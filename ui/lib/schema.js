@@ -104,7 +104,7 @@ export const MOCK_INBOX = {
       last_updated_at: '2026-05-27T09:00:00Z',
     },
     {
-      id: 'c3d4e5f6-a7b8-4901-cdef-012345678901',
+      id: 'c3d4e5f6-a7b8-4901-abcd-012345678901',
       symbol: 'ENPH',
       exchange: 'NASDAQ',
       yahoo_symbol: 'ENPH',
@@ -162,7 +162,7 @@ export const MOCK_INBOX = {
       last_updated_at: '2026-05-27T10:00:00Z',
     },
     {
-      id: 'd4e5f6a7-b8c9-4012-defa-123456789012',
+      id: 'd4e5f6a7-b8c9-4012-abcd-123456789012',
       symbol: 'SMCI',
       exchange: 'NASDAQ',
       yahoo_symbol: 'SMCI',
@@ -197,7 +197,7 @@ export const MOCK_INBOX = {
       last_updated_at: '2026-05-27T06:00:00Z',
     },
     {
-      id: 'e5f6a7b8-c9d0-4123-efab-234567890123',
+      id: 'e5f6a7b8-c9d0-4123-abcd-234567890123',
       symbol: 'SIE',
       exchange: 'XETR',
       yahoo_symbol: 'SIE.DE',
