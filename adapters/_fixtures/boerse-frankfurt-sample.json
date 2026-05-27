@@ -1,0 +1,55 @@
+{
+  "totalCount": 20,
+  "data": [
+    {
+      "isin": "DE0007164600",
+      "wkn": "716460",
+      "symbol": "SAP",
+      "name": "SAP SE",
+      "trendIndicator": 8.7,
+      "lastPrice": 182.5,
+      "currency": "EUR",
+      "exchange": "XETR"
+    },
+    {
+      "isin": "DE0007236101",
+      "wkn": "723610",
+      "symbol": "SIE",
+      "name": "Siemens AG",
+      "trendIndicator": 7.9,
+      "lastPrice": 175.3,
+      "currency": "EUR",
+      "exchange": "XETR"
+    },
+    {
+      "isin": "DE0008404005",
+      "wkn": "840400",
+      "symbol": "ALV",
+      "name": "Allianz SE",
+      "trendIndicator": 7.5,
+      "lastPrice": 295.8,
+      "currency": "EUR",
+      "exchange": "XETR"
+    },
+    {
+      "isin": "DE000BASF111",
+      "wkn": "BASF11",
+      "symbol": "BAS",
+      "name": "BASF SE",
+      "trendIndicator": 6.8,
+      "lastPrice": 48.2,
+      "currency": "EUR",
+      "exchange": "XETR"
+    },
+    {
+      "isin": "DE0005190003",
+      "wkn": "519000",
+      "symbol": "BMW",
+      "name": "Bayerische Motoren Werke AG",
+      "trendIndicator": 6.2,
+      "lastPrice": 92.4,
+      "currency": "EUR",
+      "exchange": "XETR"
+    }
+  ]
+}

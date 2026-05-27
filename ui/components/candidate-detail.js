@@ -1,0 +1,209 @@
+/**
+ * Candidate Detail Drawer
+ * Slide-in panel showing full candidate details, notes, enrichment, and actions.
+ */
+
+import { enrichCandidate } from '../lib/claude-api.js';
+
+function formatDate(isoStr) {
+  if (!isoStr) return '';
+  return new Date(isoStr).toLocaleString('de-DE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function renderEnrichment(enrichment) {
+  if (!enrichment) return '';
+  const confidenceColor = { high: '#2ecc71', medium: '#f39c12', low: '#e74c3c' }[enrichment.confidence] ?? '#999';
+  return `
+    <div class="enrichment-result">
+      <div class="enrichment-meta">
+        <span class="badge" style="background:#6c3483;color:#fff">${enrichment.model}</span>
+        <span class="badge confidence" style="color:${confidenceColor}">
+          ${enrichment.confidence} confidence
+        </span>
+        <small>${formatDate(enrichment.enriched_at)}</small>
+      </div>
+      <div class="enrichment-tags">
+        ${enrichment.sector ? `<span class="tag">${enrichment.sector}</span>` : ''}
+        ${enrichment.industry ? `<span class="tag">${enrichment.industry}</span>` : ''}
+        ${enrichment.market_cap_bucket ? `<span class="tag">${enrichment.market_cap_bucket} cap</span>` : ''}
+        ${enrichment.region ? `<span class="tag">${enrichment.region}</span>` : ''}
+      </div>
+      <div class="enrichment-thesis">
+        <p><strong>These:</strong> ${enrichment.thesis_short ?? ''}</p>
+        ${enrichment.thesis_long ? `<details><summary>Ausführliche These</summary><div class="thesis-long">${enrichment.thesis_long.replace(/\n/g, '<br>')}</div></details>` : ''}
+      </div>
+      ${enrichment.risks?.length ? `
+        <div class="enrichment-section">
+          <strong>Risiken:</strong>
+          <ul>${enrichment.risks.map((r) => `<li>${r}</li>`).join('')}</ul>
+        </div>
+      ` : ''}
+      ${enrichment.catalysts?.length ? `
+        <div class="enrichment-section">
+          <strong>Katalysatoren:</strong>
+          <ul>${enrichment.catalysts.map((c) => `<li>${c}</li>`).join('')}</ul>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderSource(source, idx) {
+  const rawJson = JSON.stringify(source.raw_signal ?? {}, null, 2);
+  return `
+    <details class="source-item" ${idx === 0 ? 'open' : ''}>
+      <summary>
+        <span class="source-adapter">${source.adapter}</span>
+        <span class="source-signal">${source.signal_type}</span>
+        <small>${formatDate(source.discovered_at)}</small>
+      </summary>
+      <div class="source-body">
+        <p class="source-snippet">${source.info_snippet ?? ''}</p>
+        <a href="${source.source_url}" target="_blank" rel="noopener">Quelle öffnen ↗</a>
+        <details class="raw-signal">
+          <summary>Raw Signal</summary>
+          <pre>${rawJson}</pre>
+        </details>
+      </div>
+    </details>
+  `;
+}
+
+export class CandidateDetail {
+  constructor(container, { onAction, onUpdate }) {
+    this.container = container;
+    this.onAction = onAction;
+    this.onUpdate = onUpdate;
+    this.candidate = null;
+    this.container.innerHTML = '';
+    this.container.className = 'detail-drawer';
+  }
+
+  show(candidate) {
+    this.candidate = candidate;
+    this.render();
+    this.container.classList.add('open');
+  }
+
+  hide() {
+    this.container.classList.remove('open');
+    this.candidate = null;
+  }
+
+  render() {
+    if (!this.candidate) return;
+    const c = this.candidate;
+
+    const stateMap = {
+      new: 'Neu', reviewed: 'Gesehen', promoted: 'Promoted',
+      dismissed: 'Abgelehnt', imported: 'Importiert',
+    };
+
+    this.container.innerHTML = `
+      <div class="detail-header">
+        <div class="detail-title">
+          <h2>${c.symbol} <span class="exchange-label">${c.exchange}</span></h2>
+          <p class="detail-name">${c.name}</p>
+          ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
+        </div>
+        <button class="btn-icon detail-close" id="detail-close">✕</button>
+      </div>
+
+      <div class="detail-links">
+        <a href="${c.links.tradingview}" target="_blank" rel="noopener" class="link-btn link-tv">TradingView ↗</a>
+        <a href="${c.links.yahoo}" target="_blank" rel="noopener" class="link-btn link-yahoo">Yahoo ↗</a>
+        <a href="${c.links.stocktwits}" target="_blank" rel="noopener" class="link-btn link-st">StockTwits ↗</a>
+      </div>
+
+      <div class="detail-state">
+        Status: <strong>${stateMap[c.workspace_state] ?? c.workspace_state}</strong>
+        &nbsp;
+        ${c.workspace_state !== 'promoted' && c.workspace_state !== 'imported'
+          ? `<button class="btn btn-sm btn-success" id="detail-promote">✓ Promoten</button>`
+          : ''}
+        ${c.workspace_state !== 'dismissed'
+          ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">✗ Ablehnen</button>`
+          : ''}
+        ${c.workspace_state === 'new'
+          ? `<button class="btn btn-sm" id="detail-review">👁 Als gesehen markieren</button>`
+          : ''}
+      </div>
+
+      <div class="detail-section">
+        <h3>Quellen (${c.sources.length})</h3>
+        <div class="sources-list">
+          ${c.sources.map((s, i) => renderSource(s, i)).join('')}
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Notizen</h3>
+        <textarea id="detail-notes" class="notes-editor" placeholder="Notizen…" rows="3">${c.notes ?? ''}</textarea>
+        <button class="btn btn-sm btn-secondary" id="detail-save-notes">Speichern</button>
+      </div>
+
+      <div class="detail-section" id="enrichment-section">
+        <h3>AI-Enrichment</h3>
+        ${c.enrichment
+          ? renderEnrichment(c.enrichment)
+          : `<p class="no-enrichment">Noch kein Enrichment vorhanden.</p>`
+        }
+        <button class="btn btn-sm btn-ai" id="detail-enrich">
+          ${c.enrichment ? '🔄 Neu enrichen' : '✨ AI-Enrichment ausführen'}
+        </button>
+        <div id="enrich-status" class="enrich-status" style="display:none"></div>
+      </div>
+    `;
+
+    this.container.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
+
+    this.container.querySelector('#detail-promote')?.addEventListener('pointerup', () => {
+      this.onAction?.('promote', c);
+      c.workspace_state = 'promoted';
+      this.render();
+    });
+
+    this.container.querySelector('#detail-dismiss')?.addEventListener('pointerup', () => {
+      this.onAction?.('dismiss', c);
+      c.workspace_state = 'dismissed';
+      this.render();
+    });
+
+    this.container.querySelector('#detail-review')?.addEventListener('pointerup', () => {
+      this.onAction?.('review', c);
+      c.workspace_state = 'reviewed';
+      this.render();
+    });
+
+    this.container.querySelector('#detail-save-notes').addEventListener('pointerup', () => {
+      const notes = this.container.querySelector('#detail-notes').value;
+      c.notes = notes;
+      this.onAction?.('saveNotes', c, { notes });
+    });
+
+    this.container.querySelector('#detail-enrich').addEventListener('pointerup', async () => {
+      const btn = this.container.querySelector('#detail-enrich');
+      const statusEl = this.container.querySelector('#enrich-status');
+      btn.disabled = true;
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Claude analysiert…';
+      statusEl.className = 'enrich-status enrich-status--info';
+
+      try {
+        const enrichment = await enrichCandidate(c, {
+          onProgress: (msg) => { statusEl.textContent = msg; },
+        });
+        c.enrichment = enrichment;
+        this.onAction?.('enriched', c, { enrichment });
+        this.render();
+      } catch (err) {
+        statusEl.textContent = `Fehler: ${err.message}`;
+        statusEl.className = 'enrich-status enrich-status--error';
+        btn.disabled = false;
+      }
+    });
+  }
+}
