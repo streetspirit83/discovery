@@ -1,18 +1,18 @@
 /* Discovery Workspace – Styles */
 
 :root {
---bg: #121212;          /* Reines, weiches Anthrazit-Schwarz */
-  --bg2: #1e1e1e;         /* Klassisches Material-Surface-Grau */
-  --bg3: #2a2a2a;         /* Helleres Element-Grau */
-  --border: #383838;      /* Neutrale Trennlinie */
-  --text: #f3f4f6;        /* Sehr helles Asche-Weiß */
-  --text-muted: #9ca3af;  /* Neutrales Mittelgrau */
-  --accent: #94a3b8;      /* Edles Schiefer-Silber */
-  --accent2: #cbd5e1;     /* Helles Silber-Grau */
-  --success: #22c55e;     /* Standard-Grün */
-  --danger: #ef4444;      /* Standard-Rot */
-  --warning: #eab308;     /* Reines Gelb */
-  --ai: #ec4899;          /* Cyber-Pink für AI-Features */
+--bg: #181412;          /* Dunkles Espresso-Braun */
+  --bg2: #241e1a;         /* Warmes Kaffeebraun für Oberflächen */
+  --bg3: #332a24;         /* Helleres Holzbraun */
+  --border: #443830;      /* Sanfte, warme Trennlinie */
+  --text: #f4eae1;        /* Angenehmes, warmes Cremeweiß */
+  --text-muted: #a08f82;  /* Mutes Taupe/Lehmgrau */
+  --accent: #e07a5f;      /* Warmes Terrakotta-Orange */
+  --accent2: #f2cc8f;     /* Sanftes Sand-Gelb */
+  --success: #81b29a;     /* Salbeigrün (warm abgemildert) */
+  --danger: #e07a5f;      /* Nutzt den Terrakotta-Ton als soften Fehlercode */
+  --warning: #f2cc8f;     /* Sand-Gelb übernimmt die Warnungen */
+  --ai: #df73ff;          /* Magisches Orchideen-Violett als Kontrast */
   --radius: 8px;
   --radius-sm: 4px;
 }
