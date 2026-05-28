@@ -29,15 +29,15 @@ function isAllowed(url) {
 }
 
 function respond(statusCode, body) {
-  return {
-    statusCode,
+  return new Response(JSON.stringify(body), {
+    status: statusCode,
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
     },
-    body: JSON.stringify(body),
-  };
+  });
 }
 
 export default async function handler(req) {
