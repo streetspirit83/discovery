@@ -44,7 +44,7 @@ export function renderUploadModal({ onImport }) {
         </div>
 
         <div class="tab-panel" data-panel="search">
-          <p class="hint">Symbol-Suche via Alpha Vantage (API-Key in Einstellungen).</p>
+          <p class="hint">Symbol-Suche via Alpha Vantage. Ohne Key läuft die Demo (nur Beispiel-Begriffe wie „tesco“); für volle Suche Key in Einstellungen hinterlegen.</p>
           <div class="search-wrap">
             <input type="search" id="symbol-input" class="symbol-search-input"
               placeholder="Firmenname oder Symbol… (z.B. Apple, BMW)" autocomplete="off">

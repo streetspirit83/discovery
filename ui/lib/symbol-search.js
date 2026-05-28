@@ -38,8 +38,10 @@ function regionOf(avRegion = '') {
 
 /** @returns {Promise<Array<{symbol,name,type,region,currency,score}>>} */
 export async function searchSymbols(keywords) {
-  const key = localStorage.getItem('discovery_alphavantage_key');
-  if (!key) throw new Error('Alpha-Vantage-API-Key fehlt – in den Einstellungen hinterlegen.');
+  // No hard block: fall back to Alpha Vantage's documented "demo" key so the
+  // lookup still works for demo keywords (e.g. "tesco") without configuration.
+  // Configure a real key in Settings for unrestricted search.
+  const key = localStorage.getItem('discovery_alphavantage_key') || 'demo';
 
   const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(keywords)}&apikey=${encodeURIComponent(key)}`;
   const res = await fetch(url);
