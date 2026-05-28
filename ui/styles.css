@@ -1,18 +1,18 @@
 /* Discovery Workspace – Styles */
 
 :root {
---bg: #181412;          /* Dunkles Espresso-Braun */
-  --bg2: #241e1a;         /* Warmes Kaffeebraun für Oberflächen */
-  --bg3: #332a24;         /* Helleres Holzbraun */
-  --border: #443830;      /* Sanfte, warme Trennlinie */
-  --text: #f4eae1;        /* Angenehmes, warmes Cremeweiß */
-  --text-muted: #a08f82;  /* Mutes Taupe/Lehmgrau */
-  --accent: #e07a5f;      /* Warmes Terrakotta-Orange */
-  --accent2: #f2cc8f;     /* Sanftes Sand-Gelb */
-  --success: #81b29a;     /* Salbeigrün (warm abgemildert) */
-  --danger: #e07a5f;      /* Nutzt den Terrakotta-Ton als soften Fehlercode */
-  --warning: #f2cc8f;     /* Sand-Gelb übernimmt die Warnungen */
-  --ai: #df73ff;          /* Magisches Orchideen-Violett als Kontrast */
+--bg: #f8fafc;          /* Knackiges, helles Off-White */
+  --bg2: #f1f5f9;         /* Sanftes Grau für Container */
+  --bg3: #e2e8f0;         /* Dunkleres Grau für Hover-Zustände */
+  --border: #cbd5e1;      /* Gut sichtbare, helle Konturlinie */
+  --text: #0f172a;        /* Dunkles Schieferblau für perfekten Textkontrast */
+  --text-muted: #64748b;  /* Klassisches, lesbares Muted-Grau */
+  --accent: #2563eb;      /* Königsblau für primäre Interaktionen */
+  --accent2: #3b82f6;     /* Standard-Blau */
+  --success: #16a34a;     /* Abgedunkeltes Grün für bessere Lesbarkeit */
+  --danger: #dc2626;      /* Sattes Warn-Rot */
+  --warning: #d97706;     /* Dunkleres Orange-Gelb */
+  --ai: #7c3aed;          /* Deep Purple für KI-Elemente */
   --radius: 8px;
   --radius-sm: 4px;
 }
