@@ -64,10 +64,61 @@ export function normalizeCandidate(obj) {
     ];
   }
 
-  const links =
-    obj.links && obj.links.tradingview
-      ? obj.links
-      : buildLinks({ symbol, exchange, yahooSymbol: yahoo_symbol });
+  // Links: prefer obj.links struct, then top-level *_url fields, then auto-build
+  const tvUrl = getField(obj, ['tradingview_url', 'tradingview']);
+  const stUrl = getField(obj, ['stocktwits_url', 'stocktwits']);
+  let links;
+  if (obj.links && obj.links.tradingview) {
+    links = obj.links;
+  } else if (tvUrl || stUrl) {
+    const built = buildLinks({ symbol, exchange, yahooSymbol: yahoo_symbol });
+    links = {
+      tradingview: tvUrl || built.tradingview,
+      stocktwits:  stUrl || built.stocktwits,
+      yahoo:       built.yahoo,
+    };
+  } else {
+    links = buildLinks({ symbol, exchange, yahooSymbol: yahoo_symbol });
+  }
+
+  // Enrichment: use existing, or map Schema A enrichment fields if present
+  let enrichment = obj.enrichment || null;
+  if (!enrichment) {
+    const sector      = getField(obj, ['sector']);
+    const industry    = getField(obj, ['sub_sector', 'industry', 'industrie']);
+    const mktCap      = getField(obj, ['market_cap_size', 'market_cap_bucket']);
+    const region      = getField(obj, ['region']);
+    const thesisShort = getField(obj, ['trend_reason', 'thesis_short']);
+    const thesisLong  = getField(obj, ['core_business', 'thesis_long']);
+    const confidence  = getField(obj, ['confidence']) || null;
+    const sentiment   = getField(obj, ['sentiment']) || null;
+    const whyNot      = getField(obj, ['why_not']);
+    const risks = Array.isArray(obj.risks)
+      ? obj.risks
+      : (whyNot ? [whyNot] : null);
+    const catalysts = Array.isArray(obj.next_catalysts)
+      ? obj.next_catalysts
+      : (typeof obj.next_catalysts === 'string' ? [obj.next_catalysts] : null);
+    const recentNews = Array.isArray(obj.recent_news) ? obj.recent_news : null;
+
+    if (sector || thesisShort || thesisLong || catalysts || risks) {
+      enrichment = {
+        enriched_at:      nowIso(),
+        model:            'import',
+        sector:           sector || null,
+        industry:         industry || null,
+        market_cap_bucket: mktCap || null,
+        region:           region || null,
+        thesis_short:     thesisShort || null,
+        thesis_long:      thesisLong || null,
+        risks,
+        catalysts,
+        confidence,
+        sentiment,
+        recent_news:      recentNews,
+      };
+    }
+  }
 
   return {
     id: obj.id || uuid(),
@@ -80,7 +131,7 @@ export function normalizeCandidate(obj) {
     links,
     workspace_state: obj.workspace_state || 'new',
     notes,
-    enrichment: obj.enrichment || null,
+    enrichment,
     first_discovered_at: obj.first_discovered_at || nowIso(),
     last_updated_at: nowIso(),
   };
@@ -139,21 +190,35 @@ function parseCSV(text) {
 }
 
 function fromJson(data) {
-  // Full Discovery blob
-  if (data && !Array.isArray(data) && Array.isArray(data.candidates)) {
+  if (!data || Array.isArray(data)) {
+    // plain array
+    const arr = Array.isArray(data) ? data : [];
+    return fromArray(arr, arr[0] && (arr[0].sources || arr[0].workspace_state) ? 'discovery-candidates' : 'objects');
+  }
+
+  // Full Discovery blob { candidates: [...] }
+  if (Array.isArray(data.candidates)) {
     const candidates = data.candidates.map(normalizeCandidate).filter(Boolean);
     return { candidates, format: 'discovery-blob', errors: candidates.length ? [] : ['Keine gültigen Kandidaten im Blob'] };
   }
 
-  const arr = Array.isArray(data) ? data : [data];
+  // Schema A wrapper { results: [...] }
+  if (Array.isArray(data.results)) {
+    return fromArray(data.results, 'schema-a');
+  }
+
+  // Single object
+  return fromArray([data], 'objects');
+}
+
+function fromArray(arr, defaultFormat) {
   const candidates = arr.map(normalizeCandidate).filter(Boolean);
   const first = arr[0] || {};
-  const format =
-    first.sources || first.workspace_state
-      ? 'discovery-candidates'
-      : first.bucket
-        ? 'schema-a'
-        : 'objects';
+  const format = first.sources || first.workspace_state
+    ? 'discovery-candidates'
+    : first.sector || first.trend_reason || first.core_business
+      ? 'schema-a'
+      : defaultFormat;
   return {
     candidates,
     format,

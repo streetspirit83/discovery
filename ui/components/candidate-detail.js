@@ -46,6 +46,17 @@ function renderEnrichment(enrichment) {
           <ul>${enrichment.catalysts.map((c) => `<li>${c}</li>`).join('')}</ul>
         </div>
       ` : ''}
+      ${enrichment.recent_news?.length ? `
+        <div class="enrichment-section">
+          <strong>Aktuelle News:</strong>
+          <ul>${enrichment.recent_news.map((n) => `<li>${n}</li>`).join('')}</ul>
+        </div>
+      ` : ''}
+      ${enrichment.sentiment ? `
+        <div class="enrichment-section">
+          <strong>Sentiment:</strong> <span class="tag">${enrichment.sentiment}</span>
+        </div>
+      ` : ''}
     </div>
   `;
 }
