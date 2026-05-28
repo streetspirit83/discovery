@@ -1,18 +1,18 @@
 /* Discovery Workspace – Styles */
 
 :root {
-  --bg: #0f1117;
-  --bg2: #1a1d27;
-  --bg3: #232635;
-  --border: #2e3347;
-  --text: #e2e8f0;
-  --text-muted: #8892a4;
-  --accent: #6366f1;
-  --accent2: #818cf8;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --ai: #a855f7;
+--bg: #f8fafc;          /* Knackiges, helles Off-White */
+  --bg2: #f1f5f9;         /* Sanftes Grau für Container */
+  --bg3: #e2e8f0;         /* Dunkleres Grau für Hover-Zustände */
+  --border: #cbd5e1;      /* Gut sichtbare, helle Konturlinie */
+  --text: #0f172a;        /* Dunkles Schieferblau für perfekten Textkontrast */
+  --text-muted: #64748b;  /* Klassisches, lesbares Muted-Grau */
+  --accent: #2563eb;      /* Königsblau für primäre Interaktionen */
+  --accent2: #3b82f6;     /* Standard-Blau */
+  --success: #16a34a;     /* Abgedunkeltes Grün für bessere Lesbarkeit */
+  --danger: #dc2626;      /* Sattes Warn-Rot */
+  --warning: #d97706;     /* Dunkleres Orange-Gelb */
+  --ai: #7c3aed;          /* Deep Purple für KI-Elemente */
   --radius: 8px;
   --radius-sm: 4px;
 }
