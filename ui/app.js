@@ -9,6 +9,7 @@ import { renderUploadModal } from './components/upload-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
+import { icons } from './lib/icons.js';
 
 let useMock = !isConfigured();
 let currentBlobType = 'inbox';
@@ -29,10 +30,10 @@ function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
   if (!badge) return;
   if (useMock) {
-    badge.textContent = '🔶 Mock-Modus';
+    badge.innerHTML = `${icons.sparkles} Mock-Modus`;
     badge.className = 'header-badge mock';
   } else {
-    badge.textContent = '✓ Backend verbunden';
+    badge.innerHTML = `${icons.check} Backend verbunden`;
     badge.className = 'header-badge';
   }
 }
@@ -123,6 +124,19 @@ async function handleAction(action, candidate, extras = {}) {
     toast('Notiz gespeichert', 'success');
   }
 
+  if (action === 'saveLinks') {
+    candidate.links = extras.links;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { links: extras.links });
+      } catch (err) {
+        toast(`Links speichern fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    toast('Links aktualisiert', 'success', 1500);
+  }
+
   if (action === 'enriched') {
     candidate.enrichment = extras.enrichment;
     if (!useMock) {
@@ -206,6 +220,11 @@ async function init() {
 
   // Load initial data
   await switchBlob('inbox');
+
+  // Inject Lucide icons into header buttons
+  document.getElementById('btn-refresh').innerHTML = `${icons.refreshCw} Refresh`;
+  document.getElementById('btn-upload').innerHTML = `${icons.upload} Upload`;
+  document.getElementById('btn-settings').innerHTML = `${icons.settings} Einstellungen`;
 
   // Header buttons
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
