@@ -1,5 +1,9 @@
 import { icons } from '../lib/icons.js';
 
+const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
+const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
+const YH_LOGO = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
+
 const STATE_LABELS = {
   new: 'Neu',
   reviewed: 'Gesehen',
@@ -448,14 +452,14 @@ export class CandidateList {
         <td class="col-links">
           <div class="link-cluster">
             ${links.tradingview
-              ? `<a href="${links.tradingview}" class="link-chip link-chip--tv" target="_blank" rel="noopener" title="TradingView">${icons.barChart2}</a>`
-              : `<span class="link-chip link-chip--missing" title="Kein TV-Link">${icons.barChart2}</span>`}
+              ? `<a href="${links.tradingview}" class="link-chip link-chip--tv" target="_blank" rel="noopener" title="TradingView"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></a>`
+              : `<span class="link-chip link-chip--missing" title="Kein TV-Link"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></span>`}
             ${links.stocktwits
-              ? `<a href="${links.stocktwits}" class="link-chip link-chip--st" target="_blank" rel="noopener" title="StockTwits">${icons.messageSquare}</a>`
-              : `<span class="link-chip link-chip--missing" title="Kein StockTwits-Link">${icons.messageSquare}</span>`}
+              ? `<a href="${links.stocktwits}" class="link-chip link-chip--st" target="_blank" rel="noopener" title="StockTwits"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></a>`
+              : `<span class="link-chip link-chip--missing" title="Kein StockTwits-Link"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></span>`}
             ${links.yahoo
-              ? `<a href="${links.yahoo}" class="link-chip link-chip--yahoo" target="_blank" rel="noopener" title="Yahoo Finance">${icons.activity}</a>`
-              : `<span class="link-chip link-chip--missing" title="Kein Yahoo-Link">${icons.activity}</span>`}
+              ? `<a href="${links.yahoo}" class="link-chip link-chip--yahoo" target="_blank" rel="noopener" title="Yahoo Finance"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></a>`
+              : `<span class="link-chip link-chip--missing" title="Kein Yahoo-Link"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></span>`}
             <button class="link-chip link-chip--edit" data-action="editLinks" title="Links manuell bearbeiten">${icons.pencil}</button>
           </div>
         </td>

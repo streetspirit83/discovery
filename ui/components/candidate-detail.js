@@ -1,9 +1,8 @@
-/**
- * Candidate Detail Drawer
- * Slide-in panel showing full candidate details, notes, enrichment, and actions.
- */
-
 import { enrichCandidate } from '../lib/claude-api.js';
+
+const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
+const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
+const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
 
 function formatDate(isoStr) {
   if (!isoStr) return '';
@@ -72,11 +71,21 @@ function renderSource(source, idx) {
   `;
 }
 
+function linkBtn(href, logo, label, cssClass) {
+  if (href) {
+    return `<a href="${href}" target="_blank" rel="noopener" class="link-btn ${cssClass}">
+      <img src="${logo}" class="link-btn-logo" alt="" loading="lazy"> ${label} ↗
+    </a>`;
+  }
+  return `<span class="link-btn ${cssClass} link-btn--missing">
+    <img src="${logo}" class="link-btn-logo" alt="" loading="lazy"> ${label}
+  </span>`;
+}
+
 export class CandidateDetail {
-  constructor(container, { onAction, onUpdate }) {
+  constructor(container, { onAction }) {
     this.container = container;
     this.onAction = onAction;
-    this.onUpdate = onUpdate;
     this.candidate = null;
     this.container.innerHTML = '';
     this.container.className = 'detail-drawer';
@@ -96,6 +105,7 @@ export class CandidateDetail {
   render() {
     if (!this.candidate) return;
     const c = this.candidate;
+    const links = c.links ?? {};
 
     const stateMap = {
       new: 'Neu', reviewed: 'Gesehen', promoted: 'Promoted',
@@ -110,12 +120,6 @@ export class CandidateDetail {
           ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
         </div>
         <button class="btn-icon detail-close" id="detail-close">✕</button>
-      </div>
-
-      <div class="detail-links">
-        <a href="${c.links.tradingview}" target="_blank" rel="noopener" class="link-btn link-tv">TradingView ↗</a>
-        <a href="${c.links.yahoo}" target="_blank" rel="noopener" class="link-btn link-yahoo">Yahoo ↗</a>
-        <a href="${c.links.stocktwits}" target="_blank" rel="noopener" class="link-btn link-st">StockTwits ↗</a>
       </div>
 
       <div class="detail-state">
@@ -136,6 +140,30 @@ export class CandidateDetail {
         <h3>Quellen (${c.sources.length})</h3>
         <div class="sources-list">
           ${c.sources.map((s, i) => renderSource(s, i)).join('')}
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Links</h3>
+        <div class="detail-links-btns">
+          ${linkBtn(links.tradingview, TV_LOGO, 'TradingView', 'link-tv')}
+          ${linkBtn(links.stocktwits, ST_LOGO, 'StockTwits',  'link-st')}
+          ${linkBtn(links.yahoo,      YH_LOGO, 'Yahoo Finance','link-yahoo')}
+        </div>
+        <div class="link-url-fields">
+          <div class="link-url-row">
+            <label>TradingView URL</label>
+            <input type="url" id="lf-tv" value="${links.tradingview ?? ''}" placeholder="https://www.tradingview.com/…">
+          </div>
+          <div class="link-url-row">
+            <label>StockTwits URL</label>
+            <input type="url" id="lf-st" value="${links.stocktwits ?? ''}" placeholder="https://stocktwits.com/…">
+          </div>
+          <div class="link-url-row">
+            <label>Yahoo Finance URL</label>
+            <input type="url" id="lf-yahoo" value="${links.yahoo ?? ''}" placeholder="https://finance.yahoo.com/…">
+          </div>
+          <button class="btn btn-sm btn-secondary" id="detail-save-links">Links speichern</button>
         </div>
       </div>
 
@@ -175,6 +203,17 @@ export class CandidateDetail {
     this.container.querySelector('#detail-review')?.addEventListener('pointerup', () => {
       this.onAction?.('review', c);
       c.workspace_state = 'reviewed';
+      this.render();
+    });
+
+    this.container.querySelector('#detail-save-links').addEventListener('pointerup', () => {
+      const newLinks = {
+        tradingview: this.container.querySelector('#lf-tv').value.trim(),
+        stocktwits:  this.container.querySelector('#lf-st').value.trim(),
+        yahoo:       this.container.querySelector('#lf-yahoo').value.trim(),
+      };
+      c.links = newLinks;
+      this.onAction?.('saveLinks', c, { links: newLinks });
       this.render();
     });
 
