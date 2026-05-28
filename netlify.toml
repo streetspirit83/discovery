@@ -1,18 +1,19 @@
 [build]
-  publish = "netlify-backend/public"
-  functions = "netlify-backend/netlify/functions"
+  base    = "netlify-backend"
+  publish = "public"
+  functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  to   = "/.netlify/functions/:splat"
   status = 200
 
 [[headers]]
   for = "/api/*"
   [headers.values]
-    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Origin  = "*"
     Access-Control-Allow-Methods = "POST, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type, x-discovery-secret"
