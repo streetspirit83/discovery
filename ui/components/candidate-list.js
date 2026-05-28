@@ -21,7 +21,7 @@ const ADAPTER_COLORS = {
 };
 
 const SORT_LABELS = {
-  state: 'Status',
+  state: '',
   symbol: 'Symbol',
   name: 'Name',
   discovered: 'Entdeckt',
@@ -316,9 +316,9 @@ export class CandidateList {
               </th>
               <th class="col-symbol">${this.thSortable('symbol')}</th>
               <th class="col-name">${this.thSortable('name')}</th>
+              <th class="col-links">Links</th>
               <th class="col-signal">Letztes Signal</th>
               <th class="col-time">${this.thSortable('discovered')}</th>
-              <th class="col-links">Links</th>
               <th class="col-actions">Aktion</th>
               <th class="col-sources">${this.thSortable('sources')}</th>
             </tr>
@@ -445,10 +445,6 @@ export class CandidateList {
           </div>
         </td>
         <td class="col-name">${c.name}</td>
-        <td class="col-signal"><span class="signal-text">${getLatestSignal(c)}</span></td>
-        <td class="col-time">
-          <span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>
-        </td>
         <td class="col-links">
           <div class="link-cluster">
             ${links.tradingview
@@ -462,6 +458,10 @@ export class CandidateList {
               : `<span class="link-chip link-chip--missing" title="Kein Yahoo-Link"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></span>`}
             <button class="link-chip link-chip--edit" data-action="editLinks" title="Links manuell bearbeiten">${icons.pencil}</button>
           </div>
+        </td>
+        <td class="col-signal"><span class="signal-text">${getLatestSignal(c)}</span></td>
+        <td class="col-time">
+          <span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>
         </td>
         <td class="col-actions">
           ${canPromote
