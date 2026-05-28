@@ -28,7 +28,7 @@ export async function proxiedFetch(url, opts = {}) {
 
   if (backendUrl && secret) {
     log('debug', 'scrape-client: routing via proxy', { url });
-    const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape`;
+    const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
     const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
