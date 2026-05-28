@@ -1,0 +1,7 @@
+node_modules/
+netlify-backend/node_modules/
+.netlify/
+*.log
+.DS_Store
+.env
+.env.*
