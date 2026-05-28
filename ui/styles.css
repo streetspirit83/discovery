@@ -222,17 +222,13 @@ body {
 .candidate-row.state-dismissed { opacity: 0.5; }
 .candidate-row.state-dismissed .col-symbol strong { text-decoration: line-through; }
 
-.col-check { width: 36px; }
-.col-state { width: 36px; text-align: center; font-size: 16px; }
+.col-check  { width: 36px; }
 .col-symbol { white-space: nowrap; }
-.col-name { max-width: 200px; }
-.col-sources { white-space: nowrap; }
-.col-signal { max-width: 280px; color: var(--text-muted); }
-.col-time { white-space: nowrap; color: var(--text-muted); }
-.col-actions { white-space: nowrap; text-align: right; }
+.col-name   { max-width: 180px; }
+.col-signal { max-width: 260px; }
+.col-time   { white-space: nowrap; }
 
 .exchange { color: var(--text-muted); font-size: 11px; }
-.enrich-dot { margin-left: 4px; font-size: 12px; }
 
 .badge {
   display: inline-block;
@@ -591,6 +587,230 @@ body {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ── State Dots ──────────────────────────────────────────────── */
+
+.state-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.state-dot--new      { background: #3b82f6; box-shadow: 0 0 7px #3b82f680; }
+.state-dot--reviewed { background: #64748b; }
+.state-dot--promoted { background: #22c55e; box-shadow: 0 0 7px #22c55e80; }
+.state-dot--dismissed { background: #ef4444; }
+.state-dot--imported { background: #a855f7; box-shadow: 0 0 7px #a855f780; }
+
+/* ── State column header ─────────────────────────────────────── */
+
+.th-state-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.state-info-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  cursor: default;
+  outline: none;
+}
+.state-info-trigger svg { width: 13px; height: 13px; }
+
+.state-legend-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  z-index: 50;
+  min-width: 230px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.state-info-trigger:hover .state-legend-tip,
+.state-info-trigger:focus .state-legend-tip { display: block; }
+
+.slt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ── Sortable column headers ─────────────────────────────────── */
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.th-sort:hover { color: var(--text); }
+
+.sort-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.35;
+  transition: opacity 0.1s;
+}
+.sort-icon--active {
+  opacity: 1;
+  color: var(--accent2);
+}
+.sort-icon svg { display: block; }
+
+/* ── Symbol cell ─────────────────────────────────────────────── */
+
+.symbol-cell { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+.symbol-cell strong { font-size: 14px; }
+.exchange-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.enrich-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ai);
+}
+.enrich-badge svg { width: 11px; height: 11px; }
+
+/* ── Time chip ───────────────────────────────────────────────── */
+
+.time-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Link cluster in table ───────────────────────────────────── */
+
+.link-cluster { display: flex; align-items: center; gap: 3px; }
+
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  text-decoration: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.link-chip svg { width: 14px; height: 14px; display: block; }
+.link-chip:hover { color: var(--text); }
+
+.link-chip--tv:hover    { color: #4e7fff; border-color: #4e7fff88; background: #0d1f44; }
+.link-chip--st:hover    { color: #19c37d; border-color: #19c37d88; background: #0a1e15; }
+.link-chip--yahoo:hover { color: #9b6fff; border-color: #9b6fff88; background: #180e30; }
+.link-chip--edit:hover  { color: var(--accent2); border-color: var(--accent); }
+
+.link-chip--missing {
+  opacity: 0.25;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Link edit popover ───────────────────────────────────────── */
+
+.link-edit-popover {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.55);
+  padding: 14px 16px;
+}
+.lep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.lep-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+.lep-close:hover { color: var(--text); background: var(--bg3); }
+.lep-close svg { width: 14px; height: 14px; }
+.lep-field { margin-bottom: 9px; }
+.lep-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.lep-field input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+}
+.lep-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.lep-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ── Action button variants ──────────────────────────────────── */
+
+.btn-icon svg { display: block; width: 15px; height: 15px; }
+.btn-icon--promote { color: var(--success); }
+.btn-icon--promote:hover { background: #0f3d22; }
+.btn-icon--dismiss { color: var(--danger); }
+.btn-icon--dismiss:hover { background: #3d0f0f; }
+
+/* ── Bulk bar icon alignment ─────────────────────────────────── */
+
+.btn svg { pointer-events: none; }
+
+/* ── Column widths (updated) ─────────────────────────────────── */
+
+.col-state  { width: 80px; }
+.col-links  { white-space: nowrap; }
+.col-actions { white-space: nowrap; text-align: right; width: 60px; }
+.signal-text { font-size: 12px; color: var(--text-muted); }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 

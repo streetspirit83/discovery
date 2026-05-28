@@ -1,15 +1,4 @@
-/**
- * Candidate List Component
- * Renders the main table with filter bar and bulk actions.
- */
-
-const STATE_ICONS = {
-  new: '🔵',
-  reviewed: '⚪',
-  promoted: '🟢',
-  dismissed: '🔴',
-  imported: '✅',
-};
+import { icons } from '../lib/icons.js';
 
 const STATE_LABELS = {
   new: 'Neu',
@@ -19,21 +8,31 @@ const STATE_LABELS = {
   imported: 'Importiert',
 };
 
+const STATE_ORDER = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
+
 const ADAPTER_COLORS = {
   openinsider: '#e67e22',
   'boerse-frankfurt': '#3498db',
   'etf-holdings': '#2ecc71',
 };
 
+const SORT_LABELS = {
+  state: 'Status',
+  symbol: 'Symbol',
+  name: 'Name',
+  discovered: 'Entdeckt',
+  sources: 'Quellen',
+};
+
 function timeAgo(isoStr) {
-  if (!isoStr) return '';
+  if (!isoStr) return '–';
   const diff = Date.now() - new Date(isoStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `vor ${mins}m`;
+  if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `vor ${hours}h`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  return `vor ${days}d`;
+  return `${days}d`;
 }
 
 function getLatestSignal(candidate) {
@@ -45,10 +44,92 @@ function renderSourceBadges(sources) {
   const adapters = [...new Set(sources.map((s) => s.adapter))];
   return adapters
     .map((a) => {
-      const color = ADAPTER_COLORS[a] ?? '#666';
-      return `<span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}66">${a}</span>`;
+      const color = ADAPTER_COLORS[a] ?? '#888';
+      return `<span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}55">${a}</span>`;
     })
     .join(' ');
+}
+
+function sortValue(c, col) {
+  switch (col) {
+    case 'symbol':     return c.symbol.toLowerCase();
+    case 'name':       return c.name.toLowerCase();
+    case 'discovered': return new Date(c.first_discovered_at).getTime();
+    case 'state':      return STATE_ORDER.indexOf(c.workspace_state);
+    case 'sources':    return c.sources.length;
+    default:           return '';
+  }
+}
+
+// Singleton popover – only one open at a time
+let _activePopover = null;
+
+function closePopover() {
+  if (_activePopover) {
+    _activePopover.remove();
+    _activePopover = null;
+  }
+}
+
+function showLinkEditPopover(candidate, anchorEl, onSave) {
+  closePopover();
+
+  const links = candidate.links ?? {};
+  const pop = document.createElement('div');
+  pop.className = 'link-edit-popover';
+  pop.innerHTML = `
+    <div class="lep-header">
+      <span>Links bearbeiten</span>
+      <button class="lep-close" title="Schließen">${icons.xMark}</button>
+    </div>
+    <div class="lep-field">
+      <label>TradingView</label>
+      <input type="url" data-field="tradingview" value="${links.tradingview ?? ''}" placeholder="https://www.tradingview.com/…">
+    </div>
+    <div class="lep-field">
+      <label>StockTwits</label>
+      <input type="url" data-field="stocktwits" value="${links.stocktwits ?? ''}" placeholder="https://stocktwits.com/…">
+    </div>
+    <div class="lep-field">
+      <label>Yahoo Finance</label>
+      <input type="url" data-field="yahoo" value="${links.yahoo ?? ''}" placeholder="https://finance.yahoo.com/…">
+    </div>
+    <div class="lep-actions">
+      <button class="btn btn-sm lep-cancel">Abbrechen</button>
+      <button class="btn btn-sm btn-primary lep-save">Speichern</button>
+    </div>
+  `;
+  document.body.appendChild(pop);
+  _activePopover = pop;
+
+  // Position below anchor, clamp to viewport
+  const rect = anchorEl.getBoundingClientRect();
+  const popW = 290;
+  let left = rect.left;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  pop.style.cssText = `position:fixed;top:${rect.bottom + 6}px;left:${left}px;width:${popW}px;z-index:400`;
+
+  pop.querySelector('.lep-close').addEventListener('pointerup', closePopover);
+  pop.querySelector('.lep-cancel').addEventListener('pointerup', closePopover);
+  pop.querySelector('.lep-save').addEventListener('pointerup', () => {
+    const newLinks = {};
+    pop.querySelectorAll('[data-field]').forEach((inp) => {
+      newLinks[inp.dataset.field] = inp.value.trim();
+    });
+    onSave(newLinks);
+    closePopover();
+  });
+
+  // Close on outside click (deferred so this pointerup doesn't immediately close it)
+  setTimeout(() => {
+    const onOutside = (e) => {
+      if (!pop.contains(e.target) && e.target !== anchorEl) {
+        closePopover();
+        document.removeEventListener('pointerdown', onOutside);
+      }
+    };
+    document.addEventListener('pointerdown', onOutside);
+  }, 0);
 }
 
 export class CandidateList {
@@ -66,6 +147,7 @@ export class CandidateList {
       dateRange: 'all',
       search: '',
     };
+    this.sort = { column: 'discovered', direction: 'desc' };
     this.selected = new Set();
     this.render();
   }
@@ -84,6 +166,23 @@ export class CandidateList {
     this.renderBulkBar();
   }
 
+  setSort(column) {
+    if (this.sort.column === column) {
+      this.sort.direction = this.sort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sort.column = column;
+      this.sort.direction = column === 'discovered' ? 'desc' : 'asc';
+    }
+    this.renderRows();
+  }
+
+  sortIcon(column) {
+    if (this.sort.column !== column) {
+      return `<span class="sort-icon">${icons.arrowUpDown}</span>`;
+    }
+    return `<span class="sort-icon sort-icon--active">${this.sort.direction === 'asc' ? icons.arrowUp : icons.arrowDown}</span>`;
+  }
+
   getFiltered() {
     const { state, adapters, region, dateRange, search } = this.filters;
     const now = Date.now();
@@ -99,10 +198,10 @@ export class CandidateList {
       if (region) {
         const exch = c.exchange ?? '';
         const isUS = ['NASDAQ', 'NYSE', 'AMEX'].includes(exch);
-        const isDE = exch.startsWith('X') && exch !== 'NYSE';
+        const isDE = exch === 'XETR';
         const isEU = ['EURONEXT', 'LSE', 'MIL', 'BME', 'SIX', 'VIE', 'OMXSTO', 'OMXCOP', 'OMXHEX', 'OSE'].includes(exch);
         if (region === 'US' && !isUS) return false;
-        if (region === 'DE' && exch !== 'XETR') return false;
+        if (region === 'DE' && !isDE) return false;
         if (region === 'EU' && !isEU) return false;
         if (region === 'other' && (isUS || isDE || isEU)) return false;
       }
@@ -119,6 +218,22 @@ export class CandidateList {
 
       return true;
     });
+  }
+
+  getSorted(candidates) {
+    const { column, direction } = this.sort;
+    if (!column) return [...candidates];
+    return [...candidates].sort((a, b) => {
+      const va = sortValue(a, column);
+      const vb = sortValue(b, column);
+      if (va < vb) return direction === 'asc' ? -1 : 1;
+      if (va > vb) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  thSortable(col) {
+    return `<span class="th-sort" data-sort="${col}">${SORT_LABELS[col]} ${this.sortIcon(col)}</span>`;
   }
 
   render() {
@@ -162,28 +277,46 @@ export class CandidateList {
           </select>
         </div>
         <div class="filter-group filter-search">
-          <input type="search" id="filter-search" placeholder="Symbol / Name suchen…">
+          <label>Suche</label>
+          <input type="search" id="filter-search" placeholder="Symbol / Name…">
         </div>
       </div>
+
       <div class="bulk-bar" id="bulk-bar" style="display:none">
         <span id="bulk-count">0 ausgewählt</span>
-        <button class="btn btn-sm btn-danger" id="bulk-dismiss">✗ Ablehnen</button>
-        <button class="btn btn-sm btn-success" id="bulk-promote">✓ Promoten</button>
-        <button class="btn btn-sm btn-ai" id="bulk-enrich">✨ Enrich</button>
+        <button class="btn btn-sm btn-danger" id="bulk-dismiss">${icons.xMark} Ablehnen</button>
+        <button class="btn btn-sm btn-success" id="bulk-promote">${icons.check} Promoten</button>
+        <button class="btn btn-sm btn-ai" id="bulk-enrich">${icons.sparkles} Enrich</button>
         <button class="btn btn-sm" id="bulk-clear">Auswahl leeren</button>
       </div>
+
       <div class="table-wrapper">
         <table class="candidate-table">
           <thead>
             <tr>
               <th class="col-check"><input type="checkbox" id="select-all"></th>
-              <th class="col-state"></th>
-              <th class="col-symbol">Symbol</th>
-              <th class="col-name">Name</th>
-              <th class="col-sources">Quellen</th>
+              <th class="col-state">
+                <div class="th-state-head">
+                  ${this.thSortable('state')}
+                  <span class="state-info-trigger" tabindex="0">
+                    ${icons.info}
+                    <div class="state-legend-tip">
+                      <div class="slt-row"><span class="state-dot state-dot--new"></span>Neu – frisch entdeckt, unbearbeitet</div>
+                      <div class="slt-row"><span class="state-dot state-dot--reviewed"></span>Gesehen – angeschaut, noch offen</div>
+                      <div class="slt-row"><span class="state-dot state-dot--promoted"></span>Promoted – für Merkliste vorgemerkt</div>
+                      <div class="slt-row"><span class="state-dot state-dot--dismissed"></span>Abgelehnt – verworfen</div>
+                      <div class="slt-row"><span class="state-dot state-dot--imported"></span>Importiert – in Merkliste übernommen</div>
+                    </div>
+                  </span>
+                </div>
+              </th>
+              <th class="col-symbol">${this.thSortable('symbol')}</th>
+              <th class="col-name">${this.thSortable('name')}</th>
               <th class="col-signal">Letztes Signal</th>
-              <th class="col-time">Entdeckt</th>
-              <th class="col-actions">Aktionen</th>
+              <th class="col-time">${this.thSortable('discovered')}</th>
+              <th class="col-links">Links</th>
+              <th class="col-actions">Aktion</th>
+              <th class="col-sources">${this.thSortable('sources')}</th>
             </tr>
           </thead>
           <tbody id="candidate-tbody"></tbody>
@@ -201,6 +334,23 @@ export class CandidateList {
 
     this.bindFilters();
     this.bindBulkActions();
+    this.bindSortHeaders();
+  }
+
+  bindSortHeaders() {
+    this.container.querySelectorAll('.th-sort[data-sort]').forEach((el) => {
+      el.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        this.setSort(el.dataset.sort);
+      });
+    });
+  }
+
+  updateSortIcons() {
+    this.container.querySelectorAll('.th-sort[data-sort]').forEach((el) => {
+      const col = el.dataset.sort;
+      el.innerHTML = `${SORT_LABELS[col]} ${this.sortIcon(col)}`;
+    });
   }
 
   bindFilters() {
@@ -216,11 +366,9 @@ export class CandidateList {
     this.container.querySelector('#filter-state').addEventListener('change', (e) => {
       this.setFilter('state', e.target.value);
     });
-
     this.container.querySelector('#filter-region').addEventListener('change', (e) => {
       this.setFilter('region', e.target.value);
     });
-
     this.container.querySelector('#filter-date').addEventListener('change', (e) => {
       this.setFilter('dateRange', e.target.value);
     });
@@ -232,12 +380,9 @@ export class CandidateList {
     });
 
     this.container.querySelector('#select-all').addEventListener('change', (e) => {
-      const filtered = this.getFiltered();
-      if (e.target.checked) {
-        filtered.forEach((c) => this.selected.add(c.id));
-      } else {
-        this.selected.clear();
-      }
+      const rows = this.getSorted(this.getFiltered());
+      if (e.target.checked) rows.forEach((c) => this.selected.add(c.id));
+      else this.selected.clear();
       this.renderRows();
       this.renderBulkBar();
     });
@@ -261,46 +406,68 @@ export class CandidateList {
   }
 
   renderRows() {
-    const filtered = this.getFiltered();
+    const rows = this.getSorted(this.getFiltered());
     this.tbody.innerHTML = '';
+    this.updateSortIcons();
 
-    if (filtered.length === 0) {
+    if (rows.length === 0) {
       this.emptyState.style.display = 'block';
       return;
     }
     this.emptyState.style.display = 'none';
 
-    for (const c of filtered) {
+    for (const c of rows) {
       const tr = document.createElement('tr');
       tr.className = `candidate-row state-${c.workspace_state}`;
       tr.dataset.id = c.id;
       if (this.selected.has(c.id)) tr.classList.add('selected');
 
-      const hasEnrichment = !!c.enrichment;
+      const links = c.links ?? {};
+      const canPromote = !['promoted', 'imported'].includes(c.workspace_state);
+      const canDismiss = c.workspace_state !== 'dismissed';
 
       tr.innerHTML = `
-        <td class="col-check"><input type="checkbox" class="row-check" ${this.selected.has(c.id) ? 'checked' : ''}></td>
-        <td class="col-state" title="${STATE_LABELS[c.workspace_state] ?? c.workspace_state}">
-          ${STATE_ICONS[c.workspace_state] ?? '⚫'}
+        <td class="col-check">
+          <input type="checkbox" class="row-check" ${this.selected.has(c.id) ? 'checked' : ''}>
+        </td>
+        <td class="col-state">
+          <span class="state-dot state-dot--${c.workspace_state}" title="${STATE_LABELS[c.workspace_state] ?? c.workspace_state}"></span>
         </td>
         <td class="col-symbol">
-          <strong>${c.symbol}</strong><br>
-          <small class="exchange">${c.exchange}</small>
-          ${hasEnrichment ? '<span class="enrich-dot" title="Enriched">✨</span>' : ''}
+          <div class="symbol-cell">
+            <strong>${c.symbol}</strong>
+            <span class="exchange-tag">${c.exchange}</span>
+            ${c.enrichment ? `<span class="enrich-badge" title="AI Enrichment vorhanden">${icons.sparkles}</span>` : ''}
+          </div>
         </td>
         <td class="col-name">${c.name}</td>
-        <td class="col-sources">${renderSourceBadges(c.sources)}</td>
-        <td class="col-signal"><small>${getLatestSignal(c)}</small></td>
-        <td class="col-time"><small>${timeAgo(c.first_discovered_at)}</small></td>
+        <td class="col-signal"><span class="signal-text">${getLatestSignal(c)}</span></td>
+        <td class="col-time">
+          <span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>
+        </td>
+        <td class="col-links">
+          <div class="link-cluster">
+            ${links.tradingview
+              ? `<a href="${links.tradingview}" class="link-chip link-chip--tv" target="_blank" rel="noopener" title="TradingView">${icons.barChart2}</a>`
+              : `<span class="link-chip link-chip--missing" title="Kein TV-Link">${icons.barChart2}</span>`}
+            ${links.stocktwits
+              ? `<a href="${links.stocktwits}" class="link-chip link-chip--st" target="_blank" rel="noopener" title="StockTwits">${icons.messageSquare}</a>`
+              : `<span class="link-chip link-chip--missing" title="Kein StockTwits-Link">${icons.messageSquare}</span>`}
+            ${links.yahoo
+              ? `<a href="${links.yahoo}" class="link-chip link-chip--yahoo" target="_blank" rel="noopener" title="Yahoo Finance">${icons.activity}</a>`
+              : `<span class="link-chip link-chip--missing" title="Kein Yahoo-Link">${icons.activity}</span>`}
+            <button class="link-chip link-chip--edit" data-action="editLinks" title="Links manuell bearbeiten">${icons.pencil}</button>
+          </div>
+        </td>
         <td class="col-actions">
-          <button class="btn-icon" data-action="detail" title="Details">🔍</button>
-          ${c.workspace_state !== 'promoted' && c.workspace_state !== 'imported'
-            ? `<button class="btn-icon" data-action="promote" title="Promoten">✓</button>`
+          ${canPromote
+            ? `<button class="btn-icon btn-icon--promote" data-action="promote" title="Promoten">${icons.check}</button>`
             : ''}
-          ${c.workspace_state !== 'dismissed'
-            ? `<button class="btn-icon" data-action="dismiss" title="Ablehnen">✗</button>`
+          ${canDismiss
+            ? `<button class="btn-icon btn-icon--dismiss" data-action="dismiss" title="Ablehnen">${icons.xMark}</button>`
             : ''}
         </td>
+        <td class="col-sources">${renderSourceBadges(c.sources)}</td>
       `;
 
       tr.querySelector('.row-check').addEventListener('change', (e) => {
@@ -310,9 +477,13 @@ export class CandidateList {
         this.renderBulkBar();
       });
 
-      tr.querySelector('[data-action="detail"]').addEventListener('pointerup', (e) => {
+      tr.querySelector('[data-action="editLinks"]').addEventListener('pointerup', (e) => {
         e.stopPropagation();
-        this.onSelect?.(c);
+        showLinkEditPopover(c, e.currentTarget, (newLinks) => {
+          c.links = { ...c.links, ...newLinks };
+          this.onAction?.('saveLinks', c, { links: c.links });
+          this.renderRows();
+        });
       });
 
       tr.querySelector('[data-action="promote"]')?.addEventListener('pointerup', (e) => {
@@ -325,8 +496,9 @@ export class CandidateList {
         this.onAction?.('dismiss', c);
       });
 
+      // Row click opens detail
       tr.addEventListener('pointerup', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        if (['INPUT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
         this.onSelect?.(c);
       });
 
