@@ -44,7 +44,7 @@ export function renderUploadModal({ onImport }) {
         </div>
 
         <div class="tab-panel" data-panel="search">
-          <p class="hint">Symbol-Suche via Alpha Vantage. Ohne Key läuft die Demo (nur Beispiel-Begriffe wie „tesco“); für volle Suche Key in Einstellungen hinterlegen.</p>
+          <p class="hint">Symbol-Suche via Twelve Data – funktioniert ohne Key. Für mehr Anfragen (800/Tag) optional einen Key in den Einstellungen hinterlegen.</p>
           <div class="search-wrap">
             <input type="search" id="symbol-input" class="symbol-search-input"
               placeholder="Firmenname oder Symbol… (z.B. Apple, BMW)" autocomplete="off">
@@ -192,7 +192,7 @@ export function renderUploadModal({ onImport }) {
       item.innerHTML = `
         <span class="sr-symbol">${r.symbol}</span>
         <span class="sr-name">${r.name}</span>
-        <span class="sr-region">${r.region || ''}</span>
+        <span class="sr-region">${r.exchange || r.region || ''}</span>
       `;
       item.addEventListener('pointerup', () => {
         const cand = searchResultToCandidate(r);

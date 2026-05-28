@@ -7,7 +7,7 @@ const KEYS = {
   secret: 'discovery_secret',
   claudeKey: 'discovery_claude_key',
   githubPat: 'discovery_github_pat',
-  alphaVantageKey: 'discovery_alphavantage_key',
+  twelveDataKey: 'discovery_twelvedata_key',
 };
 
 export function loadSettings() {
@@ -16,7 +16,7 @@ export function loadSettings() {
     secret: localStorage.getItem(KEYS.secret) ?? '',
     claudeKey: localStorage.getItem(KEYS.claudeKey) ?? '',
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
-    alphaVantageKey: localStorage.getItem(KEYS.alphaVantageKey) ?? '',
+    twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
   };
 }
 
@@ -77,10 +77,10 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
-          <label for="set-alphavantage-key">Alpha Vantage Key <small>(optional)</small></label>
-          <input type="password" id="set-alphavantage-key" placeholder="alphavantage.co/support/#api-key"
-            value="${settings.alphaVantageKey}" autocomplete="off">
-          <small>Für Symbol-Suche im Import (alphavantage.co, Free-Tier reicht)</small>
+          <label for="set-twelvedata-key">Twelve Data Key <small>(optional)</small></label>
+          <input type="password" id="set-twelvedata-key" placeholder="twelvedata.com/account/api-keys"
+            value="${settings.twelveDataKey}" autocomplete="off">
+          <small>Für Symbol-Suche im Import. Ohne Key funktioniert die Suche, mit Key 800 Anfragen/Tag.</small>
         </div>
 
         <div class="form-group">
@@ -105,7 +105,7 @@ export function renderSettingsModal(onSave) {
       secret: overlay.querySelector('#set-secret').value.trim(),
       claudeKey: overlay.querySelector('#set-claude-key').value.trim(),
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
-      alphaVantageKey: overlay.querySelector('#set-alphavantage-key').value.trim(),
+      twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
     };
     saveSettings(newSettings);
     overlay.remove();
