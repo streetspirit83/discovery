@@ -1,224 +1,200 @@
 /**
- * OpenInsider adapter
- * Scrapes insider buy signals from openinsider.com screener.
+ * Insider buy adapter – SEC EDGAR Form 4 filings
  *
- * Filters: min $1M transaction value, last 30 days, P/S type transactions.
+ * Replaces openinsider.com scraping (blocked on cloud IPs).
+ * Fetches P-Purchase Form 4 filings directly from SEC EDGAR.
+ * Filters: value ≥ $1M, last 30 days.
  */
 
-import { load as cheerioLoad } from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveUSExchange } from './_shared/us-exchange-resolver.js';
-import { resolveISIN } from './_shared/isin-resolver.js';
 import { buildLinks } from './_shared/link-builder.js';
-import { proxiedFetch } from './_shared/scrape-client.js';
 
 const log = (level, msg, data = {}) =>
   process.stdout.write(
     JSON.stringify({ level, msg, ts: new Date().toISOString(), ...data }) + '\n',
   );
 
-const SCREENER_URL =
-  'https://openinsider.com/screener?s=&o=&pl=&ph=&ll=&lh=&fd=30&td=&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&vl=1000000&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nfllo=&nflhi=&oclo=&ochi=&sortcol=0&cnt=20&page=1';
+// SEC requires identifying User-Agent per their automated-access policy
+const SEC_HEADERS = {
+  'User-Agent': 'DiscoveryWorkspace/1.0 david.krehan@gmail.com',
+  Accept: 'application/json, text/plain, */*',
+};
 
 const MIN_VALUE_USD = 1_000_000;
+const DAYS_BACK = 30;
+const MAX_FILINGS = 100;
+const DELAY_MS = 150; // stay well under SEC's 10 req/sec limit
 
-/**
- * Parse a dollar amount string like "$9,100,000" or "$9.1M" → number
- * @param {string} str
- * @returns {number}
- */
-function parseDollarAmount(str) {
-  if (!str) return 0;
-  const cleaned = str.replace(/[$,\s]/g, '');
-  if (cleaned.endsWith('M')) return parseFloat(cleaned) * 1_000_000;
-  if (cleaned.endsWith('K')) return parseFloat(cleaned) * 1_000;
-  if (cleaned.endsWith('B')) return parseFloat(cleaned) * 1_000_000_000;
-  return parseFloat(cleaned) || 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function xmlTag(xml, tag) {
+  return (xml.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`)) ?? [])[1]?.trim();
+}
+
+function xmlValue(xml, tag) {
+  return (xml.match(new RegExp(`<${tag}>\\s*<value>([^<]*)<\\/value>`)) ?? [])[1]?.trim();
 }
 
 /**
- * Parse a share count string like "50,000" → number
- * @param {string} str
- * @returns {number}
+ * Search EDGAR full-text search for recent Form 4 filings.
  */
-function parseShareCount(str) {
-  if (!str) return 0;
-  return parseInt(str.replace(/[,\s]/g, ''), 10) || 0;
+async function searchForm4s() {
+  const startDate = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+
+  const url = `https://efts.sec.gov/LATEST/search-index?forms=4&dateRange=custom&startdt=${startDate}`;
+  log('info', 'edgar: searching Form 4 filings', { startDate });
+
+  const res = await fetch(url, { headers: SEC_HEADERS });
+  if (!res.ok) throw new Error(`EDGAR EFTS search failed: ${res.status}`);
+
+  const data = await res.json();
+  const hits = data.hits?.hits ?? [];
+  log('info', 'edgar: search results', { total: data.hits?.total?.value, using: Math.min(hits.length, MAX_FILINGS) });
+  return hits.slice(0, MAX_FILINGS);
 }
 
 /**
- * Fetch and parse the OpenInsider screener page.
- * @returns {Promise<Array>} raw rows from table
+ * Get primary Form 4 XML document name from the filing index JSON.
  */
-async function scrapeOpenInsider() {
-  log('info', 'openinsider: fetching screener', { url: SCREENER_URL });
+async function getXmlDocName(cik, accessionNo) {
+  const acc = accessionNo.replace(/-/g, '');
+  const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${accessionNo}-index.json`;
+  const res = await fetch(url, { headers: SEC_HEADERS });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const items = data.directory?.item ?? data.documents ?? [];
+  const doc = items.find((d) => d.type === '4' && (d.name ?? '').endsWith('.xml'));
+  return doc?.name ?? null;
+}
 
-  const res = await proxiedFetch(SCREENER_URL);
+/**
+ * Fetch Form 4 XML and extract purchase transactions.
+ */
+async function parseForm4(cik, accessionNo, docName) {
+  const acc = accessionNo.replace(/-/g, '');
+  const res = await fetch(
+    `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${docName}`,
+    { headers: { ...SEC_HEADERS, Accept: 'text/xml, */*' } },
+  );
+  if (!res.ok) return null;
+  const xml = await res.text();
 
-  if (!res.ok) {
-    throw new Error(`OpenInsider request failed: ${res.status} ${res.statusText}`);
+  const issuerTicker = xmlTag(xml, 'issuerTradingSymbol');
+  if (!issuerTicker) return null;
+
+  const issuerName = xmlTag(xml, 'issuerName');
+  const issuerCik = xmlTag(xml, 'issuerCik');
+  const insiderName = xmlTag(xml, 'rptOwnerName');
+  const insiderTitle = xmlTag(xml, 'officerTitle');
+
+  const purchases = [];
+  const re = /<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const block = m[1];
+    if (xmlTag(block, 'transactionCode') !== 'P') continue;
+    if (xmlValue(block, 'transactionAcquiredDisposedCode') !== 'A') continue;
+
+    const shares = parseFloat(xmlValue(block, 'transactionShares') ?? '0') || 0;
+    const price = parseFloat(xmlValue(block, 'transactionPricePerShare') ?? '0') || 0;
+    const value = shares * price;
+    const date = xmlValue(block, 'transactionDate');
+
+    if (value >= MIN_VALUE_USD) purchases.push({ shares, price, value, date });
   }
 
-  const html = await res.text();
-  log('debug', 'openinsider: received HTML', { bytes: html.length });
-
-  const $ = cheerioLoad(html);
-  const rows = [];
-
-  // The main table has class "tinytable" or similar; let's find all rows
-  $('table.tinytable tbody tr, table tbody tr').each((i, tr) => {
-    const cells = $(tr).find('td');
-    if (cells.length < 13) return;
-
-    const filingDate = $(cells[1]).text().trim();
-    const tradeDate = $(cells[2]).text().trim();
-    const ticker = $(cells[3]).find('a').text().trim() || $(cells[3]).text().trim();
-    const companyName = $(cells[4]).find('a').text().trim() || $(cells[4]).text().trim();
-    const insiderName = $(cells[5]).find('a').text().trim() || $(cells[5]).text().trim();
-    const insiderTitle = $(cells[6]).text().trim();
-    const tradeType = $(cells[7]).text().trim();
-    const price = $(cells[8]).text().trim();
-    const qty = $(cells[9]).text().trim();
-    const owned = $(cells[10]).text().trim();
-    const deltaOwn = $(cells[11]).text().trim();
-    const value = $(cells[12]).text().trim();
-
-    const valueParsed = parseDollarAmount(value);
-
-    if (!ticker || valueParsed < MIN_VALUE_USD) return;
-
-    // Only include purchases (P or J - gift, A - award sometimes)
-    if (!tradeType.includes('P') && tradeType !== 'A') return;
-
-    rows.push({
-      filingDate,
-      tradeDate,
-      ticker: ticker.toUpperCase(),
-      companyName,
-      insiderName,
-      insiderTitle,
-      tradeType,
-      price: parseDollarAmount(price),
-      qty: parseShareCount(qty),
-      owned: parseShareCount(owned),
-      deltaOwn,
-      value: valueParsed,
-    });
-  });
-
-  log('info', 'openinsider: parsed rows', { count: rows.length });
-  return rows;
+  return { issuerTicker: issuerTicker.toUpperCase(), issuerName, issuerCik, insiderName, insiderTitle, purchases };
 }
 
 /**
- * Convert raw OpenInsider rows to Discovery candidates.
- * Groups multiple insider transactions for same ticker into one candidate.
- *
- * @param {Array} rows
- * @returns {Promise<Array>} candidates
+ * Resolve exchange for an issuer CIK via EDGAR submissions.
  */
-async function rowsToCandidates(rows) {
-  // Group by ticker
-  const byTicker = new Map();
-  for (const row of rows) {
-    if (!byTicker.has(row.ticker)) {
-      byTicker.set(row.ticker, []);
-    }
-    byTicker.get(row.ticker).push(row);
-  }
-
-  const candidates = [];
-  const now = new Date().toISOString();
-
-  for (const [ticker, tickerRows] of byTicker) {
-    const primaryRow = tickerRows[0];
-
-    let exchange;
-    try {
-      exchange = await resolveUSExchange(ticker);
-    } catch (err) {
-      log('warn', 'openinsider: could not resolve exchange', { ticker, error: err.message });
-      exchange = 'NASDAQ';
-    }
-
-    let isin = null;
-    try {
-      isin = await resolveISIN(ticker, exchange);
-    } catch (err) {
-      log('warn', 'openinsider: could not resolve ISIN', { ticker, error: err.message });
-    }
-
-    const links = buildLinks({
-      exchange,
-      symbol: ticker,
-      yahooSymbol: ticker,
-    });
-
-    // Build sources (one per transaction)
-    const sources = tickerRows.map((row) => {
-      const totalValue = new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0,
-      }).format(row.value);
-
-      const priceFormatted = row.price
-        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(row.price)
-        : 'unknown price';
-
-      return {
-        adapter: 'openinsider',
-        source_url: SCREENER_URL,
-        discovered_at: now,
-        signal_type: 'insider_buy',
-        raw_signal: {
-          ticker: row.ticker,
-          company: row.companyName,
-          insider_name: row.insiderName,
-          insider_title: row.insiderTitle,
-          trade_type: row.tradeType,
-          trade_date: row.tradeDate,
-          filing_date: row.filingDate,
-          price: row.price,
-          qty: row.qty,
-          value: row.value,
-          delta_own: row.deltaOwn,
-        },
-        info_snippet: `${row.insiderTitle || 'Insider'} ${row.insiderName} bought ${row.qty.toLocaleString()} shares at ${priceFormatted} (${totalValue})`,
-      };
-    });
-
-    const candidate = {
-      id: uuidv4(),
-      symbol: ticker,
-      exchange,
-      yahoo_symbol: ticker,
-      isin,
-      name: primaryRow.companyName,
-      sources,
-      links,
-      workspace_state: 'new',
-      notes: '',
-      enrichment: null,
-      first_discovered_at: now,
-      last_updated_at: now,
-    };
-
-    candidates.push(candidate);
-  }
-
-  return candidates;
+async function resolveExchange(cik) {
+  const cik10 = String(parseInt(cik, 10)).padStart(10, '0');
+  const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
+  if (!res.ok) return 'NASDAQ';
+  const data = await res.json();
+  return data.exchanges?.[0] ?? 'NASDAQ';
 }
 
-/**
- * Main export: fetch candidates from OpenInsider.
- * @returns {Promise<Array>} Discovery candidates
- */
 export async function fetchCandidates() {
-  const rows = await scrapeOpenInsider();
-  if (rows.length === 0) {
-    log('warn', 'openinsider: no rows found (site structure may have changed)');
-    return [];
+  const hits = await searchForm4s();
+
+  const byTicker = new Map();
+  const exchangeCache = new Map();
+
+  for (const hit of hits) {
+    const src = hit._source ?? {};
+    const accessionNo = src.accession_no ?? hit._id;
+    const ciks = src.ciks ?? [];
+    if (!accessionNo || ciks.length === 0) continue;
+
+    const reporterCik = ciks[0];
+
+    await sleep(DELAY_MS);
+    let docName;
+    try { docName = await getXmlDocName(reporterCik, accessionNo); } catch { continue; }
+    if (!docName) continue;
+
+    await sleep(DELAY_MS);
+    let form4;
+    try { form4 = await parseForm4(reporterCik, accessionNo, docName); } catch { continue; }
+    if (!form4 || form4.purchases.length === 0) continue;
+
+    const { issuerTicker, issuerName, issuerCik, insiderName, insiderTitle, purchases } = form4;
+
+    let exchange = 'NASDAQ';
+    if (issuerCik) {
+      if (!exchangeCache.has(issuerCik)) {
+        await sleep(DELAY_MS);
+        exchange = await resolveExchange(issuerCik).catch(() => 'NASDAQ');
+        exchangeCache.set(issuerCik, exchange);
+      } else {
+        exchange = exchangeCache.get(issuerCik);
+      }
+    }
+
+    for (const p of purchases) {
+      if (!byTicker.has(issuerTicker)) {
+        byTicker.set(issuerTicker, { name: issuerName, exchange, insiders: [] });
+      }
+      byTicker.get(issuerTicker).insiders.push({
+        name: insiderName, title: insiderTitle,
+        ...p, filingDate: src.file_date, accessionNo,
+      });
+    }
   }
-  return rowsToCandidates(rows);
+
+  log('info', 'edgar: qualified tickers', { count: byTicker.size });
+  if (byTicker.size === 0) return [];
+
+  const now = new Date().toISOString();
+  return [...byTicker.entries()].map(([ticker, data]) => ({
+    id: uuidv4(),
+    symbol: ticker,
+    exchange: data.exchange,
+    yahoo_symbol: ticker,
+    isin: null,
+    name: data.name,
+    sources: data.insiders.map((ins) => ({
+      adapter: 'openinsider',
+      source_url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ticker}&type=4&dateb=&owner=include&count=10`,
+      discovered_at: now,
+      signal_type: 'insider_buy',
+      raw_signal: {
+        ticker, company: data.name,
+        insider_name: ins.name, insider_title: ins.title,
+        trade_date: ins.date, filing_date: ins.filingDate,
+        price: ins.price, qty: ins.shares, value: ins.value,
+      },
+      info_snippet: `${ins.title || 'Insider'} ${ins.name} bought ${ins.shares.toLocaleString()} shares at $${ins.price.toFixed(2)} ($${(ins.value / 1e6).toFixed(1)}M)`,
+    })),
+    links: buildLinks({ exchange: data.exchange, symbol: ticker, yahooSymbol: ticker }),
+    workspace_state: 'new',
+    notes: '',
+    enrichment: null,
+    first_discovered_at: now,
+    last_updated_at: now,
+  }));
 }
