@@ -27,7 +27,7 @@ const DELAY_MS = 150; // stay under SEC's 10 req/sec limit
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// The filer CIK is encoded in the accession number prefix – always reliable
+// The filer CIK is the numeric prefix of the accession number
 function reporterCikFromAccession(accessionNo) {
   return String(parseInt(accessionNo.split('-')[0], 10));
 }
@@ -44,6 +44,7 @@ function xmlValue(xml, tag) {
 
 /**
  * Search EDGAR full-text search for recent Form 4 filings.
+ * The _id in results has format "{accessionNo}:{primaryDocumentName}".
  */
 async function searchForm4s() {
   const startDate = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60 * 1000)
@@ -59,31 +60,6 @@ async function searchForm4s() {
   const hits = data.hits?.hits ?? [];
   log('info', 'edgar: search results', { total: data.hits?.total?.value, using: Math.min(hits.length, MAX_FILINGS) });
   return hits.slice(0, MAX_FILINGS);
-}
-
-// Cache submissions JSON per reporter CIK to avoid redundant fetches
-const submissionsCache = new Map();
-
-/**
- * Get primary document filename via the EDGAR submissions API.
- * This is more reliable than guessing from the filing index JSON format.
- */
-async function getPrimaryDoc(reporterCik, accessionNo) {
-  const cik10 = String(parseInt(reporterCik, 10)).padStart(10, '0');
-
-  if (!submissionsCache.has(cik10)) {
-    const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
-    submissionsCache.set(cik10, res.ok ? await res.json() : null);
-  }
-
-  const data = submissionsCache.get(cik10);
-  const recent = data?.filings?.recent;
-  if (!recent?.accessionNumber) return null;
-
-  const idx = recent.accessionNumber.findIndex((a) => a === accessionNo);
-  if (idx === -1) return null;
-
-  return recent.primaryDocument?.[idx] ?? null;
 }
 
 /**
@@ -127,16 +103,16 @@ async function parseForm4(reporterCik, accessionNo, docName) {
   return { issuerTicker: issuerTicker.toUpperCase(), issuerName, issuerCik, insiderName, insiderTitle, purchases };
 }
 
-/**
- * Resolve exchange for an issuer CIK via EDGAR submissions (cached).
- */
+// Cache per issuer CIK to avoid redundant fetches
+const exchangeCache = new Map();
+
 async function resolveExchange(issuerCik) {
+  if (exchangeCache.has(issuerCik)) return exchangeCache.get(issuerCik);
   const cik10 = String(parseInt(issuerCik, 10)).padStart(10, '0');
-  if (!submissionsCache.has(cik10)) {
-    const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
-    submissionsCache.set(cik10, res.ok ? await res.json() : null);
-  }
-  return submissionsCache.get(cik10)?.exchanges?.[0] ?? 'NASDAQ';
+  const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
+  const exchange = res.ok ? ((await res.json()).exchanges?.[0] ?? 'NASDAQ') : 'NASDAQ';
+  exchangeCache.set(issuerCik, exchange);
+  return exchange;
 }
 
 export async function fetchCandidates() {
@@ -146,26 +122,21 @@ export async function fetchCandidates() {
 
   for (const hit of hits) {
     const src = hit._source ?? {};
-    const accessionNo = src.accession_no ?? hit._id;
-    if (!accessionNo) continue;
 
-    // Use the accession number prefix as the reporter CIK – always correct
+    // EDGAR EFTS _id format: "{accessionNo}:{primaryDocumentName}"
+    const colonIdx = (hit._id ?? '').indexOf(':');
+    if (colonIdx === -1) continue;
+    const accessionNo = hit._id.slice(0, colonIdx);
+    const docName = hit._id.slice(colonIdx + 1);
+    if (!accessionNo || !docName) continue;
+
     const reporterCik = reporterCikFromAccession(accessionNo);
 
     await sleep(DELAY_MS);
-    let docName;
-    try { docName = await getPrimaryDoc(reporterCik, accessionNo); } catch (e) {
-      log('debug', 'edgar: submissions lookup failed', { accessionNo, error: e.message });
-      continue;
-    }
-    if (!docName) {
-      log('debug', 'edgar: no primary doc', { accessionNo, reporterCik });
-      continue;
-    }
-
-    await sleep(DELAY_MS);
     let form4;
-    try { form4 = await parseForm4(reporterCik, accessionNo, docName); } catch (e) {
+    try {
+      form4 = await parseForm4(reporterCik, accessionNo, docName);
+    } catch (e) {
       log('debug', 'edgar: parse failed', { accessionNo, error: e.message });
       continue;
     }
