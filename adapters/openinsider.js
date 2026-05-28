@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { resolveUSExchange } from './_shared/us-exchange-resolver.js';
 import { resolveISIN } from './_shared/isin-resolver.js';
 import { buildLinks } from './_shared/link-builder.js';
+import { proxiedFetch } from './_shared/scrape-client.js';
 
 const log = (level, msg, data = {}) =>
   process.stdout.write(
@@ -52,13 +53,7 @@ function parseShareCount(str) {
 async function scrapeOpenInsider() {
   log('info', 'openinsider: fetching screener', { url: SCREENER_URL });
 
-  const res = await fetch(SCREENER_URL, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (compatible; DiscoveryWorkspace/1.0; +https://github.com/discovery)',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-  });
+  const res = await proxiedFetch(SCREENER_URL);
 
   if (!res.ok) {
     throw new Error(`OpenInsider request failed: ${res.status} ${res.statusText}`);
