@@ -23,16 +23,23 @@ const SEC_HEADERS = {
 const MIN_VALUE_USD = 1_000_000;
 const DAYS_BACK = 30;
 const MAX_FILINGS = 100;
-const DELAY_MS = 150; // stay well under SEC's 10 req/sec limit
+const DELAY_MS = 150; // stay under SEC's 10 req/sec limit
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function xmlTag(xml, tag) {
-  return (xml.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`)) ?? [])[1]?.trim();
+// The filer CIK is encoded in the accession number prefix – always reliable
+function reporterCikFromAccession(accessionNo) {
+  return String(parseInt(accessionNo.split('-')[0], 10));
 }
 
+// Matches content between XML tags, including multi-line values
+function xmlTag(xml, tag) {
+  return (xml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`)) ?? [])[1]?.trim();
+}
+
+// Matches <tag>\s*<value>…</value> pattern used in Form 4 amount fields
 function xmlValue(xml, tag) {
-  return (xml.match(new RegExp(`<${tag}>\\s*<value>([^<]*)<\\/value>`)) ?? [])[1]?.trim();
+  return (xml.match(new RegExp(`<${tag}>[\\s\\S]*?<value>([\\s\\S]*?)<\\/value>`)) ?? [])[1]?.trim();
 }
 
 /**
@@ -54,27 +61,40 @@ async function searchForm4s() {
   return hits.slice(0, MAX_FILINGS);
 }
 
+// Cache submissions JSON per reporter CIK to avoid redundant fetches
+const submissionsCache = new Map();
+
 /**
- * Get primary Form 4 XML document name from the filing index JSON.
+ * Get primary document filename via the EDGAR submissions API.
+ * This is more reliable than guessing from the filing index JSON format.
  */
-async function getXmlDocName(cik, accessionNo) {
-  const acc = accessionNo.replace(/-/g, '');
-  const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${accessionNo}-index.json`;
-  const res = await fetch(url, { headers: SEC_HEADERS });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const items = data.directory?.item ?? data.documents ?? [];
-  const doc = items.find((d) => d.type === '4' && (d.name ?? '').endsWith('.xml'));
-  return doc?.name ?? null;
+async function getPrimaryDoc(reporterCik, accessionNo) {
+  const cik10 = String(parseInt(reporterCik, 10)).padStart(10, '0');
+
+  if (!submissionsCache.has(cik10)) {
+    const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
+    submissionsCache.set(cik10, res.ok ? await res.json() : null);
+  }
+
+  const data = submissionsCache.get(cik10);
+  const recent = data?.filings?.recent;
+  if (!recent?.accessionNumber) return null;
+
+  const idx = recent.accessionNumber.findIndex((a) => a === accessionNo);
+  if (idx === -1) return null;
+
+  return recent.primaryDocument?.[idx] ?? null;
 }
 
 /**
  * Fetch Form 4 XML and extract purchase transactions.
  */
-async function parseForm4(cik, accessionNo, docName) {
+async function parseForm4(reporterCik, accessionNo, docName) {
   const acc = accessionNo.replace(/-/g, '');
+  const cikInt = parseInt(reporterCik, 10);
+
   const res = await fetch(
-    `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${docName}`,
+    `https://www.sec.gov/Archives/edgar/data/${cikInt}/${acc}/${docName}`,
     { headers: { ...SEC_HEADERS, Accept: 'text/xml, */*' } },
   );
   if (!res.ok) return null;
@@ -108,51 +128,55 @@ async function parseForm4(cik, accessionNo, docName) {
 }
 
 /**
- * Resolve exchange for an issuer CIK via EDGAR submissions.
+ * Resolve exchange for an issuer CIK via EDGAR submissions (cached).
  */
-async function resolveExchange(cik) {
-  const cik10 = String(parseInt(cik, 10)).padStart(10, '0');
-  const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
-  if (!res.ok) return 'NASDAQ';
-  const data = await res.json();
-  return data.exchanges?.[0] ?? 'NASDAQ';
+async function resolveExchange(issuerCik) {
+  const cik10 = String(parseInt(issuerCik, 10)).padStart(10, '0');
+  if (!submissionsCache.has(cik10)) {
+    const res = await fetch(`https://data.sec.gov/submissions/CIK${cik10}.json`, { headers: SEC_HEADERS });
+    submissionsCache.set(cik10, res.ok ? await res.json() : null);
+  }
+  return submissionsCache.get(cik10)?.exchanges?.[0] ?? 'NASDAQ';
 }
 
 export async function fetchCandidates() {
   const hits = await searchForm4s();
 
   const byTicker = new Map();
-  const exchangeCache = new Map();
 
   for (const hit of hits) {
     const src = hit._source ?? {};
     const accessionNo = src.accession_no ?? hit._id;
-    const ciks = src.ciks ?? [];
-    if (!accessionNo || ciks.length === 0) continue;
+    if (!accessionNo) continue;
 
-    const reporterCik = ciks[0];
+    // Use the accession number prefix as the reporter CIK – always correct
+    const reporterCik = reporterCikFromAccession(accessionNo);
 
     await sleep(DELAY_MS);
     let docName;
-    try { docName = await getXmlDocName(reporterCik, accessionNo); } catch { continue; }
-    if (!docName) continue;
+    try { docName = await getPrimaryDoc(reporterCik, accessionNo); } catch (e) {
+      log('debug', 'edgar: submissions lookup failed', { accessionNo, error: e.message });
+      continue;
+    }
+    if (!docName) {
+      log('debug', 'edgar: no primary doc', { accessionNo, reporterCik });
+      continue;
+    }
 
     await sleep(DELAY_MS);
     let form4;
-    try { form4 = await parseForm4(reporterCik, accessionNo, docName); } catch { continue; }
+    try { form4 = await parseForm4(reporterCik, accessionNo, docName); } catch (e) {
+      log('debug', 'edgar: parse failed', { accessionNo, error: e.message });
+      continue;
+    }
     if (!form4 || form4.purchases.length === 0) continue;
 
     const { issuerTicker, issuerName, issuerCik, insiderName, insiderTitle, purchases } = form4;
 
     let exchange = 'NASDAQ';
     if (issuerCik) {
-      if (!exchangeCache.has(issuerCik)) {
-        await sleep(DELAY_MS);
-        exchange = await resolveExchange(issuerCik).catch(() => 'NASDAQ');
-        exchangeCache.set(issuerCik, exchange);
-      } else {
-        exchange = exchangeCache.get(issuerCik);
-      }
+      await sleep(DELAY_MS);
+      exchange = await resolveExchange(issuerCik).catch(() => 'NASDAQ');
     }
 
     for (const p of purchases) {
