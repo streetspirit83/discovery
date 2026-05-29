@@ -27,6 +27,13 @@ const MIN_WEIGHT_PCT = 0.3; // % of portfolio; keep low to capture more holdings
 const ETF_NAME = 'iShares Global Clean Energy ETF (ICLN)';
 const ISHARES_CIK = '1100663'; // iShares Trust registrant CIK
 
+// Only include US and European equity markets; skip Asia-Pacific, LatAm, etc.
+const ALLOWED_COUNTRIES = new Set([
+  'US',
+  'DE', 'GB', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT',
+  'DK', 'SE', 'NO', 'FI', 'PT', 'IE', 'LU', 'GR', 'PL',
+]);
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── XML helpers (namespace-aware) ──────────────────────────────────────────
@@ -208,6 +215,11 @@ async function parseHoldings(cik, accessionNo, xmlDoc) {
 
     const invCountry = xmlTag(block, 'invCountry') ?? 'US';
 
+    if (!ALLOWED_COUNTRIES.has(invCountry)) {
+      log('debug', 'etf-holdings: skipping non-US/EU holding', { name, invCountry });
+      continue;
+    }
+
     holdings.push({ name, ticker, isin, invCountry, pctVal });
   }
 
@@ -229,13 +241,16 @@ async function parseHoldings(cik, accessionNo, xmlDoc) {
 // ─── Step 4: Resolve exchange for each holding ──────────────────────────────
 
 const COUNTRY_EXCHANGE = {
-  DK: 'OMXCO', ES: 'BME', PT: 'EURONEXT', DE: 'XETR',
-  GB: 'LSE',   FR: 'EURONEXT', IT: 'MIL',  JP: 'TSE',
+  DE: 'XETR', GB: 'LSE',     FR: 'EURONEXT', IT: 'MIL',
+  ES: 'BME',  DK: 'OMXCO',   SE: 'OMXSTO',   NO: 'OMXNO',
+  PT: 'EURONEXT', BE: 'EURONEXT', NL: 'EURONEXT', FI: 'OMXHEX',
+  CH: 'SIX',  AT: 'WBAG',    IE: 'EURONEXT',  GR: 'ATHEX',
 };
 
 const YAHOO_SUFFIX = {
   XETR: '.DE', LSE: '.L', EURONEXT: '.PA',
-  BME: '.MC',  MIL: '.MI', OMXCO: '.CO', TSE: '.T',
+  BME: '.MC', MIL: '.MI', OMXCO: '.CO', OMXSTO: '.ST',
+  OMXNO: '.OL', SIX: '.SW', WBAG: '.VI', OMXHEX: '.HE',
 };
 
 async function resolveExchange(ticker, invCountry, knownExchange = null) {
