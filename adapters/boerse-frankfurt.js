@@ -1,11 +1,14 @@
 /**
- * Börse Frankfurt adapter
- * Fetches trend indicator top-20 stocks from Börse Frankfurt API.
- * Maps to XETR (Xetra) exchange.
+ * Börse Frankfurt adapter – Xetra top momentum stocks
+ *
+ * Replaces direct Börse Frankfurt API scraping (blocked on cloud IPs).
+ * Uses Twelve Data batch time-series to compute 5-day price momentum
+ * for DAX 40 components and returns the top 20 by performance.
+ *
+ * Requires env var: TWELVEDATA_API_KEY
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { resolveISIN } from './_shared/isin-resolver.js';
 import { buildLinks } from './_shared/link-builder.js';
 
 const log = (level, msg, data = {}) =>
@@ -13,126 +16,114 @@ const log = (level, msg, data = {}) =>
     JSON.stringify({ level, msg, ts: new Date().toISOString(), ...data }) + '\n',
   );
 
-const BF_API_URL =
-  'https://api.boerse-frankfurt.de/v1/search/stocks?&limit=20&offset=0&order=desc&sort=TREND_INDICATOR';
-
 const EXCHANGE = 'XETR';
+const TOP_N = 20;
+const BATCH_SIZE = 8;
+const DAYS_BACK = 7; // enough trading days for a 5-day return
+const DELAY_MS = 300;
 
-/**
- * Fetch Börse Frankfurt trend list.
- * @returns {Promise<Array>}
- */
-async function fetchTrendList() {
-  log('info', 'boerse-frankfurt: fetching trend list', { url: BF_API_URL });
+// DAX 40 constituents (as of early 2025; rarely changes)
+const DAX_TICKERS = [
+  'ADS', 'AIR', 'ALV', 'BAYN', 'BEI', 'BMW', 'BNR', 'CBK', 'CON',
+  'DB1', 'DBK', 'DHL', 'DTE', 'EOAN', 'ENR', 'FME', 'FRE', 'HEI',
+  'HEN3', 'HFG', 'HNR1', 'IFX', 'KION', 'MRK', 'MTX', 'MUV2',
+  'P911', 'PAH3', 'PUM', 'QIA', 'RHM', 'RWE', 'SAP', 'SHL', 'SIE',
+  'SRT3', 'SY1', 'VNA', 'VOW3', 'ZAL',
+];
 
-  const res = await fetch(BF_API_URL, {
-    headers: {
-      Accept: 'application/json',
-      'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
-      'User-Agent':
-        'Mozilla/5.0 (compatible; DiscoveryWorkspace/1.0)',
-      Origin: 'https://www.boerse-frankfurt.de',
-      Referer: 'https://www.boerse-frankfurt.de/',
-    },
-  });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  if (!res.ok) {
-    throw new Error(`Börse Frankfurt API failed: ${res.status} ${res.statusText}`);
-  }
-
-  const data = await res.json();
-  log('debug', 'boerse-frankfurt: received response', {
-    totalCount: data?.totalCount,
-    items: data?.data?.length ?? data?.stocks?.length ?? 0,
-  });
-
-  // The API might return { data: [...] } or { stocks: [...] } or just an array
-  const items = data?.data ?? data?.stocks ?? data?.results ?? (Array.isArray(data) ? data : []);
-  log('info', 'boerse-frankfurt: items in trend list', { count: items.length });
-  return items;
+async function fetchBatch(tickers, apiKey) {
+  const url =
+    `https://api.twelvedata.com/time_series` +
+    `?symbol=${tickers.join(',')}` +
+    `&exchange=${EXCHANGE}` +
+    `&interval=1day` +
+    `&outputsize=${DAYS_BACK}` +
+    `&apikey=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Twelve Data error: ${res.status}`);
+  return res.json();
 }
 
-/**
- * Parse a Börse Frankfurt stock item to Discovery candidate.
- * @param {object} item
- * @param {number} rank
- * @returns {Promise<object>}
- */
-async function itemToCandidate(item, rank) {
-  const now = new Date().toISOString();
-
-  // BF API field names may vary – cover common variants
-  const isin = item.isin ?? item.ISIN ?? null;
-  const wkn = item.wkn ?? item.WKN ?? null;
-  const name = item.name ?? item.companyName ?? item.longName ?? item.shortName ?? 'Unknown';
-  const symbol = item.symbol ?? item.ticker ?? item.wkn ?? wkn ?? isin?.slice(-6) ?? 'UNKNOWN';
-  const trendValue = item.trendIndicator ?? item.trend ?? item.trendScore ?? null;
-
-  // Build Yahoo symbol: BF stocks are typically .DE for Xetra
-  const yahooSymbol = `${symbol}.DE`;
-
-  const links = buildLinks({
-    exchange: EXCHANGE,
-    symbol,
-    yahooSymbol,
-  });
-
-  const source = {
-    adapter: 'boerse-frankfurt',
-    source_url: BF_API_URL,
-    discovered_at: now,
-    signal_type: 'trend_indicator',
-    raw_signal: {
-      rank,
-      isin,
-      wkn,
-      name,
-      symbol,
-      trend_indicator: trendValue,
-      raw: item,
-    },
-    info_snippet: `Ranked #${rank} in Börse Frankfurt trend indicator${trendValue != null ? ` (score: ${trendValue})` : ''}`,
-  };
-
-  return {
-    id: uuidv4(),
-    symbol,
-    exchange: EXCHANGE,
-    yahoo_symbol: yahooSymbol,
-    isin,
-    name,
-    sources: [source],
-    links,
-    workspace_state: 'new',
-    notes: '',
-    enrichment: null,
-    first_discovered_at: now,
-    last_updated_at: now,
-  };
-}
-
-/**
- * Main export: fetch candidates from Börse Frankfurt.
- * @returns {Promise<Array>} Discovery candidates
- */
 export async function fetchCandidates() {
-  const items = await fetchTrendList();
-
-  if (items.length === 0) {
-    log('warn', 'boerse-frankfurt: no items returned');
+  const apiKey = process.env.TWELVEDATA_API_KEY;
+  if (!apiKey) {
+    log('error', 'boerse-frankfurt: TWELVEDATA_API_KEY not set');
     return [];
   }
 
-  const candidates = [];
-  for (let i = 0; i < Math.min(items.length, 20); i++) {
+  log('info', 'boerse-frankfurt: fetching Xetra momentum', { tickers: DAX_TICKERS.length });
+
+  const scores = [];
+
+  for (let i = 0; i < DAX_TICKERS.length; i += BATCH_SIZE) {
+    const batch = DAX_TICKERS.slice(i, i + BATCH_SIZE);
+    let data;
     try {
-      const candidate = await itemToCandidate(items[i], i + 1);
-      candidates.push(candidate);
+      data = await fetchBatch(batch, apiKey);
     } catch (err) {
-      log('warn', 'boerse-frankfurt: failed to parse item', { index: i, error: err.message });
+      log('warn', 'boerse-frankfurt: batch failed', { batch, error: err.message });
+      continue;
     }
+
+    // Single-symbol response is wrapped differently from multi-symbol
+    const results = batch.length === 1 ? { [batch[0]]: data } : data;
+
+    for (const ticker of batch) {
+      const entry = results[ticker];
+      if (!entry || entry.status === 'error') continue;
+      const vals = entry.values;
+      if (!Array.isArray(vals) || vals.length < 2) continue;
+
+      // values[] is newest-first; use first vs last for period return
+      const latest = parseFloat(vals[0].close);
+      const prior  = parseFloat(vals[vals.length - 1].close);
+      if (!latest || !prior) continue;
+
+      const momentum = (latest / prior) - 1;
+      const name = entry.meta?.name ?? ticker;
+      scores.push({ ticker, name, momentum, latest });
+    }
+
+    if (i + BATCH_SIZE < DAX_TICKERS.length) await sleep(DELAY_MS);
   }
 
-  log('info', 'boerse-frankfurt: produced candidates', { count: candidates.length });
-  return candidates;
+  scores.sort((a, b) => b.momentum - a.momentum);
+  const top = scores.filter((s) => s.momentum > 0).slice(0, TOP_N);
+
+  log('info', 'boerse-frankfurt: top movers', { count: top.length });
+  if (top.length === 0) return [];
+
+  const now = new Date().toISOString();
+  return top.map((s, rank) => {
+    const yahooSymbol = `${s.ticker}.DE`;
+    return {
+      id: uuidv4(),
+      symbol: s.ticker,
+      exchange: EXCHANGE,
+      yahoo_symbol: yahooSymbol,
+      isin: null,
+      name: s.name,
+      sources: [{
+        adapter: 'boerse-frankfurt',
+        source_url: 'https://twelvedata.com',
+        discovered_at: now,
+        signal_type: 'trend_indicator',
+        raw_signal: {
+          rank: rank + 1,
+          ticker: s.ticker,
+          price: s.latest,
+          momentum_5d_pct: parseFloat((s.momentum * 100).toFixed(2)),
+        },
+        info_snippet: `Xetra momentum #${rank + 1}: ${s.name} +${(s.momentum * 100).toFixed(1)}% in ${DAYS_BACK - 1} days`,
+      }],
+      links: buildLinks({ exchange: EXCHANGE, symbol: s.ticker, yahooSymbol }),
+      workspace_state: 'new',
+      notes: '',
+      enrichment: null,
+      first_discovered_at: now,
+      last_updated_at: now,
+    };
+  });
 }
