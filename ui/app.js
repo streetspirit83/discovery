@@ -194,6 +194,25 @@ async function handleBulkAction(action, ids) {
   if (!blob) return;
   const targets = blob.candidates.filter((c) => ids.includes(c.id));
 
+  if (action === 'delete') {
+    if (!confirm(`${targets.length} Kandidat(en) endgültig aus „${currentBlobType}" löschen?`)) return;
+    for (const c of targets) {
+      if (!useMock) {
+        try {
+          await storageClient.deleteCandidate(currentBlobType, c.id);
+        } catch (err) {
+          toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
+          continue;
+        }
+      }
+      blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
+    }
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`🗑 ${targets.length} Kandidat(en) gelöscht`, 'info');
+    return;
+  }
+
   if (action === 'dismiss') {
     for (const c of targets) await handleAction('dismiss', c);
   }
