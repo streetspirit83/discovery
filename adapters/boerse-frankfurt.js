@@ -1,9 +1,9 @@
 /**
- * Börse Frankfurt adapter – Xetra top momentum stocks
+ * Börse Frankfurt adapter – Xetra top momentum stocks via Twelve Data
  *
- * Replaces direct Börse Frankfurt API scraping (blocked on cloud IPs).
- * Uses Twelve Data batch time-series to compute 5-day price momentum
- * for DAX 40 components and returns the top 20 by performance.
+ * Twelve Data free tier: 800 credits/day, 8 credits/minute.
+ * Each symbol in a batch = 1 credit → max 8 symbols per minute.
+ * Strategy: single batch of 8 blue-chip DAX stocks → no rate-limit issues.
  *
  * Requires env var: TWELVEDATA_API_KEY
  */
@@ -17,34 +17,10 @@ const log = (level, msg, data = {}) =>
   );
 
 const EXCHANGE = 'XETR';
-const TOP_N = 20;
-const BATCH_SIZE = 8;
-const DAYS_BACK = 7; // enough trading days for a 5-day return
-const DELAY_MS = 300;
+const DAYS_BACK = 7;
 
-// DAX 40 constituents (as of early 2025; rarely changes)
-const DAX_TICKERS = [
-  'ADS', 'AIR', 'ALV', 'BAYN', 'BEI', 'BMW', 'BNR', 'CBK', 'CON',
-  'DB1', 'DBK', 'DHL', 'DTE', 'EOAN', 'ENR', 'FME', 'FRE', 'HEI',
-  'HEN3', 'HFG', 'HNR1', 'IFX', 'KION', 'MRK', 'MTX', 'MUV2',
-  'P911', 'PAH3', 'PUM', 'QIA', 'RHM', 'RWE', 'SAP', 'SHL', 'SIE',
-  'SRT3', 'SY1', 'VNA', 'VOW3', 'ZAL',
-];
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchBatch(tickers, apiKey) {
-  const url =
-    `https://api.twelvedata.com/time_series` +
-    `?symbol=${tickers.join(',')}` +
-    `&exchange=${EXCHANGE}` +
-    `&interval=1day` +
-    `&outputsize=${DAYS_BACK}` +
-    `&apikey=${apiKey}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Twelve Data error: ${res.status}`);
-  return res.json();
-}
+// 8 representative DAX blue chips (1 API call = exactly the free-tier per-minute limit)
+const TICKERS = ['SAP', 'SIE', 'ALV', 'BMW', 'MUV2', 'RWE', 'DTE', 'DBK'];
 
 export async function fetchCandidates() {
   const apiKey = process.env.TWELVEDATA_API_KEY;
@@ -53,46 +29,73 @@ export async function fetchCandidates() {
     return [];
   }
 
-  log('info', 'boerse-frankfurt: fetching Xetra momentum', { tickers: DAX_TICKERS.length });
+  // mic_code=XETR is the correct parameter for Twelve Data (not exchange=XETR)
+  const url =
+    `https://api.twelvedata.com/time_series` +
+    `?symbol=${TICKERS.join(',')}` +
+    `&mic_code=XETR` +
+    `&interval=1day` +
+    `&outputsize=${DAYS_BACK}` +
+    `&apikey=${apiKey}`;
+
+  log('info', 'boerse-frankfurt: fetching time series', { tickers: TICKERS.length, url: url.replace(apiKey, '***') });
+
+  let data;
+  try {
+    const res = await fetch(url);
+    if (res.status === 429) {
+      log('error', 'boerse-frankfurt: rate limit hit (429) – reduce batch or wait', {});
+      return [];
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (err) {
+    log('error', 'boerse-frankfurt: fetch failed', { error: err.message });
+    return [];
+  }
+
+  // Log raw structure of first symbol for diagnostics
+  const firstKey = Object.keys(data)[0];
+  if (firstKey) {
+    const sample = data[firstKey];
+    log('debug', 'boerse-frankfurt: sample response', {
+      symbol: firstKey,
+      status: sample?.status,
+      valuesCount: sample?.values?.length ?? 'n/a',
+      firstValue: sample?.values?.[0] ?? sample,
+    });
+  }
 
   const scores = [];
 
-  for (let i = 0; i < DAX_TICKERS.length; i += BATCH_SIZE) {
-    const batch = DAX_TICKERS.slice(i, i + BATCH_SIZE);
-    let data;
-    try {
-      data = await fetchBatch(batch, apiKey);
-    } catch (err) {
-      log('warn', 'boerse-frankfurt: batch failed', { batch, error: err.message });
+  for (const ticker of TICKERS) {
+    const entry = TICKERS.length === 1 ? data : data[ticker];
+    if (!entry) { log('warn', 'boerse-frankfurt: no entry', { ticker }); continue; }
+    if (entry.status === 'error') {
+      log('warn', 'boerse-frankfurt: symbol error', { ticker, msg: entry.message });
+      continue;
+    }
+    const vals = entry.values;
+    if (!Array.isArray(vals) || vals.length < 2) {
+      log('warn', 'boerse-frankfurt: insufficient data', { ticker, vals: vals?.length });
       continue;
     }
 
-    // Single-symbol response is wrapped differently from multi-symbol
-    const results = batch.length === 1 ? { [batch[0]]: data } : data;
+    // values[] is newest-first
+    const latest = parseFloat(vals[0].close);
+    const prior  = parseFloat(vals[vals.length - 1].close);
+    if (!latest || !prior) continue;
 
-    for (const ticker of batch) {
-      const entry = results[ticker];
-      if (!entry || entry.status === 'error') continue;
-      const vals = entry.values;
-      if (!Array.isArray(vals) || vals.length < 2) continue;
-
-      // values[] is newest-first; use first vs last for period return
-      const latest = parseFloat(vals[0].close);
-      const prior  = parseFloat(vals[vals.length - 1].close);
-      if (!latest || !prior) continue;
-
-      const momentum = (latest / prior) - 1;
-      const name = entry.meta?.name ?? ticker;
-      scores.push({ ticker, name, momentum, latest });
-    }
-
-    if (i + BATCH_SIZE < DAX_TICKERS.length) await sleep(DELAY_MS);
+    const momentum = (latest / prior) - 1;
+    const name = entry.meta?.name ?? ticker;
+    scores.push({ ticker, name, momentum, latest });
+    log('debug', 'boerse-frankfurt: scored', { ticker, momentum: (momentum * 100).toFixed(2) + '%' });
   }
 
   scores.sort((a, b) => b.momentum - a.momentum);
-  const top = scores.filter((s) => s.momentum > 0).slice(0, TOP_N);
+  const top = scores.filter((s) => s.momentum > 0);
 
-  log('info', 'boerse-frankfurt: top movers', { count: top.length });
+  log('info', 'boerse-frankfurt: results', { scored: scores.length, positive: top.length });
   if (top.length === 0) return [];
 
   const now = new Date().toISOString();
@@ -114,9 +117,10 @@ export async function fetchCandidates() {
           rank: rank + 1,
           ticker: s.ticker,
           price: s.latest,
-          momentum_5d_pct: parseFloat((s.momentum * 100).toFixed(2)),
+          momentum_pct: parseFloat((s.momentum * 100).toFixed(2)),
+          period_days: DAYS_BACK,
         },
-        info_snippet: `Xetra momentum #${rank + 1}: ${s.name} +${(s.momentum * 100).toFixed(1)}% in ${DAYS_BACK - 1} days`,
+        info_snippet: `Xetra Momentum #${rank + 1}: ${s.name} +${(s.momentum * 100).toFixed(1)}% (${DAYS_BACK}d)`,
       }],
       links: buildLinks({ exchange: EXCHANGE, symbol: s.ticker, yahooSymbol }),
       workspace_state: 'new',
