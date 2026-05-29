@@ -1,15 +1,16 @@
 /**
  * Transform Discovery candidates → Merkliste "Schema A" import format.
- *
- * NOTE: The exact Merkliste Schema A field names should be confirmed against the
- * Merkliste import dialog (separate repo). This mapping is a sensible, easy-to-
- * adjust default: it flattens enrichment, sets bucket "neutral", and keeps a
- * backlink (discovery_id) plus a compact source trail.
  */
 
 export function toMerklisteSchemaA(candidates) {
   return candidates.map((c) => {
     const e = c.enrichment || {};
+    const links = c.links || {};
+
+    // Collect source signal descriptions for Notizen
+    const sourceLines = (c.sources || []).map((s) => s.info_snippet).filter(Boolean);
+    const notes = [c.notes || '', ...sourceLines].filter(Boolean).join('\n');
+
     return {
       symbol: c.symbol,
       name: c.name,
@@ -17,6 +18,11 @@ export function toMerklisteSchemaA(candidates) {
       exchange: c.exchange,
       yahoo_symbol: c.yahoo_symbol,
       bucket: 'neutral',
+
+      // Top-level URL fields – required for any Schema A importer to pick up links
+      tradingview_url: links.tradingview || null,
+      stocktwits_url: links.stocktwits || null,
+      yahoo_url: links.yahoo || null,
 
       sector: e.sector || null,
       industry: e.industry || null,
@@ -29,8 +35,11 @@ export function toMerklisteSchemaA(candidates) {
       catalysts: e.catalysts || [],
       confidence: e.confidence || null,
 
-      notes: c.notes || '',
-      links: c.links || {},
+      // Notizen = user notes + source signal descriptions (e.g. "CEO bought $2M")
+      notes,
+
+      // Keep nested links too for Discovery's own re-import
+      links,
 
       discovery_id: c.id,
       sources: (c.sources || []).map((s) => ({

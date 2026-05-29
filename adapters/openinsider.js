@@ -21,8 +21,8 @@ const SEC_HEADERS = {
 };
 
 const MIN_VALUE_USD = 1_000_000;
-const DAYS_BACK = 30;
-const MAX_FILINGS = 500;  // increased from 100 – pre-filter reduces noise significantly
+const DAYS_BACK = 7;    // match weekly adapter window; dedup prevents re-adding
+const MAX_FILINGS = 500;
 const DELAY_MS = 150; // stay under SEC's 10 req/sec limit
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,9 +50,7 @@ async function searchForm4s() {
   const startDate = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
 
-  // Pre-filter: only Form 4s that contain a P-Purchase transaction code in their XML.
-  // Eliminates ~70% of filings (grants, exercises, disposals) before we fetch anything.
-  const url = `https://efts.sec.gov/LATEST/search-index?q=%22transactionCode%3EP%3C%22&forms=4&dateRange=custom&startdt=${startDate}`;
+  const url = `https://efts.sec.gov/LATEST/search-index?forms=4&dateRange=custom&startdt=${startDate}`;
   log('info', 'edgar: searching Form 4 filings', { startDate });
 
   const res = await fetch(url, { headers: SEC_HEADERS });

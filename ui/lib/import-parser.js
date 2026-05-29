@@ -67,15 +67,21 @@ export function normalizeCandidate(obj) {
   // Links: prefer obj.links struct, then top-level *_url fields, then auto-build
   const tvUrl = getField(obj, ['tradingview_url', 'tradingview']);
   const stUrl = getField(obj, ['stocktwits_url', 'stocktwits']);
+  const yhUrl = getField(obj, ['yahoo_url', 'yahoo']);
   let links;
   if (obj.links && obj.links.tradingview) {
-    links = obj.links;
+    // Merge: nested links object wins, but top-level *_url fields can override nulls
+    links = {
+      tradingview: obj.links.tradingview || tvUrl || null,
+      stocktwits:  obj.links.stocktwits  || stUrl || null,
+      yahoo:       obj.links.yahoo       || yhUrl || null,
+    };
   } else if (tvUrl || stUrl) {
     const built = buildLinks({ symbol, exchange, yahooSymbol: yahoo_symbol });
     links = {
       tradingview: tvUrl || built.tradingview,
       stocktwits:  stUrl || built.stocktwits,
-      yahoo:       built.yahoo,
+      yahoo:       yhUrl || built.yahoo,
     };
   } else {
     links = buildLinks({ symbol, exchange, yahooSymbol: yahoo_symbol });
