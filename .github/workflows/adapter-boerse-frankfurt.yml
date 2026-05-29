@@ -8,6 +8,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,8 +18,20 @@ jobs:
 
       - run: npm ci
 
+      - name: Debug TWELVEDATA_API_KEY
+        run: |
+          if [ -z "$TWELVEDATA_API_KEY" ]; then
+            echo "❌ Missing TWELVEDATA_API_KEY"
+            exit 1
+          else
+            echo "✅ TWELVEDATA_API_KEY present"
+          fi
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+
       - name: Run Börse Frankfurt adapter
         run: node adapters/_run.js boerse-frankfurt
         env:
           DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
           DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
