@@ -7,6 +7,7 @@ const KEYS = {
   secret: 'discovery_secret',
   claudeKey: 'discovery_claude_key',
   githubPat: 'discovery_github_pat',
+  twelveDataKey: 'discovery_twelvedata_key',
 };
 
 export function loadSettings() {
@@ -15,6 +16,7 @@ export function loadSettings() {
     secret: localStorage.getItem(KEYS.secret) ?? '',
     claudeKey: localStorage.getItem(KEYS.claudeKey) ?? '',
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
+    twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
   };
 }
 
@@ -75,6 +77,13 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-twelvedata-key">Twelve Data Key <small>(optional)</small></label>
+          <input type="password" id="set-twelvedata-key" placeholder="twelvedata.com/account/api-keys"
+            value="${settings.twelveDataKey}" autocomplete="off">
+          <small>Für Symbol-Suche im Import. Ohne Key funktioniert die Suche, mit Key 800 Anfragen/Tag.</small>
+        </div>
+
+        <div class="form-group">
           <label>
             <input type="checkbox" id="set-use-mock"> Mock-Daten verwenden (kein Backend nötig)
           </label>
@@ -96,6 +105,7 @@ export function renderSettingsModal(onSave) {
       secret: overlay.querySelector('#set-secret').value.trim(),
       claudeKey: overlay.querySelector('#set-claude-key').value.trim(),
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
+      twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
     };
     saveSettings(newSettings);
     overlay.remove();

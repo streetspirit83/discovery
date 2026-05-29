@@ -6,6 +6,7 @@ import { CandidateList } from './components/candidate-list.js';
 import { CandidateDetail } from './components/candidate-detail.js';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
+import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
@@ -51,12 +52,26 @@ async function loadBlob(blobType) {
   }
 }
 
-async function switchBlob(blobType) {
-  currentBlobType = blobType;
+async function ensureBlob(blobType) {
   if (!allBlobs[blobType]) {
     allBlobs[blobType] = await loadBlob(blobType);
   }
+  return allBlobs[blobType];
+}
+
+async function switchBlob(blobType) {
+  currentBlobType = blobType;
+  await ensureBlob(blobType);
   candidateList.setData(allBlobs[blobType].candidates);
+}
+
+/** Insert a candidate clone into a target blob's in-memory copy (mock mode). */
+async function mockInsert(blobType, candidate) {
+  const target = await ensureBlob(blobType);
+  const clone = structuredClone(candidate);
+  clone.last_updated_at = new Date().toISOString();
+  target.candidates.push(clone);
+  target.updated_at = new Date().toISOString();
 }
 
 async function handleAction(action, candidate, extras = {}) {
@@ -78,10 +93,29 @@ async function handleAction(action, candidate, extras = {}) {
         toast(`Promote fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
+    } else {
+      await mockInsert('export', candidate);
     }
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
-    toast(`✓ ${candidate.symbol} promoted`, 'success');
+    candidateDetail.hide();
+    toast(`✓ ${candidate.symbol} → Export (Tab „Export")`, 'success');
+  }
+
+  if (action === 'delete') {
+    if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
+    if (!useMock) {
+      try {
+        await storageClient.deleteCandidate(currentBlobType, candidate.id);
+      } catch (err) {
+        toast(`Löschen fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`🗑 ${candidate.symbol} gelöscht`, 'info');
   }
 
   if (action === 'dismiss') {
@@ -94,10 +128,13 @@ async function handleAction(action, candidate, extras = {}) {
         toast(`Dismiss fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
+    } else {
+      await mockInsert('archive', candidate);
     }
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
-    toast(`✗ ${candidate.symbol} abgelehnt`, 'info');
+    candidateDetail.hide();
+    toast(`✗ ${candidate.symbol} → Archiv`, 'info');
   }
 
   if (action === 'review') {
@@ -193,6 +230,50 @@ async function handleBulkAction(action, ids) {
   }
 }
 
+/** Import candidates into inbox (mock = in-memory dedup, real = backend). */
+async function importCandidates(candidates) {
+  let added = 0, merged = 0, skipped = 0, errors = 0;
+
+  if (useMock) {
+    const inbox = await ensureBlob('inbox');
+    for (const cand of candidates) {
+      const existing = inbox.candidates.find(
+        (c) => c.symbol === cand.symbol && c.exchange === cand.exchange,
+      );
+      if (existing) {
+        existing.sources.push(...cand.sources);
+        existing.last_updated_at = new Date().toISOString();
+        merged++;
+      } else {
+        inbox.candidates.push(cand);
+        added++;
+      }
+    }
+  } else {
+    for (const cand of candidates) {
+      try {
+        const result = await storageClient.appendCandidate(cand);
+        if (result.action === 'inserted' || result.action === 'added') added++;
+        else if (result.action === 'merged') merged++;
+        else skipped++;
+      } catch {
+        errors++;
+      }
+    }
+    allBlobs.inbox = null;
+  }
+
+  if (currentBlobType === 'inbox') await switchBlob('inbox');
+  toast(`Import: ${added} neu, ${merged} gemergt${skipped ? `, ${skipped} übersprungen` : ''}`, 'success');
+  return { added, merged, skipped, errors };
+}
+
+/** Open the Merkliste Schema-A export modal for the export blob. */
+async function handleExport() {
+  const exp = await ensureBlob('export');
+  renderExportModal(exp.candidates, toast);
+}
+
 async function init() {
   // Init storage client
   if (!useMock) {
@@ -223,8 +304,11 @@ async function init() {
 
   // Inject Lucide icons into header buttons
   document.getElementById('btn-refresh').innerHTML = `${icons.refreshCw} Refresh`;
-  document.getElementById('btn-upload').innerHTML = `${icons.upload} Upload`;
+  document.getElementById('btn-upload').innerHTML = `${icons.upload} Import`;
+  document.getElementById('btn-export').innerHTML = `${icons.download} Export`;
   document.getElementById('btn-settings').innerHTML = `${icons.settings} Einstellungen`;
+
+  document.getElementById('btn-export').addEventListener('pointerup', handleExport);
 
   // Header buttons
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
@@ -239,10 +323,7 @@ async function init() {
   });
 
   document.getElementById('btn-upload').addEventListener('pointerup', () => {
-    renderUploadModal(async () => {
-      allBlobs.inbox = null;
-      if (currentBlobType === 'inbox') await switchBlob('inbox');
-    });
+    renderUploadModal({ onImport: importCandidates });
   });
 
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {

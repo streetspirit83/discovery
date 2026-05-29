@@ -29,15 +29,15 @@ function emptyBlob(blobType) {
 }
 
 function respond(statusCode, body) {
-  return {
-    statusCode,
+  return new Response(JSON.stringify(body), {
+    status: statusCode,
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
     },
-    body: JSON.stringify(body),
-  };
+  });
 }
 
 async function readBlobDoc(store, blobType) {
@@ -55,9 +55,16 @@ async function writeBlobDoc(store, blobType, doc) {
 }
 
 export default async function handler(req) {
-  // CORS preflight
+  // CORS preflight – return 200 + null body (204 with body is invalid HTTP)
   if (req.method === 'OPTIONS') {
-    return respond(204, {});
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
+      },
+    });
   }
 
   if (req.method !== 'POST') {
@@ -177,6 +184,26 @@ export default async function handler(req) {
     };
     await writeBlobDoc(store, blobType, doc);
     log('info', 'storage: update_candidate', { blobType, candidateId });
+    return respond(200, { ok: true, id: candidateId });
+  }
+
+  // --- op: delete_candidate ---
+  if (op === 'delete_candidate') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const { candidate_id: candidateId } = body;
+    if (!candidateId) return respond(400, { ok: false, error: 'Missing candidate_id' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idx = doc.candidates.findIndex((c) => c.id === candidateId);
+    if (idx === -1) {
+      return respond(404, { ok: false, error: `Candidate ${candidateId} not found in ${blobType}` });
+    }
+
+    doc.candidates.splice(idx, 1);
+    await writeBlobDoc(store, blobType, doc);
+    log('info', 'storage: delete_candidate', { blobType, candidateId });
     return respond(200, { ok: true, id: candidateId });
   }
 
