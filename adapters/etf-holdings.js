@@ -101,12 +101,36 @@ async function findLatestFiling() {
 }
 
 /**
+ * EDGAR filings include both .htm (human-readable) and .xml (machine-readable).
+ * EFTS primary document is usually the .htm; we need the .xml for parsing.
+ * Fetch the filing index to find the XML document name.
+ */
+async function resolveXmlDocName(cik, accessionNo, htmDocName) {
+  const acc = accessionNo.replace(/-/g, '');
+  const indexUrl = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${accessionNo}-index.json`;
+  const res = await fetch(indexUrl, { headers: SEC_HEADERS });
+  if (!res.ok) {
+    // Fall back: try replacing .htm extension with .xml
+    return htmDocName.replace(/\.htm$/i, '.xml');
+  }
+  const idx = await res.json();
+  const items = idx.directory?.item ?? [];
+  const xmlItem = items.find((f) => /\.xml$/i.test(f.name) && f.type !== 'EX-100.D');
+  return xmlItem?.name ?? htmDocName.replace(/\.htm$/i, '.xml');
+}
+
+/**
  * Fetch and parse the NPORT-P XML, returning all equity holdings.
  */
 async function parseNportXml(cik, accessionNo, docName) {
   const acc = accessionNo.replace(/-/g, '');
-  const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${docName}`;
 
+  // Primary document is usually .htm; resolve the companion .xml file
+  const xmlDoc = /\.xml$/i.test(docName) ? docName : await resolveXmlDocName(cik, accessionNo, docName);
+  log('info', 'etf-holdings: fetching XML', { xmlDoc });
+  await sleep(DELAY_MS);
+
+  const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${xmlDoc}`;
   const res = await fetch(url, {
     headers: { ...SEC_HEADERS, Accept: 'text/xml, */*' },
   });
