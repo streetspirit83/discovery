@@ -75,9 +75,21 @@ async function findLatestFiling() {
     await sleep(attempt * 2000);
   }
 
-  const hits = data.hits?.hits ?? [];
-  log('info', 'etf-holdings: EFTS hits', { count: hits.length });
-  if (hits.length === 0) throw new Error('No NPORT-P filings found for ICLN in EFTS');
+  const allHits = data.hits?.hits ?? [];
+  log('info', 'etf-holdings: EFTS hits total', { count: allHits.length });
+  if (allHits.length === 0) throw new Error('No NPORT-P filings found in EFTS');
+
+  // Filter to iShares Trust only – EFTS returns any fund mentioning "Clean Energy",
+  // including Goldman Sachs, Invesco etc. The _source.ciks array holds the registrant CIK.
+  const iSharesNorm = ISHARES_CIK.replace(/^0+/, ''); // "1100663"
+  const hits = allHits.filter((h) =>
+    (h._source?.ciks ?? []).some((c) => c.replace(/^0+/, '') === iSharesNorm),
+  );
+  log('info', 'etf-holdings: iShares Trust hits', {
+    count: hits.length,
+    others: allHits.length - hits.length,
+  });
+  if (hits.length === 0) throw new Error(`No iShares Trust (CIK ${ISHARES_CIK}) NPORT-P hits found`);
 
   // Sort by file_date descending (EFTS returns by relevance, not date)
   hits.sort((a, b) =>
@@ -86,7 +98,7 @@ async function findLatestFiling() {
 
   const hit = hits[0];
   const id = hit._id ?? '';
-  log('debug', 'etf-holdings: best hit', { id, fileDate: hit._source?.file_date, source: hit._source });
+  log('debug', 'etf-holdings: best hit', { id, fileDate: hit._source?.file_date, ciks: hit._source?.ciks });
 
   const colonIdx = id.indexOf(':');
   if (colonIdx === -1) throw new Error(`Unexpected _id format: ${id}`);
@@ -94,11 +106,9 @@ async function findLatestFiling() {
   const accessionNo = id.slice(0, colonIdx);
   const primaryDoc  = id.slice(colonIdx + 1);
 
-  // Registrant CIK from _source.entity_id; fall back to known iShares Trust CIK
-  const raw = hit._source?.entity_id;
-  const cik = raw
-    ? String(parseInt(Array.isArray(raw) ? raw[0] : raw, 10))
-    : ISHARES_CIK;
+  // Use the registrant CIK directly from the _source.ciks field (already confirmed = iShares)
+  const cikRaw = (hit._source?.ciks ?? [])[0] ?? ISHARES_CIK;
+  const cik = String(parseInt(cikRaw, 10));
 
   log('info', 'etf-holdings: filing located', { accessionNo, primaryDoc, cik, fileDate: hit._source?.file_date });
   return { accessionNo, primaryDoc, cik };
