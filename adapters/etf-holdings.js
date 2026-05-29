@@ -47,18 +47,35 @@ function xmlAttr(xml, tag, attr = 'value') {
  * Find the latest NPORT-P accession number for ICLN.
  */
 async function findLatestFiling() {
-  const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+  const today = new Date();
+  const startDate = new Date(today.getTime() - 400 * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
+  const endDate = today.toISOString().slice(0, 10);
 
-  const url = `https://efts.sec.gov/LATEST/search-index?q=${FUND_QUERY}&forms=NPORT-P&dateRange=custom&startdt=${startDate}`;
-  const res = await fetch(url, { headers: SEC_HEADERS });
-  if (!res.ok) throw new Error(`EDGAR NPORT search failed: ${res.status}`);
+  // EFTS returns hits sorted by relevance, not date, so we fetch and sort ourselves.
+  const url = `https://efts.sec.gov/LATEST/search-index?q=${FUND_QUERY}&forms=NPORT-P&startdt=${startDate}&enddt=${endDate}`;
 
-  const data = await res.json();
+  // EDGAR occasionally returns transient 500s; retry with backoff.
+  let data;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const res = await fetch(url, { headers: SEC_HEADERS });
+    if (res.ok) {
+      data = await res.json();
+      break;
+    }
+    if (attempt === 4) throw new Error(`EDGAR NPORT search failed: ${res.status}`);
+    log('warn', 'etf-holdings: EDGAR search retry', { status: res.status, attempt });
+    await sleep(attempt * 1000);
+  }
+
   const hits = data.hits?.hits ?? [];
   if (hits.length === 0) throw new Error('No NPORT-P filings found for ICLN');
 
-  // hits are newest-first; take the most recent
+  // Sort by filing date descending so hits[0] is the most recent filing.
+  hits.sort((a, b) =>
+    String(b._source?.file_date ?? '').localeCompare(String(a._source?.file_date ?? '')),
+  );
+
   const hit = hits[0];
   const id = hit._id ?? '';
   const colonIdx = id.indexOf(':');
