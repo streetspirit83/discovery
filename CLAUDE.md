@@ -46,3 +46,29 @@ Settings → configure backend URL, secret, and Claude API key for full function
 ## Netlify Setup
 Deploy `netlify-backend/` directory. Set environment variables:
 - `DISCOVERY_SECRET` – shared secret for API auth
+
+## Development Gotchas
+
+### Netlify deploys cost credits — batch changes
+Never deploy speculatively. Diagnose locally first, then merge all Netlify-touching changes into one commit before pushing. Every push to `netlify-backend/` or `netlify.toml` that triggers a deploy burns a credit.
+
+### Netlify Functions v2 sharp edges
+- Return `new Response(body, { status, headers })` — not `{ statusCode, headers, body }` (that's v1 format)
+- A `204` response **must** have a null body; sending any body causes Netlify's CDN to strip response headers (including CORS). Use `200` with a null body for OPTIONS preflights.
+- Set CORS headers in **both** the function response and `netlify.toml` `[[headers]]` — one covers direct function invocations, the other covers CDN edge routing.
+- `[[headers]]` `for` patterns must match the actual request path. `/.netlify/functions/*` and `/api/*` are different paths; add both if you alias functions.
+
+### Cloud environments get blocked by consumer-facing websites
+GitHub Actions (Azure) and Netlify Functions (AWS) are on well-known cloud IP ranges. Consumer sites often block them. Before writing any scraper, verify the target allows automated access from cloud IPs — or find an official API / primary-source feed that does.
+
+### Inspect real API responses before writing parsing logic
+Never assume field names, nesting depth, or data formats. Fetch one live response, log it verbatim, and read it before writing any parser. Wrong assumptions compound: each fix that's based on another guess adds another debug cycle.
+
+### CI cache optimizations aren't always worth it
+Optional CI caches (`cache: 'npm'`) fail when lock files are missing or in unexpected paths. If the cache isn't already working, remove it — the time saved rarely justifies the debugging overhead for infrequent scheduled jobs.
+
+### CI workflow viewers show the YAML at run-trigger-time
+When a GitHub Actions run shows an outdated workflow definition, that's expected — the UI shows the YAML as it was when the run was triggered, not the current file. Verify the current branch has your changes and wait for a new run.
+
+### Diagnose before you assume it's a bug
+Unexpected behaviour (e.g. an item "disappearing" after an action) is often intended behaviour with a missing UX affordance (a toast, a redirect, a drawer close). Check the intended flow first before writing fix code.

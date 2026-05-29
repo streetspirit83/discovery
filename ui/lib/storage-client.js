@@ -44,6 +44,10 @@ export class StorageClient {
   async moveCandidate(candidateId, fromBlob, toBlob) {
     return this.#post({ op: 'move_candidate', candidate_id: candidateId, from_blob: fromBlob, to_blob: toBlob });
   }
+
+  async deleteCandidate(blobType, candidateId) {
+    return this.#post({ op: 'delete_candidate', blob_type: blobType, candidate_id: candidateId });
+  }
 }
 
 export function loadStorageClient() {

@@ -470,6 +470,9 @@ export class CandidateList {
           ${canDismiss
             ? `<button class="btn-icon btn-icon--dismiss" data-action="dismiss" title="Ablehnen">${icons.xMark}</button>`
             : ''}
+          ${this.filters.blobType === 'archive'
+            ? `<button class="btn-icon btn-icon--delete" data-action="delete" title="Endgültig löschen">${icons.trash}</button>`
+            : ''}
         </td>
         <td class="col-sources">${renderSourceBadges(c.sources)}</td>
       `;
@@ -498,6 +501,11 @@ export class CandidateList {
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => {
         e.stopPropagation();
         this.onAction?.('dismiss', c);
+      });
+
+      tr.querySelector('[data-action="delete"]')?.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        this.onAction?.('delete', c);
       });
 
       // Row click opens detail

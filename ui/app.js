@@ -98,7 +98,24 @@ async function handleAction(action, candidate, extras = {}) {
     }
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
-    toast(`✓ ${candidate.symbol} → Export`, 'success');
+    candidateDetail.hide();
+    toast(`✓ ${candidate.symbol} → Export (Tab „Export")`, 'success');
+  }
+
+  if (action === 'delete') {
+    if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
+    if (!useMock) {
+      try {
+        await storageClient.deleteCandidate(currentBlobType, candidate.id);
+      } catch (err) {
+        toast(`Löschen fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`🗑 ${candidate.symbol} gelöscht`, 'info');
   }
 
   if (action === 'dismiss') {
@@ -116,6 +133,7 @@ async function handleAction(action, candidate, extras = {}) {
     }
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
+    candidateDetail.hide();
     toast(`✗ ${candidate.symbol} → Archiv`, 'info');
   }
 
