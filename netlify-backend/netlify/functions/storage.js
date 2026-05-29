@@ -55,9 +55,16 @@ async function writeBlobDoc(store, blobType, doc) {
 }
 
 export default async function handler(req) {
-  // CORS preflight
+  // CORS preflight – return 200 + null body (204 with body is invalid HTTP)
   if (req.method === 'OPTIONS') {
-    return respond(204, {});
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
+      },
+    });
   }
 
   if (req.method !== 'POST') {

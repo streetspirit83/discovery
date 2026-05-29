@@ -41,7 +41,16 @@ function respond(statusCode, body) {
 }
 
 export default async function handler(req) {
-  if (req.method === 'OPTIONS') return respond(204, {});
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
+      },
+    });
+  }
 
   if (req.method !== 'POST') {
     return respond(405, { ok: false, error: 'Method not allowed' });
