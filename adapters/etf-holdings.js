@@ -11,6 +11,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { buildLinks } from './_shared/link-builder.js';
 import { resolveUSExchange } from './_shared/us-exchange-resolver.js';
+import { resolveISINsToTickers } from './_shared/isin-to-ticker.js';
 
 const log = (level, msg, data = {}) =>
   process.stdout.write(
@@ -237,7 +238,8 @@ const YAHOO_SUFFIX = {
   BME: '.MC',  MIL: '.MI', OMXCO: '.CO', TSE: '.T',
 };
 
-async function resolveExchange(ticker, invCountry) {
+async function resolveExchange(ticker, invCountry, knownExchange = null) {
+  if (knownExchange) return knownExchange;
   if (invCountry && invCountry !== 'US' && COUNTRY_EXCHANGE[invCountry]) {
     return COUNTRY_EXCHANGE[invCountry];
   }
@@ -287,12 +289,36 @@ export async function fetchCandidates() {
 
   holdings.sort((a, b) => b.pctVal - a.pctVal);
 
+  // Resolve ISINs → tickers for any holding missing a ticker
+  const isinsNeedingResolution = holdings
+    .filter((h) => !h.ticker && h.isin)
+    .map((h) => h.isin);
+
+  let isinTickerMap = {};
+  if (isinsNeedingResolution.length > 0) {
+    log('info', 'etf-holdings: resolving ISINs to tickers via OpenFIGI', {
+      count: isinsNeedingResolution.length,
+    });
+    try {
+      isinTickerMap = await resolveISINsToTickers(isinsNeedingResolution);
+    } catch (err) {
+      log('warn', 'etf-holdings: ISIN resolution failed', { error: err.message });
+    }
+  }
+
   const now = new Date().toISOString();
   const candidates = [];
 
   for (const h of holdings) {
-    const ticker = h.ticker ?? h.isin?.slice(-6) ?? 'UNKNOWN';
-    const exchange = await resolveExchange(h.ticker, h.invCountry);
+    const resolved = h.isin ? (isinTickerMap[h.isin] ?? null) : null;
+    const ticker = h.ticker ?? resolved?.ticker ?? null;
+
+    if (!ticker) {
+      log('warn', 'etf-holdings: skipping – no ticker resolved', { name: h.name, isin: h.isin });
+      continue;
+    }
+
+    const exchange = await resolveExchange(ticker, h.invCountry, resolved?.exchange ?? null);
     const suffix = YAHOO_SUFFIX[exchange] ?? '';
     const yahooSymbol = suffix ? `${ticker}${suffix}` : ticker;
 
