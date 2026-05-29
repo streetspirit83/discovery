@@ -1,8 +1,8 @@
 name: Adapter – Börse Frankfurt
 
 on:
-  schedule:
-    - cron: '30 6 * * *'
+  # Paused: Twelve Data free plan does not cover European exchanges.
+  # Re-enable schedule once a suitable free data source is confirmed.
   workflow_dispatch:
 
 jobs:
