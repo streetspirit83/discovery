@@ -106,7 +106,14 @@ async function handleAction(action, candidate, extras = {}) {
     if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
     if (!useMock) {
       try {
-        await storageClient.deleteCandidate(currentBlobType, candidate.id);
+        // Inbox delete → move to archive so the adapter won't re-add on next run.
+        // Archive/export delete → true hard delete (adapters never write there).
+        if (currentBlobType === 'inbox') {
+          await storageClient.moveCandidate(candidate.id, 'inbox', 'archive');
+          allBlobs.archive = null;
+        } else {
+          await storageClient.deleteCandidate(currentBlobType, candidate.id);
+        }
       } catch (err) {
         toast(`Löschen fehlgeschlagen: ${err.message}`, 'error');
         return;
@@ -199,7 +206,12 @@ async function handleBulkAction(action, ids) {
     for (const c of targets) {
       if (!useMock) {
         try {
-          await storageClient.deleteCandidate(currentBlobType, c.id);
+          if (currentBlobType === 'inbox') {
+            await storageClient.moveCandidate(c.id, 'inbox', 'archive');
+            allBlobs.archive = null;
+          } else {
+            await storageClient.deleteCandidate(currentBlobType, c.id);
+          }
         } catch (err) {
           toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
           continue;
