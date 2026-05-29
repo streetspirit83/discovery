@@ -20,9 +20,9 @@ const SEC_HEADERS = {
   Accept: 'application/json, text/plain, */*',
 };
 
-const MIN_VALUE_USD = 1_000_000;
+const MIN_VALUE_USD = 500_000;  // lowered from $1M to surface more meaningful buys
 const DAYS_BACK = 7;    // match weekly adapter window; dedup prevents re-adding
-const MAX_FILINGS = 500;
+const MAX_FILINGS = 600;
 const DELAY_MS = 150; // stay under SEC's 10 req/sec limit
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,16 +50,32 @@ async function searchForm4s() {
   const startDate = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
 
-  const url = `https://efts.sec.gov/LATEST/search-index?forms=4&dateRange=custom&startdt=${startDate}`;
   log('info', 'edgar: searching Form 4 filings', { startDate });
 
-  const res = await fetch(url, { headers: SEC_HEADERS });
-  if (!res.ok) throw new Error(`EDGAR EFTS search failed: ${res.status}`);
+  const all = [];
+  let from = 0;
+  let total = null;
 
-  const data = await res.json();
-  const hits = data.hits?.hits ?? [];
-  log('info', 'edgar: search results', { total: data.hits?.total?.value, using: Math.min(hits.length, MAX_FILINGS) });
-  return hits.slice(0, MAX_FILINGS);
+  // Paginate via the `from` offset until we hit MAX_FILINGS or run out
+  while (all.length < MAX_FILINGS) {
+    const url = `https://efts.sec.gov/LATEST/search-index?forms=4&dateRange=custom&startdt=${startDate}&from=${from}`;
+    const res = await fetch(url, { headers: SEC_HEADERS });
+    if (!res.ok) throw new Error(`EDGAR EFTS search failed: ${res.status}`);
+
+    const data = await res.json();
+    const hits = data.hits?.hits ?? [];
+    total = data.hits?.total?.value ?? total;
+    if (hits.length === 0) break;
+
+    all.push(...hits);
+    from += hits.length;
+
+    if (total !== null && from >= total) break;
+    await sleep(DELAY_MS);
+  }
+
+  log('info', 'edgar: search results', { total, fetched: all.length, using: Math.min(all.length, MAX_FILINGS) });
+  return all.slice(0, MAX_FILINGS);
 }
 
 /**
@@ -183,7 +199,7 @@ export async function fetchCandidates() {
         trade_date: ins.date, filing_date: ins.filingDate,
         price: ins.price, qty: ins.shares, value: ins.value,
       },
-      info_snippet: `${ins.title || 'Insider'} ${ins.name} bought ${ins.shares.toLocaleString()} shares at $${ins.price.toFixed(2)} ($${(ins.value / 1e6).toFixed(1)}M)`,
+      info_snippet: `${ins.title || 'Insider'} ${ins.name} bought ${ins.shares.toLocaleString()} shares at $${ins.price.toFixed(2)} (${ins.value >= 1e6 ? `$${(ins.value / 1e6).toFixed(1)}M` : `$${Math.round(ins.value / 1e3)}K`})`,
     })),
     links: buildLinks({ exchange: data.exchange, symbol: ticker, yahooSymbol: ticker }),
     workspace_state: 'new',

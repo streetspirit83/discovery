@@ -187,6 +187,26 @@ export default async function handler(req) {
     return respond(200, { ok: true, id: candidateId });
   }
 
+  // --- op: delete_candidate ---
+  if (op === 'delete_candidate') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const { candidate_id: candidateId } = body;
+    if (!candidateId) return respond(400, { ok: false, error: 'Missing candidate_id' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idx = doc.candidates.findIndex((c) => c.id === candidateId);
+    if (idx === -1) {
+      return respond(404, { ok: false, error: `Candidate ${candidateId} not found in ${blobType}` });
+    }
+
+    doc.candidates.splice(idx, 1);
+    await writeBlobDoc(store, blobType, doc);
+    log('info', 'storage: delete_candidate', { blobType, candidateId });
+    return respond(200, { ok: true, id: candidateId });
+  }
+
   // --- op: move_candidate ---
   if (op === 'move_candidate') {
     const { candidate_id: candidateId, from_blob: fromBlob, to_blob: toBlob } = body;
