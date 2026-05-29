@@ -66,8 +66,12 @@ async function findLatestFiling() {
 
   const accessionNo = id.slice(0, colonIdx);
   const docName = id.slice(colonIdx + 1);
-  // CIK is the numeric prefix of the accession number
-  const cik = String(parseInt(accessionNo.split('-')[0], 10));
+  // For NPORT-P the accession prefix is the filing agent's CIK, not the registrant's.
+  // The registrant CIK lives in _source.entity_id; fall back to the known iShares Trust CIK.
+  const rawEntityId = hit._source?.entity_id;
+  const cik = rawEntityId
+    ? String(parseInt(Array.isArray(rawEntityId) ? rawEntityId[0] : rawEntityId, 10))
+    : '1100663';
 
   log('info', 'etf-holdings: found filing', {
     accessionNo,
