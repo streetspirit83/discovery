@@ -51,14 +51,14 @@ function xmlAttr(xml, tag, attr = 'value') {
 // ─── Step 1: Find the latest NPORT-P filing for ICLN ────────────────────────
 
 async function findLatestFiling() {
-  // Search EFTS for NPORT-P filings mentioning ICLN (the fund ticker)
   const startDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
   const endDate = new Date().toISOString().slice(0, 10);
 
+  // Use the full, specific fund name – avoids matching other sponsors' funds
   const url =
     `https://efts.sec.gov/LATEST/search-index` +
-    `?q=%22Global+Clean+Energy%22` +
+    `?q=%22iShares+Global+Clean+Energy%22` +
     `&forms=NPORT-P` +
     `&startdt=${startDate}` +
     `&enddt=${endDate}`;
@@ -79,17 +79,17 @@ async function findLatestFiling() {
   log('info', 'etf-holdings: EFTS hits total', { count: allHits.length });
   if (allHits.length === 0) throw new Error('No NPORT-P filings found in EFTS');
 
-  // Filter to iShares Trust only – EFTS returns any fund mentioning "Clean Energy",
-  // including Goldman Sachs, Invesco etc. The _source.ciks array holds the registrant CIK.
-  const iSharesNorm = ISHARES_CIK.replace(/^0+/, ''); // "1100663"
+  // Filter by the registrant *name* (not a hardcoded CIK – which proved unreliable).
+  // EFTS returns any fund mentioning the phrase, incl. Goldman Sachs, TIAA etc.
   const hits = allHits.filter((h) =>
-    (h._source?.ciks ?? []).some((c) => c.replace(/^0+/, '') === iSharesNorm),
+    (h._source?.display_names ?? []).some((n) => /ishares/i.test(n)),
   );
-  log('info', 'etf-holdings: iShares Trust hits', {
+  log('info', 'etf-holdings: iShares hits', {
     count: hits.length,
     others: allHits.length - hits.length,
+    sampleNames: allHits.slice(0, 5).map((h) => h._source?.display_names?.[0]),
   });
-  if (hits.length === 0) throw new Error(`No iShares Trust (CIK ${ISHARES_CIK}) NPORT-P hits found`);
+  if (hits.length === 0) throw new Error('No iShares NPORT-P hits found (check display_names)');
 
   // Sort by file_date descending (EFTS returns by relevance, not date)
   hits.sort((a, b) =>
@@ -98,7 +98,12 @@ async function findLatestFiling() {
 
   const hit = hits[0];
   const id = hit._id ?? '';
-  log('debug', 'etf-holdings: best hit', { id, fileDate: hit._source?.file_date, ciks: hit._source?.ciks });
+  log('debug', 'etf-holdings: best hit', {
+    id,
+    fileDate: hit._source?.file_date,
+    displayNames: hit._source?.display_names,
+    ciks: hit._source?.ciks,
+  });
 
   const colonIdx = id.indexOf(':');
   if (colonIdx === -1) throw new Error(`Unexpected _id format: ${id}`);
@@ -106,7 +111,7 @@ async function findLatestFiling() {
   const accessionNo = id.slice(0, colonIdx);
   const primaryDoc  = id.slice(colonIdx + 1);
 
-  // Use the registrant CIK directly from the _source.ciks field (already confirmed = iShares)
+  // Derive CIK from the matched hit itself (no hardcoded value)
   const cikRaw = (hit._source?.ciks ?? [])[0] ?? ISHARES_CIK;
   const cik = String(parseInt(cikRaw, 10));
 
@@ -117,21 +122,20 @@ async function findLatestFiling() {
 // ─── Step 2: Resolve the XML document name from the filing index ─────────────
 
 async function resolveXmlDoc(cik, accessionNo, primaryDoc) {
-  // EDGAR primary doc is usually .htm (viewer); the companion .xml has the data
   if (/\.xml$/i.test(primaryDoc)) return primaryDoc;
 
   const acc = accessionNo.replace(/-/g, '');
+  // Correct EDGAR directory-listing JSON endpoint is just ".../index.json"
   const indexUrl =
-    `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${accessionNo}-index.json`;
+    `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/index.json`;
 
   log('info', 'etf-holdings: fetching filing index', { indexUrl });
   const res = await fetch(indexUrl, { headers: SEC_HEADERS });
 
   if (!res.ok) {
-    // Fall back: replace .htm extension with .xml
-    const fallback = primaryDoc.replace(/\.htm$/i, '.xml');
-    log('warn', 'etf-holdings: index fetch failed, using fallback doc name', { fallback, status: res.status });
-    return fallback;
+    log('warn', 'etf-holdings: index fetch failed', { status: res.status });
+    // Last resort: NPORT-P data file is conventionally primary_doc.xml
+    return 'primary_doc.xml';
   }
 
   const idx = await res.json();
@@ -140,16 +144,21 @@ async function resolveXmlDoc(cik, accessionNo, primaryDoc) {
     docs: items.map((f) => `${f.name} (${f.type})`),
   });
 
-  // Prefer the XML companion document; exclude EX-100 exhibits
-  const xmlItem = items.find(
-    (f) => /\.xml$/i.test(f.name) && !/EX-100|ex100/i.test(f.type ?? ''),
+  const xmlNames = items.filter((f) => /\.xml$/i.test(f.name)).map((f) => f.name);
+
+  // Preference order: primary_doc.xml → any non-exhibit .xml → first .xml
+  const primary = xmlNames.find((n) => /^primary_doc\.xml$/i.test(n));
+  if (primary) return primary;
+
+  const nonExhibit = items.find(
+    (f) => /\.xml$/i.test(f.name) && !/EX-?100/i.test(f.type ?? ''),
   );
+  if (nonExhibit) return nonExhibit.name;
 
-  if (xmlItem) return xmlItem.name;
+  if (xmlNames.length > 0) return xmlNames[0];
 
-  const fallback = primaryDoc.replace(/\.htm$/i, '.xml');
-  log('warn', 'etf-holdings: no XML doc found in index, using fallback', { fallback });
-  return fallback;
+  log('warn', 'etf-holdings: no .xml in index, defaulting to primary_doc.xml', {});
+  return 'primary_doc.xml';
 }
 
 // ─── Step 3: Fetch and parse the NPORT-P XML ────────────────────────────────
