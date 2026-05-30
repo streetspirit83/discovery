@@ -51,7 +51,7 @@ async function proxyFetch(url, extraHeaders = {}) {
   const secret     = process.env.DISCOVERY_SECRET;
   if (!backendUrl || !secret) throw new Error('DISCOVERY_BACKEND_URL / DISCOVERY_SECRET not set');
 
-  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape`, {
+  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
     body: JSON.stringify({
