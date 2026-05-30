@@ -274,7 +274,9 @@ Re-enable when a suitable free, cloud-accessible source for European exchange da
 
 ### `_run.js` — Adapter Runner
 
-Entry point for all adapters. Loads the adapter module, calls `fetchCandidates()`, then pushes each result to the backend via `appendCandidate()`. Outputs a structured JSON log per line (level, msg, ts, data).
+Entry point for all adapters. Loads the adapter module, calls `fetchCandidates()`, then pushes all results to the backend in a single `appendCandidates()` call. Outputs a structured JSON log per line (level, msg, ts, data).
+
+> **Why bulk?** The old per-candidate approach sent one HTTP request per ticker, each doing a separate read→modify→write on the inbox blob. With Netlify Blob Storage's eventual consistency, later reads could return stale data before the previous write propagated, causing writes to overwrite each other. `appendCandidates` reads all blobs once, processes everything in memory, then writes once — fully atomic.
 
 Exit codes: `0` = success, `1` = any error (missing env, adapter load failure, backend errors).
 
@@ -287,14 +289,15 @@ Final log line summary:
 
 HTTP client for the Netlify backend. Reads env vars `DISCOVERY_BACKEND_URL` and `DISCOVERY_SECRET`.
 
-| Method                                          | Backend op          |
-|-------------------------------------------------|---------------------|
-| `appendCandidate(candidate)`                    | `append_candidate`  |
-| `readBlob(blobType)`                            | `read`              |
-| `writeBlob(blobType, blob)`                     | `write`             |
-| `updateCandidate(blobType, id, updates)`        | `update_candidate`  |
-| `moveCandidate(id, fromBlob, toBlob)`           | `move_candidate`    |
-| `deleteCandidate(blobType, id)`                 | `delete_candidate`  |
+| Method                                          | Backend op             |
+|-------------------------------------------------|------------------------|
+| `appendCandidates(candidates[])`                | `append_candidates`    |
+| `appendCandidate(candidate)`                    | `append_candidate`     |
+| `readBlob(blobType)`                            | `read`                 |
+| `writeBlob(blobType, blob)`                     | `write`                |
+| `updateCandidate(blobType, id, updates)`        | `update_candidate`     |
+| `moveCandidate(id, fromBlob, toBlob)`           | `move_candidate`       |
+| `deleteCandidate(blobType, id)`                 | `delete_candidate`     |
 
 ### `_shared/isin-to-ticker.js`
 
