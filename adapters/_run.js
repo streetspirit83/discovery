@@ -17,6 +17,7 @@ const ADAPTERS = {
   'boerse-frankfurt': './boerse-frankfurt.js',
   'etf-holdings': './etf-holdings.js',
   stocktwits: './stocktwits.js',
+  'yahoo-trending': './yahoo-trending.js',
 };
 
 async function main() {

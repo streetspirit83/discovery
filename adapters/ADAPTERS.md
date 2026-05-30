@@ -11,6 +11,7 @@ Each adapter is a Node.js module that exports `fetchCandidates()` and is run by 
 | `openinsider`      | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
 | `etf-holdings`     | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
 | `stocktwits`       | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
+| `yahoo-trending`   | `0 14 * * 1-5`    | Weekdays 14:00        | Schedule + manual    | ✅ Active  |
 | `boerse-frankfurt` | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
 
 Manual trigger: GitHub Actions → workflow → **Run workflow**.
@@ -113,6 +114,64 @@ US equity-focused. Measures **retail sentiment momentum** — not a price breako
 | `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
 | `FMP_API_KEY`           | Optional | Exchange resolution (primary)      |
 | `TWELVEDATA_API_KEY`    | Optional | Exchange resolution (fallback)     |
+
+---
+
+## Adapter: Yahoo Finance Trending
+
+**File:** `adapters/yahoo-trending.js`  
+**Workflow:** `.github/workflows/adapter-yahoo-trending.yml`  
+**Signal type:** `page_view_trending`
+
+### Data Source
+
+Yahoo Finance trending endpoint — no auth required for the trending list.  
+Endpoints: `GET https://query1.finance.yahoo.com/v1/finance/trending/{region}?count=20`
+
+> ⚠️ Cloud IP behaviour untested. 403 is logged explicitly; no silent failure. If blocked, the Netlify scrape proxy (AWS) is a fallback option — different IP space from GitHub Actions (Azure).
+
+### Signal Methodology
+
+Yahoo Finance trending reflects **page-view velocity**: which stock detail pages receive significantly more visits than their rolling baseline within the current time window. This is a retail research/attention signal — distinct from StockTwits (opinion/sentiment) and insider buys (conviction buying).
+
+- **Order is meaningful**: rank 1 = strongest page-view spike
+- **Not alphabetical, not sorted by price or volume** — driven purely by user attention
+- **News-sensitive**: earnings, M&A, analyst calls cause immediate spikes
+- **Response fields**: `jobTimestamp` and `startInterval` define the measurement window
+
+### Regions
+
+| Region | Symbol format | Base ticker | Exchange |
+|--------|--------------|-------------|----------|
+| `US`   | `AAPL`       | as-is       | Resolved via FMP/TD/static |
+| `DE`   | `SAP.DE`     | Strip `.DE` | `XETR` (hardcoded) |
+
+### Method
+
+1. **Fetch** `trending/{region}?count=20` for each region sequentially (1 s pause between).
+2. **Parse** `finance.result[0].quotes[].symbol`.
+3. **Strip suffix** for DE symbols (`SAP.DE` → `SAP`); keep full symbol as `yahoo_symbol`.
+4. **Filter** symbols not matching `/^[A-Z0-9.]{1,10}$/` after stripping.
+5. **Resolve exchange** for US via `resolveUSExchange()`; DE is hardcoded to `XETR`.
+6. Store `rank` and `region` in `raw_signal`. Name field left as ticker (no name in response); AI enrichment fills it in.
+
+### Key Thresholds & Filters
+
+| Parameter       | Value              | Rationale                                     |
+|-----------------|--------------------|-----------------------------------------------|
+| Count requested | 20                 | API default is 5; 20 covers meaningful signal |
+| Regions         | US, DE             | JP/KR use numeric codes incompatible with pipeline |
+| Schedule        | Weekdays 14:00 UTC | Mid-session for both US (10:00 ET) and EU markets |
+| Ticker filter   | `/^[A-Z0-9.]{1,10}$/` | Rejects malformed entries post-stripping   |
+
+### Required Env Vars
+
+| Variable                | Required | Purpose                            |
+|-------------------------|----------|------------------------------------|
+| `DISCOVERY_BACKEND_URL` | ✅        | Netlify backend URL                |
+| `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
+| `FMP_API_KEY`           | Optional | US exchange resolution (primary)   |
+| `TWELVEDATA_API_KEY`    | Optional | US exchange resolution (fallback)  |
 
 ---
 
