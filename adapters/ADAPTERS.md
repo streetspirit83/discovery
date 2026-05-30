@@ -6,11 +6,12 @@ Each adapter is a Node.js module that exports `fetchCandidates()` and is run by 
 
 ## Auto-Fetch Schedule
 
-| Adapter            | Cron              | UTC Time        | Trigger              | Status     |
-|--------------------|-------------------|-----------------|----------------------|------------|
-| `openinsider`      | `0 6 * * *`       | Daily 06:00     | Schedule + manual    | ✅ Active  |
-| `etf-holdings`     | `0 7 * * 1`       | Monday 07:00    | Schedule + manual    | ✅ Active  |
-| `boerse-frankfurt` | *(paused)*        | —               | Manual only          | ⏸ Paused  |
+| Adapter            | Cron              | UTC Time              | Trigger              | Status     |
+|--------------------|-------------------|-----------------------|----------------------|------------|
+| `openinsider`      | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
+| `etf-holdings`     | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
+| `stocktwits`       | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
+| `boerse-frankfurt` | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
 
 Manual trigger: GitHub Actions → workflow → **Run workflow**.
 
@@ -66,6 +67,52 @@ URL: `https://efts.sec.gov/LATEST/search-index?forms=4&dateRange=custom&startdt=
 | `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
 | `FMP_API_KEY`           | Optional | Exchange resolution (FMP API)      |
 | `TWELVEDATA_API_KEY`    | Optional | Exchange resolution (Twelve Data)  |
+
+---
+
+## Adapter: StockTwits Trending
+
+**File:** `adapters/stocktwits.js`  
+**Workflow:** `.github/workflows/adapter-stocktwits.yml`  
+**Signal type:** `social_trending`
+
+### Data Source
+
+StockTwits public trending API — no auth required.  
+Endpoint: `GET https://api.stocktwits.com/api/2/trending/symbols.json`
+
+> ✅ Public endpoint, no API key, no cookie/crumb flow. Cloud IPs not blocked as of 2025.
+
+StockTwits refreshes their trending list every 15 minutes. The adapter runs twice daily to capture distinct pre-market (08:00 UTC) and after-hours (20:00 UTC) sentiment snapshots without excessive polling.
+
+### Method
+
+1. **Fetch** `trending/symbols.json` — returns top-30 symbols with `id`, `symbol`, `title`, `watchlist_count`.
+2. **Filter** for standard equity tickers only — regex `/^[A-Z]{1,5}$/` removes crypto (`.X` suffix), indices, and malformed entries.
+3. **Resolve exchange** via `resolveUSExchange()` (FMP → Twelve Data → static fallback → NASDAQ).
+4. **Return** all remaining symbols as candidates; rank and watchlist count stored in `raw_signal` for downstream weighting.
+
+### Key Thresholds & Filters
+
+| Parameter           | Value             | Rationale                                   |
+|---------------------|-------------------|---------------------------------------------|
+| Symbols fetched     | Top 30 (API max)  | Full trending list; dedup prevents bloat    |
+| Equity filter       | `/^[A-Z]{1,5}$/`  | Excludes crypto `BTC.X`, indices `SPY500`   |
+| Schedule            | 2× daily          | Pre-market + after-hours sentiment capture  |
+| Rate limit margin   | 50 ms between     | API allows ~60 req/min; one req per run     |
+
+### Signal Quality
+
+US equity-focused. Measures **retail sentiment momentum** — not a price breakout signal. Best used as a secondary confirmation layer alongside insider buy or ETF weight data. High-volume trending stocks often correlate with near-term volatility.
+
+### Required Env Vars
+
+| Variable                | Required | Purpose                            |
+|-------------------------|----------|------------------------------------|
+| `DISCOVERY_BACKEND_URL` | ✅        | Netlify backend URL                |
+| `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
+| `FMP_API_KEY`           | Optional | Exchange resolution (primary)      |
+| `TWELVEDATA_API_KEY`    | Optional | Exchange resolution (fallback)     |
 
 ---
 

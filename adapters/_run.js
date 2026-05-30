@@ -16,6 +16,7 @@ const ADAPTERS = {
   openinsider: './openinsider.js',
   'boerse-frankfurt': './boerse-frankfurt.js',
   'etf-holdings': './etf-holdings.js',
+  stocktwits: './stocktwits.js',
 };
 
 async function main() {
