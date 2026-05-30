@@ -22,6 +22,8 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/financialmodelingprep\.com\//,
   /^https:\/\/api\.twelvedata\.com\//,
   /^https:\/\/finance\.yahoo\.com\//,
+  /^https:\/\/query1\.finance\.yahoo\.com\//,
+  /^https:\/\/query2\.finance\.yahoo\.com\//,
 ];
 
 function isAllowed(url) {

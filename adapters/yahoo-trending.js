@@ -1,21 +1,20 @@
 /**
  * Yahoo Finance Trending adapter – US and DE regions
  *
- * Fetches Yahoo Finance trending tickers (page-view velocity signal).
- * Trending reflects which stock pages receive above-baseline visits on
- * Yahoo Finance. Order is meaningful – rank 1 = strongest spike.
+ * Fetches via the Netlify scrape-proxy (AWS IP, browser headers).
+ * GitHub Actions (Azure) is range-blocked by Yahoo; Netlify is not.
  *
- * Auth: Yahoo now gates the trending endpoint with a crumb/cookie flow
- * even though it was previously unauthenticated. Flow:
- *   1. GET fc.yahoo.com        → consent cookie
- *   2. GET /v1/test/getcrumb   → crumb token (using that cookie)
- *   3. GET /v1/finance/trending/{region}?crumb=… + Cookie header
+ * Method 1 – API endpoint (preferred):
+ *   query1.finance.yahoo.com/v1/finance/trending/{region}
+ *   Requires Origin + Referer to pass Yahoo's bot filter.
  *
- * Crumb is cached for the duration of one adapter run (single process).
+ * Method 2 – HTML fallback:
+ *   finance.yahoo.com/markets/stocks/trending/
+ *   Yahoo embeds full page data as window.__context JSON in the HTML.
+ *   Extracted via brace-counting (not regex) to handle arbitrary size.
  *
- * Regions:
- *   US – raw alphabetic tickers, exchange resolved via FMP/TD/static
- *   DE – symbols arrive as "SAP.DE"; strip suffix, exchange = XETR
+ * Signal: page-view velocity – rank 1 = strongest attention spike.
+ * Order is meaningful; not alphabetical, not price/volume sorted.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -29,145 +28,204 @@ const log = (level, msg, data = {}) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const YF_BASE = 'https://query1.finance.yahoo.com/v1/finance/trending';
-const COUNT   = 20;
-
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.5',
-};
+const COUNT = 20;
 
 const REGIONS = [
   { code: 'US', exchange: null,   stripSuffix: null     },
   { code: 'DE', exchange: 'XETR', stripSuffix: /\.DE$/i },
 ];
 
-// ─── Crumb / cookie acquisition ───────────────────────────────────────────────
+// Browser headers that pass Yahoo's bot filter (per spec)
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Origin': 'https://finance.yahoo.com',
+  'Referer': 'https://finance.yahoo.com/',
+};
 
-let _crumb = null;
-let _cookie = '';
+// ─── Proxy helper ─────────────────────────────────────────────────────────────
 
-async function acquireCrumb() {
-  if (_crumb) return true;
+async function proxyFetch(url, extraHeaders = {}) {
+  const backendUrl = process.env.DISCOVERY_BACKEND_URL;
+  const secret     = process.env.DISCOVERY_SECRET;
+  if (!backendUrl || !secret) throw new Error('DISCOVERY_BACKEND_URL / DISCOVERY_SECRET not set');
 
-  log('info', 'yahoo-trending: acquiring crumb');
+  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+    body: JSON.stringify({
+      url,
+      method: 'GET',
+      headers: { ...BROWSER_HEADERS, ...extraHeaders },
+    }),
+  });
 
-  // Step 1: get full session cookies from Yahoo Finance homepage (sets A3 token)
-  // fc.yahoo.com only sets the GDPR consent cookie, which is insufficient
-  for (const seedUrl of ['https://finance.yahoo.com/', 'https://fc.yahoo.com']) {
-    try {
-      const res = await fetch(seedUrl, { headers: HEADERS, redirect: 'follow' });
-      const setCookies = typeof res.headers.getSetCookie === 'function'
-        ? res.headers.getSetCookie()
-        : [res.headers.get('set-cookie')].filter(Boolean);
-      const cookies = setCookies.map((c) => c.split(';')[0]).join('; ');
-      if (cookies) _cookie = _cookie ? `${_cookie}; ${cookies}` : cookies;
-      log('debug', 'yahoo-trending: seed cookies', { url: seedUrl, added: cookies.length });
-    } catch (err) {
-      log('warn', 'yahoo-trending: seed fetch failed', { url: seedUrl, error: err.message });
-    }
-    await sleep(300);
+  if (!res.ok) throw new Error(`Proxy responded ${res.status}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Proxy error: ${data.error}`);
+  return data; // { status, body, content_type }
+}
+
+// ─── Method 1: API endpoint ───────────────────────────────────────────────────
+
+async function fetchViaAPI(region) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/trending/${region}?count=${COUNT}`;
+  log('info', 'yahoo-trending: method1 API', { region, url });
+
+  let proxy;
+  try {
+    proxy = await proxyFetch(url, { Accept: 'application/json' });
+  } catch (err) {
+    log('warn', 'yahoo-trending: proxy call failed', { region, error: err.message });
+    return null;
   }
 
-  log('debug', 'yahoo-trending: total cookie length', { cookieLen: _cookie.length });
+  log('debug', 'yahoo-trending: method1 upstream status', { region, status: proxy.status });
 
-  // Step 2: crumb – try query2 first, fall back to query1
-  for (const host of ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']) {
-    try {
-      await sleep(500); // brief pause to avoid triggering per-IP rate limit on crumb endpoint
-      const crumbRes = await fetch(`https://${host}/v1/test/getcrumb`, {
-        headers: { ...HEADERS, Accept: 'text/plain', ...(_cookie ? { Cookie: _cookie } : {}) },
-      });
-      log('debug', 'yahoo-trending: crumb response', { host, status: crumbRes.status });
+  if (proxy.status !== 200) return null;
 
-      if (!crumbRes.ok) {
-        log('warn', 'yahoo-trending: crumb failed', { host, status: crumbRes.status });
-        continue;
+  try {
+    const data = JSON.parse(proxy.body);
+    const quotes = data?.finance?.result?.[0]?.quotes ?? [];
+    log('info', 'yahoo-trending: method1 success', { region, count: quotes.length });
+    return quotes.length > 0 ? quotes : null;
+  } catch {
+    log('warn', 'yahoo-trending: method1 JSON parse failed', { region });
+    return null;
+  }
+}
+
+// ─── Method 2: HTML + window.__context fallback ───────────────────────────────
+
+// Brace-counting JSON extractor – handles arbitrarily large embedded objects
+function extractBracedJson(text, startMarker) {
+  const idx = text.indexOf(startMarker);
+  if (idx === -1) return null;
+
+  const objStart = text.indexOf('{', idx);
+  if (objStart === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = objStart; i < text.length; i++) {
+    const ch = text[i];
+    if (escape)           { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true;  continue; }
+    if (ch === '"')       { inString = !inString; continue; }
+    if (inString)         { continue; }
+    if (ch === '{')       { depth++; }
+    else if (ch === '}')  { depth--; if (depth === 0) return text.slice(objStart, i + 1); }
+  }
+  return null;
+}
+
+// Navigate the context object looking for an array of { symbol } objects
+function findQuotesInContext(ctx) {
+  const topKeys = Object.keys(ctx ?? {});
+  log('debug', 'yahoo-trending: context top-level keys', { keys: topKeys.slice(0, 30) });
+
+  // Known paths – extended as we discover the live structure
+  const PATHS = [
+    ['dispatcher', 'stores', 'TrendingTickersStore', 'tickers'],
+    ['dispatcher', 'stores', 'TrendingStore', 'tickers'],
+    ['dispatcher', 'stores', 'StreamDataStore', 'quoteData'],
+    ['context', 'dispatcher', 'stores', 'TrendingTickersStore', 'tickers'],
+  ];
+
+  for (const path of PATHS) {
+    let node = ctx;
+    for (const key of path) { node = node?.[key]; }
+    if (!node) continue;
+
+    if (Array.isArray(node) && node.length > 0) {
+      const symbols = node.map((t) => ({ symbol: t?.symbol ?? t })).filter((t) => t.symbol);
+      if (symbols.length > 0) {
+        log('info', 'yahoo-trending: found quotes via path', { path: path.join('.'), count: symbols.length });
+        return symbols;
       }
+    }
 
-      const text = (await crumbRes.text()).trim();
-      if (!text || text.toLowerCase().includes('too many') || text.startsWith('<') || text.startsWith('{')) {
-        log('warn', 'yahoo-trending: crumb invalid', { host, preview: text.slice(0, 80) });
-        continue;
+    if (node && typeof node === 'object' && !Array.isArray(node)) {
+      const symbols = Object.keys(node)
+        .filter((k) => /^[A-Z]/.test(k))
+        .map((k) => ({ symbol: k }));
+      if (symbols.length > 0) {
+        log('info', 'yahoo-trending: found quotes via object keys', { path: path.join('.'), count: symbols.length });
+        return symbols;
       }
-
-      _crumb = text;
-      log('info', 'yahoo-trending: crumb ready', { host, crumbLen: _crumb.length });
-      return true;
-    } catch (err) {
-      log('warn', 'yahoo-trending: crumb error', { host, error: err.message });
     }
   }
 
-  log('error', 'yahoo-trending: could not acquire crumb from any host');
-  return false;
+  // Last resort: log a structured sample so we can identify the correct path
+  log('warn', 'yahoo-trending: context path unknown – logging structure for diagnostics', {
+    topKeys: topKeys.slice(0, 20),
+    dispatcherKeys: Object.keys(ctx?.dispatcher ?? {}).slice(0, 20),
+    storeKeys: Object.keys(ctx?.dispatcher?.stores ?? {}).slice(0, 30),
+  });
+  return null;
+}
+
+async function fetchViaHTML() {
+  const url = 'https://finance.yahoo.com/markets/stocks/trending/';
+  log('info', 'yahoo-trending: method2 HTML fallback', { url });
+
+  let proxy;
+  try {
+    proxy = await proxyFetch(url);
+  } catch (err) {
+    log('warn', 'yahoo-trending: method2 proxy failed', { error: err.message });
+    return null;
+  }
+
+  log('debug', 'yahoo-trending: method2 upstream status', { status: proxy.status, size: proxy.body?.length });
+
+  if (proxy.status !== 200) return null;
+
+  const html = proxy.body ?? '';
+
+  const jsonStr = extractBracedJson(html, 'window.__context');
+  if (!jsonStr) {
+    log('warn', 'yahoo-trending: window.__context not found', {
+      htmlPreview: html.slice(0, 500),
+    });
+    return null;
+  }
+
+  log('debug', 'yahoo-trending: context JSON extracted', { bytes: jsonStr.length });
+
+  let ctx;
+  try {
+    ctx = JSON.parse(jsonStr);
+  } catch (err) {
+    log('error', 'yahoo-trending: context JSON parse failed', { error: err.message });
+    return null;
+  }
+
+  return findQuotesInContext(ctx);
 }
 
 // ─── Fetch one region ─────────────────────────────────────────────────────────
 
 async function fetchRegion(region) {
-  const url = `${YF_BASE}/${region.code}?count=${COUNT}&crumb=${encodeURIComponent(_crumb ?? '')}`;
-  log('info', 'yahoo-trending: fetching', { region: region.code });
+  // Method 1 first – lighter, structured response
+  let quotes = await fetchViaAPI(region.code);
 
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: { ...HEADERS, ...(_cookie ? { Cookie: _cookie } : {}) },
-    });
-  } catch (err) {
-    log('error', 'yahoo-trending: network error', { region: region.code, error: err.message });
-    return [];
+  // Method 2 – HTML fallback if API is blocked or empty
+  if (!quotes) {
+    log('info', 'yahoo-trending: falling back to HTML method', { region: region.code });
+    quotes = await fetchViaHTML();
   }
 
-  if (res.status === 401 || res.status === 403) {
-    log('error', 'yahoo-trending: auth rejected', { region: region.code, status: res.status });
-    return [];
-  }
-  if (res.status === 429) {
-    log('error', 'yahoo-trending: rate limited', { region: region.code });
-    return [];
-  }
-  if (!res.ok) {
-    log('error', 'yahoo-trending: HTTP error', { region: region.code, status: res.status });
-    return [];
-  }
-
-  let data;
-  try {
-    data = await res.json();
-  } catch (err) {
-    log('error', 'yahoo-trending: invalid JSON', { region: region.code, error: err.message });
-    return [];
-  }
-
-  const result = data?.finance?.result?.[0];
-  if (!result) {
-    log('warn', 'yahoo-trending: empty result', { region: region.code, raw: JSON.stringify(data).slice(0, 200) });
-    return [];
-  }
-
-  const quotes = result.quotes ?? [];
-  log('info', 'yahoo-trending: received', {
-    region: region.code,
-    count: quotes.length,
-    jobTimestamp: result.jobTimestamp,
-    startInterval: result.startInterval,
-  });
-
-  return quotes;
+  return quotes ?? [];
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function fetchCandidates() {
   log('info', 'yahoo-trending: starting', { regions: REGIONS.map((r) => r.code) });
-
-  const ok = await acquireCrumb();
-  if (!ok) {
-    log('error', 'yahoo-trending: cannot proceed without crumb – aborting');
-    return [];
-  }
 
   const now = new Date().toISOString();
   const candidates = [];
@@ -190,18 +248,16 @@ export async function fetchCandidates() {
       const rank     = i + 1;
       const exchange = region.exchange ?? await resolveUSExchange(baseTicker).catch(() => 'NASDAQ');
 
-      log('debug', 'yahoo-trending: resolved', { region: region.code, baseTicker, exchange, rank });
-
       candidates.push({
         id: uuidv4(),
         symbol: baseTicker,
         exchange,
         yahoo_symbol: yahooSymbol,
         isin: null,
-        name: baseTicker, // no name in response – AI enrichment fills it in
+        name: baseTicker, // no name in trending response – AI enrichment fills it in
         sources: [{
           adapter: 'yahoo-trending',
-          source_url: 'https://finance.yahoo.com/trending-tickers/',
+          source_url: 'https://finance.yahoo.com/markets/stocks/trending/',
           discovered_at: now,
           signal_type: 'page_view_trending',
           raw_signal: { region: region.code, rank, yahoo_symbol: yahooSymbol },
@@ -218,7 +274,7 @@ export async function fetchCandidates() {
       await sleep(50);
     }
 
-    log('info', 'yahoo-trending: region done', { region: region.code, candidates: candidates.length });
+    log('info', 'yahoo-trending: region done', { region: region.code, added: candidates.length });
     if (region !== REGIONS[REGIONS.length - 1]) await sleep(1000);
   }
 
