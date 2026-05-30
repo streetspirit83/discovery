@@ -2,12 +2,16 @@
  * Yahoo Finance Trending adapter – US and DE regions
  *
  * Fetches Yahoo Finance trending tickers (page-view velocity signal).
- * Trending is driven by Yahoo Finance user research activity:
- * which stock pages are being visited significantly above their rolling
- * baseline. Order is meaningful – rank 1 = strongest spike.
+ * Trending reflects which stock pages receive above-baseline visits on
+ * Yahoo Finance. Order is meaningful – rank 1 = strongest spike.
  *
- * Auth: trending endpoint is served unauthenticated. No crumb/cookie needed.
- * Cloud IPs: untested – 403 is logged clearly; no silent failure.
+ * Auth: Yahoo now gates the trending endpoint with a crumb/cookie flow
+ * even though it was previously unauthenticated. Flow:
+ *   1. GET fc.yahoo.com        → consent cookie
+ *   2. GET /v1/test/getcrumb   → crumb token (using that cookie)
+ *   3. GET /v1/finance/trending/{region}?crumb=… + Cookie header
+ *
+ * Crumb is cached for the duration of one adapter run (single process).
  *
  * Regions:
  *   US – raw alphabetic tickers, exchange resolved via FMP/TD/static
@@ -26,40 +30,88 @@ const log = (level, msg, data = {}) =>
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const YF_BASE = 'https://query1.finance.yahoo.com/v1/finance/trending';
-const COUNT = 20;
+const COUNT   = 20;
 
-// Browser-like headers per spec recommendation
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.5',
 };
 
 const REGIONS = [
-  { code: 'US', exchange: null,   yahooSuffix: '',    stripSuffix: null   },
-  { code: 'DE', exchange: 'XETR', yahooSuffix: '.DE', stripSuffix: /\.DE$/i },
+  { code: 'US', exchange: null,   stripSuffix: null     },
+  { code: 'DE', exchange: 'XETR', stripSuffix: /\.DE$/i },
 ];
+
+// ─── Crumb / cookie acquisition ───────────────────────────────────────────────
+
+let _crumb = null;
+let _cookie = '';
+
+async function acquireCrumb() {
+  if (_crumb) return true; // already have it for this run
+
+  log('info', 'yahoo-trending: acquiring crumb');
+
+  // Step 1: consent cookie from fc.yahoo.com
+  try {
+    const gateRes = await fetch('https://fc.yahoo.com', {
+      headers: HEADERS,
+      redirect: 'follow',
+    });
+    // Node 18+ getSetCookie(); older Node fallback via get()
+    const setCookies = typeof gateRes.headers.getSetCookie === 'function'
+      ? gateRes.headers.getSetCookie()
+      : [gateRes.headers.get('set-cookie')].filter(Boolean);
+    _cookie = setCookies.map((c) => c.split(';')[0]).join('; ');
+    log('debug', 'yahoo-trending: gate cookie acquired', { cookieLen: _cookie.length });
+  } catch (err) {
+    log('warn', 'yahoo-trending: fc.yahoo.com failed, continuing without cookie', { error: err.message });
+  }
+
+  // Step 2: crumb token
+  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    headers: { ...HEADERS, ...(_cookie ? { Cookie: _cookie } : {}) },
+  });
+
+  if (!crumbRes.ok) {
+    log('error', 'yahoo-trending: crumb request failed', { status: crumbRes.status });
+    return false;
+  }
+
+  const text = (await crumbRes.text()).trim();
+  if (!text || text.toLowerCase().includes('too many') || text.startsWith('<')) {
+    log('error', 'yahoo-trending: crumb response invalid', { preview: text.slice(0, 80) });
+    return false;
+  }
+
+  _crumb = text;
+  log('info', 'yahoo-trending: crumb ready', { crumbLen: _crumb.length });
+  return true;
+}
 
 // ─── Fetch one region ─────────────────────────────────────────────────────────
 
 async function fetchRegion(region) {
-  const url = `${YF_BASE}/${region.code}?count=${COUNT}`;
-  log('info', 'yahoo-trending: fetching', { region: region.code, url });
+  const url = `${YF_BASE}/${region.code}?count=${COUNT}&crumb=${encodeURIComponent(_crumb ?? '')}`;
+  log('info', 'yahoo-trending: fetching', { region: region.code });
 
   let res;
   try {
-    res = await fetch(url, { headers: HEADERS });
+    res = await fetch(url, {
+      headers: { ...HEADERS, ...(_cookie ? { Cookie: _cookie } : {}) },
+    });
   } catch (err) {
     log('error', 'yahoo-trending: network error', { region: region.code, error: err.message });
     return [];
   }
 
-  if (res.status === 403) {
-    log('error', 'yahoo-trending: 403 – endpoint blocked (cloud IP or auth required)', { region: region.code });
+  if (res.status === 401 || res.status === 403) {
+    log('error', 'yahoo-trending: auth rejected', { region: region.code, status: res.status });
     return [];
   }
   if (res.status === 429) {
-    log('error', 'yahoo-trending: 429 – rate limited', { region: region.code });
+    log('error', 'yahoo-trending: rate limited', { region: region.code });
     return [];
   }
   if (!res.ok) {
@@ -97,6 +149,12 @@ async function fetchRegion(region) {
 export async function fetchCandidates() {
   log('info', 'yahoo-trending: starting', { regions: REGIONS.map((r) => r.code) });
 
+  const ok = await acquireCrumb();
+  if (!ok) {
+    log('error', 'yahoo-trending: cannot proceed without crumb – aborting');
+    return [];
+  }
+
   const now = new Date().toISOString();
   const candidates = [];
 
@@ -104,22 +162,18 @@ export async function fetchCandidates() {
     const quotes = await fetchRegion(region);
 
     for (let i = 0; i < quotes.length; i++) {
-      const raw = quotes[i].symbol ?? '';
+      const raw = quotes[i]?.symbol ?? '';
       if (!raw) continue;
 
-      // Derive base ticker and yahoo symbol
       const yahooSymbol = raw;
-      const baseTicker = region.stripSuffix ? raw.replace(region.stripSuffix, '') : raw;
+      const baseTicker  = region.stripSuffix ? raw.replace(region.stripSuffix, '') : raw;
 
-      // Skip anything that doesn't look like a real equity ticker after stripping
       if (!/^[A-Z0-9.]{1,10}$/.test(baseTicker)) {
-        log('debug', 'yahoo-trending: skipping non-standard symbol', { raw, baseTicker });
+        log('debug', 'yahoo-trending: skipping non-standard symbol', { raw });
         continue;
       }
 
-      const rank = i + 1;
-
-      // Resolve exchange: known for DE, dynamic for US
+      const rank     = i + 1;
       const exchange = region.exchange ?? await resolveUSExchange(baseTicker).catch(() => 'NASDAQ');
 
       log('debug', 'yahoo-trending: resolved', { region: region.code, baseTicker, exchange, rank });
@@ -130,17 +184,13 @@ export async function fetchCandidates() {
         exchange,
         yahoo_symbol: yahooSymbol,
         isin: null,
-        name: baseTicker, // Yahoo trending returns no name – enrichment fills this in
+        name: baseTicker, // no name in response – AI enrichment fills it in
         sources: [{
           adapter: 'yahoo-trending',
-          source_url: `https://finance.yahoo.com/trending-tickers/`,
+          source_url: 'https://finance.yahoo.com/trending-tickers/',
           discovered_at: now,
           signal_type: 'page_view_trending',
-          raw_signal: {
-            region: region.code,
-            rank,
-            yahoo_symbol: yahooSymbol,
-          },
+          raw_signal: { region: region.code, rank, yahoo_symbol: yahooSymbol },
           info_snippet: `Yahoo Finance Trending ${region.code} #${rank}`,
         }],
         links: buildLinks({ exchange, symbol: baseTicker, yahooSymbol }),
@@ -155,8 +205,6 @@ export async function fetchCandidates() {
     }
 
     log('info', 'yahoo-trending: region done', { region: region.code, candidates: candidates.length });
-
-    // Polite pause between region fetches
     if (region !== REGIONS[REGIONS.length - 1]) await sleep(1000);
   }
 
