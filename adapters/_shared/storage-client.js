@@ -88,6 +88,11 @@ export class StorageClient {
     return this.#post({ op: 'append_candidate', candidate });
   }
 
+  async appendCandidates(candidates) {
+    log('debug', 'storage: appendCandidates', { count: candidates.length });
+    return this.#post({ op: 'append_candidates', candidates });
+  }
+
   /**
    * Update a candidate in place (by id).
    * @param {'inbox'|'archive'|'export'} blobType

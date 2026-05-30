@@ -73,26 +73,29 @@ async function main() {
   let skipped = 0;
   let errors = 0;
 
-  for (const candidate of candidates) {
-    try {
-      const result = await storageClient.appendCandidate(candidate);
-      if (result.action === 'added') added++;
-      else if (result.action === 'merged') merged++;
-      else if (result.action === 'skipped') skipped++;
-      log('debug', 'adapter: candidate processed', {
-        adapter: adapterName,
-        symbol: candidate.symbol,
-        action: result.action,
-        id: result.id,
-      });
-    } catch (err) {
-      errors++;
-      log('error', 'adapter: failed to append candidate', {
-        adapter: adapterName,
-        symbol: candidate.symbol,
-        error: err.message,
-      });
-    }
+  let bulkResults;
+  try {
+    log('info', 'adapter: appending candidates (bulk)', { adapter: adapterName, count: candidates.length });
+    const res = await storageClient.appendCandidates(candidates);
+    bulkResults = res.results ?? [];
+  } catch (err) {
+    log('error', 'adapter: appendCandidates failed', { adapter: adapterName, error: err.message });
+    process.exit(1);
+  }
+
+  for (let i = 0; i < bulkResults.length; i++) {
+    const result    = bulkResults[i];
+    const candidate = candidates[i];
+    if (result.action === 'added')   added++;
+    else if (result.action === 'merged')  merged++;
+    else if (result.action === 'skipped') skipped++;
+    else if (result.action === 'error')   errors++;
+    log('debug', 'adapter: candidate processed', {
+      adapter: adapterName,
+      symbol: candidate.symbol,
+      action: result.action,
+      id: result.id,
+    });
   }
 
   log('info', 'adapter: complete', {

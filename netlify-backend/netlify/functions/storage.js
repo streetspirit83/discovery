@@ -161,6 +161,65 @@ export default async function handler(req) {
     return respond(200, { ok: true, action: 'added', id: candidate.id });
   }
 
+  // --- op: append_candidates (bulk, atomic single write) ---
+  if (op === 'append_candidates') {
+    const { candidates } = body;
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return respond(400, { ok: false, error: 'Missing or empty candidates array' });
+    }
+
+    const [archiveDoc, exportDoc, inbox] = await Promise.all([
+      readBlobDoc(store, 'archive'),
+      readBlobDoc(store, 'export'),
+      readBlobDoc(store, 'inbox'),
+    ]);
+
+    const archiveKeys = new Set(archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
+    const exportKeys  = new Set(exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
+    const inboxMap    = new Map(inbox.candidates.map((c) => [`${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`, c]));
+
+    const now = new Date().toISOString();
+    const results = [];
+
+    for (const candidate of candidates) {
+      if (!candidate.symbol || !candidate.exchange) {
+        results.push({ action: 'error', error: 'Missing symbol or exchange' });
+        continue;
+      }
+      const sym  = candidate.symbol.toUpperCase();
+      const exch = candidate.exchange.toUpperCase();
+      const key  = `${sym}:${exch}`;
+
+      if (archiveKeys.has(key) || exportKeys.has(key)) {
+        log('info', 'storage: bulk skipped (tombstoned)', { sym, exch });
+        results.push({ action: 'skipped' });
+        continue;
+      }
+
+      const existing = inboxMap.get(key);
+      if (existing) {
+        existing.sources.push(...(candidate.sources ?? []));
+        existing.last_updated_at = now;
+        log('info', 'storage: bulk merged', { sym, exch, id: existing.id });
+        results.push({ action: 'merged', id: existing.id });
+      } else {
+        inbox.candidates.push(candidate);
+        inboxMap.set(key, candidate);
+        log('info', 'storage: bulk added', { sym, exch, id: candidate.id });
+        results.push({ action: 'added', id: candidate.id });
+      }
+    }
+
+    await writeBlobDoc(store, 'inbox', inbox);
+    log('info', 'storage: append_candidates done', {
+      total: candidates.length,
+      added:   results.filter((r) => r.action === 'added').length,
+      merged:  results.filter((r) => r.action === 'merged').length,
+      skipped: results.filter((r) => r.action === 'skipped').length,
+    });
+    return respond(200, { ok: true, results });
+  }
+
   // --- op: update_candidate ---
   if (op === 'update_candidate') {
     if (!blobType || !BLOB_NAMES[blobType]) {
