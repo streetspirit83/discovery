@@ -49,45 +49,59 @@ let _crumb = null;
 let _cookie = '';
 
 async function acquireCrumb() {
-  if (_crumb) return true; // already have it for this run
+  if (_crumb) return true;
 
   log('info', 'yahoo-trending: acquiring crumb');
 
-  // Step 1: consent cookie from fc.yahoo.com
-  try {
-    const gateRes = await fetch('https://fc.yahoo.com', {
-      headers: HEADERS,
-      redirect: 'follow',
-    });
-    // Node 18+ getSetCookie(); older Node fallback via get()
-    const setCookies = typeof gateRes.headers.getSetCookie === 'function'
-      ? gateRes.headers.getSetCookie()
-      : [gateRes.headers.get('set-cookie')].filter(Boolean);
-    _cookie = setCookies.map((c) => c.split(';')[0]).join('; ');
-    log('debug', 'yahoo-trending: gate cookie acquired', { cookieLen: _cookie.length });
-  } catch (err) {
-    log('warn', 'yahoo-trending: fc.yahoo.com failed, continuing without cookie', { error: err.message });
+  // Step 1: get full session cookies from Yahoo Finance homepage (sets A3 token)
+  // fc.yahoo.com only sets the GDPR consent cookie, which is insufficient
+  for (const seedUrl of ['https://finance.yahoo.com/', 'https://fc.yahoo.com']) {
+    try {
+      const res = await fetch(seedUrl, { headers: HEADERS, redirect: 'follow' });
+      const setCookies = typeof res.headers.getSetCookie === 'function'
+        ? res.headers.getSetCookie()
+        : [res.headers.get('set-cookie')].filter(Boolean);
+      const cookies = setCookies.map((c) => c.split(';')[0]).join('; ');
+      if (cookies) _cookie = _cookie ? `${_cookie}; ${cookies}` : cookies;
+      log('debug', 'yahoo-trending: seed cookies', { url: seedUrl, added: cookies.length });
+    } catch (err) {
+      log('warn', 'yahoo-trending: seed fetch failed', { url: seedUrl, error: err.message });
+    }
+    await sleep(300);
   }
 
-  // Step 2: crumb token
-  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
-    headers: { ...HEADERS, ...(_cookie ? { Cookie: _cookie } : {}) },
-  });
+  log('debug', 'yahoo-trending: total cookie length', { cookieLen: _cookie.length });
 
-  if (!crumbRes.ok) {
-    log('error', 'yahoo-trending: crumb request failed', { status: crumbRes.status });
-    return false;
+  // Step 2: crumb – try query2 first, fall back to query1
+  for (const host of ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']) {
+    try {
+      await sleep(500); // brief pause to avoid triggering per-IP rate limit on crumb endpoint
+      const crumbRes = await fetch(`https://${host}/v1/test/getcrumb`, {
+        headers: { ...HEADERS, Accept: 'text/plain', ...(_cookie ? { Cookie: _cookie } : {}) },
+      });
+      log('debug', 'yahoo-trending: crumb response', { host, status: crumbRes.status });
+
+      if (!crumbRes.ok) {
+        log('warn', 'yahoo-trending: crumb failed', { host, status: crumbRes.status });
+        continue;
+      }
+
+      const text = (await crumbRes.text()).trim();
+      if (!text || text.toLowerCase().includes('too many') || text.startsWith('<') || text.startsWith('{')) {
+        log('warn', 'yahoo-trending: crumb invalid', { host, preview: text.slice(0, 80) });
+        continue;
+      }
+
+      _crumb = text;
+      log('info', 'yahoo-trending: crumb ready', { host, crumbLen: _crumb.length });
+      return true;
+    } catch (err) {
+      log('warn', 'yahoo-trending: crumb error', { host, error: err.message });
+    }
   }
 
-  const text = (await crumbRes.text()).trim();
-  if (!text || text.toLowerCase().includes('too many') || text.startsWith('<')) {
-    log('error', 'yahoo-trending: crumb response invalid', { preview: text.slice(0, 80) });
-    return false;
-  }
-
-  _crumb = text;
-  log('info', 'yahoo-trending: crumb ready', { crumbLen: _crumb.length });
-  return true;
+  log('error', 'yahoo-trending: could not acquire crumb from any host');
+  return false;
 }
 
 // ─── Fetch one region ─────────────────────────────────────────────────────────
