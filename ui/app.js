@@ -272,7 +272,11 @@ async function handleBulkAction(action, ids) {
 
     let enrichments;
     try {
-      enrichments = await fetchTVEnrichment(targets, { backendUrl, secret });
+      enrichments = await fetchTVEnrichment(targets, {
+        backendUrl,
+        secret,
+        onProgress: (msg) => toast(msg, 'info', 2000),
+      });
     } catch (err) {
       toast(`TV Enrichment fehlgeschlagen: ${err.message}`, 'error');
       return;
