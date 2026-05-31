@@ -52,13 +52,12 @@ const TV_COLUMNS = [
   'close',                      // 1
   'market_cap_basic',           // 2
   'price_earnings_ttm',         // 3
-  'price_to_book_ratio',        // 4
-  'Recommend.All',              // 5
-  'sector',                     // 6
-  'industry',                   // 7
-  'earnings_release_next_date', // 8
+  'Recommend.All',              // 4
+  'sector',                     // 5
+  'industry',                   // 6
+  'earnings_release_next_date', // 7
 ];
-const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, sector: 6, industry: 7, earningsDate: 8 };
+const COL = { description: 0, close: 1, marketCap: 2, pe: 3, rating: 4, sector: 5, industry: 6, earningsDate: 7 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
 
@@ -148,7 +147,6 @@ function buildUpdates(d, candidate) {
     tv_data: {
       rating:             d[COL.rating]       ?? null,
       pe_ttm:             d[COL.pe]           ?? null,
-      pb_ratio:           d[COL.pb]           ?? null,
       market_cap:         d[COL.marketCap]    ?? null,
       close:              d[COL.close]        ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
