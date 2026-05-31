@@ -1,12 +1,11 @@
 /**
  * TradingView bulk enrichment – browser-side
  *
- * Fetches all stocks from each TV market endpoint (no name filter — name
- * filtering appears unreliable in the scanner API) and matches by the
- * "EXCHANGE:SYMBOL" s-field client-side.
+ * Uses the scanner API's symbols.tickers batch lookup:
+ * POST https://scanner.tradingview.com/scan
+ * Body: { markets: ["america"], symbols: { tickers: ["NASDAQ:AAPL", ...] }, columns: [...] }
  *
- * Uses only confirmed-working API patterns: type=equal=stock filter,
- * same format as the screener adapter.
+ * This is the correct per-ticker API — no filter needed, no client-side matching.
  */
 
 const EXCHANGE_TO_MARKET = {
@@ -61,28 +60,67 @@ const TV_COLUMNS = [
 ];
 const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, sector: 6, industry: 7, earningsDate: 8 };
 
-// Fetch enough rows to cover most liquid stocks per market
-const SCAN_RANGE = 3000;
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
 
 async function proxyPost(backendUrl, secret, url, requestBody) {
-  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
-    body: JSON.stringify({
-      url,
+  const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
+
+  console.group(`[TV] POST ${url}`);
+  console.log('[TV] Proxy URL:', proxyUrl);
+  console.log('[TV] Request body:', JSON.stringify(requestBody, null, 2));
+
+  let res;
+  try {
+    res = await fetch(proxyUrl, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    requestBody,
-    }),
-  });
-  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-  const wrapper = await res.json();
-  if (!wrapper.ok)          throw new Error(`Proxy: ${wrapper.error}`);
-  if (wrapper.status !== 200) throw new Error(`TV HTTP ${wrapper.status}`);
+      headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+      body: JSON.stringify({
+        url,
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    requestBody,
+      }),
+    });
+  } catch (fetchErr) {
+    console.error('[TV] Proxy fetch failed (network):', fetchErr);
+    console.groupEnd();
+    throw new Error(`Proxy network error: ${fetchErr.message}`);
+  }
+
+  console.log('[TV] Proxy response status:', res.status);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('[TV] Proxy HTTP error body:', text);
+    console.groupEnd();
+    throw new Error(`Proxy HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  let wrapper;
+  try {
+    wrapper = await res.json();
+  } catch (jsonErr) {
+    console.error('[TV] Proxy response not JSON:', jsonErr);
+    console.groupEnd();
+    throw new Error('Proxy returned non-JSON');
+  }
+
+  console.log('[TV] Proxy wrapper:', { ok: wrapper.ok, status: wrapper.status, error: wrapper.error, bodyLen: wrapper.body?.length });
+
+  if (!wrapper.ok) {
+    console.error('[TV] Proxy error:', wrapper.error);
+    console.groupEnd();
+    throw new Error(`Proxy: ${wrapper.error}`);
+  }
+  if (wrapper.status !== 200) {
+    console.error('[TV] Upstream HTTP error. Body preview:', wrapper.body?.slice(0, 500));
+    console.groupEnd();
+    throw new Error(`TV HTTP ${wrapper.status} – ${wrapper.body?.slice(0, 200)}`);
+  }
+
+  console.log('[TV] Upstream body (first 500 chars):', wrapper.body?.slice(0, 500));
+  console.groupEnd();
+
   return wrapper.body;
 }
 
@@ -146,17 +184,28 @@ function buildUpdates(d, candidate) {
  * @returns {Promise<Map<string, object>>}  candidateId → updates
  */
 export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProgress }) {
-  // Group by TV market endpoint
+  console.group('[TV] fetchTVEnrichment start');
+  console.log('[TV] candidates:', candidates.map((c) => `${c.exchange}:${c.symbol}`));
+
+  // Group by TV market
   const groups   = new Map(); // market → [{candidate, tvTicker}]
   const noMarket = [];
 
   for (const c of candidates) {
     const market = EXCHANGE_TO_MARKET[c.exchange];
     const prefix = TV_PREFIX_MAP[c.exchange];
-    if (!market || !prefix) { noMarket.push(`${c.symbol}(${c.exchange ?? '?'})`); continue; }
+    if (!market || !prefix) {
+      console.warn('[TV] Unknown exchange:', c.exchange, 'for', c.symbol);
+      noMarket.push(`${c.symbol}(${c.exchange ?? '?'})`);
+      continue;
+    }
     if (!groups.has(market)) groups.set(market, []);
     groups.get(market).push({ candidate: c, tvTicker: `${prefix}:${c.symbol}` });
   }
+
+  console.log('[TV] groups:', Object.fromEntries([...groups.entries()].map(([m, e]) => [m, e.map((x) => x.tvTicker)])));
+  console.log('[TV] noMarket:', noMarket);
+  console.groupEnd();
 
   if (groups.size === 0) {
     throw new Error(`Keine bekannten Exchanges – ${noMarket.join(', ')}`);
@@ -167,52 +216,71 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
 
   for (const [market, entries] of groups) {
     marketIdx++;
-    onProgress?.(`📊 ${marketIdx}/${groups.size} – ${market} (${entries.length} Symbole)…`);
+    const tvTickers = entries.map((e) => e.tvTicker);
+    onProgress?.(`📊 ${marketIdx}/${groups.size} – ${market}: ${tvTickers.join(', ')}…`);
 
     // Build lookup: tvTicker → candidate
     const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
 
+    // Use symbols.tickers for direct batch ticker lookup (no filter needed)
+    const requestBody = {
+      markets: [market],
+      symbols: { tickers: tvTickers },
+      columns: TV_COLUMNS,
+    };
+
     let bodyStr;
     try {
       bodyStr = await proxyPost(backendUrl, secret,
-        `https://scanner.tradingview.com/${market}/scan`,
-        {
-          filter:  [{ left: 'type', operation: 'equal', right: 'stock' }],
-          columns: TV_COLUMNS,
-          sort:    { sortBy: 'market_cap_basic', sortOrder: 'desc' },
-          range:   [0, SCAN_RANGE],
-        },
+        'https://scanner.tradingview.com/scan',
+        requestBody,
       );
     } catch (err) {
-      // Surface error in toast via re-throw after other markets are tried
-      console.warn(`tv-enrichment ${market}: ${err.message}`);
+      console.warn(`[TV] ${market} failed:`, err.message);
       onProgress?.(`⚠️ ${market}: ${err.message}`);
-      if (marketIdx < groups.size) await sleep(1000);
       continue;
     }
 
     let parsed;
     try {
       parsed = JSON.parse(bodyStr);
-    } catch {
-      console.warn(`tv-enrichment ${market}: JSON parse failed`);
-      if (marketIdx < groups.size) await sleep(1000);
+    } catch (parseErr) {
+      console.warn(`[TV] ${market}: JSON parse error on body:`, bodyStr?.slice(0, 300));
+      onProgress?.(`⚠️ ${market}: JSON parse fehlgeschlagen`);
       continue;
     }
 
+    console.group(`[TV] ${market} response`);
+    console.log('[TV] totalCount:', parsed?.totalCount);
+    console.log('[TV] data rows:', parsed?.data?.length ?? 0);
+    console.log('[TV] data sample:', parsed?.data?.slice(0, 3));
+    console.groupEnd();
+
     const rows = parsed?.data ?? [];
+    onProgress?.(`✅ ${market}: ${rows.length} Treffer für ${tvTickers.length} Ticker`);
+
+    let matched = 0;
     for (const row of rows) {
       const candidate = tvTickerMap.get(row.s);
-      if (candidate) results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+      if (candidate) {
+        results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+        matched++;
+      } else {
+        console.warn('[TV] No candidate for ticker:', row.s);
+      }
     }
 
-    if (marketIdx < groups.size) await sleep(1000);
+    if (matched < tvTickers.length) {
+      const missing = tvTickers.filter((t) => !rows.find((r) => r.s === t));
+      console.warn('[TV] No TV data for:', missing);
+      onProgress?.(`⚠️ ${market}: ${missing.length} Ticker ohne Daten: ${missing.join(', ')}`);
+    }
   }
 
   if (results.size === 0) {
     const detail = noMarket.length === candidates.length
       ? `Keine bekannten Exchanges: ${noMarket.join(', ')}`
-      : 'Keine Übereinstimmungen – Symbole möglicherweise unter $100M Market Cap oder falsche Exchange';
+      : 'Keine TV-Daten – Exchange/Symbol prüfen (Details im Browser Console)';
     throw new Error(detail);
   }
 
