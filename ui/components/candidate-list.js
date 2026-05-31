@@ -23,6 +23,24 @@ const ADAPTER_COLORS = {
   'tradingview-screener':   '#2962ff',
 };
 
+function tvRatingClass(r) {
+  if (r == null) return 'neutral';
+  if (r > 0.5)  return 'strong-buy';
+  if (r > 0.1)  return 'buy';
+  if (r < -0.5) return 'strong-sell';
+  if (r < -0.1) return 'sell';
+  return 'neutral';
+}
+
+function tvRatingLabel(r) {
+  if (r == null) return '?';
+  if (r > 0.5)  return '↑↑';
+  if (r > 0.1)  return '↑';
+  if (r < -0.5) return '↓↓';
+  if (r < -0.1) return '↓';
+  return '→';
+}
+
 const SORT_LABELS = {
   state: '',
   symbol: 'Symbol',
@@ -453,6 +471,7 @@ export class CandidateList {
             <strong>${c.symbol}</strong>
             <span class="exchange-tag">${c.exchange}</span>
             ${c.enrichment ? `<span class="enrich-badge" title="AI Enrichment vorhanden">${icons.sparkles}</span>` : ''}
+            ${c.tv_data ? `<span class="tv-rating-badge tv-rating-badge--${tvRatingClass(c.tv_data.rating)}" title="TV Rating: ${c.tv_data.rating?.toFixed(2) ?? '?'}">${tvRatingLabel(c.tv_data.rating)}</span>` : ''}
           </div>
         </td>
         <td class="col-name">${c.name}</td>

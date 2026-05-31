@@ -12,6 +12,55 @@ function formatDate(isoStr) {
   });
 }
 
+function formatMarketCap(mc) {
+  if (mc == null) return '—';
+  if (mc >= 1e12) return `${(mc / 1e12).toFixed(1)}T`;
+  if (mc >= 1e9)  return `${(mc / 1e9).toFixed(1)}B`;
+  if (mc >= 1e6)  return `${(mc / 1e6).toFixed(0)}M`;
+  return mc.toLocaleString('de-DE');
+}
+
+function tvRatingClass(r) {
+  if (r == null) return 'neutral';
+  if (r > 0.5)  return 'strong-buy';
+  if (r > 0.1)  return 'buy';
+  if (r < -0.5) return 'strong-sell';
+  if (r < -0.1) return 'sell';
+  return 'neutral';
+}
+
+function tvRatingLabel(r) {
+  if (r == null) return '—';
+  if (r > 0.5)  return 'Strong Buy ↑↑';
+  if (r > 0.1)  return 'Buy ↑';
+  if (r < -0.5) return 'Strong Sell ↓↓';
+  if (r < -0.1) return 'Sell ↓';
+  return 'Neutral →';
+}
+
+function renderTVData(c) {
+  const tv = c.tv_data;
+  if (!tv) return '';
+  const ratingClass = tvRatingClass(tv.rating);
+  return `
+    <div class="detail-section">
+      <h3>TV Daten</h3>
+      <div class="tv-data-grid">
+        <div class="tv-kv">
+          <span>Rating</span>
+          <strong class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</strong>
+        </div>
+        <div class="tv-kv"><span>Kurs</span><strong>${tv.close != null ? tv.close.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong></div>
+        <div class="tv-kv"><span>Market Cap</span><strong>${formatMarketCap(tv.market_cap)}</strong></div>
+        <div class="tv-kv"><span>KGV (TTM)</span><strong>${tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—'}</strong></div>
+        <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—'}</strong></div>
+      </div>
+      ${c.sector ? `<div class="tv-meta"><span class="tag">${c.sector}</span>${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}</div>` : ''}
+      <small class="tv-fetched">Stand: ${formatDate(tv.fetched_at)}</small>
+    </div>
+  `;
+}
+
 function renderEnrichment(enrichment) {
   if (!enrichment) return '';
   const confidenceColor = { high: '#2ecc71', medium: '#f39c12', low: '#e74c3c' }[enrichment.confidence] ?? '#999';
@@ -183,6 +232,8 @@ export class CandidateDetail {
         <textarea id="detail-notes" class="notes-editor" placeholder="Notizen…" rows="3">${c.notes ?? ''}</textarea>
         <button class="btn btn-sm btn-secondary" id="detail-save-notes">Speichern</button>
       </div>
+
+      ${renderTVData(c)}
 
       <div class="detail-section" id="enrichment-section">
         <h3>AI-Enrichment</h3>
