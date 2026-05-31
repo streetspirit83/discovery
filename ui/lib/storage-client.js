@@ -45,6 +45,10 @@ export class StorageClient {
     return this.#post({ op: 'move_candidate', candidate_id: candidateId, from_blob: fromBlob, to_blob: toBlob });
   }
 
+  async bulkUpdateCandidates(blobType, updates) {
+    return this.#post({ op: 'bulk_update_candidates', blob_type: blobType, updates });
+  }
+
   async deleteCandidate(blobType, candidateId) {
     return this.#post({ op: 'delete_candidate', blob_type: blobType, candidate_id: candidateId });
   }

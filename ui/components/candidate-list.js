@@ -294,6 +294,7 @@ export class CandidateList {
         <button class="btn btn-sm btn-danger" id="bulk-dismiss">${icons.xMark} Ablehnen</button>
         <button class="btn btn-sm btn-success" id="bulk-promote">${icons.check} Promoten</button>
         <button class="btn btn-sm btn-ai" id="bulk-enrich">${icons.sparkles} Enrich</button>
+        <button class="btn btn-sm btn-tv" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
         <button class="btn btn-sm btn-danger" id="bulk-delete">${icons.trash} Löschen</button>
         <button class="btn btn-sm" id="bulk-clear">Auswahl leeren</button>
       </div>
@@ -405,6 +406,9 @@ export class CandidateList {
     });
     this.container.querySelector('#bulk-enrich').addEventListener('pointerup', () => {
       this.onBulkAction?.('enrich', [...this.selected]);
+    });
+    this.container.querySelector('#bulk-tv-data').addEventListener('pointerup', () => {
+      this.onBulkAction?.('tv-data', [...this.selected]);
     });
     this.container.querySelector('#bulk-delete').addEventListener('pointerup', () => {
       this.onBulkAction?.('delete', [...this.selected]);

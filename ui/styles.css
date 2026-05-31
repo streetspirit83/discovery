@@ -13,6 +13,7 @@
   --danger: #dc2626;
   --warning: #d97706;
   --ai: #7c3aed;
+  --tv: #2962ff;
   --radius: 8px;
   --radius-sm: 4px;
 }
@@ -97,6 +98,7 @@ body {
 .btn-success   { background: color-mix(in srgb, var(--success) 12%, var(--bg)); border-color: var(--success); color: var(--success); }
 .btn-danger    { background: color-mix(in srgb, var(--danger)  10%, var(--bg)); border-color: var(--danger);  color: var(--danger);  }
 .btn-ai        { background: color-mix(in srgb, var(--ai)      10%, var(--bg)); border-color: var(--ai);      color: var(--ai);      }
+.btn-tv        { background: color-mix(in srgb, var(--tv)      10%, var(--bg)); border-color: var(--tv);      color: var(--tv);      }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 
 .btn-icon {

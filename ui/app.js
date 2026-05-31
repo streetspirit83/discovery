@@ -9,6 +9,7 @@ import { renderUploadModal } from './components/upload-modal.js';
 import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
+import { fetchTVEnrichment } from './lib/tv-enrichment.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 
@@ -258,6 +259,48 @@ async function handleBulkAction(action, ids) {
 
     candidateList.renderRows();
     toast('✨ Bulk-Enrichment abgeschlossen', 'success');
+  }
+
+  if (action === 'tv-data') {
+    if (useMock) { toast('TV Daten nicht im Mock-Modus verfügbar', 'error'); return; }
+
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+    toast(`📊 Lade TV Daten für ${targets.length} Kandidaten…`, 'info', 12000);
+
+    let enrichments;
+    try {
+      enrichments = await fetchTVEnrichment(targets, { backendUrl, secret });
+    } catch (err) {
+      toast(`TV Enrichment fehlgeschlagen: ${err.message}`, 'error');
+      return;
+    }
+
+    if (enrichments.size === 0) {
+      toast('Keine TV Daten gefunden – Exchange unbekannt oder Symbol nicht auf TradingView', 'error');
+      return;
+    }
+
+    // Apply updates in-memory + prepare bulk storage write
+    const bulkUpdates = [];
+    for (const [candidateId, updates] of enrichments) {
+      const candidate = targets.find((c) => c.id === candidateId);
+      if (!candidate) continue;
+      Object.assign(candidate, updates);
+      bulkUpdates.push({ candidate_id: candidateId, updates });
+    }
+
+    try {
+      await storageClient.bulkUpdateCandidates(currentBlobType, bulkUpdates);
+    } catch (err) {
+      toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+      return;
+    }
+
+    candidateList.renderRows();
+    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert`, 'success');
   }
 }
 

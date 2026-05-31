@@ -220,6 +220,38 @@ export default async function handler(req) {
     return respond(200, { ok: true, results });
   }
 
+  // --- op: bulk_update_candidates (atomic single read-modify-write) ---
+  if (op === 'bulk_update_candidates') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const { updates } = body; // [{ candidate_id, updates }]
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return respond(400, { ok: false, error: 'Missing or empty updates array' });
+    }
+
+    const doc = await readBlobDoc(store, blobType);
+    const idxMap = new Map(doc.candidates.map((c, i) => [c.id, i]));
+    const now = new Date().toISOString();
+    let updated = 0;
+
+    for (const { candidate_id: candidateId, updates: candidateUpdates } of updates) {
+      const idx = idxMap.get(candidateId);
+      if (idx === undefined) continue;
+      doc.candidates[idx] = {
+        ...doc.candidates[idx],
+        ...candidateUpdates,
+        id: doc.candidates[idx].id,
+        last_updated_at: now,
+      };
+      updated++;
+    }
+
+    await writeBlobDoc(store, blobType, doc);
+    log('info', 'storage: bulk_update_candidates', { blobType, updated });
+    return respond(200, { ok: true, updated });
+  }
+
   // --- op: update_candidate ---
   if (op === 'update_candidate') {
     if (!blobType || !BLOB_NAMES[blobType]) {
