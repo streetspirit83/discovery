@@ -1,12 +1,27 @@
 /**
  * TradingView bulk enrichment – browser-side
  *
- * Uses scanner.tradingview.com/global/scan with symbols.tickers parameter —
- * the reliable way to query specific symbols (how TV queries watchlists internally).
- * Single request for all candidates regardless of market; no grouping needed.
+ * Groups candidates by exchange → known-working TV market endpoint, then
+ * uses symbols.tickers parameter (not a name filter) for reliable per-symbol lookup.
  */
 
-// Our exchange codes → TradingView exchange prefix in the "EXCHANGE:TICKER" format
+const EXCHANGE_TO_MARKET = {
+  NASDAQ:   'america',
+  NYSE:     'america',
+  AMEX:     'america',
+  XETR:     'germany',
+  LSE:      'uk',
+  EURONEXT: 'france',
+  MIL:      'italy',
+  BME:      'spain',
+  OMXSTO:   'sweden',
+  SIX:      'switzerland',
+  OMXCO:    'denmark',
+  OMXNO:    'norway',
+  OMXHEX:   'finland',
+};
+
+// Exchange code → TV "EXCHANGE:TICKER" prefix (as seen in s-field of screener response)
 const TV_PREFIX_MAP = {
   NASDAQ:   'NASDAQ',
   NYSE:     'NYSE',
@@ -31,14 +46,14 @@ const EXCHANGE_CURRENCY = {
 };
 
 const TV_COLUMNS = [
-  'description',              // 0
-  'close',                    // 1
-  'market_cap_basic',         // 2
-  'price_earnings_ttm',       // 3
-  'price_to_book_ratio',      // 4
-  'Recommend.All',            // 5
-  'sector',                   // 6
-  'industry',                 // 7
+  'description',                // 0
+  'close',                      // 1
+  'market_cap_basic',           // 2
+  'price_earnings_ttm',         // 3
+  'price_to_book_ratio',        // 4
+  'Recommend.All',              // 5
+  'sector',                     // 6
+  'industry',                   // 7
   'earnings_release_next_date', // 8
 ];
 const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, sector: 6, industry: 7, earningsDate: 8 };
@@ -47,7 +62,7 @@ const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, s
 
 async function proxyPost(backendUrl, secret, url, requestBody) {
   const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
-    method: 'POST',
+    method:  'POST',
     headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
     body: JSON.stringify({
       url,
@@ -57,9 +72,10 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
     }),
   });
   if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Proxy: ${data.error}`);
-  return data;
+  const wrapper = await res.json();
+  if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
+  if (wrapper.status !== 200) throw new Error(`TV HTTP ${wrapper.status} für ${url}`);
+  return wrapper.body; // raw response body string
 }
 
 // ─── Schema A mapping ─────────────────────────────────────────────────────────
@@ -84,11 +100,11 @@ function buildUpdates(d, candidate) {
     asset_type: 'Stock',
     scan_date:  new Date().toISOString().split('T')[0],
     tv_data: {
-      rating:             d[COL.rating]      ?? null,
-      pe_ttm:             d[COL.pe]          ?? null,
-      pb_ratio:           d[COL.pb]          ?? null,
-      market_cap:         d[COL.marketCap]   ?? null,
-      close:              d[COL.close]       ?? null,
+      rating:             d[COL.rating]       ?? null,
+      pe_ttm:             d[COL.pe]           ?? null,
+      pb_ratio:           d[COL.pb]           ?? null,
+      market_cap:         d[COL.marketCap]    ?? null,
+      close:              d[COL.close]        ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
       fetched_at:         new Date().toISOString(),
     },
@@ -97,16 +113,15 @@ function buildUpdates(d, candidate) {
   if (d[COL.description] && (!candidate.name || candidate.name === candidate.symbol)) {
     updates.name = d[COL.description];
   }
-  if (d[COL.sector])    updates.sector        = d[COL.sector];
-  if (d[COL.industry])  updates.sub_sector    = d[COL.industry];
+  if (d[COL.sector])    updates.sector          = d[COL.sector];
+  if (d[COL.industry])  updates.sub_sector      = d[COL.industry];
   if (d[COL.marketCap]) updates.market_cap_size = marketCapBucket(d[COL.marketCap]);
 
   const earningsStr = formatEarningsDate(d[COL.earningsDate]);
-  if (earningsStr)  updates.next_catalysts = earningsStr;
+  if (earningsStr) updates.next_catalysts = earningsStr;
 
   if (d[COL.rating] !== null && d[COL.rating] !== undefined) {
-    const r = d[COL.rating];
-    updates.priority = r > 0.3 ? 'high' : r < -0.3 ? 'low' : 'medium';
+    updates.priority = d[COL.rating] > 0.3 ? 'high' : d[COL.rating] < -0.3 ? 'low' : 'medium';
   }
 
   const currency = EXCHANGE_CURRENCY[candidate.exchange];
@@ -118,57 +133,70 @@ function buildUpdates(d, candidate) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch TV enrichment for a list of candidates.
- * Single global/scan request using symbols.tickers — no market grouping needed.
- *
  * @param {object[]} candidates
  * @param {{ backendUrl: string, secret: string }} opts
  * @returns {Promise<Map<string, object>>}  candidateId → updates
- * @throws on proxy or schema failure
+ * @throws with a user-readable message on any failure
  */
 export async function fetchTVEnrichment(candidates, { backendUrl, secret }) {
-  // Build "EXCHANGE:SYMBOL" → candidate map
-  const tickerMap = new Map();
-  const skipped   = [];
+  // Group by TV market endpoint
+  const groups = new Map(); // market → [{candidate, tvTicker}]
+  const noExchange = [];
 
   for (const c of candidates) {
+    const market = EXCHANGE_TO_MARKET[c.exchange];
     const prefix = TV_PREFIX_MAP[c.exchange];
-    if (!prefix) { skipped.push(`${c.symbol} (${c.exchange ?? 'no exchange'})`); continue; }
-    tickerMap.set(`${prefix}:${c.symbol}`, c);
+    if (!market || !prefix) { noExchange.push(`${c.symbol}(${c.exchange ?? '?'})`); continue; }
+    if (!groups.has(market)) groups.set(market, []);
+    groups.get(market).push({ candidate: c, tvTicker: `${prefix}:${c.symbol}` });
   }
 
-  if (tickerMap.size === 0) {
-    const detail = skipped.length ? ` (${skipped.join(', ')})` : '';
-    throw new Error(`Keine bekannten Exchanges${detail}`);
-  }
-
-  const tickers = [...tickerMap.keys()];
-
-  const proxy = await proxyPost(backendUrl, secret, 'https://scanner.tradingview.com/global/scan', {
-    symbols: { tickers },
-    columns: TV_COLUMNS,
-  });
-
-  let parsed;
-  try {
-    parsed = JSON.parse(proxy.body);
-  } catch {
-    throw new Error('TV Antwort ungültig (kein JSON)');
-  }
-
-  if (!Array.isArray(parsed?.data)) {
-    throw new Error(`Unbekanntes TV Schema – Keys: ${Object.keys(parsed ?? {}).join(', ')}`);
+  if (groups.size === 0) {
+    throw new Error(`Keine bekannten Exchanges – übersprungen: ${noExchange.join(', ')}`);
   }
 
   const results = new Map();
-  for (const row of parsed.data) {
-    const candidate = tickerMap.get(row.s);
-    if (!candidate) continue;
-    results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+  const errors  = [];
+
+  for (const [market, entries] of groups) {
+    const tickers    = entries.map((e) => e.tvTicker);
+    const tickerMap  = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
+    const url        = `https://scanner.tradingview.com/${market}/scan`;
+
+    let bodyStr;
+    try {
+      bodyStr = await proxyPost(backendUrl, secret, url, {
+        symbols: { tickers },
+        columns: TV_COLUMNS,
+      });
+    } catch (err) {
+      errors.push(`${market}: ${err.message}`);
+      continue;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(bodyStr);
+    } catch {
+      errors.push(`${market}: JSON parse fehlgeschlagen`);
+      continue;
+    }
+
+    if (!Array.isArray(parsed?.data)) {
+      errors.push(`${market}: unbekanntes Schema (keys: ${Object.keys(parsed ?? {}).join(', ')})`);
+      continue;
+    }
+
+    for (const row of parsed.data) {
+      const candidate = tickerMap.get(row.s);
+      if (!candidate) continue;
+      results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+    }
   }
 
-  if (results.size === 0 && parsed.data.length === 0) {
-    throw new Error(`TV hat keine Daten für: ${tickers.slice(0, 5).join(', ')}${tickers.length > 5 ? '…' : ''}`);
+  if (results.size === 0) {
+    const detail = errors.length ? errors.join(' | ') : 'TV hat keine Übereinstimmungen zurückgegeben';
+    throw new Error(detail);
   }
 
   return results;
