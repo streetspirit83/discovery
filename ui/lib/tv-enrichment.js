@@ -222,9 +222,8 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
     // Build lookup: tvTicker → candidate
     const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
 
-    // Use symbols.tickers for direct batch ticker lookup (no filter needed)
+    // Use symbols.tickers for direct batch ticker lookup on the market endpoint
     const requestBody = {
-      markets: [market],
       symbols: { tickers: tvTickers },
       columns: TV_COLUMNS,
     };
@@ -232,7 +231,7 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
     let bodyStr;
     try {
       bodyStr = await proxyPost(backendUrl, secret,
-        'https://scanner.tradingview.com/scan',
+        `https://scanner.tradingview.com/${market}/scan`,
         requestBody,
       );
     } catch (err) {
