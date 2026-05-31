@@ -568,7 +568,7 @@ Klick auf Zeile öffnet Detailansicht:
 
 Beim ersten Start zeigt das UI ein Setup-Modal:
 
-- **Backend URL:** URL des Netlify-Sites (z.B. `https://discovery-backend.netlify.app`)
+- **Backend URL:** `https://screener-discovery.netlify.app`
 - **Shared Secret:** Wert aus `DISCOVERY_SECRET`
 - **Claude API Key:** für AI-Enrichment
 - **GitHub PAT** (optional, falls UI Workflow-Dispatch nutzen soll)

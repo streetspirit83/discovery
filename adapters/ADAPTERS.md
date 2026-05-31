@@ -323,6 +323,30 @@ Builds TradingView, Yahoo Finance, and Stocktwits links from `{ exchange, symbol
 
 ---
 
+## Deployment
+
+**Netlify site:** `screener-discovery.netlify.app`
+
+### Public export endpoint (merkliste integration)
+
+```
+GET https://screener-discovery.netlify.app/.netlify/functions/discovery-export
+```
+
+- No auth — publicly readable, merkliste proxy fetches server-side
+- Returns the `discovery-export` blob as `{ candidates: [...] }` with `Cache-Control: no-store`
+- Set as `DISCOVERY_EXPORT_URL` on the merkliste Netlify project
+
+### Authenticated storage API
+
+```
+POST https://screener-discovery.netlify.app/api/storage
+```
+
+Requires header `x-discovery-secret`. Used by adapters (`DISCOVERY_BACKEND_URL` + `DISCOVERY_SECRET` env vars) and the UI.
+
+---
+
 ## Adding a New Adapter
 
 1. Create `adapters/<name>.js` exporting `async function fetchCandidates(): Promise<Candidate[]>`.
