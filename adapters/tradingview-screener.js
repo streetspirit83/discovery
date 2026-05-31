@@ -42,11 +42,10 @@ const SCREENS = [
     count:      50,
     signal_type: 'volume_spike',
     filter: [
-      { left: 'type',                       operation: 'equal',   right: 'stock'                      },
-      { left: 'subtype',                    operation: 'in',      right: ['common', 'foreign-issuer'] },
-      { left: 'close',                      operation: 'greater', right: 5                            }, // no penny stocks
-      { left: 'volume',                     operation: 'greater', right: 500000                       },
-      { left: 'relative_volume_10d_calc',   operation: 'greater', right: 2.5                          },
+      { left: 'type',                       operation: 'equal',   right: 'stock'   },
+      { left: 'close',                      operation: 'greater', right: 5         },
+      { left: 'volume',                     operation: 'greater', right: 500000    },
+      { left: 'relative_volume_10d_calc',   operation: 'greater', right: 2.5       },
     ],
   },
   {
