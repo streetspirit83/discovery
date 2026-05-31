@@ -8,11 +8,12 @@ Each adapter is a Node.js module that exports `fetchCandidates()` and is run by 
 
 | Adapter            | Cron              | UTC Time              | Trigger              | Status     |
 |--------------------|-------------------|-----------------------|----------------------|------------|
-| `openinsider`      | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
-| `etf-holdings`     | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
-| `stocktwits`       | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
-| `yahoo-trending`   | `0 14 * * 1-5`    | Weekdays 14:00        | Schedule + manual    | ✅ Active  |
-| `boerse-frankfurt` | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
+| `openinsider`              | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
+| `etf-holdings`             | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
+| `stocktwits`               | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
+| `yahoo-trending`           | `0 14 * * 1-5`    | Weekdays 14:00        | Schedule + manual    | ✅ Active  |
+| `tradingview-screener`     | `30 15 * * 1-5`   | Weekdays 15:30        | Schedule + manual    | ✅ Active  |
+| `boerse-frankfurt`         | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
 
 Manual trigger: GitHub Actions → workflow → **Run workflow**.
 
@@ -231,6 +232,71 @@ DK  SE  NO  FI  PT  IE  LU  GR  PL
 | `DISCOVERY_SECRET`      | ✅        | Auth header for backend                        |
 | `TWELVEDATA_API_KEY`    | Optional | ISIN→ticker via TD (primary); exchange resolve |
 | `FMP_API_KEY`           | Optional | Exchange resolution fallback for US tickers    |
+
+---
+
+## Adapter: TradingView Screener
+
+**File:** `adapters/tradingview-screener.js`  
+**Workflow:** `.github/workflows/adapter-tradingview-screener.yml`  
+**Signal type:** `volume_spike`
+
+### Data Source
+
+TradingView unofficial scanner API — no auth required.  
+Endpoints:
+- `POST https://scanner.tradingview.com/america/scan` (US)
+- `POST https://scanner.tradingview.com/germany/scan` (DE/XETR)
+
+> ⚠️ Cloud IP behaviour: TradingView blocks GitHub Actions (Azure IPs). All requests route through the Netlify scrape-proxy (AWS IPs). No crumb/cookie flow required — the scanner accepts plain POST with JSON filter body.
+
+### Signal Methodology
+
+#### Option A – Volume Spike (active)
+
+Stocks trading at **≥ 2.5× their 10-day average volume** during the session. Results sorted by relative volume descending.
+
+Signal quality: early detection of institutional or retail attention before price reacts. Complements insider-buy (conviction) and trending (attention) signals with a technical volume dimension.
+
+#### Option B – Technical Momentum (planned)
+
+RSI(14) > 60, close > EMA(50), MACD > signal line. Not yet active — add as a second entry in the `SCREENS` array in `tradingview-screener.js`.
+
+### Screen Structure
+
+Screens are defined as entries in the `SCREENS` array. Each has:
+
+| Field         | Purpose                                             |
+|---------------|-----------------------------------------------------|
+| `id`          | Unique identifier (used in logs + `raw_signal`)    |
+| `label`       | Human-readable label for `info_snippet`            |
+| `endpoint`    | Scanner URL (`america`, `germany`, etc.)           |
+| `region`      | `US` / `DE` — for logging                         |
+| `count`       | Max results to request                             |
+| `filter`      | TradingView filter array (left/operation/right)    |
+| `signal_type` | Stored in `sources[].signal_type`                  |
+
+### Exchange Parsing
+
+Exchange is read directly from the `s` field prefix (`NASDAQ:AAPL` → `NASDAQ`). No ISIN lookup, no secondary API call. Unknown prefixes (FWB, SWB) are skipped.
+
+### Key Thresholds & Filters
+
+| Parameter            | US                        | DE          | Rationale                                      |
+|----------------------|---------------------------|-------------|------------------------------------------------|
+| Relative volume min  | 2.5×                      | 2.5×        | Meaningful spike above baseline                |
+| Volume min           | 500,000                   | 50,000      | Liquidity floor; DE markets are thinner        |
+| Min price            | $5                        | —           | Excludes US penny stocks                       |
+| Stock types included | `common`, `foreign-issuer`| all stocks  | Excludes ETFs/funds (`type = fund` filtered out)|
+| Max results          | 50                        | 30          | Covers all meaningful spike candidates         |
+| Schedule             | Weekdays 15:30 UTC        | same        | Mid-US-session (11:30 ET); EU near close       |
+
+### Required Env Vars
+
+| Variable                | Required | Purpose                  |
+|-------------------------|----------|--------------------------|
+| `DISCOVERY_BACKEND_URL` | ✅        | Netlify backend URL      |
+| `DISCOVERY_SECRET`      | ✅        | Auth for proxy + storage |
 
 ---
 

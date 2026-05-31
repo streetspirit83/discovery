@@ -13,11 +13,12 @@ const log = (level, msg, data = {}) =>
   );
 
 const ADAPTERS = {
-  openinsider: './openinsider.js',
-  'boerse-frankfurt': './boerse-frankfurt.js',
-  'etf-holdings': './etf-holdings.js',
-  stocktwits: './stocktwits.js',
-  'yahoo-trending': './yahoo-trending.js',
+  openinsider:              './openinsider.js',
+  'boerse-frankfurt':       './boerse-frankfurt.js',
+  'etf-holdings':           './etf-holdings.js',
+  stocktwits:               './stocktwits.js',
+  'yahoo-trending':         './yahoo-trending.js',
+  'tradingview-screener':   './tradingview-screener.js',
 };
 
 async function main() {

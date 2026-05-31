@@ -15,11 +15,12 @@ const STATE_LABELS = {
 const STATE_ORDER = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
 
 const ADAPTER_COLORS = {
-  openinsider:        '#e67e22',
-  'boerse-frankfurt': '#3498db',
-  'etf-holdings':     '#2ecc71',
-  stocktwits:         '#1d9bf0',
-  'yahoo-trending':   '#6001d2',
+  openinsider:              '#e67e22',
+  'boerse-frankfurt':       '#3498db',
+  'etf-holdings':           '#2ecc71',
+  stocktwits:               '#1d9bf0',
+  'yahoo-trending':         '#6001d2',
+  'tradingview-screener':   '#2962ff',
 };
 
 const SORT_LABELS = {

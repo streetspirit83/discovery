@@ -24,6 +24,7 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/finance\.yahoo\.com\//,
   /^https:\/\/query1\.finance\.yahoo\.com\//,
   /^https:\/\/query2\.finance\.yahoo\.com\//,
+  /^https:\/\/scanner\.tradingview\.com\//,
 ];
 
 function isAllowed(url) {
@@ -70,7 +71,7 @@ export default async function handler(req) {
     return respond(400, { ok: false, error: 'Invalid JSON body' });
   }
 
-  const { url, method = 'GET', headers: reqHeaders = {} } = body;
+  const { url, method = 'GET', headers: reqHeaders = {}, body: upstreamBody } = body;
 
   if (!url) return respond(400, { ok: false, error: 'Missing url' });
 
@@ -88,6 +89,9 @@ export default async function handler(req) {
         'User-Agent': 'Mozilla/5.0 (compatible; DiscoveryBot/1.0)',
         ...reqHeaders,
       },
+      body: upstreamBody !== undefined
+        ? (typeof upstreamBody === 'string' ? upstreamBody : JSON.stringify(upstreamBody))
+        : undefined,
     });
 
     const contentType = upstream.headers.get('content-type') ?? 'text/plain';
