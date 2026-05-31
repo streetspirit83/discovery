@@ -1,26 +1,26 @@
 /**
  * TradingView bulk enrichment – browser-side
  *
- * Groups candidates by exchange → TV market endpoint, fires one POST per
- * market group through the Netlify scrape-proxy, maps the response to
- * Schema A compatible top-level fields + tv_data{} for raw values.
+ * Uses scanner.tradingview.com/global/scan with symbols.tickers parameter —
+ * the reliable way to query specific symbols (how TV queries watchlists internally).
+ * Single request for all candidates regardless of market; no grouping needed.
  */
 
-// Exchange → scanner.tradingview.com/{market}/scan
-const EXCHANGE_TO_MARKET = {
-  NASDAQ:   'america',
-  NYSE:     'america',
-  AMEX:     'america',
-  XETR:     'germany',
-  LSE:      'uk',
-  EURONEXT: 'france',
-  MIL:      'italy',
-  BME:      'spain',
-  OMXSTO:   'sweden',
-  SIX:      'switzerland',
-  OMXCO:    'denmark',
-  OMXNO:    'norway',
-  OMXHEX:   'finland',
+// Our exchange codes → TradingView exchange prefix in the "EXCHANGE:TICKER" format
+const TV_PREFIX_MAP = {
+  NASDAQ:   'NASDAQ',
+  NYSE:     'NYSE',
+  AMEX:     'AMEX',
+  XETR:     'XETR',
+  LSE:      'LSE',
+  EURONEXT: 'EURONEXT',
+  MIL:      'MIL',
+  BME:      'BME',
+  OMXSTO:   'OMXSTO',
+  SIX:      'SIX',
+  OMXCO:    'OMXCO',
+  OMXNO:    'OMXNO',
+  OMXHEX:   'OMXHEX',
 };
 
 const EXCHANGE_CURRENCY = {
@@ -30,17 +30,16 @@ const EXCHANGE_CURRENCY = {
   LSE: 'GBP', SIX: 'CHF',
 };
 
-// Columns sent to TV – index order matters for COL map below
 const TV_COLUMNS = [
-  'description',
-  'close',
-  'market_cap_basic',
-  'price_earnings_ttm',
-  'price_to_book_ratio',
-  'Recommend.All',
-  'sector',
-  'industry',
-  'earnings_release_next_date',
+  'description',              // 0
+  'close',                    // 1
+  'market_cap_basic',         // 2
+  'price_earnings_ttm',       // 3
+  'price_to_book_ratio',      // 4
+  'Recommend.All',            // 5
+  'sector',                   // 6
+  'industry',                 // 7
+  'earnings_release_next_date', // 8
 ];
 const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, sector: 6, industry: 7, earningsDate: 8 };
 
@@ -57,9 +56,9 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
       body:    requestBody,
     }),
   });
-  if (!res.ok) throw new Error(`Proxy ${res.status}`);
+  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
   const data = await res.json();
-  if (!data.ok) throw new Error(`Proxy error: ${data.error}`);
+  if (!data.ok) throw new Error(`Proxy: ${data.error}`);
   return data;
 }
 
@@ -75,7 +74,6 @@ function marketCapBucket(mc) {
 
 function formatEarningsDate(ts) {
   if (!ts) return null;
-  // TV returns Unix seconds or ISO string
   const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts);
   if (isNaN(d)) return null;
   return `Earnings: ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
@@ -86,21 +84,21 @@ function buildUpdates(d, candidate) {
     asset_type: 'Stock',
     scan_date:  new Date().toISOString().split('T')[0],
     tv_data: {
-      rating:            d[COL.rating]      ?? null,
-      pe_ttm:            d[COL.pe]          ?? null,
-      pb_ratio:          d[COL.pb]          ?? null,
-      market_cap:        d[COL.marketCap]   ?? null,
-      close:             d[COL.close]       ?? null,
+      rating:             d[COL.rating]      ?? null,
+      pe_ttm:             d[COL.pe]          ?? null,
+      pb_ratio:           d[COL.pb]          ?? null,
+      market_cap:         d[COL.marketCap]   ?? null,
+      close:              d[COL.close]       ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
-      fetched_at:        new Date().toISOString(),
+      fetched_at:         new Date().toISOString(),
     },
   };
 
   if (d[COL.description] && (!candidate.name || candidate.name === candidate.symbol)) {
     updates.name = d[COL.description];
   }
-  if (d[COL.sector])    updates.sector     = d[COL.sector];
-  if (d[COL.industry])  updates.sub_sector = d[COL.industry];
+  if (d[COL.sector])    updates.sector        = d[COL.sector];
+  if (d[COL.industry])  updates.sub_sector    = d[COL.industry];
   if (d[COL.marketCap]) updates.market_cap_size = marketCapBucket(d[COL.marketCap]);
 
   const earningsStr = formatEarningsDate(d[COL.earningsDate]);
@@ -120,66 +118,57 @@ function buildUpdates(d, candidate) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch TV enrichment data for a list of candidates.
- * Groups by exchange → one TV call per market.
+ * Fetch TV enrichment for a list of candidates.
+ * Single global/scan request using symbols.tickers — no market grouping needed.
  *
  * @param {object[]} candidates
  * @param {{ backendUrl: string, secret: string }} opts
- * @returns {Promise<Map<string, object>>}  candidateId → updates object
+ * @returns {Promise<Map<string, object>>}  candidateId → updates
+ * @throws on proxy or schema failure
  */
 export async function fetchTVEnrichment(candidates, { backendUrl, secret }) {
-  // Group by TV market endpoint
-  const groups = new Map(); // market → [candidate]
+  // Build "EXCHANGE:SYMBOL" → candidate map
+  const tickerMap = new Map();
+  const skipped   = [];
+
   for (const c of candidates) {
-    const market = EXCHANGE_TO_MARKET[c.exchange];
-    if (!market) continue;
-    if (!groups.has(market)) groups.set(market, []);
-    groups.get(market).push(c);
+    const prefix = TV_PREFIX_MAP[c.exchange];
+    if (!prefix) { skipped.push(`${c.symbol} (${c.exchange ?? 'no exchange'})`); continue; }
+    tickerMap.set(`${prefix}:${c.symbol}`, c);
   }
 
-  const results = new Map(); // candidateId → updates
+  if (tickerMap.size === 0) {
+    const detail = skipped.length ? ` (${skipped.join(', ')})` : '';
+    throw new Error(`Keine bekannten Exchanges${detail}`);
+  }
 
-  for (const [market, group] of groups) {
-    const symbols = group.map((c) => c.symbol);
-    const url = `https://scanner.tradingview.com/${market}/scan`;
+  const tickers = [...tickerMap.keys()];
 
-    let proxy;
-    try {
-      proxy = await proxyPost(backendUrl, secret, url, {
-        filter:  [{ left: 'name', operation: 'in', right: symbols }],
-        columns: TV_COLUMNS,
-        range:   [0, symbols.length],
-      });
-    } catch (err) {
-      console.warn(`tv-enrichment: proxy failed for ${market}:`, err.message);
-      continue;
-    }
+  const proxy = await proxyPost(backendUrl, secret, 'https://scanner.tradingview.com/global/scan', {
+    symbols: { tickers },
+    columns: TV_COLUMNS,
+  });
 
-    let parsed;
-    try {
-      parsed = JSON.parse(proxy.body);
-    } catch {
-      console.warn(`tv-enrichment: JSON parse failed for ${market}`);
-      continue;
-    }
+  let parsed;
+  try {
+    parsed = JSON.parse(proxy.body);
+  } catch {
+    throw new Error('TV Antwort ungültig (kein JSON)');
+  }
 
-    if (!Array.isArray(parsed?.data)) {
-      console.warn(`tv-enrichment: unexpected schema for ${market}`, Object.keys(parsed ?? {}));
-      continue;
-    }
+  if (!Array.isArray(parsed?.data)) {
+    throw new Error(`Unbekanntes TV Schema – Keys: ${Object.keys(parsed ?? {}).join(', ')}`);
+  }
 
-    // Build symbol → row lookup from TV response
-    const rowBySymbol = new Map();
-    for (const row of parsed.data) {
-      const colon = (row.s ?? '').indexOf(':');
-      if (colon !== -1) rowBySymbol.set(row.s.slice(colon + 1), row.d ?? []);
-    }
+  const results = new Map();
+  for (const row of parsed.data) {
+    const candidate = tickerMap.get(row.s);
+    if (!candidate) continue;
+    results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+  }
 
-    for (const candidate of group) {
-      const d = rowBySymbol.get(candidate.symbol);
-      if (!d) continue;
-      results.set(candidate.id, buildUpdates(d, candidate));
-    }
+  if (results.size === 0 && parsed.data.length === 0) {
+    throw new Error(`TV hat keine Daten für: ${tickers.slice(0, 5).join(', ')}${tickers.length > 5 ? '…' : ''}`);
   }
 
   return results;
