@@ -1,9 +1,12 @@
 /**
  * TradingView bulk enrichment – browser-side
  *
- * One scanner request per symbol using filter name=equal=TICKER —
- * the same filter pattern our screener adapter uses (confirmed working).
- * Grouped by market to use the correct endpoint, with 150ms between calls.
+ * Fetches all stocks from each TV market endpoint (no name filter — name
+ * filtering appears unreliable in the scanner API) and matches by the
+ * "EXCHANGE:SYMBOL" s-field client-side.
+ *
+ * Uses only confirmed-working API patterns: type=equal=stock filter,
+ * same format as the screener adapter.
  */
 
 const EXCHANGE_TO_MARKET = {
@@ -22,6 +25,22 @@ const EXCHANGE_TO_MARKET = {
   OMXHEX:   'finland',
 };
 
+const TV_PREFIX_MAP = {
+  NASDAQ:   'NASDAQ',
+  NYSE:     'NYSE',
+  AMEX:     'AMEX',
+  XETR:     'XETR',
+  LSE:      'LSE',
+  EURONEXT: 'EURONEXT',
+  MIL:      'MIL',
+  BME:      'BME',
+  OMXSTO:   'OMXSTO',
+  SIX:      'SIX',
+  OMXCO:    'OMXCO',
+  OMXNO:    'OMXNO',
+  OMXHEX:   'OMXHEX',
+};
+
 const EXCHANGE_CURRENCY = {
   NASDAQ: 'USD', NYSE: 'USD', AMEX: 'USD',
   XETR: 'EUR', EURONEXT: 'EUR', MIL: 'EUR', BME: 'EUR',
@@ -30,7 +49,7 @@ const EXCHANGE_CURRENCY = {
 };
 
 const TV_COLUMNS = [
-  'description',                // 0
+  'description',                // 0 – company name
   'close',                      // 1
   'market_cap_basic',           // 2
   'price_earnings_ttm',         // 3
@@ -41,6 +60,9 @@ const TV_COLUMNS = [
   'earnings_release_next_date', // 8
 ];
 const COL = { description: 0, close: 1, marketCap: 2, pe: 3, pb: 4, rating: 5, sector: 6, industry: 7, earningsDate: 8 };
+
+// Fetch enough rows to cover most liquid stocks per market
+const SCAN_RANGE = 3000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,7 +81,7 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
   });
   if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
   const wrapper = await res.json();
-  if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
+  if (!wrapper.ok)          throw new Error(`Proxy: ${wrapper.error}`);
   if (wrapper.status !== 200) throw new Error(`TV HTTP ${wrapper.status}`);
   return wrapper.body;
 }
@@ -124,49 +146,73 @@ function buildUpdates(d, candidate) {
  * @returns {Promise<Map<string, object>>}  candidateId → updates
  */
 export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProgress }) {
-  const results   = new Map();
-  const noMarket  = [];
+  // Group by TV market endpoint
+  const groups   = new Map(); // market → [{candidate, tvTicker}]
+  const noMarket = [];
 
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    const market    = EXCHANGE_TO_MARKET[candidate.exchange];
+  for (const c of candidates) {
+    const market = EXCHANGE_TO_MARKET[c.exchange];
+    const prefix = TV_PREFIX_MAP[c.exchange];
+    if (!market || !prefix) { noMarket.push(`${c.symbol}(${c.exchange ?? '?'})`); continue; }
+    if (!groups.has(market)) groups.set(market, []);
+    groups.get(market).push({ candidate: c, tvTicker: `${prefix}:${c.symbol}` });
+  }
 
-    if (!market) {
-      noMarket.push(`${candidate.symbol}(${candidate.exchange ?? '?'})`);
-      continue;
-    }
+  if (groups.size === 0) {
+    throw new Error(`Keine bekannten Exchanges – ${noMarket.join(', ')}`);
+  }
 
-    onProgress?.(`📊 ${i + 1}/${candidates.length} – ${candidate.symbol}`);
+  const results = new Map();
+  let marketIdx = 0;
 
-    const url = `https://scanner.tradingview.com/${market}/scan`;
+  for (const [market, entries] of groups) {
+    marketIdx++;
+    onProgress?.(`📊 ${marketIdx}/${groups.size} – ${market} (${entries.length} Symbole)…`);
+
+    // Build lookup: tvTicker → candidate
+    const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
+
     let bodyStr;
     try {
-      bodyStr = await proxyPost(backendUrl, secret, url, {
-        filter:  [{ left: 'name', operation: 'equal', right: candidate.symbol }],
-        columns: TV_COLUMNS,
-        range:   [0, 1],
-      });
+      bodyStr = await proxyPost(backendUrl, secret,
+        `https://scanner.tradingview.com/${market}/scan`,
+        {
+          filter:  [{ left: 'type', operation: 'equal', right: 'stock' }],
+          columns: TV_COLUMNS,
+          sort:    { sortBy: 'market_cap_basic', sortOrder: 'desc' },
+          range:   [0, SCAN_RANGE],
+        },
+      );
     } catch (err) {
-      console.warn(`tv-enrichment: ${candidate.symbol} – ${err.message}`);
-      if (i < candidates.length - 1) await sleep(150);
+      // Surface error in toast via re-throw after other markets are tried
+      console.warn(`tv-enrichment ${market}: ${err.message}`);
+      onProgress?.(`⚠️ ${market}: ${err.message}`);
+      if (marketIdx < groups.size) await sleep(1000);
       continue;
     }
 
+    let parsed;
     try {
-      const parsed = JSON.parse(bodyStr);
-      const row    = parsed?.data?.[0];
-      if (row) results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+      parsed = JSON.parse(bodyStr);
     } catch {
-      console.warn(`tv-enrichment: JSON parse failed for ${candidate.symbol}`);
+      console.warn(`tv-enrichment ${market}: JSON parse failed`);
+      if (marketIdx < groups.size) await sleep(1000);
+      continue;
     }
 
-    if (i < candidates.length - 1) await sleep(150);
+    const rows = parsed?.data ?? [];
+    for (const row of rows) {
+      const candidate = tvTickerMap.get(row.s);
+      if (candidate) results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+    }
+
+    if (marketIdx < groups.size) await sleep(1000);
   }
 
   if (results.size === 0) {
     const detail = noMarket.length === candidates.length
       ? `Keine bekannten Exchanges: ${noMarket.join(', ')}`
-      : 'TV hat für kein Symbol Daten zurückgegeben';
+      : 'Keine Übereinstimmungen – Symbole möglicherweise unter $100M Market Cap oder falsche Exchange';
     throw new Error(detail);
   }
 

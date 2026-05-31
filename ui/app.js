@@ -282,11 +282,6 @@ async function handleBulkAction(action, ids) {
       return;
     }
 
-    if (enrichments.size === 0) {
-      toast('Keine TV Daten gefunden – Exchange unbekannt oder Symbol nicht auf TradingView', 'error');
-      return;
-    }
-
     // Apply updates in-memory + prepare bulk storage write
     const bulkUpdates = [];
     for (const [candidateId, updates] of enrichments) {
