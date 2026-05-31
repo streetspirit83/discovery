@@ -282,7 +282,7 @@ async function handleBulkAction(action, ids) {
       return;
     }
 
-    // Apply updates in-memory + prepare bulk storage write
+    // Apply updates in-memory
     const bulkUpdates = [];
     for (const [candidateId, updates] of enrichments) {
       const candidate = targets.find((c) => c.id === candidateId);
@@ -291,15 +291,16 @@ async function handleBulkAction(action, ids) {
       bulkUpdates.push({ candidate_id: candidateId, updates });
     }
 
+    // Re-render immediately — data is already in memory
+    candidateList.renderRows();
+    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert`, 'success');
+
+    // Persist to backend best-effort
     try {
       await storageClient.bulkUpdateCandidates(currentBlobType, bulkUpdates);
     } catch (err) {
-      toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
-      return;
+      toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
     }
-
-    candidateList.renderRows();
-    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert`, 'success');
   }
 }
 
