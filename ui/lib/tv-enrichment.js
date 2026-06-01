@@ -48,38 +48,35 @@ const EXCHANGE_CURRENCY = {
 };
 
 const TV_COLUMNS = [
-  'description',               // 0
-  'sector',                    // 1
-  'industry',                  // 2
-  'close',                     // 3
-  'change',                    // 4
-  'change|1W',                 // 5
-  'change|1M',                 // 6
-  'Volatility.D',              // 7
-  'beta_1_year',               // 8
-  'average_volume_10d_calc',   // 9
-  'market_cap_basic',          // 10
-  'price_earnings_ttm',        // 11
-  'dividend_yield_recent',     // 12
-  'Recommend.All',             // 13
-  'RSI',                       // 14
-  'EMA20',                     // 15
-  'EMA50',                     // 16
-  'EMA200',                    // 17
-  'MACD.macd',                 // 18
-  'ADX',                       // 19
-  'high|52W',                  // 20
-  'earnings_release_next_date',// 21
-
-  // --- under test ---
-  'earnings_per_share_diluted_growth_ttm', // 22
-  'performance_ytd',                       // 23
-  'price_earnings_growth_ttm',             // 24
-  'return_on_equity_ttm',                  // 25
-  'beta_5_year',                           // 26
-  'price_to_sales_ttm',                    // 27
-  'Recommend.All|1D',                      // 28
-  'earnings_release_recent_date',          // 29
+  'description',                          // 0
+  'sector',                               // 1
+  'industry',                             // 2
+  'close',                                // 3
+  'change',                               // 4
+  'change|1W',                            // 5
+  'change|1M',                            // 6
+  'Volatility.D',                         // 7
+  'beta_1_year',                          // 8
+  'average_volume_10d_calc',              // 9
+  'market_cap_basic',                     // 10
+  'price_earnings_ttm',                   // 11
+  'dividend_yield_recent',                // 12
+  'Recommend.All',                        // 13
+  'RSI',                                  // 14
+  'EMA20',                                // 15
+  'EMA50',                                // 16
+  'EMA200',                               // 17
+  'MACD.macd',                            // 18
+  'ADX',                                  // 19
+  'high|52W',                             // 20
+  'earnings_release_next_date',           // 21
+  'earnings_per_share_diluted_growth_ttm',// 22
+  'perf.YTD',                             // 23
+  'earnings_release_last_date',           // 24
+  'earnings_release_next_date',           // 25 (duplicate – test slot)
+  'total_revenue_growth_ttm',             // 26
+  'Recommend.Analysts',                   // 27
+  'Recommend.All|43200',                  // 28
 ];
 
 const COL = {
@@ -93,6 +90,24 @@ const COL = {
   volatility:    7,
   beta:          8,
   avgVol10d:     9,
+  marketCap:     10,
+  pe:            11,
+  dividendYield: 12,
+  rating:        13,
+  rsi:           14,
+  ema20:         15,
+  ema50:         16,
+  ema200:        17,
+  macd:          18,
+  adx:           19,
+  high52w:       20,
+  earningsDate:  21,
+  epsGrowthTTM:  22,
+  perfYTD:       23,
+  earningsLastDate: 24,
+  ratingAnalysts:27,
+  ratingMonthly: 28,
+};
   marketCap:     10,
   pe:            11,
   dividendYield: 12,
@@ -210,9 +225,14 @@ function buildUpdates(d, candidate) {
       ema200:        d[COL.ema200]       ?? null,
       macd:          d[COL.macd]         ?? null,
       adx:           d[COL.adx]          ?? null,
-      high_52w:      d[COL.high52w]      ?? null,
-      earnings_next_date: d[COL.earningsDate] ?? null,
-      fetched_at:    new Date().toISOString(),
+      high_52w:           d[COL.high52w]        ?? null,
+      earnings_next_date: d[COL.earningsDate]   ?? null,
+      earnings_last_date: d[COL.earningsLastDate]?? null,
+      eps_growth_ttm:     d[COL.epsGrowthTTM]   ?? null,
+      perf_ytd:           d[COL.perfYTD]         ?? null,
+      rating_analysts:    d[COL.ratingAnalysts]  ?? null,
+      rating_monthly:     d[COL.ratingMonthly]   ?? null,
+      fetched_at:         new Date().toISOString(),
     },
   };
 
