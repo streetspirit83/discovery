@@ -56,6 +56,45 @@ const TV_COLUMNS = [
   'sector',                     // 5
   'industry',                   // 6
   'earnings_release_next_date', // 7
+
+  // --- extended set (UI mapping wired later) ---
+  'currency',
+  'volume',
+  'average_volume_60d_calc',
+
+  'total_revenue_fy',
+  'revenue_per_employee',
+
+  'earnings_per_share_basic_ttm',
+  'earnings_per_share_diluted_ttm',
+
+  'price_to_sales_ratio_ttm',
+  'price_book_ratio',
+  'enterprise_value_ebitda_ttm',
+
+  'return_on_equity',
+  'return_on_assets',
+
+  'gross_margin',
+  'operating_margin',
+  'net_margin',
+
+  'debt_to_equity',
+  'current_ratio',
+  'quick_ratio',
+
+  'revenue_growth_yoy',
+  'earnings_growth_yoy',
+
+  'dividends_yield_current',
+
+  'number_of_employees',
+
+  'target_price',
+  'Perf.1M',
+  'Perf.3M',
+  'Perf.6M',
+  'Perf.Y',
 ];
 const COL = { description: 0, close: 1, marketCap: 2, pe: 3, rating: 4, sector: 5, industry: 6, earningsDate: 7 };
 
@@ -250,7 +289,16 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
     console.group(`[TV] ${market} response`);
     console.log('[TV] totalCount:', parsed?.totalCount);
     console.log('[TV] data rows:', parsed?.data?.length ?? 0);
-    console.log('[TV] data sample:', parsed?.data?.slice(0, 3));
+    // Per-column dump for the first row so we can verify which fields return data
+    const firstRow = parsed?.data?.[0];
+    if (firstRow?.d) {
+      console.group(`[TV] columns for ${firstRow.s}`);
+      TV_COLUMNS.forEach((name, i) => {
+        const v = firstRow.d[i];
+        console.log(`  ${name}: ${v === null ? 'null' : v === undefined ? 'undefined' : JSON.stringify(v)}`);
+      });
+      console.groupEnd();
+    }
     console.groupEnd();
 
     const rows = parsed?.data ?? [];
