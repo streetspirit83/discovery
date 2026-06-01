@@ -70,35 +70,31 @@ const TV_COLUMNS = [
   'ADX',                       // 19
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
-  'EarningsRecent',            // 22 – test
-  'EpsDilutedGrowth|YoYTTM',  // 23 – test
 ];
 
 const COL = {
-  description:      0,
-  sector:           1,
-  industry:         2,
-  close:            3,
-  change:           4,
-  change1W:         5,
-  change1M:         6,
-  volatility:       7,
-  beta:             8,
-  avgVol10d:        9,
-  marketCap:        10,
-  pe:               11,
-  dividendYield:    12,
-  rating:           13,
-  rsi:              14,
-  ema20:            15,
-  ema50:            16,
-  ema200:           17,
-  macd:             18,
-  adx:              19,
-  high52w:          20,
-  earningsDate:     21,
-  earningsRecent:   22,
-  epsGrowthYoYTTM:  23,
+  description:   0,
+  sector:        1,
+  industry:      2,
+  close:         3,
+  change:        4,
+  change1W:      5,
+  change1M:      6,
+  volatility:    7,
+  beta:          8,
+  avgVol10d:     9,
+  marketCap:     10,
+  pe:            11,
+  dividendYield: 12,
+  rating:        13,
+  rsi:           14,
+  ema20:         15,
+  ema50:         16,
+  ema200:        17,
+  macd:          18,
+  adx:           19,
+  high52w:       20,
+  earningsDate:  21,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -204,11 +200,9 @@ function buildUpdates(d, candidate) {
       ema200:        d[COL.ema200]       ?? null,
       macd:          d[COL.macd]         ?? null,
       adx:           d[COL.adx]          ?? null,
-      high_52w:            d[COL.high52w]          ?? null,
-      earnings_next_date:  d[COL.earningsDate]     ?? null,
-      earnings_recent:     d[COL.earningsRecent]   ?? null,
-      eps_growth_yoy_ttm:  d[COL.epsGrowthYoYTTM] ?? null,
-      fetched_at:          new Date().toISOString(),
+      high_52w:           d[COL.high52w]      ?? null,
+      earnings_next_date: d[COL.earningsDate] ?? null,
+      fetched_at:         new Date().toISOString(),
     },
   };
 
