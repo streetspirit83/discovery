@@ -68,7 +68,6 @@ const TV_COLUMNS = [
   'earnings_per_share_basic_ttm',
   'earnings_per_share_diluted_ttm',
 
-  'price_to_sales_ratio_ttm',
   'price_book_ratio',
   'enterprise_value_ebitda_ttm',
 
