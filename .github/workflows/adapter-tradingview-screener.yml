@@ -2,7 +2,7 @@ name: Adapter – TradingView Screener
 
 on:
   schedule:
-    - cron: '30 15 * * 1-5'   # Weekdays 15:30 UTC – mid-session US (11:30 ET) + EU closing
+    - cron: '10 21 * * *'   # TEST: 21:10 UTC – revert to '30 15 * * 1-5' after confirming
   workflow_dispatch:
 
 jobs:
