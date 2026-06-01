@@ -82,9 +82,6 @@ const TV_COLUMNS = [
   'current_ratio',
   'quick_ratio',
 
-  'revenue_growth_yoy',
-  'earnings_growth_yoy',
-
   'dividends_yield_current',
 
   'number_of_employees',
