@@ -61,17 +61,16 @@ const TV_COLUMNS = [
   'market_cap_basic',          // 10
   'price_earnings_ttm',        // 11
   'dividend_yield_recent',     // 12
-  'total_revenue_growth_ttm',  // 13
-  'Recommend.All',             // 14
-  'RSI',                       // 15
-  'EMA20',                     // 16
-  'EMA50',                     // 17
-  'EMA200',                    // 18
-  'MACD.macd',                 // 19
-  'ADX',                       // 20
-  'high|52W',                  // 21
-  'earnings_release_next_date',// 22
-  'target_price_analysts',     // 23
+  'Recommend.All',             // 13
+  'RSI',                       // 14
+  'EMA20',                     // 15
+  'EMA50',                     // 16
+  'EMA200',                    // 17
+  'MACD.macd',                 // 18
+  'ADX',                       // 19
+  'high|52W',                  // 20
+  'earnings_release_next_date',// 21
+  'target_price_analysts',     // 22
 ];
 
 const COL = {
@@ -88,17 +87,16 @@ const COL = {
   marketCap:     10,
   pe:            11,
   dividendYield: 12,
-  revGrowth:     13,
-  rating:        14,
-  rsi:           15,
-  ema20:         16,
-  ema50:         17,
-  ema200:        18,
-  macd:          19,
-  adx:           20,
-  high52w:       21,
-  earningsDate:  22,
-  targetPrice:   23,
+  rating:        13,
+  rsi:           14,
+  ema20:         15,
+  ema50:         16,
+  ema200:        17,
+  macd:          18,
+  adx:           19,
+  high52w:       20,
+  earningsDate:  21,
+  targetPrice:   22,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -198,7 +196,6 @@ function buildUpdates(d, candidate) {
       beta:          d[COL.beta]         ?? null,
       avg_vol_10d:   d[COL.avgVol10d]    ?? null,
       dividend_yield:d[COL.dividendYield]?? null,
-      rev_growth_ttm:d[COL.revGrowth]    ?? null,
       rsi:           d[COL.rsi]          ?? null,
       ema20:         d[COL.ema20]        ?? null,
       ema50:         d[COL.ema50]        ?? null,
