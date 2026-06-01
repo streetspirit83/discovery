@@ -70,7 +70,7 @@ const TV_COLUMNS = [
   'ADX',                       // 19
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
-  'eps_diluted_growth_ttm',// 22
+  'eps_diluted_growth_yoyttm',// 22
 
 ];
 
