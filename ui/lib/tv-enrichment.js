@@ -48,51 +48,60 @@ const EXCHANGE_CURRENCY = {
 };
 
 const TV_COLUMNS = [
-  'description',                // 0 – company name
-  'close',                      // 1
-  'market_cap_basic',           // 2
-  'price_earnings_ttm',         // 3
-  'Recommend.All',              // 4
-  'sector',                     // 5
-  'industry',                   // 6
-  'earnings_release_next_date', // 7
-
-  // --- extended set (UI mapping wired later) ---
-  'currency',
-  'volume',
-  'average_volume_60d_calc',
-
-  'total_revenue_fy',
-  'revenue_per_employee',
-
-  'earnings_per_share_basic_ttm',
-  'earnings_per_share_diluted_ttm',
-
-  'price_book_ratio',
-  'enterprise_value_ebitda_ttm',
-
-  'return_on_equity',
-  'return_on_assets',
-
-  'gross_margin',
-  'operating_margin',
-  'net_margin',
-
-  'debt_to_equity',
-  'current_ratio',
-  'quick_ratio',
-
-  'dividends_yield_current',
-
-  'number_of_employees',
-
-  'target_price',
-  'Perf.1M',
-  'Perf.3M',
-  'Perf.6M',
-  'Perf.Y',
+  'description',               // 0
+  'sector',                    // 1
+  'industry',                  // 2
+  'close',                     // 3
+  'change',                    // 4
+  'change|1W',                 // 5
+  'change|1M',                 // 6
+  'Volatility.D',              // 7
+  'beta_1_year',               // 8
+  'average_volume_10d_calc',   // 9
+  'market_cap_basic',          // 10
+  'price_earnings_ttm',        // 11
+  'price_to_book_ratio',       // 12
+  'dividend_yield_recent',     // 13
+  'total_revenue_growth_ttm',  // 14
+  'Recommend.All',             // 15
+  'RSI',                       // 16
+  'EMA20',                     // 17
+  'EMA50',                     // 18
+  'EMA200',                    // 19
+  'MACD.macd',                 // 20
+  'ADX',                       // 21
+  'high|52W',                  // 22
+  'earnings_release_next_date',// 23
+  'target_price_analysts',     // 24
 ];
-const COL = { description: 0, close: 1, marketCap: 2, pe: 3, rating: 4, sector: 5, industry: 6, earningsDate: 7 };
+
+const COL = {
+  description:   0,
+  sector:        1,
+  industry:      2,
+  close:         3,
+  change:        4,
+  change1W:      5,
+  change1M:      6,
+  volatility:    7,
+  beta:          8,
+  avgVol10d:     9,
+  marketCap:     10,
+  pe:            11,
+  pb:            12,
+  dividendYield: 13,
+  revGrowth:     14,
+  rating:        15,
+  rsi:           16,
+  ema20:         17,
+  ema50:         18,
+  ema200:        19,
+  macd:          20,
+  adx:           21,
+  high52w:       22,
+  earningsDate:  23,
+  targetPrice:   24,
+};
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
 
@@ -180,12 +189,29 @@ function buildUpdates(d, candidate) {
     asset_type: 'Stock',
     scan_date:  new Date().toISOString().split('T')[0],
     tv_data: {
-      rating:             d[COL.rating]       ?? null,
-      pe_ttm:             d[COL.pe]           ?? null,
-      market_cap:         d[COL.marketCap]    ?? null,
-      close:              d[COL.close]        ?? null,
+      rating:        d[COL.rating]       ?? null,
+      pe_ttm:        d[COL.pe]           ?? null,
+      pb_ratio:      d[COL.pb]           ?? null,
+      market_cap:    d[COL.marketCap]    ?? null,
+      close:         d[COL.close]        ?? null,
+      change_1d:     d[COL.change]       ?? null,
+      change_1w:     d[COL.change1W]     ?? null,
+      change_1m:     d[COL.change1M]     ?? null,
+      volatility:    d[COL.volatility]   ?? null,
+      beta:          d[COL.beta]         ?? null,
+      avg_vol_10d:   d[COL.avgVol10d]    ?? null,
+      dividend_yield:d[COL.dividendYield]?? null,
+      rev_growth_ttm:d[COL.revGrowth]    ?? null,
+      rsi:           d[COL.rsi]          ?? null,
+      ema20:         d[COL.ema20]        ?? null,
+      ema50:         d[COL.ema50]        ?? null,
+      ema200:        d[COL.ema200]       ?? null,
+      macd:          d[COL.macd]         ?? null,
+      adx:           d[COL.adx]          ?? null,
+      high_52w:      d[COL.high52w]      ?? null,
+      target_price:  d[COL.targetPrice]  ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
-      fetched_at:         new Date().toISOString(),
+      fetched_at:    new Date().toISOString(),
     },
   };
 
@@ -199,7 +225,7 @@ function buildUpdates(d, candidate) {
   const earningsStr = formatEarningsDate(d[COL.earningsDate]);
   if (earningsStr) updates.next_catalysts = earningsStr;
 
-  if (d[COL.rating] !== null && d[COL.rating] !== undefined) {
+  if (d[COL.rating] != null) {
     updates.priority = d[COL.rating] > 0.3 ? 'high' : d[COL.rating] < -0.3 ? 'low' : 'medium';
   }
 
@@ -255,8 +281,8 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
     // Build lookup: tvTicker → candidate
     const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
 
-    // Use symbols.tickers for direct batch ticker lookup on the market endpoint
     const requestBody = {
+      markets: [market],
       symbols: { tickers: tvTickers },
       columns: TV_COLUMNS,
     };
