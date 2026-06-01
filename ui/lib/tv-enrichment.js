@@ -108,19 +108,6 @@ const COL = {
   ratingAnalysts:27,
   ratingMonthly: 28,
 };
-  marketCap:     10,
-  pe:            11,
-  dividendYield: 12,
-  rating:        13,
-  rsi:           14,
-  ema20:         15,
-  ema50:         16,
-  ema200:        17,
-  macd:          18,
-  adx:           19,
-  high52w:       20,
-  earningsDate:  21,
-};
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
 
