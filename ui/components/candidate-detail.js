@@ -42,18 +42,25 @@ function renderTVData(c) {
   const tv = c.tv_data;
   if (!tv) return '';
   const ratingClass = tvRatingClass(tv.rating);
+  const description = tv.description ?? c.name ?? '';
+  const industry = c.sub_sector ?? tv.industry ?? '';
   return `
     <div class="detail-section">
       <h3>TV Daten</h3>
+      ${description ? `<p style="margin-bottom:8px;font-size:13px;color:var(--text)">${description}</p>` : ''}
+      ${industry ? `<p style="margin-bottom:10px;font-size:12px;color:var(--text-muted)">${industry}${c.sector ? ` · ${c.sector}` : ''}</p>` : ''}
       <div class="tv-data-grid">
         <div class="tv-kv">
           <span>Rating</span>
           <strong class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</strong>
         </div>
-        <div class="tv-kv"><span>Kurs</span><strong>${tv.close != null ? tv.close.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong></div>
         <div class="tv-kv"><span>Market Cap</span><strong>${formatMarketCap(tv.market_cap)}</strong></div>
+        <div class="tv-kv"><span>Kurs</span><strong>${tv.close != null ? tv.close.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong></div>
         <div class="tv-kv"><span>KGV (TTM)</span><strong>${tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—'}</strong></div>
+        <div class="tv-kv"><span>Dividende</span><strong>${tv.dividend_yield != null ? tv.dividend_yield.toFixed(2) + '%' : '—'}</strong></div>
         <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—'}</strong></div>
+        <div class="tv-kv"><span>RSI</span><strong>${tv.rsi != null ? tv.rsi.toFixed(1) : '—'}</strong></div>
+        <div class="tv-kv"><span>Beta</span><strong>${tv.beta != null ? tv.beta.toFixed(2) : '—'}</strong></div>
       </div>
       ${c.sector ? `<div class="tv-meta"><span class="tag">${c.sector}</span>${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}</div>` : ''}
       <small class="tv-fetched">Stand: ${formatDate(tv.fetched_at)}</small>
@@ -176,7 +183,7 @@ export class CandidateDetail {
       <div class="detail-header">
         <div class="detail-title">
           <h2>${c.symbol} <span class="exchange-label">${c.exchange}</span></h2>
-          <p class="detail-name">${c.name}</p>
+          <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
         </div>
         <button class="btn-icon detail-close" id="detail-close">✕</button>
@@ -195,6 +202,8 @@ export class CandidateDetail {
           ? `<button class="btn btn-sm" id="detail-review">👁 Als gesehen markieren</button>`
           : ''}
       </div>
+
+      ${renderTVData(c)}
 
       <div class="detail-section">
         <h3>Quellen (${c.sources.length})</h3>
@@ -232,8 +241,6 @@ export class CandidateDetail {
         <textarea id="detail-notes" class="notes-editor" placeholder="Notizen…" rows="3">${c.notes ?? ''}</textarea>
         <button class="btn btn-sm btn-secondary" id="detail-save-notes">Speichern</button>
       </div>
-
-      ${renderTVData(c)}
 
       <div class="detail-section" id="enrichment-section">
         <h3>AI-Enrichment</h3>

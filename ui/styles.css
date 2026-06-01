@@ -1018,6 +1018,54 @@ body {
 .col-actions { white-space: nowrap; text-align: right; width: 60px; }
 .signal-text { font-size: 12px; color: var(--text-muted); }
 
+/* ── View mode switch ────────────────────────────────────────── */
+
+.view-switch { display: flex; gap: 4px; }
+
+.view-btn {
+  padding: 6px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.view-btn.active {
+  background: var(--tv);
+  border-color: var(--tv);
+  color: #fff;
+}
+
+/* ── TV table columns ────────────────────────────────────────── */
+
+.tv-col { white-space: nowrap; }
+.tv-num { text-align: right; font-variant-numeric: tabular-nums; }
+.tv-pos { color: var(--success); }
+.tv-neg { color: var(--danger); }
+
+.sector-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--tv) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tv), transparent 65%);
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--tv);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-rating-txt--strong-buy  { color: #16a34a; font-weight: 700; }
+.tv-rating-txt--buy         { color: #22c55e; font-weight: 700; }
+.tv-rating-txt--neutral     { color: var(--text-muted); }
+.tv-rating-txt--sell        { color: #ef4444; font-weight: 700; }
+.tv-rating-txt--strong-sell { color: #dc2626; font-weight: 700; }
+
 /* ── TV rating badge (list row) ──────────────────────────────── */
 
 .tv-rating-badge {
