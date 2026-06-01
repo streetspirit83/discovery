@@ -60,19 +60,18 @@ const TV_COLUMNS = [
   'average_volume_10d_calc',   // 9
   'market_cap_basic',          // 10
   'price_earnings_ttm',        // 11
-  'price_to_book_ratio',       // 12
-  'dividend_yield_recent',     // 13
-  'total_revenue_growth_ttm',  // 14
-  'Recommend.All',             // 15
-  'RSI',                       // 16
-  'EMA20',                     // 17
-  'EMA50',                     // 18
-  'EMA200',                    // 19
-  'MACD.macd',                 // 20
-  'ADX',                       // 21
-  'high|52W',                  // 22
-  'earnings_release_next_date',// 23
-  'target_price_analysts',     // 24
+  'dividend_yield_recent',     // 12
+  'total_revenue_growth_ttm',  // 13
+  'Recommend.All',             // 14
+  'RSI',                       // 15
+  'EMA20',                     // 16
+  'EMA50',                     // 17
+  'EMA200',                    // 18
+  'MACD.macd',                 // 19
+  'ADX',                       // 20
+  'high|52W',                  // 21
+  'earnings_release_next_date',// 22
+  'target_price_analysts',     // 23
 ];
 
 const COL = {
@@ -88,19 +87,18 @@ const COL = {
   avgVol10d:     9,
   marketCap:     10,
   pe:            11,
-  pb:            12,
-  dividendYield: 13,
-  revGrowth:     14,
-  rating:        15,
-  rsi:           16,
-  ema20:         17,
-  ema50:         18,
-  ema200:        19,
-  macd:          20,
-  adx:           21,
-  high52w:       22,
-  earningsDate:  23,
-  targetPrice:   24,
+  dividendYield: 12,
+  revGrowth:     13,
+  rating:        14,
+  rsi:           15,
+  ema20:         16,
+  ema50:         17,
+  ema200:        18,
+  macd:          19,
+  adx:           20,
+  high52w:       21,
+  earningsDate:  22,
+  targetPrice:   23,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -191,7 +189,6 @@ function buildUpdates(d, candidate) {
     tv_data: {
       rating:        d[COL.rating]       ?? null,
       pe_ttm:        d[COL.pe]           ?? null,
-      pb_ratio:      d[COL.pb]           ?? null,
       market_cap:    d[COL.marketCap]    ?? null,
       close:         d[COL.close]        ?? null,
       change_1d:     d[COL.change]       ?? null,
