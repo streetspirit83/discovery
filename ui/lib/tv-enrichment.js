@@ -71,13 +71,37 @@ const TV_COLUMNS = [
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
   'beta_3_year',// 22
-  'submarket', // 23
-  'asset_class', // 24
-  'category', // 25
-  'description', // 26
-  'focus', // 27
-  'strategy', // 28
-  'subtype', // 29
+ 'change_abs|1W', // 23
+'change_abs|1M', // 24
+'Recommend.All|1M', // 25
+'High.1M', // 26
+'Low.1M', // 27
+'price_52_week_high', // 28
+'price_52_week_low', // 29
+'High.All', // 30
+'Low.All', // 31
+'Perf.All', // 32
+'Aroon.Down|120', // 33
+'Aroon.Down|1M', // 34
+'Aroon.Up|120', // 35
+'Aroon.Up|1M', // 36
+'average_volume_30d_calc', // 37
+'basic_eps_net_income', // 38
+'CCI20|1M', // 39
+'DonchCh20.Lower|1M', // 40
+'DonchCh20.Upper|1M', // 41
+'ebitda_yoy_growth_fy', // 42
+'ebitda', // 43
+'EMA20', // 44
+'EMA50', // 45
+'EMA100', // 46
+'EMA200', // 47
+'gross_margin', // 48
+'gross_profit_yoy_growth_fy', // 49
+'MACD.signal', // 50
+'Mom|1M', // 51
+'Perf.1M', // 52
+'Recommend.MA|1M', // 53
 
 ];
 
@@ -105,13 +129,37 @@ const COL = {
   high52w:       20,
   earningsDate:  21,
   beta_3_year:  22,
-  submarket: 23,
-  assetClass: 24,
-  category: 25,
-  description: 26,
-  focus: 27,
-  strategy: 28,
-  subtype: 29,
+ changeAbs1W: 23,
+changeAbs1M: 24,
+recommendAll1M: 25,
+high1M: 26,
+low1M: 27,
+price52WeekHigh: 28,
+price52WeekLow: 29,
+highAll: 30,
+lowAll: 31,
+perfAll: 32,
+aroonDown120: 33,
+aroonDown1M: 34,
+aroonUp120: 35,
+aroonUp1M: 36,
+averageVolume30dCalc: 37,
+basicEpsNetIncome: 38,
+cci20_1M: 39,
+donchCh20Lower1M: 40,
+donchCh20Upper1M: 41,
+ebitdaYoyGrowthFy: 42,
+ebitda: 43,
+ema20: 44,
+ema50: 45,
+ema100: 46,
+ema200: 47,
+grossMargin: 48,
+grossProfitYoyGrowthFy: 49,
+macdSignal: 50,
+mom1M: 51,
+perf1M: 52,
+recommendMA1M: 53,
 
 };
 
@@ -220,14 +268,37 @@ function buildUpdates(d, candidate) {
       adx:           d[COL.adx]          ?? null,
       high_52w:           d[COL.high52w]      ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
-      beta_3_year: d[COL.beta_3_year] ?? null,
-      submarket: d[COL.submarket] ?? null,
-      asset_class: d[COL.assetClass] ?? null,
-      category: d[COL.category] ?? null,
-      description: d[COL.description] ?? null,
-      focus: d[COL.focus] ?? null,
-      strategy: d[COL.strategy] ?? null,
-      subtype: d[COL.subtype] ?? null,
+   change_abs_1w: d[COL.changeAbs1W] ?? null,
+change_abs_1m: d[COL.changeAbs1M] ?? null,
+recommend_all_1m: d[COL.recommendAll1M] ?? null,
+high_1m: d[COL.high1M] ?? null,
+low_1m: d[COL.low1M] ?? null,
+price_52_week_high: d[COL.price52WeekHigh] ?? null,
+price_52_week_low: d[COL.price52WeekLow] ?? null,
+high_all: d[COL.highAll] ?? null,
+low_all: d[COL.lowAll] ?? null,
+perf_all: d[COL.perfAll] ?? null,
+aroon_down_120: d[COL.aroonDown120] ?? null,
+aroon_down_1m: d[COL.aroonDown1M] ?? null,
+aroon_up_120: d[COL.aroonUp120] ?? null,
+aroon_up_1m: d[COL.aroonUp1M] ?? null,
+average_volume_30d_calc: d[COL.averageVolume30dCalc] ?? null,
+basic_eps_net_income: d[COL.basicEpsNetIncome] ?? null,
+cci20_1m: d[COL.cci20_1M] ?? null,
+donch_ch20_lower_1m: d[COL.donchCh20Lower1M] ?? null,
+donch_ch20_upper_1m: d[COL.donchCh20Upper1M] ?? null,
+ebitda_yoy_growth_fy: d[COL.ebitdaYoyGrowthFy] ?? null,
+ebitda: d[COL.ebitda] ?? null,
+ema20: d[COL.ema20] ?? null,
+ema50: d[COL.ema50] ?? null,
+ema100: d[COL.ema100] ?? null,
+ema200: d[COL.ema200] ?? null,
+gross_margin: d[COL.grossMargin] ?? null,
+gross_profit_yoy_growth_fy: d[COL.grossProfitYoyGrowthFy] ?? null,
+macd_signal: d[COL.macdSignal] ?? null,
+mom_1m: d[COL.mom1M] ?? null,
+perf_1m: d[COL.perf1M] ?? null,
+recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       fetched_at:         new Date().toISOString(),
     },
   };
