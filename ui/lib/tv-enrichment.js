@@ -70,7 +70,7 @@ const TV_COLUMNS = [
   'ADX',                       // 19
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
-  'eps_diluted_growth_yoyttm',// 22
+  'beta_3_year',// 22
 
 ];
 
@@ -97,7 +97,7 @@ const COL = {
   adx:           19,
   high52w:       20,
   earningsDate:  21,
-  EpsDilutedGrowth:  22,
+  beta_3_year:  22,
 
 };
 
@@ -206,7 +206,7 @@ function buildUpdates(d, candidate) {
       adx:           d[COL.adx]          ?? null,
       high_52w:           d[COL.high52w]      ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
-      earnings_next_date: d[COL.EpsDilutedGrowth] ?? null,
+      beta_3_year: d[COL.beta_3_year] ?? null,
       fetched_at:         new Date().toISOString(),
     },
   };
