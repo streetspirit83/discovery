@@ -71,7 +71,13 @@ const TV_COLUMNS = [
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
   'beta_3_year',// 22
-  'all_time_high', //23
+  'submarket', // 23
+  'asset_class', // 24
+  'category', // 25
+  'description', // 26
+  'focus', // 27
+  'strategy', // 28
+  'subtype', // 29
 
 ];
 
@@ -99,7 +105,13 @@ const COL = {
   high52w:       20,
   earningsDate:  21,
   beta_3_year:  22,
-  all_time_high: 23,
+  submarket: 23,
+  assetClass: 24,
+  category: 25,
+  description: 26,
+  focus: 27,
+  strategy: 28,
+  subtype: 29,
 
 };
 
@@ -209,7 +221,13 @@ function buildUpdates(d, candidate) {
       high_52w:           d[COL.high52w]      ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
       beta_3_year: d[COL.beta_3_year] ?? null,
-      all_time_high: d[COL.all_time_high] ?? null,
+      submarket: d[COL.submarket] ?? null,
+      asset_class: d[COL.assetClass] ?? null,
+      category: d[COL.category] ?? null,
+      description: d[COL.description] ?? null,
+      focus: d[COL.focus] ?? null,
+      strategy: d[COL.strategy] ?? null,
+      subtype: d[COL.subtype] ?? null,
       fetched_at:         new Date().toISOString(),
     },
   };
