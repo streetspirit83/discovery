@@ -71,6 +71,7 @@ const TV_COLUMNS = [
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
   'beta_3_year',// 22
+  'all_time_high', //23
 
 ];
 
@@ -98,6 +99,7 @@ const COL = {
   high52w:       20,
   earningsDate:  21,
   beta_3_year:  22,
+  all_time_high: 23,
 
 };
 
@@ -207,6 +209,7 @@ function buildUpdates(d, candidate) {
       high_52w:           d[COL.high52w]      ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
       beta_3_year: d[COL.beta_3_year] ?? null,
+      all_time_high: d[COL.all_time_high] ?? null,
       fetched_at:         new Date().toISOString(),
     },
   };
