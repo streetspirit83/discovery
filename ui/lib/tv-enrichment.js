@@ -70,6 +70,16 @@ const TV_COLUMNS = [
   'ADX',                       // 19
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
+
+  // --- under test ---
+  'earnings_per_share_diluted_growth_ttm', // 22
+  'performance_ytd',                       // 23
+  'price_earnings_growth_ttm',             // 24
+  'return_on_equity_ttm',                  // 25
+  'beta_5_year',                           // 26
+  'price_to_sales_ttm',                    // 27
+  'Recommend.All|1D',                      // 28
+  'earnings_release_recent_date',          // 29
 ];
 
 const COL = {
