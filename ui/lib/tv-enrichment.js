@@ -70,7 +70,6 @@ const TV_COLUMNS = [
   'ADX',                       // 19
   'high|52W',                  // 20
   'earnings_release_next_date',// 21
-  'target_price_analysts',     // 22
 ];
 
 const COL = {
@@ -96,7 +95,6 @@ const COL = {
   adx:           19,
   high52w:       20,
   earningsDate:  21,
-  targetPrice:   22,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -203,7 +201,6 @@ function buildUpdates(d, candidate) {
       macd:          d[COL.macd]         ?? null,
       adx:           d[COL.adx]          ?? null,
       high_52w:      d[COL.high52w]      ?? null,
-      target_price:  d[COL.targetPrice]  ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
       fetched_at:    new Date().toISOString(),
     },
