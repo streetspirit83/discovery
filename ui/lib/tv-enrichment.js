@@ -268,6 +268,7 @@ function buildUpdates(d, candidate) {
       adx:           d[COL.adx]          ?? null,
       high_52w:           d[COL.high52w]      ?? null,
       earnings_next_date: d[COL.earningsDate] ?? null,
+      beta_3_year:        d[COL.beta_3_year]  ?? null,
    change_abs_1w: d[COL.changeAbs1W] ?? null,
 change_abs_1m: d[COL.changeAbs1M] ?? null,
 recommend_all_1m: d[COL.recommendAll1M] ?? null,
