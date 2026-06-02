@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,24 +7,56 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app">
-    <header class="app-header">
-     
-      <span id="mode-badge" class="header-badge">Laden…</span>
-      <button class="btn btn-sm" id="btn-refresh" title="Aktualisieren">Refresh</button>
-      <button class="btn btn-sm" id="btn-upload" title="Import">Import</button>
-      <button class="btn btn-sm" id="btn-export" title="Export nach Merkliste">Export</button>
-      <button class="btn btn-sm" id="btn-settings" title="Einstellungen">Einstellungen</button>
-    </header>
-
-    <div class="app-body">
-      <main class="list-panel" id="list-panel"></main>
-      <aside id="detail-panel"></aside>
+<div id="app">
+  <header class="topbar">
+    <span class="topbar__title">Discovery</span>
+    <div class="topbar__actions">
+      <button class="icon-btn" id="btn-refresh" aria-label="Aktualisieren"></button>
+      <button class="icon-btn" id="btn-upload" aria-label="Import"></button>
+      <button class="icon-btn" id="btn-theme" aria-label="Theme umschalten"></button>
+      <button class="icon-btn" id="btn-export" aria-label="Export"></button>
+      <button class="icon-btn" id="btn-settings" aria-label="Einstellungen" aria-haspopup="dialog"></button>
     </div>
-  </div>
+  </header>
 
-  <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-  <script>eruda.init();</script>
-  <script type="module" src="app.js"></script>
+  <nav class="subbar" aria-label="Spaltenansicht">
+    <div class="segmented" id="view-switch" role="tablist"></div>
+    <span id="mode-badge" class="mode-badge" style="margin-left:auto;flex-shrink:0"></span>
+  </nav>
+
+  <div class="filterbar" id="filterbar" aria-label="Filter"></div>
+
+  <main class="content" id="content">
+    <table class="candidate-table">
+      <thead id="candidate-thead"></thead>
+      <tbody id="candidate-tbody"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none"></div>
+
+    <div class="bulkbar" id="bulk-bar" role="region" aria-label="Massenaktionen">
+      <span class="bulk-count" id="bulk-count" aria-live="polite">0 ausgewählt</span>
+      <div class="bulk-actions" id="bulk-actions"></div>
+    </div>
+  </main>
+
+  <nav class="botnav" aria-label="Hauptnavigation">
+    <button class="botnav__slot botnav__slot--active" id="nav-home">
+      <span id="nav-home-icon"></span><span>Home</span>
+    </button>
+    <button class="botnav__slot" id="nav-bucket" aria-haspopup="dialog">
+      <span id="nav-bucket-icon"></span>
+      <span class="botnav__bucket-label" id="nav-bucket-label">Inbox</span>
+    </button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="nav-sheet" role="dialog" aria-modal="true" aria-label="Navigation"></aside>
+<aside class="sheet sheet--detail" id="detail-sheet" role="dialog" aria-modal="true" aria-label="Kandidaten-Detail"></aside>
+<div class="bucket-sheet" id="bucket-sheet" role="dialog" aria-modal="true" aria-label="Bucket wählen"></div>
+
+<script src="//cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

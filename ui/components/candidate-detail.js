@@ -4,6 +4,8 @@ const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
 const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
 
+const CLOSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+
 function formatDate(isoStr) {
   if (!isoStr) return '';
   return new Date(isoStr).toLocaleString('de-DE', {
@@ -48,7 +50,7 @@ function renderTVData(c) {
     <div class="detail-section">
       <h3>TV Daten</h3>
       ${description ? `<p style="margin-bottom:8px;font-size:13px;color:var(--text)">${description}</p>` : ''}
-      ${industry ? `<p style="margin-bottom:10px;font-size:12px;color:var(--text-muted)">${industry}${c.sector ? ` · ${c.sector}` : ''}</p>` : ''}
+      ${industry ? `<p style="margin-bottom:10px;font-size:12px;color:var(--muted)">${industry}${c.sector ? ` · ${c.sector}` : ''}</p>` : ''}
       <div class="tv-data-grid">
         <div class="tv-kv">
           <span>Rating</span>
@@ -150,23 +152,21 @@ function linkBtn(href, logo, label, cssClass) {
 }
 
 export class CandidateDetail {
-  constructor(container, { onAction }) {
-    this.container = container;
+  constructor(sheetEl, { onAction, onClose }) {
+    this.el = sheetEl;
     this.onAction = onAction;
+    this.onClose = onClose;
     this.candidate = null;
-    this.container.innerHTML = '';
-    this.container.className = 'detail-drawer';
   }
 
   show(candidate) {
     this.candidate = candidate;
     this.render();
-    this.container.classList.add('open');
   }
 
   hide() {
-    this.container.classList.remove('open');
     this.candidate = null;
+    this.onClose?.();
   }
 
   render() {
@@ -179,14 +179,14 @@ export class CandidateDetail {
       dismissed: 'Abgelehnt', imported: 'Importiert',
     };
 
-    this.container.innerHTML = `
-      <div class="detail-header">
+    this.el.innerHTML = `
+      <div class="sheet__header">
         <div class="detail-title">
-          <h2>${c.symbol} <span class="exchange-label">${c.exchange}</span></h2>
+          <h2>${c.symbol} <span class="exchange-tag">${c.exchange}</span></h2>
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
         </div>
-        <button class="btn-icon detail-close" id="detail-close">✕</button>
+        <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
       </div>
 
       <div class="detail-state">
@@ -255,46 +255,46 @@ export class CandidateDetail {
       </div>
     `;
 
-    this.container.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
+    this.el.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
 
-    this.container.querySelector('#detail-promote')?.addEventListener('pointerup', () => {
+    this.el.querySelector('#detail-promote')?.addEventListener('pointerup', () => {
       this.onAction?.('promote', c);
       c.workspace_state = 'promoted';
       this.render();
     });
 
-    this.container.querySelector('#detail-dismiss')?.addEventListener('pointerup', () => {
+    this.el.querySelector('#detail-dismiss')?.addEventListener('pointerup', () => {
       this.onAction?.('dismiss', c);
       c.workspace_state = 'dismissed';
       this.render();
     });
 
-    this.container.querySelector('#detail-review')?.addEventListener('pointerup', () => {
+    this.el.querySelector('#detail-review')?.addEventListener('pointerup', () => {
       this.onAction?.('review', c);
       c.workspace_state = 'reviewed';
       this.render();
     });
 
-    this.container.querySelector('#detail-save-links').addEventListener('pointerup', () => {
+    this.el.querySelector('#detail-save-links').addEventListener('pointerup', () => {
       const newLinks = {
-        tradingview: this.container.querySelector('#lf-tv').value.trim(),
-        stocktwits:  this.container.querySelector('#lf-st').value.trim(),
-        yahoo:       this.container.querySelector('#lf-yahoo').value.trim(),
+        tradingview: this.el.querySelector('#lf-tv').value.trim(),
+        stocktwits:  this.el.querySelector('#lf-st').value.trim(),
+        yahoo:       this.el.querySelector('#lf-yahoo').value.trim(),
       };
       c.links = newLinks;
       this.onAction?.('saveLinks', c, { links: newLinks });
       this.render();
     });
 
-    this.container.querySelector('#detail-save-notes').addEventListener('pointerup', () => {
-      const notes = this.container.querySelector('#detail-notes').value;
+    this.el.querySelector('#detail-save-notes').addEventListener('pointerup', () => {
+      const notes = this.el.querySelector('#detail-notes').value;
       c.notes = notes;
       this.onAction?.('saveNotes', c, { notes });
     });
 
-    this.container.querySelector('#detail-enrich').addEventListener('pointerup', async () => {
-      const btn = this.container.querySelector('#detail-enrich');
-      const statusEl = this.container.querySelector('#enrich-status');
+    this.el.querySelector('#detail-enrich').addEventListener('pointerup', async () => {
+      const btn = this.el.querySelector('#detail-enrich');
+      const statusEl = this.el.querySelector('#enrich-status');
       btn.disabled = true;
       statusEl.style.display = 'block';
       statusEl.textContent = 'Claude analysiert…';
