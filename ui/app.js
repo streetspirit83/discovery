@@ -12,6 +12,7 @@ import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment } from './lib/tv-enrichment.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
 import { icons } from './lib/icons.js';
+import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -19,6 +20,7 @@ const luc = (d, s = 20) =>
 
 const L = {
   refresh:  luc('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
+  zap:      luc('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
   upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
   sun:      luc('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
   moon:     luc('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
@@ -52,6 +54,7 @@ let storageClient = null;
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
 let bucketSheetOpen = false;
+let runSheetOpen = false;
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'info', duration = 3000) {
@@ -91,6 +94,7 @@ function toggleTheme() {
 // ── Shell rendering ────────────────────────────────────────────────────────────
 function renderTopbar() {
   document.getElementById('btn-refresh').innerHTML  = L.refresh;
+  document.getElementById('btn-run').innerHTML      = L.zap;
   document.getElementById('btn-upload').innerHTML   = L.upload;
   document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
   document.getElementById('btn-export').innerHTML   = L.download;
@@ -212,7 +216,7 @@ function renderBotnav() {
 
 // ── Sheet management ───────────────────────────────────────────────────────────
 function updateScrim() {
-  document.getElementById('scrim').classList.toggle('is-open', detailSheetOpen || bucketSheetOpen);
+  document.getElementById('scrim').classList.toggle('is-open', detailSheetOpen || bucketSheetOpen || runSheetOpen);
 }
 
 function openDetailSheet() {
@@ -259,6 +263,52 @@ function openBucketSheet() {
 function closeBucketSheet() {
   bucketSheetOpen = false;
   document.getElementById('bucket-sheet').classList.remove('is-open');
+  updateScrim();
+}
+
+// ── Run-adapter sheet ────────────────────────────────────────────────────────
+// Manually dispatch an adapter's GitHub Action. Requires a GitHub PAT in
+// Settings; the scrape itself runs on GitHub's runners and lands in the inbox.
+function renderRunSheet() {
+  const rs = document.getElementById('run-sheet');
+  rs.innerHTML = `
+    <h2 class="bucket-sheet__title">Adapter ausführen</h2>
+    ${ADAPTERS.map(({ workflow, label }) =>
+      `<button class="bucket-opt" data-wf="${workflow}" data-label="${label}">
+        ${L.zap}<span>${label}</span>
+      </button>`
+    ).join('')}`;
+  rs.querySelectorAll('.bucket-opt[data-wf]').forEach((btn) => {
+    btn.addEventListener('pointerup', async () => {
+      const { wf, label } = btn.dataset;
+      closeRunSheet();
+
+      if (!hasGithubPat()) {
+        toast('GitHub PAT nicht konfiguriert (Einstellungen → GitHub PAT)', 'error', 4500);
+        return;
+      }
+
+      toast(`⏳ Starte „${label}"…`, 'info', 4000);
+      try {
+        await triggerAdapter(wf);
+        toast(`🚀 „${label}" gestartet – läuft via GitHub Actions. Später „Aktualisieren".`, 'success', 5000);
+      } catch (err) {
+        toast(`Start fehlgeschlagen: ${err.message}`, 'error', 6000);
+      }
+    });
+  });
+}
+
+function openRunSheet() {
+  runSheetOpen = true;
+  renderRunSheet();
+  document.getElementById('run-sheet').classList.add('is-open');
+  updateScrim();
+}
+
+function closeRunSheet() {
+  runSheetOpen = false;
+  document.getElementById('run-sheet').classList.remove('is-open');
   updateScrim();
 }
 
@@ -627,11 +677,13 @@ async function init() {
   document.getElementById('scrim').addEventListener('pointerup', () => {
     if (detailSheetOpen) { candidateDetail.hide(); return; }
     if (bucketSheetOpen) { closeBucketSheet(); return; }
+    if (runSheetOpen)    { closeRunSheet(); return; }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (detailSheetOpen) { candidateDetail.hide(); return; }
     if (bucketSheetOpen) { closeBucketSheet(); return; }
+    if (runSheetOpen)    { closeRunSheet(); return; }
   });
 
   // ── Topbar buttons ───────────────────────────────────────────────────────────
@@ -640,6 +692,8 @@ async function init() {
     await switchBlob(currentBlobType);
     toast('Aktualisiert', 'info', 1500);
   });
+
+  document.getElementById('btn-run').addEventListener('pointerup', openRunSheet);
 
   document.getElementById('btn-upload').addEventListener('pointerup', () => {
     renderUploadModal({ onImport: importCandidates });

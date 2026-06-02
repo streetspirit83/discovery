@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discovery Workspace</title>
-  <link rel="stylesheet" href="styles.css?v=20260602c">
+  <link rel="stylesheet" href="styles.css?v=20260602d">
 </head>
 <body>
 <div id="app">
@@ -12,6 +12,7 @@
     <span class="topbar__title">Discovery</span>
     <div class="topbar__actions">
       <button class="icon-btn" id="btn-refresh" aria-label="Aktualisieren"></button>
+      <button class="icon-btn" id="btn-run" aria-label="Adapter ausführen" aria-haspopup="dialog"></button>
       <button class="icon-btn" id="btn-upload" aria-label="Import"></button>
       <button class="icon-btn" id="btn-theme" aria-label="Theme umschalten"></button>
       <button class="icon-btn" id="btn-export" aria-label="Export"></button>
@@ -54,9 +55,10 @@
 <aside class="sheet" id="nav-sheet" role="dialog" aria-modal="true" aria-label="Navigation"></aside>
 <aside class="sheet sheet--detail" id="detail-sheet" role="dialog" aria-modal="true" aria-label="Kandidaten-Detail"></aside>
 <div class="bucket-sheet" id="bucket-sheet" role="dialog" aria-modal="true" aria-label="Bucket wählen"></div>
+<div class="bucket-sheet" id="run-sheet" role="dialog" aria-modal="true" aria-label="Adapter ausführen"></div>
 
 <script src="//cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
-<script type="module" src="app.js?v=20260602c"></script>
+<script type="module" src="app.js?v=20260602d"></script>
 </body>
 </html>
