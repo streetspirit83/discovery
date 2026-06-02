@@ -20,27 +20,7 @@ const ADAPTER_COLORS = {
   'tradingview-screener': '#2962ff',
 };
 
-const SORT_LABELS = {
-  state: '', symbol: 'Symbol', name: 'Name', discovered: 'Entdeckt', sources: 'Quellen',
-  tv_close: 'Kurs', tv_chg1d: 'Δ1D', tv_chg1w: 'Δ1W', tv_chg1m: 'Δ1M',
-  tv_vol: 'Vola', tv_rsi: 'RSI', tv_ema20: 'EMA20', tv_ema50: 'EMA50',
-  tv_ema200: 'EMA200', tv_macd: 'MACD', tv_adx: 'ADX',
-  tv_rating: 'Rating', tv_mcap: 'Mkt Cap', tv_pe: 'KGV', tv_div: 'Div%',
-  tv_beta: 'Beta', tv_vol10d: 'V10d',
-  // Technicals
-  tv_h1m: 'H1M', tv_l1m: 'L1M', tv_h52hi: '52W↑', tv_h52lo: '52W↓',
-  tv_hall: 'ATH', tv_lall: 'ATL', tv_perfall: '%ATH',
-  tv_aroondn120: 'Ar↓120', tv_aroondn1m: 'Ar↓1M',
-  tv_aroonup120: 'Ar↑120', tv_aroonup1m: 'Ar↑1M',
-  tv_macdsig: 'MACD·S', tv_cci: 'CCI', tv_donchlo: 'DC↓', tv_donchhi: 'DC↑',
-  // Fundamentals
-  tv_eps: 'EPS', tv_earnings: 'Earnings',
-  tv_ebitdagrowth: 'EBITDA%', tv_ebitda: 'EBITDA',
-  tv_grossmargin: 'GM%', tv_grossgrowth: 'Gross%',
-  tv_mom1m: 'Mom', tv_beta3y: 'β3Y', tv_vol30d: 'V30d', tv_rating1m: 'Rat1M',
-};
-
-// ── Formatters ──────────────────────────────────────────────────────────────
+// ── Formatters ───────────────────────────────────────────────────────────────
 
 function fmtPct(v) {
   if (v == null) return '—';
@@ -159,33 +139,9 @@ function sortValue(c, col) {
     case 'tv_beta':   return tv?.beta ?? -Infinity;
     case 'tv_beta3y': return tv?.beta_3_year ?? -Infinity;
     case 'tv_vol10d': return tv?.avg_vol_10d ?? -Infinity;
-    // Technicals
-    case 'tv_h1m':    return tv?.high_1m ?? -Infinity;
-    case 'tv_l1m':    return tv?.low_1m ?? -Infinity;
-    case 'tv_h52hi':  return tv?.price_52_week_high ?? -Infinity;
-    case 'tv_h52lo':  return tv?.price_52_week_low ?? -Infinity;
-    case 'tv_hall':   return tv?.high_all ?? -Infinity;
-    case 'tv_lall':   return tv?.low_all ?? -Infinity;
-    case 'tv_perfall':return tv?.perf_all ?? -Infinity;
-    case 'tv_aroondn120': return tv?.aroon_down_120 ?? -Infinity;
-    case 'tv_aroondn1m':  return tv?.aroon_down_1m ?? -Infinity;
-    case 'tv_aroonup120': return tv?.aroon_up_120 ?? -Infinity;
-    case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? -Infinity;
-    case 'tv_macdsig':    return tv?.macd_signal ?? -Infinity;
-    case 'tv_cci':    return tv?.cci20_1m ?? -Infinity;
-    case 'tv_donchlo':return tv?.donch_ch20_lower_1m ?? -Infinity;
-    case 'tv_donchhi':return tv?.donch_ch20_upper_1m ?? -Infinity;
-    // Fundamentals
-    case 'tv_eps':    return tv?.basic_eps_net_income ?? -Infinity;
-    case 'tv_earnings':   return tv?.earnings_next_date ?? -Infinity;
-    case 'tv_ebitdagrowth': return tv?.ebitda_yoy_growth_fy ?? -Infinity;
-    case 'tv_ebitda': return tv?.ebitda ?? -Infinity;
-    case 'tv_grossmargin': return tv?.gross_margin ?? -Infinity;
-    case 'tv_grossgrowth': return tv?.gross_profit_yoy_growth_fy ?? -Infinity;
-    case 'tv_mom1m':  return tv?.mom_1m ?? -Infinity;
-    case 'tv_beta3y': return tv?.beta_3_year ?? -Infinity;
     case 'tv_vol30d': return tv?.average_volume_30d_calc ?? -Infinity;
-    case 'tv_rating1m': return tv?.recommend_all_1m ?? -Infinity;
+    case 'tv_rating1m':return tv?.recommend_all_1m ?? -Infinity;
+    case 'tv_mcap':   return tv?.market_cap ?? -Infinity;
     default:          return '';
   }
 }
@@ -392,75 +348,21 @@ export class CandidateList {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   renderThead() {
-    const stateTh = `
-      <th class="col-state">
-        <div class="th-state-head">
-          ${this.thSortable('state')}
-          <span class="state-info-trigger" tabindex="0">
-            ${icons.info}
-            <div class="state-legend-tip">
-              <div class="slt-row"><span class="state-dot state-dot--new"></span>Neu – frisch entdeckt</div>
-              <div class="slt-row"><span class="state-dot state-dot--reviewed"></span>Gesehen – angeschaut</div>
-              <div class="slt-row"><span class="state-dot state-dot--promoted"></span>Promoted – vorgemerkt</div>
-              <div class="slt-row"><span class="state-dot state-dot--dismissed"></span>Abgelehnt – verworfen</div>
-              <div class="slt-row"><span class="state-dot state-dot--imported"></span>Importiert – übernommen</div>
-            </div>
-          </span>
-        </div>
-      </th>`;
+    const stateTh = `<th class="col-state" aria-sort="${this.ariaSort('state')}">
+      <button class="sort-btn" data-sort="state">S ${this.sortGlyph('state')}</button></th>`;
 
-    if (this.viewMode === 'technicals') {
-      this.thead.innerHTML = `<tr>
-        <th class="col-check"><input type="checkbox" id="select-all"></th>
-        ${stateTh}
-        <th class="col-symbol">${this.thSortable('symbol')}</th>
-        <th class="tv-col">${this.thSortable('tv_chg1w')}</th>
-        <th class="tv-col">${this.thSortable('tv_chg1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_h1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_l1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_h52hi')}</th>
-        <th class="tv-col">${this.thSortable('tv_h52lo')}</th>
-        <th class="tv-col">${this.thSortable('tv_hall')}</th>
-        <th class="tv-col">${this.thSortable('tv_lall')}</th>
-        <th class="tv-col">${this.thSortable('tv_perfall')}</th>
-        <th class="tv-col">${this.thSortable('tv_aroondn120')}</th>
-        <th class="tv-col">${this.thSortable('tv_aroondn1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_aroonup120')}</th>
-        <th class="tv-col">${this.thSortable('tv_aroonup1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_macdsig')}</th>
-        <th class="tv-col">${this.thSortable('tv_rsi')}</th>
-        <th class="tv-col">${this.thSortable('tv_ema20')}</th>
-        <th class="tv-col">${this.thSortable('tv_ema50')}</th>
-        <th class="tv-col">${this.thSortable('tv_ema200')}</th>
-        <th class="tv-col">${this.thSortable('tv_macd')}</th>
-        <th class="tv-col">${this.thSortable('tv_adx')}</th>
-        <th class="tv-col">${this.thSortable('tv_cci')}</th>
-        <th class="tv-col">${this.thSortable('tv_donchlo')}</th>
-        <th class="tv-col">${this.thSortable('tv_donchhi')}</th>
-        <th class="col-actions">Aktion</th>
-      </tr>`;
-    } else if (this.viewMode === 'fundamentals') {
-      this.thead.innerHTML = `<tr>
-        <th class="col-check"><input type="checkbox" id="select-all"></th>
-        ${stateTh}
-        <th class="col-symbol">${this.thSortable('symbol')}</th>
-        <th class="tv-col">${this.thSortable('tv_pe')}</th>
-        <th class="tv-col">${this.thSortable('tv_div')}</th>
-        <th class="tv-col">${this.thSortable('tv_eps')}</th>
-        <th class="tv-col">${this.thSortable('tv_earnings')}</th>
-        <th class="tv-col">${this.thSortable('tv_ebitdagrowth')}</th>
-        <th class="tv-col">${this.thSortable('tv_ebitda')}</th>
-        <th class="tv-col">${this.thSortable('tv_grossmargin')}</th>
-        <th class="tv-col">${this.thSortable('tv_grossgrowth')}</th>
-        <th class="tv-col">${this.thSortable('tv_mom1m')}</th>
-        <th class="tv-col">${this.thSortable('tv_vol')}</th>
-        <th class="tv-col">${this.thSortable('tv_beta')}</th>
-        <th class="tv-col">${this.thSortable('tv_beta3y')}</th>
-        <th class="tv-col">${this.thSortable('tv_vol10d')}</th>
-        <th class="tv-col">${this.thSortable('tv_vol30d')}</th>
-        <th class="tv-col">${this.thSortable('tv_rating1m')}</th>
-        <th class="col-actions">Aktion</th>
-      </tr>`;
+    let cols = '';
+    cols += `<th class="col-check"><input type="checkbox" id="select-all" aria-label="Alle auswählen"></th>`;
+    cols += stateTh;
+    cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
+
+    if (this.viewMode === 'standard') {
+      cols += this.th('name', 'Name', 'class="col-name-data"');
+      cols += `<th>Links</th>`;
+      cols += `<th>Letztes Signal</th>`;
+      cols += this.th('discovered', 'Entdeckt');
+      cols += `<th class="num">Aktion</th>`;
+      cols += this.th('sources', 'Quellen');
     } else {
       cols += VIEWS[this.viewMode].map((d) =>
         `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
@@ -509,50 +411,19 @@ export class CandidateList {
       </div></td>`;
 
       let dataCols;
-      if (this.viewMode === 'technicals') {
-        dataCols = `
-          <td class="tv-col tv-num${posNeg(tv?.change_1w)}">${fmtPct(tv?.change_1w)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.change_1m)}">${fmtPct(tv?.change_1m)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.high_1m, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.low_1m, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.price_52_week_high, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.price_52_week_low, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.high_all, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.low_all, 2)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.perf_all)}">${tv?.perf_all != null ? fmtNum(tv.perf_all, 1) + '%' : '—'}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.aroon_down_120, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.aroon_down_1m, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.aroon_up_120, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.aroon_up_1m, 1)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.macd_signal)}">${fmtNum(tv?.macd_signal, 3)}</td>
-          <td class="tv-col tv-num${rsiClass(tv?.rsi)}">${fmtNum(tv?.rsi, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.ema20, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.ema50, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.ema200, 2)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.macd)}">${fmtNum(tv?.macd, 3)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.adx, 1)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.cci20_1m)}">${fmtNum(tv?.cci20_1m, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.donch_ch20_lower_1m, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.donch_ch20_upper_1m, 2)}</td>
-          ${actionTd}`;
-      } else if (this.viewMode === 'fundamentals') {
-        dataCols = `
-          <td class="tv-col tv-num">${fmtNum(tv?.pe_ttm, 1)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.dividend_yield)}">${tv?.dividend_yield != null ? fmtNum(tv.dividend_yield, 2) + '%' : '—'}</td>
-          <td class="tv-col tv-num${posNeg(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</td>
-          <td class="tv-col">${tv?.earnings_next_date ? fmtDate(tv.earnings_next_date) : '—'}</td>
-          <td class="tv-col tv-num${posNeg(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</td>
-          <td class="tv-col tv-num">${fmtMCap(tv?.ebitda)}</td>
-          <td class="tv-col tv-num${posNeg(tv?.gross_margin)}">${tv?.gross_margin != null ? fmtNum(tv.gross_margin, 1) + '%' : '—'}</td>
-          <td class="tv-col tv-num${posNeg(tv?.gross_profit_yoy_growth_fy)}">${tv?.gross_profit_yoy_growth_fy != null ? fmtNum(tv.gross_profit_yoy_growth_fy, 1) + '%' : '—'}</td>
-          <td class="tv-col tv-num${posNeg(tv?.mom_1m)}">${fmtNum(tv?.mom_1m, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.volatility, 1)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.beta, 2)}</td>
-          <td class="tv-col tv-num">${fmtNum(tv?.beta_3_year, 2)}</td>
-          <td class="tv-col tv-num">${fmtMCap(tv?.avg_vol_10d)}</td>
-          <td class="tv-col tv-num">${fmtMCap(tv?.average_volume_30d_calc)}</td>
-          <td class="tv-col tv-num tv-rating-txt--${tvRatingClass(tv?.recommend_all_1m)}">${fmtNum(tv?.recommend_all_1m, 2)}</td>
-          ${actionTd}`;
+      if (this.viewMode === 'standard') {
+        dataCols =
+          `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
+          `<td><div class="link-cluster">
+            ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
+            ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
+            ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
+            <button class="link-chip link-chip--edit" data-action="editLinks" title="Links bearbeiten">${icons.pencil}</button>
+          </div></td>` +
+          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
+          `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
+          actionTd +
+          `<td>${renderSourceBadges(c.sources)}</td>`;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
