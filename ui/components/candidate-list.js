@@ -89,6 +89,10 @@ function getLatestSignal(c) {
 function renderSourceBadges(sources) {
   return [...new Set(sources.map((s) => s.adapter))]
     .map((a) => {
+      // TradingView labels: black background, white ink.
+      if (a === 'tradingview-screener') {
+        return `<span class="badge" style="background:#000;color:#fff;border:1px solid #000">${a}</span>`;
+      }
       const color = ADAPTER_COLORS[a] ?? '#888';
       return `<span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}55">${a}</span>`;
     }).join(' ');
@@ -328,7 +332,7 @@ export class CandidateList {
     if (this.viewMode === 'standard') {
       cols += this.th('name', 'Name', 'class="col-name-data"');
       cols += this.th('sector', 'Sektor');
-      cols += this.th('discovered', 'Entdeckt');
+      cols += this.th('discovered', 'in');
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1w',       'Δ1W',     'Veränderung 1 Woche');

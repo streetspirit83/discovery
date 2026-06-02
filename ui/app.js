@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260602b';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260602b';
+import { CandidateList } from './components/candidate-list.js?v=20260602c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderExportModal } from './components/export-modal.js';

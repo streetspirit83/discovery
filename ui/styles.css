@@ -330,6 +330,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   overflow:hidden; text-overflow:ellipsis; max-width:240px; display:inline-block; vertical-align:middle;
 }
 .time-chip { font-size:var(--fs-2); color:var(--muted); }
+.sector-cell { font-size:var(--fs-2); }
 
 /* Source badges */
 .src-badge, .badge {
@@ -392,6 +393,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .bulk-btn--pos    { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
 .bulk-btn--ai     { background:var(--ai-weak);  border-color:var(--ai);  color:var(--ai); }
 .bulk-btn--accent { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+/* TradingView labels: black background, white ink. */
+#bulk-tv-data { background:#000; border-color:#000; color:#fff; }
 .bulk-btn--neutral { background:none; border:none; color:var(--muted); width:36px; padding:0; justify-content:center; }
 
 /* ════════════════════════════════════════════════════════════════
