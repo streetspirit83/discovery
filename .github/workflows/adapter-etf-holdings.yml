@@ -2,7 +2,7 @@ name: Adapter – ETF Holdings
 
 on:
   schedule:
-    - cron: '37 7 * * 1'
+    - cron: '37 7 * * 2'  # Tuesday ~07:37 UTC
   workflow_dispatch:
 
 jobs:

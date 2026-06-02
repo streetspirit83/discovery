@@ -1,5 +1,5 @@
 /**
- * ETF Holdings adapter – iShares Global Clean Energy ETF (ICLN)
+ * ETF Holdings adapter – SOXX + ARTY
  *
  * Uses SEC EDGAR NPORT-P filings (free, official, cloud-accessible).
  * NPORT-P is the monthly portfolio disclosure all US-registered funds must file.
@@ -23,9 +23,22 @@ const SEC_HEADERS = {
   Accept: 'application/json, text/plain, */*',
 };
 
-const MIN_WEIGHT_PCT = 0.3; // % of portfolio; keep low to capture more holdings
-const ETF_NAME = 'iShares Global Clean Energy ETF (ICLN)';
-const ISHARES_CIK = '1100663'; // iShares Trust registrant CIK
+const MIN_WEIGHT_PCT = 1.0; // % of portfolio – concentrated ETFs, keep only significant holdings
+
+// ETFs to pull. searchTerm is the free-text phrase sent to EFTS; must uniquely
+// identify the fund within iShares' NPORT-P filings.
+const ETF_LIST = [
+  {
+    name:       'iShares Semiconductor ETF (SOXX)',
+    searchTerm: 'iShares PHLX Semiconductor',
+  },
+  {
+    name:       'iShares Future AI & Tech ETF (ARTY)',
+    searchTerm: 'iShares Future AI',
+  },
+];
+
+const ISHARES_CIK_FALLBACK = '1100663'; // iShares Trust registrant CIK
 
 // Only include US and European equity markets; skip Asia-Pacific, LatAm, etc.
 const ALLOWED_COUNTRIES = new Set([
@@ -56,50 +69,47 @@ function xmlAttr(xml, tag, attr = 'value') {
   return (xml.match(re) ?? [])[1];
 }
 
-// ─── Step 1: Find the latest NPORT-P filing for ICLN ────────────────────────
+// ─── Step 1: Find the latest NPORT-P filing for a given ETF ─────────────────
 
-async function findLatestFiling() {
+async function findLatestFiling(searchTerm, etfName) {
   const startDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
   const endDate = new Date().toISOString().slice(0, 10);
 
-  // Use the full, specific fund name – avoids matching other sponsors' funds
+  const encoded = encodeURIComponent(`"${searchTerm}"`);
   const url =
     `https://efts.sec.gov/LATEST/search-index` +
-    `?q=%22iShares+Global+Clean+Energy%22` +
+    `?q=${encoded}` +
     `&forms=NPORT-P` +
     `&startdt=${startDate}` +
     `&enddt=${endDate}`;
 
-  log('info', 'etf-holdings: searching EDGAR for NPORT-P filing', { startDate, endDate });
+  log('info', 'etf-holdings: searching EDGAR for NPORT-P filing', { etf: etfName, startDate, endDate });
 
-  // Retry up to 4x – EFTS returns transient 500s occasionally
   let data;
   for (let attempt = 1; attempt <= 4; attempt++) {
     const res = await fetch(url, { headers: SEC_HEADERS });
     if (res.ok) { data = await res.json(); break; }
     if (attempt === 4) throw new Error(`EDGAR EFTS search failed: ${res.status}`);
-    log('warn', 'etf-holdings: EFTS retry', { attempt, status: res.status });
+    log('warn', 'etf-holdings: EFTS retry', { etf: etfName, attempt, status: res.status });
     await sleep(attempt * 2000);
   }
 
   const allHits = data.hits?.hits ?? [];
-  log('info', 'etf-holdings: EFTS hits total', { count: allHits.length });
-  if (allHits.length === 0) throw new Error('No NPORT-P filings found in EFTS');
+  log('info', 'etf-holdings: EFTS hits total', { etf: etfName, count: allHits.length });
+  if (allHits.length === 0) throw new Error(`No NPORT-P filings found for "${etfName}"`);
 
-  // Filter by the registrant *name* (not a hardcoded CIK – which proved unreliable).
-  // EFTS returns any fund mentioning the phrase, incl. Goldman Sachs, TIAA etc.
+  // Filter to iShares-sponsored filings only
   const hits = allHits.filter((h) =>
     (h._source?.display_names ?? []).some((n) => /ishares/i.test(n)),
   );
   log('info', 'etf-holdings: iShares hits', {
+    etf: etfName,
     count: hits.length,
-    others: allHits.length - hits.length,
     sampleNames: allHits.slice(0, 5).map((h) => h._source?.display_names?.[0]),
   });
-  if (hits.length === 0) throw new Error('No iShares NPORT-P hits found (check display_names)');
+  if (hits.length === 0) throw new Error(`No iShares NPORT-P hits found for "${etfName}"`);
 
-  // Sort by file_date descending (EFTS returns by relevance, not date)
   hits.sort((a, b) =>
     String(b._source?.file_date ?? '').localeCompare(String(a._source?.file_date ?? '')),
   );
@@ -107,10 +117,10 @@ async function findLatestFiling() {
   const hit = hits[0];
   const id = hit._id ?? '';
   log('debug', 'etf-holdings: best hit', {
+    etf: etfName,
     id,
     fileDate: hit._source?.file_date,
     displayNames: hit._source?.display_names,
-    ciks: hit._source?.ciks,
   });
 
   const colonIdx = id.indexOf(':');
@@ -118,12 +128,10 @@ async function findLatestFiling() {
 
   const accessionNo = id.slice(0, colonIdx);
   const primaryDoc  = id.slice(colonIdx + 1);
-
-  // Derive CIK from the matched hit itself (no hardcoded value)
-  const cikRaw = (hit._source?.ciks ?? [])[0] ?? ISHARES_CIK;
+  const cikRaw = (hit._source?.ciks ?? [])[0] ?? ISHARES_CIK_FALLBACK;
   const cik = String(parseInt(cikRaw, 10));
 
-  log('info', 'etf-holdings: filing located', { accessionNo, primaryDoc, cik, fileDate: hit._source?.file_date });
+  log('info', 'etf-holdings: filing located', { etf: etfName, accessionNo, cik, fileDate: hit._source?.file_date });
   return { accessionNo, primaryDoc, cik };
 }
 
@@ -133,7 +141,6 @@ async function resolveXmlDoc(cik, accessionNo, primaryDoc) {
   if (/\.xml$/i.test(primaryDoc)) return primaryDoc;
 
   const acc = accessionNo.replace(/-/g, '');
-  // Correct EDGAR directory-listing JSON endpoint is just ".../index.json"
   const indexUrl =
     `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/index.json`;
 
@@ -142,19 +149,13 @@ async function resolveXmlDoc(cik, accessionNo, primaryDoc) {
 
   if (!res.ok) {
     log('warn', 'etf-holdings: index fetch failed', { status: res.status });
-    // Last resort: NPORT-P data file is conventionally primary_doc.xml
     return 'primary_doc.xml';
   }
 
   const idx = await res.json();
   const items = idx.directory?.item ?? [];
-  log('debug', 'etf-holdings: filing index documents', {
-    docs: items.map((f) => `${f.name} (${f.type})`),
-  });
-
   const xmlNames = items.filter((f) => /\.xml$/i.test(f.name)).map((f) => f.name);
 
-  // Preference order: primary_doc.xml → any non-exhibit .xml → first .xml
   const primary = xmlNames.find((n) => /^primary_doc\.xml$/i.test(n));
   if (primary) return primary;
 
@@ -171,24 +172,20 @@ async function resolveXmlDoc(cik, accessionNo, primaryDoc) {
 
 // ─── Step 3: Fetch and parse the NPORT-P XML ────────────────────────────────
 
-async function parseHoldings(cik, accessionNo, xmlDoc) {
+async function parseHoldings(cik, accessionNo, xmlDoc, etfName) {
   const acc = accessionNo.replace(/-/g, '');
   const xmlUrl =
     `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${acc}/${xmlDoc}`;
 
-  log('info', 'etf-holdings: fetching XML', { xmlUrl });
+  log('info', 'etf-holdings: fetching XML', { etf: etfName, xmlUrl });
   const res = await fetch(xmlUrl, { headers: { ...SEC_HEADERS, Accept: 'text/xml, application/xml, */*' } });
   if (!res.ok) throw new Error(`XML fetch failed: ${res.status} for ${xmlUrl}`);
 
   const xml = await res.text();
-  log('info', 'etf-holdings: XML fetched', { bytes: xml.length });
-
-  // Log first 800 chars of XML so we can see namespace declarations and structure
-  log('debug', 'etf-holdings: XML preview', { preview: xml.slice(0, 800) });
+  log('info', 'etf-holdings: XML fetched', { etf: etfName, bytes: xml.length });
+  log('debug', 'etf-holdings: XML preview', { etf: etfName, preview: xml.slice(0, 800) });
 
   const holdings = [];
-
-  // Match individual holding blocks (namespace-aware)
   const holdingRe = /<(?:[a-zA-Z0-9_-]+:)?invstOrSec[\s>]([\s\S]*?)<\/(?:[a-zA-Z0-9_-]+:)?invstOrSec>/g;
   let m;
   let totalBlocks = 0;
@@ -197,42 +194,29 @@ async function parseHoldings(cik, accessionNo, xmlDoc) {
     totalBlocks++;
     const block = m[1];
 
-    // Filter to equity holdings only (assetCat = EC)
     const assetCat = xmlTag(block, 'assetCat');
     if (assetCat && assetCat !== 'EC') continue;
 
-    const pctValStr = xmlTag(block, 'pctVal') ?? '0';
-    const pctVal = parseFloat(pctValStr);
+    const pctVal = parseFloat(xmlTag(block, 'pctVal') ?? '0');
     if (isNaN(pctVal) || pctVal * 100 < MIN_WEIGHT_PCT) continue;
 
-    const name = xmlTag(block, 'name') ?? '';
-
-    // Ticker: may be attribute-style <ticker value="ENPH"/> or text <ticker>ENPH</ticker>
-    const ticker = xmlAttr(block, 'ticker') ?? xmlTag(block, 'ticker') ?? null;
-
-    // ISIN: may be attribute or text
-    const isin = xmlAttr(block, 'isin') ?? xmlTag(block, 'isin') ?? null;
-
+    const name       = xmlTag(block, 'name') ?? '';
+    const ticker     = xmlAttr(block, 'ticker') ?? xmlTag(block, 'ticker') ?? null;
+    const isin       = xmlAttr(block, 'isin')   ?? xmlTag(block, 'isin')   ?? null;
     const invCountry = xmlTag(block, 'invCountry') ?? 'US';
 
     if (!ALLOWED_COUNTRIES.has(invCountry)) {
-      log('debug', 'etf-holdings: skipping non-US/EU holding', { name, invCountry });
+      log('debug', 'etf-holdings: skipping non-US/EU holding', { etf: etfName, name, invCountry });
       continue;
     }
 
     holdings.push({ name, ticker, isin, invCountry, pctVal });
   }
 
-  log('info', 'etf-holdings: parsed holdings', {
-    totalBlocks,
-    equityAboveThreshold: holdings.length,
-  });
+  log('info', 'etf-holdings: parsed holdings', { etf: etfName, totalBlocks, equityAboveThreshold: holdings.length });
 
-  // If no blocks found at all, log a larger sample to diagnose XML structure
   if (totalBlocks === 0) {
-    log('warn', 'etf-holdings: no invstOrSec blocks found – XML structure sample', {
-      sample: xml.slice(0, 2000),
-    });
+    log('warn', 'etf-holdings: no invstOrSec blocks found', { etf: etfName, sample: xml.slice(0, 2000) });
   }
 
   return holdings;
@@ -264,16 +248,16 @@ async function resolveExchange(ticker, invCountry, knownExchange = null) {
   return 'NASDAQ';
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
+// ─── Per-ETF fetch ────────────────────────────────────────────────────────────
 
-export async function fetchCandidates() {
-  log('info', 'etf-holdings: starting EDGAR NPORT-P fetch');
+async function fetchForEtf(etf) {
+  log('info', 'etf-holdings: starting fetch', { etf: etf.name });
 
   let filing;
   try {
-    filing = await findLatestFiling();
+    filing = await findLatestFiling(etf.searchTerm, etf.name);
   } catch (err) {
-    log('error', 'etf-holdings: filing discovery failed', { error: err.message });
+    log('error', 'etf-holdings: filing discovery failed', { etf: etf.name, error: err.message });
     return [];
   }
 
@@ -283,7 +267,7 @@ export async function fetchCandidates() {
   try {
     xmlDoc = await resolveXmlDoc(filing.cik, filing.accessionNo, filing.primaryDoc);
   } catch (err) {
-    log('error', 'etf-holdings: XML doc resolution failed', { error: err.message });
+    log('error', 'etf-holdings: XML doc resolution failed', { etf: etf.name, error: err.message });
     return [];
   }
 
@@ -291,33 +275,29 @@ export async function fetchCandidates() {
 
   let holdings;
   try {
-    holdings = await parseHoldings(filing.cik, filing.accessionNo, xmlDoc);
+    holdings = await parseHoldings(filing.cik, filing.accessionNo, xmlDoc, etf.name);
   } catch (err) {
-    log('error', 'etf-holdings: XML parse failed', { error: err.message });
+    log('error', 'etf-holdings: XML parse failed', { etf: etf.name, error: err.message });
     return [];
   }
 
   if (holdings.length === 0) {
-    log('warn', 'etf-holdings: no equity holdings above threshold');
+    log('warn', 'etf-holdings: no equity holdings above threshold', { etf: etf.name });
     return [];
   }
 
   holdings.sort((a, b) => b.pctVal - a.pctVal);
 
-  // Resolve ISINs → tickers for any holding missing a ticker
-  const isinsNeedingResolution = holdings
-    .filter((h) => !h.ticker && h.isin)
-    .map((h) => h.isin);
-
+  const isinsNeedingResolution = holdings.filter((h) => !h.ticker && h.isin).map((h) => h.isin);
   let isinTickerMap = {};
   if (isinsNeedingResolution.length > 0) {
     log('info', 'etf-holdings: resolving ISINs to tickers via OpenFIGI', {
-      count: isinsNeedingResolution.length,
+      etf: etf.name, count: isinsNeedingResolution.length,
     });
     try {
       isinTickerMap = await resolveISINsToTickers(isinsNeedingResolution);
     } catch (err) {
-      log('warn', 'etf-holdings: ISIN resolution failed', { error: err.message });
+      log('warn', 'etf-holdings: ISIN resolution failed', { etf: etf.name, error: err.message });
     }
   }
 
@@ -329,7 +309,7 @@ export async function fetchCandidates() {
     const ticker = h.ticker ?? resolved?.ticker ?? null;
 
     if (!ticker) {
-      log('warn', 'etf-holdings: skipping – no ticker resolved', { name: h.name, isin: h.isin });
+      log('warn', 'etf-holdings: skipping – no ticker resolved', { etf: etf.name, name: h.name, isin: h.isin });
       continue;
     }
 
@@ -346,17 +326,17 @@ export async function fetchCandidates() {
       name: h.name,
       sources: [{
         adapter: 'etf-holdings',
-        source_url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ISHARES_CIK}&type=NPORT-P&count=5`,
+        source_url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${filing.cik}&type=NPORT-P&count=5`,
         discovered_at: now,
         signal_type: 'etf_addition',
         raw_signal: {
-          etf: ETF_NAME,
+          etf: etf.name,
           weight_pct: parseFloat((h.pctVal * 100).toFixed(3)),
           isin: h.isin,
           country: h.invCountry,
           filing_accession: filing.accessionNo,
         },
-        info_snippet: `${(h.pctVal * 100).toFixed(2)}% weight in ${ETF_NAME}`,
+        info_snippet: `${(h.pctVal * 100).toFixed(2)}% weight in ${etf.name}`,
       }],
       links: buildLinks({ exchange, symbol: ticker, yahooSymbol }),
       workspace_state: 'new',
@@ -366,9 +346,43 @@ export async function fetchCandidates() {
       last_updated_at: now,
     });
 
-    await sleep(30); // brief pause between exchange lookups
+    await sleep(30);
   }
 
-  log('info', 'etf-holdings: candidates ready', { count: candidates.length });
+  log('info', 'etf-holdings: candidates ready', { etf: etf.name, count: candidates.length });
   return candidates;
+}
+
+// ─── Main export ─────────────────────────────────────────────────────────────
+
+export async function fetchCandidates() {
+  const allCandidates = [];
+
+  for (const etf of ETF_LIST) {
+    const batch = await fetchForEtf(etf);
+    allCandidates.push(...batch);
+    // Brief pause between ETF fetches to be polite to EDGAR rate limits
+    if (etf !== ETF_LIST[ETF_LIST.length - 1]) await sleep(1000);
+  }
+
+  // Dedup by ticker: if both ETFs hold the same stock, merge sources into one
+  // candidate rather than submitting two entries (the backend dedups by
+  // symbol+exchange, but merging here keeps the source list clean).
+  const byTicker = new Map();
+  for (const c of allCandidates) {
+    const key = `${c.symbol}:${c.exchange}`;
+    if (byTicker.has(key)) {
+      byTicker.get(key).sources.push(...c.sources);
+    } else {
+      byTicker.set(key, c);
+    }
+  }
+
+  const merged = [...byTicker.values()];
+  log('info', 'etf-holdings: total after dedup', {
+    raw: allCandidates.length,
+    merged: merged.length,
+    deduped: allCandidates.length - merged.length,
+  });
+  return merged;
 }

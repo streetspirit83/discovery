@@ -2,7 +2,7 @@ name: Adapter – StockTwits Trending
 
 on:
   schedule:
-    - cron: '23 8,20 * * *'  # ~08:23 + 20:23 UTC daily (pre-market + after-hours)
+    - cron: '23 8,13,20 * * *'  # 3× daily: ~08:23 (pre-market), 13:23 (US open), 20:23 (after-hours) UTC
   workflow_dispatch:
 
 jobs:
