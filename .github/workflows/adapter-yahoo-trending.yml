@@ -2,7 +2,7 @@ name: Adapter – Yahoo Finance Trending
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'   # Weekdays 14:00 UTC – mid-session US + EU markets
+    - cron: '43 14 * * 1-5'  # Weekdays ~14:43 UTC – mid-session US + EU markets
   workflow_dispatch:
 
 jobs:
