@@ -153,6 +153,15 @@ svg { display:block; }
   display:inline-flex; align-items:center; gap:var(--s-1);
   background:var(--accent-weak); border-color:var(--accent); color:var(--accent);
 }
+.pill--select { display:inline-flex; align-items:center; gap:var(--s-1); cursor:pointer; }
+.pill__x {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:50%; line-height:1;
+  font-size:var(--fs-2); font-weight:var(--fw-bold);
+  background:var(--surface-2); color:var(--muted);
+}
+.pill--select.pill--active .pill__x { background:var(--accent); color:var(--surface-1); }
+.pill__x:hover { background:var(--neg); color:#fff; }
 
 /* ─ Content (sole scroll container) ─ */
 .content { overflow:auto; min-height:0; position:relative; background:var(--bg); }

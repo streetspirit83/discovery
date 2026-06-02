@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260602';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260602';
+import { CandidateList } from './components/candidate-list.js?v=20260602b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260602b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderExportModal } from './components/export-modal.js';
@@ -132,6 +132,7 @@ function renderFilterbar() {
   const sectors = candidateList ? candidateList.getSectors() : [];
 
   fb.innerHTML = `
+    <span id="pill-selected-wrap"></span>
     <div class="pill-group">
       ${states.map(({ key, label }) =>
         `<button class="pill${uiState.fState === key ? ' pill--active' : ''}" data-state="${key}">${label}</button>`
@@ -169,6 +170,35 @@ function renderFilterbar() {
     uiState.fCap = e.target.value;
     saveUiState();
     candidateList.setFilter('capSize', uiState.fCap);
+  });
+
+  renderSelectedPill();
+}
+
+/**
+ * "Nur ausgewählte" filter pill — auto-appears in the filterbar when the
+ * selection is non-empty. Body click toggles the filter; the × clears it.
+ */
+function renderSelectedPill() {
+  const wrap = document.getElementById('pill-selected-wrap');
+  if (!wrap || !candidateList) return;
+  const count = candidateList.selected.size;
+  if (count === 0) { wrap.innerHTML = ''; return; }
+
+  const active = candidateList.showSelectedOnly;
+  wrap.innerHTML =
+    `<button class="pill pill--select${active ? ' pill--active' : ''}" id="pill-selected" title="Nur ausgewählte anzeigen">
+      <span>✔️ (${count})</span>
+      <span class="pill__x" id="pill-selected-clear" role="button" aria-label="Auswahl leeren">×</span>
+    </button>`;
+
+  document.getElementById('pill-selected').addEventListener('click', (e) => {
+    if (e.target.closest('#pill-selected-clear')) {
+      candidateList.clearSelection(); // fires onSelectionChange → re-renders this pill
+      return;
+    }
+    candidateList.setShowSelectedOnly(!candidateList.showSelectedOnly);
+    renderSelectedPill();
   });
 }
 
@@ -568,6 +598,7 @@ async function init() {
     },
     onAction: handleAction,
     onBulkAction: handleBulkAction,
+    onSelectionChange: () => renderSelectedPill(),
   });
 
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
