@@ -13,13 +13,47 @@ import { fetchTVEnrichment } from './lib/tv-enrichment.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 
+// ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
+const luc = (d, s = 20) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+const L = {
+  refresh:  luc('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
+  upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+  sun:      luc('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
+  moon:     luc('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
+  download: luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+  settings: luc('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
+  home:     luc('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
+  inbox:    luc('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+  archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
+  checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
+};
+
+// ── UI state (persisted) ───────────────────────────────────────────────────────
+const UI_KEY = 'discovery.ui.v1';
+const uiState = (() => {
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '' };
+  try { return { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
+  catch { return { ...def }; }
+})();
+function saveUiState() {
+  try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch {}
+}
+
+// ── App globals ────────────────────────────────────────────────────────────────
 let useMock = !isConfigured();
-let currentBlobType = 'inbox';
+let currentBlobType = uiState.bucket ?? 'inbox';
 let allBlobs = { inbox: null, archive: null, export: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
 
+// Sheet open-state tracking (avoids querying class lists in conditionals)
+let detailSheetOpen = false;
+let bucketSheetOpen = false;
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'info', duration = 3000) {
   const el = document.createElement('div');
   el.className = `toast toast--${type}`;
@@ -28,18 +62,177 @@ function toast(msg, type = 'info', duration = 3000) {
   setTimeout(() => el.remove(), duration);
 }
 
+// ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
   if (!badge) return;
   if (useMock) {
-    badge.innerHTML = `${icons.sparkles} Mock-Modus`;
-    badge.className = 'header-badge mock';
+    badge.textContent = 'Mock';
+    badge.className = 'mode-badge mode-badge--mock';
   } else {
-    badge.innerHTML = `${icons.check} Backend verbunden`;
-    badge.className = 'header-badge';
+    badge.textContent = 'Live';
+    badge.className = 'mode-badge mode-badge--live';
   }
 }
 
+// ── Theme ──────────────────────────────────────────────────────────────────────
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', uiState.theme);
+  const btn = document.getElementById('btn-theme');
+  if (btn) btn.innerHTML = uiState.theme === 'dark' ? L.sun : L.moon;
+}
+
+function toggleTheme() {
+  uiState.theme = uiState.theme === 'dark' ? 'light' : 'dark';
+  saveUiState();
+  applyTheme();
+}
+
+// ── Shell rendering ────────────────────────────────────────────────────────────
+function renderTopbar() {
+  document.getElementById('btn-refresh').innerHTML  = L.refresh;
+  document.getElementById('btn-upload').innerHTML   = L.upload;
+  document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
+  document.getElementById('btn-export').innerHTML   = L.download;
+  document.getElementById('btn-settings').innerHTML = L.settings;
+}
+
+function renderSubbar() {
+  const tabs = [
+    { key: 'standard',     label: 'Standard' },
+    { key: 'technicals',   label: 'Technisch' },
+    { key: 'fundamentals', label: 'Fundamental' },
+  ];
+  const vs = document.getElementById('view-switch');
+  vs.innerHTML = tabs.map(({ key, label }) =>
+    `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
+  ).join('');
+  vs.querySelectorAll('.seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      uiState.view = btn.dataset.view;
+      saveUiState();
+      candidateList.setViewMode(uiState.view);
+      vs.querySelectorAll('.seg-btn').forEach((b) => {
+        b.classList.toggle('seg-btn--active', b.dataset.view === uiState.view);
+        b.setAttribute('aria-selected', String(b.dataset.view === uiState.view));
+      });
+    });
+  });
+}
+
+function renderFilterbar() {
+  const fb = document.getElementById('filterbar');
+  const states = [
+    { key: '', label: 'Alle' },
+    { key: 'new', label: 'Neu' },
+    { key: 'reviewed', label: 'Gesehen' },
+    { key: 'promoted', label: 'Promoted' },
+    { key: 'dismissed', label: 'Abgelehnt' },
+  ];
+  const sectors = candidateList ? candidateList.getSectors() : [];
+
+  fb.innerHTML = `
+    <div class="pill-group">
+      ${states.map(({ key, label }) =>
+        `<button class="pill${uiState.fState === key ? ' pill--active' : ''}" data-state="${key}">${label}</button>`
+      ).join('')}
+    </div>
+    <select class="filter-select" id="filter-sector">
+      <option value="">Alle Sektoren</option>
+      ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
+    </select>
+    <select class="filter-select" id="filter-cap">
+      <option value="">Alle Größen</option>
+      <option value="micro"${uiState.fCap === 'micro' ? ' selected' : ''}>Micro</option>
+      <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
+      <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
+      <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
+    </select>`;
+
+  fb.querySelectorAll('.pill[data-state]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      uiState.fState = btn.dataset.state;
+      saveUiState();
+      candidateList.setFilter('state', uiState.fState);
+      fb.querySelectorAll('.pill[data-state]').forEach((b) =>
+        b.classList.toggle('pill--active', b.dataset.state === uiState.fState));
+    });
+  });
+
+  fb.querySelector('#filter-sector').addEventListener('change', (e) => {
+    uiState.fSector = e.target.value;
+    saveUiState();
+    candidateList.setFilter('sector', uiState.fSector);
+  });
+
+  fb.querySelector('#filter-cap').addEventListener('change', (e) => {
+    uiState.fCap = e.target.value;
+    saveUiState();
+    candidateList.setFilter('capSize', uiState.fCap);
+  });
+}
+
+function renderBotnav() {
+  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq };
+  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export' };
+  document.getElementById('nav-home-icon').innerHTML   = L.home;
+  document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
+  document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
+}
+
+// ── Sheet management ───────────────────────────────────────────────────────────
+function updateScrim() {
+  document.getElementById('scrim').classList.toggle('is-open', detailSheetOpen || bucketSheetOpen);
+}
+
+function openDetailSheet() {
+  detailSheetOpen = true;
+  document.getElementById('detail-sheet').classList.add('is-open');
+  updateScrim();
+}
+
+function closeDetailSheet() {
+  detailSheetOpen = false;
+  document.getElementById('detail-sheet').classList.remove('is-open');
+  updateScrim();
+}
+
+function renderBucketSheet() {
+  const buckets = [
+    { key: 'inbox',   label: 'Inbox',  icon: L.inbox },
+    { key: 'archive', label: 'Archiv', icon: L.archive },
+    { key: 'export',  label: 'Export', icon: L.checkSq },
+  ];
+  const bs = document.getElementById('bucket-sheet');
+  bs.innerHTML = `
+    <h2 class="bucket-sheet__title">Bucket wählen</h2>
+    ${buckets.map(({ key, label, icon }) =>
+      `<button class="bucket-opt${currentBlobType === key ? ' bucket-opt--active' : ''}" data-bucket="${key}">
+        ${icon}<span>${label}</span>
+      </button>`
+    ).join('')}`;
+  bs.querySelectorAll('.bucket-opt[data-bucket]').forEach((btn) => {
+    btn.addEventListener('pointerup', async () => {
+      closeBucketSheet();
+      await switchBlob(btn.dataset.bucket);
+    });
+  });
+}
+
+function openBucketSheet() {
+  bucketSheetOpen = true;
+  renderBucketSheet();
+  document.getElementById('bucket-sheet').classList.add('is-open');
+  updateScrim();
+}
+
+function closeBucketSheet() {
+  bucketSheetOpen = false;
+  document.getElementById('bucket-sheet').classList.remove('is-open');
+  updateScrim();
+}
+
+// ── Data loading ───────────────────────────────────────────────────────────────
 async function loadBlob(blobType) {
   if (useMock) {
     const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT };
@@ -62,8 +255,12 @@ async function ensureBlob(blobType) {
 
 async function switchBlob(blobType) {
   currentBlobType = blobType;
+  uiState.bucket = blobType;
+  saveUiState();
   await ensureBlob(blobType);
   candidateList.setData(allBlobs[blobType].candidates);
+  renderBotnav();
+  renderFilterbar();
 }
 
 /** Insert a candidate clone into a target blob's in-memory copy (mock mode). */
@@ -352,39 +549,75 @@ async function init() {
   // Init storage client
   if (!useMock) {
     storageClient = loadStorageClient();
-    if (!storageClient) {
-      useMock = true;
-    }
+    if (!storageClient) useMock = true;
   }
 
-  updateMockBadge();
+  // Apply theme before anything renders
+  applyTheme();
+
+  // Render static shell parts
+  renderTopbar();
+  renderSubbar();
+  renderBotnav();
 
   // Init components
-  const listPanel = document.getElementById('list-panel');
-  const detailPanel = document.getElementById('detail-panel');
-
-  candidateList = new CandidateList(listPanel, {
-    onSelect: (candidate) => candidateDetail.show(candidate),
+  candidateList = new CandidateList({
+    onSelect: (candidate) => {
+      candidateDetail.show(candidate);
+      openDetailSheet();
+    },
     onAction: handleAction,
     onBulkAction: handleBulkAction,
   });
 
-  candidateDetail = new CandidateDetail(detailPanel, {
+  candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
     onAction: handleAction,
+    onClose: closeDetailSheet,
   });
 
-  // Load initial data
-  await switchBlob('inbox');
+  // Apply saved view mode before first data load
+  if (uiState.view !== 'standard') {
+    candidateList.setViewMode(uiState.view);
+  }
 
-  // Inject Lucide icons into header buttons
-  document.getElementById('btn-refresh').innerHTML = `${icons.refreshCw} Refresh`;
-  document.getElementById('btn-upload').innerHTML = `${icons.upload} Import`;
-  document.getElementById('btn-export').innerHTML = `${icons.download} Export`;
-  document.getElementById('btn-settings').innerHTML = `${icons.settings} Einstellungen`;
+  // Apply saved filters directly (before setData so first render uses them)
+  candidateList.filters = {
+    state:   uiState.fState  ?? '',
+    sector:  uiState.fSector ?? '',
+    capSize: uiState.fCap    ?? '',
+  };
+
+  // Load initial data (also calls renderBotnav + renderFilterbar)
+  await switchBlob(currentBlobType);
+
+  updateMockBadge();
+
+  // ── Scrim + ESC ──────────────────────────────────────────────────────────────
+  document.getElementById('scrim').addEventListener('pointerup', () => {
+    if (detailSheetOpen) { candidateDetail.hide(); return; }
+    if (bucketSheetOpen) { closeBucketSheet(); return; }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (detailSheetOpen) { candidateDetail.hide(); return; }
+    if (bucketSheetOpen) { closeBucketSheet(); return; }
+  });
+
+  // ── Topbar buttons ───────────────────────────────────────────────────────────
+  document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
+    allBlobs[currentBlobType] = null;
+    await switchBlob(currentBlobType);
+    toast('Aktualisiert', 'info', 1500);
+  });
+
+  document.getElementById('btn-upload').addEventListener('pointerup', () => {
+    renderUploadModal({ onImport: importCandidates });
+  });
+
+  document.getElementById('btn-theme').addEventListener('pointerup', toggleTheme);
 
   document.getElementById('btn-export').addEventListener('pointerup', handleExport);
 
-  // Header buttons
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
     renderSettingsModal(async () => {
       useMock = !isConfigured();
@@ -396,17 +629,14 @@ async function init() {
     });
   });
 
-  document.getElementById('btn-upload').addEventListener('pointerup', () => {
-    renderUploadModal({ onImport: importCandidates });
+  // ── Botnav ───────────────────────────────────────────────────────────────────
+  document.getElementById('nav-home').addEventListener('pointerup', () => {
+    document.getElementById('content').scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
-    allBlobs[currentBlobType] = null;
-    await switchBlob(currentBlobType);
-    toast('Aktualisiert', 'info', 1500);
-  });
+  document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
 
-  // Show settings on first run
+  // ── First run hint ───────────────────────────────────────────────────────────
   if (!isConfigured()) {
     toast('Willkommen! Läuft im Mock-Modus. Einstellungen für echtes Backend.', 'info', 5000);
   }

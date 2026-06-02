@@ -8,7 +8,8 @@ const STATE_LABELS = {
   new: 'Neu', reviewed: 'Gesehen', promoted: 'Promoted',
   dismissed: 'Abgelehnt', imported: 'Importiert',
 };
-const STATE_ORDER = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
+const STATE_LETTER = { new: 'N', reviewed: 'G', promoted: 'P', dismissed: 'A', imported: 'I' };
+const STATE_ORDER  = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
 
 const ADAPTER_COLORS = {
   openinsider:            '#e67e22',
@@ -43,7 +44,7 @@ const SORT_LABELS = {
 
 function fmtPct(v) {
   if (v == null) return '—';
-  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
 }
 function fmtNum(v, dec = 2) {
   if (v == null) return '—';
@@ -60,14 +61,14 @@ function fmtDate(ts) {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
-function posNeg(v) {
+function posNegClass(v) {
   if (v == null) return '';
-  return v > 0 ? ' tv-pos' : v < 0 ? ' tv-neg' : '';
+  return v > 0 ? ' pos' : v < 0 ? ' neg' : '';
 }
 function rsiClass(v) {
   if (v == null) return '';
-  if (v >= 70) return ' tv-neg';
-  if (v <= 30) return ' tv-pos';
+  if (v >= 70) return ' neg';
+  if (v <= 30) return ' pos';
   return '';
 }
 function capSizeFromMC(mc) {
@@ -85,7 +86,7 @@ function tvRatingClass(r) {
   if (r < -0.1)  return 'sell';
   return 'neutral';
 }
-function tvRatingLabel(r) {
+function tvRatingGlyph(r) {
   if (r == null) return '?';
   if (r > 0.5)   return '↑↑';
   if (r > 0.1)   return '↑';
@@ -122,23 +123,41 @@ function sortValue(c, col) {
     case 'discovered':return new Date(c.first_discovered_at).getTime();
     case 'state':     return STATE_ORDER.indexOf(c.workspace_state);
     case 'sources':   return c.sources.length;
-    case 'tv_close':  return tv?.close ?? -Infinity;
-    case 'tv_chg1d':  return tv?.change_1d ?? -Infinity;
     case 'tv_chg1w':  return tv?.change_1w ?? -Infinity;
     case 'tv_chg1m':  return tv?.change_1m ?? -Infinity;
-    case 'tv_vol':    return tv?.volatility ?? -Infinity;
+    case 'tv_h1m':    return tv?.high_1m ?? -Infinity;
+    case 'tv_l1m':    return tv?.low_1m ?? -Infinity;
+    case 'tv_h52hi':  return tv?.price_52_week_high ?? -Infinity;
+    case 'tv_h52lo':  return tv?.price_52_week_low ?? -Infinity;
+    case 'tv_hall':   return tv?.high_all ?? -Infinity;
+    case 'tv_lall':   return tv?.low_all ?? -Infinity;
+    case 'tv_perfall':return tv?.perf_all ?? -Infinity;
+    case 'tv_aroondn120': return tv?.aroon_down_120 ?? -Infinity;
+    case 'tv_aroondn1m':  return tv?.aroon_down_1m ?? -Infinity;
+    case 'tv_aroonup120': return tv?.aroon_up_120 ?? -Infinity;
+    case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? -Infinity;
+    case 'tv_macdsig': return tv?.macd_signal ?? -Infinity;
     case 'tv_rsi':    return tv?.rsi ?? -Infinity;
     case 'tv_ema20':  return tv?.ema20 ?? -Infinity;
     case 'tv_ema50':  return tv?.ema50 ?? -Infinity;
     case 'tv_ema200': return tv?.ema200 ?? -Infinity;
     case 'tv_macd':   return tv?.macd ?? -Infinity;
     case 'tv_adx':    return tv?.adx ?? -Infinity;
-    case 'tv_h52':    return tv?.high_52w ?? -Infinity;
-    case 'tv_rating': return tv?.rating ?? -Infinity;
-    case 'tv_mcap':   return tv?.market_cap ?? -Infinity;
+    case 'tv_cci':    return tv?.cci20_1m ?? -Infinity;
+    case 'tv_donchlo':return tv?.donch_ch20_lower_1m ?? -Infinity;
+    case 'tv_donchhi':return tv?.donch_ch20_upper_1m ?? -Infinity;
     case 'tv_pe':     return tv?.pe_ttm ?? -Infinity;
     case 'tv_div':    return tv?.dividend_yield ?? -Infinity;
+    case 'tv_eps':    return tv?.basic_eps_net_income ?? -Infinity;
+    case 'tv_earnings':    return tv?.earnings_next_date ?? -Infinity;
+    case 'tv_ebitdagrowth':return tv?.ebitda_yoy_growth_fy ?? -Infinity;
+    case 'tv_ebitda': return tv?.ebitda ?? -Infinity;
+    case 'tv_grossmargin': return tv?.gross_margin ?? -Infinity;
+    case 'tv_grossgrowth': return tv?.gross_profit_yoy_growth_fy ?? -Infinity;
+    case 'tv_mom1m':  return tv?.mom_1m ?? -Infinity;
+    case 'tv_vol':    return tv?.volatility ?? -Infinity;
     case 'tv_beta':   return tv?.beta ?? -Infinity;
+    case 'tv_beta3y': return tv?.beta_3_year ?? -Infinity;
     case 'tv_vol10d': return tv?.avg_vol_10d ?? -Infinity;
     // Technicals
     case 'tv_h1m':    return tv?.high_1m ?? -Infinity;
@@ -221,26 +240,80 @@ function showLinkEditPopover(candidate, anchorEl, onSave) {
   }, 0);
 }
 
+// ── Column definitions ───────────────────────────────────────────────────────
+
+const VIEWS = {
+  technicals: [
+    { key:'tv_chg1w',   label:'Δ1W',    title:'Veränderung 1 Woche',              num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1w)}">${fmtPct(c.tv_data?.change_1w)}</span>` },
+    { key:'tv_chg1m',   label:'Δ1M',    title:'Veränderung 1 Monat',              num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1m)}">${fmtPct(c.tv_data?.change_1m)}</span>` },
+    { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.high_1m) },
+    { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_1m) },
+    { key:'tv_h52hi',   label:'52W↑',   title:'52-Wochen-Hoch',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_high) },
+    { key:'tv_h52lo',   label:'52W↓',   title:'52-Wochen-Tief',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_low) },
+    { key:'tv_hall',    label:'ATH',    title:'All-Time-High',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_all) },
+    { key:'tv_lall',    label:'ATL',    title:'All-Time-Low',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_all) },
+    { key:'tv_perfall', label:'%ATH',   title:'Performance seit Beginn',          num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_all)}">${c.tv_data?.perf_all!=null?fmtNum(c.tv_data.perf_all,1)+'%':'—'}</span>` },
+    { key:'tv_aroondn120',label:'Ar↓120',title:'Aroon Down 120',                  num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_120,1) },
+    { key:'tv_aroondn1m', label:'Ar↓1M', title:'Aroon Down 1 Monat',              num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_1m,1) },
+    { key:'tv_aroonup120',label:'Ar↑120',title:'Aroon Up 120',                    num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_120,1) },
+    { key:'tv_aroonup1m', label:'Ar↑1M', title:'Aroon Up 1 Monat',               num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_1m,1) },
+    { key:'tv_macdsig', label:'MACD·S', title:'MACD Signal',                      num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd_signal)}">${fmtNum(c.tv_data?.macd_signal,3)}</span>` },
+    { key:'tv_rsi',     label:'RSI',    title:'Relative Strength Index',          num:true, fmt:c=>`<span class="${rsiClass(c.tv_data?.rsi)}">${fmtNum(c.tv_data?.rsi,1)}</span>` },
+    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema20) },
+    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema50) },
+    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtNum(c.tv_data?.ema200) },
+    { key:'tv_macd',    label:'MACD',   title:'MACD',                             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd)}">${fmtNum(c.tv_data?.macd,3)}</span>` },
+    { key:'tv_adx',     label:'ADX',    title:'Average Directional Index',        num:true, fmt:c=>fmtNum(c.tv_data?.adx,1) },
+    { key:'tv_cci',     label:'CCI',    title:'Commodity Channel Index 20 (1M)',  num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.cci20_1m)}">${fmtNum(c.tv_data?.cci20_1m,1)}</span>` },
+    { key:'tv_donchlo', label:'DC↓',    title:'Donchian Channel 20 Lower (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
+    { key:'tv_donchhi', label:'DC↑',    title:'Donchian Channel 20 Upper (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
+  ],
+  fundamentals: [
+    { key:'tv_pe',          label:'KGV',    title:'Kurs-Gewinn-Verhältnis (TTM)',  num:true,  fmt:c=>fmtNum(c.tv_data?.pe_ttm,1) },
+    { key:'tv_div',         label:'Div%',   title:'Dividendenrendite',             num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.dividend_yield)}">${c.tv_data?.dividend_yield!=null?fmtNum(c.tv_data.dividend_yield,2)+'%':'—'}</span>` },
+    { key:'tv_eps',         label:'EPS',    title:'Gewinn je Aktie',               num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.basic_eps_net_income)}">${fmtNum(c.tv_data?.basic_eps_net_income,2)}</span>` },
+    { key:'tv_earnings',    label:'Earnings',title:'Nächster Earnings-Termin',    num:false, fmt:c=>c.tv_data?.earnings_next_date?fmtDate(c.tv_data.earnings_next_date):'—' },
+    { key:'tv_ebitdagrowth',label:'EBITDA%',title:'EBITDA YoY Wachstum',          num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.ebitda_yoy_growth_fy)}">${c.tv_data?.ebitda_yoy_growth_fy!=null?fmtNum(c.tv_data.ebitda_yoy_growth_fy,1)+'%':'—'}</span>` },
+    { key:'tv_ebitda',      label:'EBITDA', title:'EBITDA',                        num:true,  fmt:c=>fmtMCap(c.tv_data?.ebitda) },
+    { key:'tv_grossmargin', label:'GM%',    title:'Bruttomarge',                   num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_margin)}">${c.tv_data?.gross_margin!=null?fmtNum(c.tv_data.gross_margin,1)+'%':'—'}</span>` },
+    { key:'tv_grossgrowth', label:'Gross%', title:'Bruttogewinn YoY Wachstum',    num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_profit_yoy_growth_fy)}">${c.tv_data?.gross_profit_yoy_growth_fy!=null?fmtNum(c.tv_data.gross_profit_yoy_growth_fy,1)+'%':'—'}</span>` },
+    { key:'tv_mom1m',       label:'Mom',    title:'Momentum 1 Monat',              num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.mom_1m)}">${fmtNum(c.tv_data?.mom_1m,2)}</span>` },
+    { key:'tv_vol',         label:'Vola',   title:'Volatilität',                   num:true,  fmt:c=>fmtNum(c.tv_data?.volatility,1) },
+    { key:'tv_beta',        label:'Beta',   title:'Beta (1 Jahr)',                 num:true,  fmt:c=>fmtNum(c.tv_data?.beta,2) },
+    { key:'tv_beta3y',      label:'β3Y',    title:'Beta (3 Jahre)',                num:true,  fmt:c=>fmtNum(c.tv_data?.beta_3_year,2) },
+    { key:'tv_vol10d',      label:'V10d',   title:'Ø Volumen 10 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
+    { key:'tv_vol30d',      label:'V30d',   title:'Ø Volumen 30 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
+    { key:'tv_rating1m',    label:'Rat1M',  title:'Empfehlung 1 Monat',           num:true,  fmt:c=>`<span class="tv-rating-txt--${tvRatingClass(c.tv_data?.recommend_all_1m)}">${fmtNum(c.tv_data?.recommend_all_1m,2)}</span>` },
+  ],
+};
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export class CandidateList {
-  constructor(container, { onSelect, onAction, onBulkAction }) {
-    this.container = container;
-    this.onSelect = onSelect;
-    this.onAction = onAction;
+  constructor({ onSelect, onAction, onBulkAction }) {
+    this.onSelect     = onSelect;
+    this.onAction     = onAction;
     this.onBulkAction = onBulkAction;
-    this.candidates = [];
-    this.filters = { blobType: 'inbox', state: '', adapters: [], region: '', dateRange: 'all', sector: '', capSize: '' };
-    this.sort = { column: 'discovered', direction: 'desc' };
-    this.selected = new Set();
-    this.viewMode = 'standard';
-    this.render();
+    this.candidates   = [];
+    this.filters      = { state: '', sector: '', capSize: '' };
+    this.sort         = { column: 'discovered', direction: 'desc' };
+    this.selected     = new Set();
+    this.viewMode     = 'standard';
+
+    this.thead     = document.getElementById('candidate-thead');
+    this.tbody     = document.getElementById('candidate-tbody');
+    this.emptyState = document.getElementById('empty-state');
+    this.bulkBar   = document.getElementById('bulk-bar');
+    this.bulkCount = document.getElementById('bulk-count');
+
+    this.renderBulkActions();
+    this.renderThead();
+    this.bindSelectAll();
   }
 
   setData(candidates) {
     this.candidates = candidates;
     this.selected.clear();
-    this.updateSectorFilter();
     this.renderRows();
     this.renderBulkBar();
   }
@@ -253,58 +326,50 @@ export class CandidateList {
   }
 
   setSort(column) {
+    const textCols = new Set(['symbol', 'name']);
     if (this.sort.column === column) {
       this.sort.direction = this.sort.direction === 'asc' ? 'desc' : 'asc';
     } else {
-      this.sort.column = column;
-      this.sort.direction = column === 'discovered' ? 'desc' : 'asc';
+      this.sort.column    = column;
+      this.sort.direction = textCols.has(column) ? 'asc' : 'desc';
     }
     this.renderRows();
   }
 
   setViewMode(mode) {
-    this.viewMode = mode;
-    this.sort = { column: mode === 'standard' ? 'discovered' : 'tv_mcap', direction: 'desc' };
+    this.viewMode   = mode;
+    this.sort.column = mode === 'standard' ? 'discovered' : 'tv_mcap';
+    this.sort.direction = 'desc';
     this.renderThead();
     this.renderRows();
   }
 
-  sortIcon(column) {
-    if (this.sort.column !== column) return `<span class="sort-icon">${icons.arrowUpDown}</span>`;
-    return `<span class="sort-icon sort-icon--active">${this.sort.direction === 'asc' ? icons.arrowUp : icons.arrowDown}</span>`;
+  // Returns ▲/▼ glyph only for the active sort column, nothing for others.
+  sortGlyph(col) {
+    if (this.sort.column !== col) return '';
+    return `<span class="sort-glyph" aria-hidden="true">${this.sort.direction === 'asc' ? '▲' : '▼'}</span>`;
   }
 
-  thSortable(col, label) {
-    const lbl = label ?? SORT_LABELS[col] ?? col;
-    return `<span class="th-sort" data-sort="${col}">${lbl} ${this.sortIcon(col)}</span>`;
+  ariaSort(col) {
+    if (this.sort.column !== col) return 'none';
+    return this.sort.direction === 'asc' ? 'ascending' : 'descending';
+  }
+
+  th(col, label, extra = '') {
+    return `<th ${extra} aria-sort="${this.ariaSort(col)}">
+      <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
+  }
+  thNum(col, label, title = '') {
+    return `<th class="num" ${title ? `title="${title}"` : ''} aria-sort="${this.ariaSort(col)}">
+      <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
   }
 
   getFiltered() {
-    const { state, adapters, region, dateRange, sector, capSize } = this.filters;
-    const now = Date.now();
+    const { state, sector, capSize } = this.filters;
     return this.candidates.filter((c) => {
-      if (state && c.workspace_state !== state) return false;
-      if (adapters.length > 0) {
-        if (!adapters.some((a) => c.sources.map((s) => s.adapter).includes(a))) return false;
-      }
-      if (region) {
-        const exch = c.exchange ?? '';
-        const isUS = ['NASDAQ', 'NYSE', 'AMEX'].includes(exch);
-        const isDE = exch === 'XETR';
-        const isEU = ['EURONEXT', 'LSE', 'MIL', 'BME', 'SIX', 'VIE', 'OMXSTO', 'OMXCOP', 'OMXHEX', 'OSE'].includes(exch);
-        if (region === 'US' && !isUS) return false;
-        if (region === 'DE' && !isDE) return false;
-        if (region === 'EU' && !isEU) return false;
-        if (region === 'other' && (isUS || isDE || isEU)) return false;
-      }
-      if (dateRange !== 'all') {
-        const ms = { '24h': 86400000, '7d': 604800000, '30d': 2592000000 }[dateRange];
-        if (ms && now - new Date(c.first_discovered_at).getTime() > ms) return false;
-      }
-      if (sector && c.sector !== sector) return false;
-      if (capSize) {
-        if (capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
-      }
+      if (state   && c.workspace_state !== state)               return false;
+      if (sector  && c.sector !== sector)                       return false;
+      if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
       return true;
     });
   }
@@ -313,120 +378,18 @@ export class CandidateList {
     const { column, direction } = this.sort;
     if (!column) return [...candidates];
     return [...candidates].sort((a, b) => {
-      const va = sortValue(a, column);
-      const vb = sortValue(b, column);
+      const va = sortValue(a, column), vb = sortValue(b, column);
       if (va < vb) return direction === 'asc' ? -1 : 1;
       if (va > vb) return direction === 'asc' ? 1 : -1;
       return 0;
     });
   }
 
-  updateSectorFilter() {
-    const sel = this.container.querySelector('#filter-sector');
-    if (!sel) return;
-    const sectors = [...new Set(this.candidates.filter((c) => c.sector).map((c) => c.sector))].sort();
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">Alle Sektoren</option>` +
-      sectors.map((s) => `<option value="${s}" ${s === cur ? 'selected' : ''}>${s}</option>`).join('');
+  getSectors() {
+    return [...new Set(this.candidates.filter((c) => c.sector).map((c) => c.sector))].sort();
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  render() {
-    this.container.innerHTML = `
-      <div class="filter-bar">
-        <div class="filter-group">
-          <label>Ansicht</label>
-          <div class="blob-switch">
-            <button class="blob-btn active" data-blob="inbox">Inbox</button>
-            <button class="blob-btn" data-blob="archive">Archiv</button>
-            <button class="blob-btn" data-blob="export">Export</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <label>Spalten</label>
-          <div class="view-switch">
-            <button class="view-btn active" data-view="standard">Standard</button>
-            <button class="view-btn" data-view="technicals">Technicals</button>
-            <button class="view-btn" data-view="fundamentals">Fundamentals</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <label>Status</label>
-          <select id="filter-state">
-            <option value="">Alle</option>
-            <option value="new">Neu</option>
-            <option value="reviewed">Gesehen</option>
-            <option value="promoted">Promoted</option>
-            <option value="dismissed">Abgelehnt</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Region</label>
-          <select id="filter-region">
-            <option value="">Alle</option>
-            <option value="US">US</option>
-            <option value="DE">DE (Xetra)</option>
-            <option value="EU">EU</option>
-            <option value="other">Andere</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Sektor</label>
-          <select id="filter-sector"><option value="">Alle Sektoren</option></select>
-        </div>
-        <div class="filter-group">
-          <label>Marktkapitalisierung</label>
-          <select id="filter-capsize">
-            <option value="">Alle</option>
-            <option value="micro">Micro (&lt;300M)</option>
-            <option value="small">Small (300M–2B)</option>
-            <option value="mid">Mid (2–50B)</option>
-            <option value="large">Large (&gt;50B)</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Zeitraum</label>
-          <select id="filter-date">
-            <option value="all">Alle</option>
-            <option value="24h">24h</option>
-            <option value="7d">7 Tage</option>
-            <option value="30d">30 Tage</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="bulk-bar" id="bulk-bar" style="display:none">
-        <span id="bulk-count">0 ausgewählt</span>
-        <button class="btn btn-sm btn-danger" id="bulk-dismiss">${icons.xMark} Ablehnen</button>
-        <button class="btn btn-sm btn-success" id="bulk-promote">${icons.check} Promoten</button>
-        <button class="btn btn-sm btn-ai" id="bulk-enrich">${icons.sparkles} Enrich</button>
-        <button class="btn btn-sm btn-tv" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
-        <button class="btn btn-sm btn-danger" id="bulk-delete">${icons.trash} Löschen</button>
-        <button class="btn btn-sm" id="bulk-clear">Auswahl leeren</button>
-      </div>
-
-      <div class="table-wrapper">
-        <table class="candidate-table">
-          <thead id="candidate-thead"></thead>
-          <tbody id="candidate-tbody"></tbody>
-        </table>
-        <div id="empty-state" class="empty-state" style="display:none">
-          <p>Keine Kandidaten gefunden.</p>
-        </div>
-      </div>
-    `;
-
-    this.tbody = this.container.querySelector('#candidate-tbody');
-    this.thead = this.container.querySelector('#candidate-thead');
-    this.emptyState = this.container.querySelector('#empty-state');
-    this.bulkBar = this.container.querySelector('#bulk-bar');
-    this.bulkCount = this.container.querySelector('#bulk-count');
-
-    this.renderThead();
-    this.bindFilters();
-    this.bindBulkActions();
-  }
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   renderThead() {
     const stateTh = `
@@ -499,113 +462,51 @@ export class CandidateList {
         <th class="col-actions">Aktion</th>
       </tr>`;
     } else {
-      this.thead.innerHTML = `<tr>
-        <th class="col-check"><input type="checkbox" id="select-all"></th>
-        ${stateTh}
-        <th class="col-symbol">${this.thSortable('symbol')}</th>
-        <th class="col-name">${this.thSortable('name')}</th>
-        <th class="col-links">Links</th>
-        <th class="col-signal">Letztes Signal</th>
-        <th class="col-time">${this.thSortable('discovered')}</th>
-        <th class="col-actions">Aktion</th>
-        <th class="col-sources">${this.thSortable('sources')}</th>
-      </tr>`;
+      cols += VIEWS[this.viewMode].map((d) =>
+        `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
+          <button class="sort-btn" data-sort="${d.key}">${d.label} ${this.sortGlyph(d.key)}</button></th>`
+      ).join('');
+      cols += `<th class="num">Aktion</th>`;
     }
 
-    // Bind sort headers
-    this.thead.querySelectorAll('.th-sort[data-sort]').forEach((el) => {
-      el.addEventListener('pointerup', (e) => { e.stopPropagation(); this.setSort(el.dataset.sort); });
+    this.thead.innerHTML = `<tr>${cols}</tr>`;
+    this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); this.setSort(btn.dataset.sort); });
     });
-  }
-
-  updateSortIcons() {
-    this.thead.querySelectorAll('.th-sort[data-sort]').forEach((el) => {
-      const col = el.dataset.sort;
-      const lbl = SORT_LABELS[col] ?? col;
-      el.innerHTML = `${lbl} ${this.sortIcon(col)}`;
-    });
-  }
-
-  bindFilters() {
-    this.container.querySelectorAll('.blob-btn').forEach((btn) => {
-      btn.addEventListener('pointerup', () => {
-        this.container.querySelectorAll('.blob-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.filters.blobType = btn.dataset.blob;
-        this.onAction?.('blobSwitch', btn.dataset.blob);
-      });
-    });
-
-    this.container.querySelectorAll('.view-btn').forEach((btn) => {
-      btn.addEventListener('pointerup', () => {
-        this.container.querySelectorAll('.view-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.setViewMode(btn.dataset.view);
-      });
-    });
-
-    this.container.querySelector('#filter-state').addEventListener('change', (e) => this.setFilter('state', e.target.value));
-    this.container.querySelector('#filter-region').addEventListener('change', (e) => this.setFilter('region', e.target.value));
-    this.container.querySelector('#filter-sector').addEventListener('change', (e) => this.setFilter('sector', e.target.value));
-    this.container.querySelector('#filter-capsize').addEventListener('change', (e) => this.setFilter('capSize', e.target.value));
-    this.container.querySelector('#filter-date').addEventListener('change', (e) => this.setFilter('dateRange', e.target.value));
-
-    // select-all via delegation (survives thead re-renders)
-    this.container.addEventListener('change', (e) => {
-      if (e.target.id === 'select-all') {
-        const rows = this.getSorted(this.getFiltered());
-        if (e.target.checked) rows.forEach((c) => this.selected.add(c.id));
-        else this.selected.clear();
-        this.renderRows();
-        this.renderBulkBar();
-      }
-    });
-  }
-
-  bindBulkActions() {
-    this.container.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
-    this.container.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
-    this.container.querySelector('#bulk-enrich').addEventListener('pointerup', () => this.onBulkAction?.('enrich', [...this.selected]));
-    this.container.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
-    this.container.querySelector('#bulk-delete').addEventListener('pointerup', () => this.onBulkAction?.('delete', [...this.selected]));
-    this.container.querySelector('#bulk-clear').addEventListener('pointerup', () => { this.selected.clear(); this.renderRows(); this.renderBulkBar(); });
+    this.bindSelectAll();
   }
 
   renderRows() {
     const rows = this.getSorted(this.getFiltered());
     this.tbody.innerHTML = '';
-    this.updateSortIcons();
 
-    if (rows.length === 0) { this.emptyState.style.display = 'block'; return; }
+    if (rows.length === 0) {
+      this.emptyState.style.display = 'block';
+      this.emptyState.className = 'empty-state';
+      this.emptyState.innerHTML = '<p>Keine Kandidaten gefunden.</p>';
+      this.renderBulkBar();
+      return;
+    }
     this.emptyState.style.display = 'none';
 
     for (const c of rows) {
-      const tr = document.createElement('tr');
-      tr.className = `candidate-row state-${c.workspace_state}`;
-      tr.dataset.id = c.id;
-      if (this.selected.has(c.id)) tr.classList.add('selected');
-
-      const tv = c.tv_data;
+      const tv    = c.tv_data;
       const links = c.links ?? {};
       const canPromote = !['promoted', 'imported'].includes(c.workspace_state);
       const canDismiss = c.workspace_state !== 'dismissed';
+      const isSelected = this.selected.has(c.id);
 
-      const symbolTd = `
-        <td class="col-symbol">
-          <div class="symbol-cell">
-            <strong>${c.symbol}</strong>
-            <span class="exchange-tag">${c.exchange}</span>
-            ${c.enrichment ? `<span class="enrich-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
-            ${tv ? `<span class="tv-rating-badge tv-rating-badge--${tvRatingClass(tv.rating)}" title="TV Rating: ${tv.rating?.toFixed(2) ?? '?'}">${tvRatingLabel(tv.rating)}</span>` : ''}
-          </div>
-        </td>`;
+      const symHtml = `<div class="sym-cell">
+        <span class="sym-strong">${c.symbol}</span>
+        <span class="exch-tag">${c.exchange}</span>
+        ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
+        ${tv ? `<span class="rating-badge rating-badge--${tvRatingClass(tv.rating)}" title="TV Rating ${tv.rating?.toFixed(2) ?? '?'}">${tvRatingGlyph(tv.rating)}</span>` : ''}
+      </div>`;
 
-      const actionTd = `
-        <td class="col-actions">
-          ${canPromote ? `<button class="btn-icon btn-icon--promote" data-action="promote" title="Promoten">${icons.check}</button>` : ''}
-          ${canDismiss ? `<button class="btn-icon btn-icon--dismiss" data-action="dismiss" title="Ablehnen">${icons.xMark}</button>` : ''}
-          ${this.filters.blobType === 'archive' ? `<button class="btn-icon btn-icon--delete" data-action="delete" title="Löschen">${icons.trash}</button>` : ''}
-        </td>`;
+      const actionTd = `<td class="num"><div class="row-actions">
+        ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
+        ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
+      </div></td>`;
 
       let dataCols;
       if (this.viewMode === 'technicals') {
@@ -653,41 +554,45 @@ export class CandidateList {
           <td class="tv-col tv-num tv-rating-txt--${tvRatingClass(tv?.recommend_all_1m)}">${fmtNum(tv?.recommend_all_1m, 2)}</td>
           ${actionTd}`;
       } else {
-        dataCols = `
-          <td class="col-name">${c.name}</td>
-          <td class="col-links">
-            <div class="link-cluster">
-              ${links.tradingview
-                ? `<a href="${links.tradingview}" class="link-chip link-chip--tv" target="_blank" rel="noopener" title="TradingView"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></a>`
-                : `<span class="link-chip link-chip--missing"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></span>`}
-              ${links.stocktwits
-                ? `<a href="${links.stocktwits}" class="link-chip link-chip--st" target="_blank" rel="noopener" title="StockTwits"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></a>`
-                : `<span class="link-chip link-chip--missing"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></span>`}
-              ${links.yahoo
-                ? `<a href="${links.yahoo}" class="link-chip link-chip--yahoo" target="_blank" rel="noopener" title="Yahoo Finance"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></a>`
-                : `<span class="link-chip link-chip--missing"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></span>`}
-              <button class="link-chip link-chip--edit" data-action="editLinks" title="Links bearbeiten">${icons.pencil}</button>
-            </div>
-          </td>
-          <td class="col-signal"><span class="signal-text">${getLatestSignal(c)}</span></td>
-          <td class="col-time"><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>
-          ${actionTd}
-          <td class="col-sources">${renderSourceBadges(c.sources)}</td>`;
+        dataCols = VIEWS[this.viewMode].map((d) =>
+          `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
+        ).join('') + actionTd;
       }
 
+      const tr = document.createElement('tr');
+      tr.className = `candidate-row state-${c.workspace_state}${isSelected ? ' is-selected' : ''}`;
+      tr.dataset.id = c.id;
+      tr.setAttribute('tabindex', '0');
+      tr.setAttribute('role', 'button');
+      tr.setAttribute('aria-label', `${c.symbol} ${c.name}, ${STATE_LABELS[c.workspace_state] ?? ''}`);
       tr.innerHTML = `
-        <td class="col-check"><input type="checkbox" class="row-check" ${this.selected.has(c.id) ? 'checked' : ''}></td>
-        <td class="col-state"><span class="state-dot state-dot--${c.workspace_state}" title="${STATE_LABELS[c.workspace_state] ?? c.workspace_state}"></span></td>
-        ${symbolTd}
+        <td class="col-check"><input type="checkbox" class="row-check" ${isSelected ? 'checked' : ''} aria-label="${c.symbol} auswählen"></td>
+        <td class="col-state"><span class="state-cell" aria-label="${STATE_LABELS[c.workspace_state] ?? ''}">
+          <span class="state-dot state-dot--${c.workspace_state}"></span>
+          <span class="state-letter">${STATE_LETTER[c.workspace_state] ?? '?'}</span>
+        </span></td>
+        <td class="col-anchor">${symHtml}</td>
         ${dataCols}`;
 
+      // Row click → open detail
+      tr.addEventListener('pointerup', (e) => {
+        if (['INPUT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
+        this.onSelect?.(c);
+      });
+      tr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onSelect?.(c); }
+      });
+
+      // Checkbox
       tr.querySelector('.row-check').addEventListener('change', (e) => {
         if (e.target.checked) this.selected.add(c.id);
         else this.selected.delete(c.id);
-        tr.classList.toggle('selected', e.target.checked);
+        tr.classList.toggle('is-selected', e.target.checked);
         this.renderBulkBar();
+        this.syncSelectAll();
       });
 
+      // Link edit
       tr.querySelector('[data-action="editLinks"]')?.addEventListener('pointerup', (e) => {
         e.stopPropagation();
         showLinkEditPopover(c, e.currentTarget, (newLinks) => {
@@ -697,23 +602,69 @@ export class CandidateList {
         });
       });
 
+      // Promote / Dismiss
       tr.querySelector('[data-action="promote"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('promote', c); });
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
-      tr.querySelector('[data-action="delete"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('delete', c); });
-
-      tr.addEventListener('pointerup', (e) => {
-        if (['INPUT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
-        this.onSelect?.(c);
-      });
 
       this.tbody.appendChild(tr);
     }
+
+    this.syncSelectAll();
+    this.renderBulkBar();
   }
 
   renderBulkBar() {
     const count = this.selected.size;
-    if (count === 0) { this.bulkBar.style.display = 'none'; return; }
-    this.bulkBar.style.display = 'flex';
     this.bulkCount.textContent = `${count} ausgewählt`;
+    this.bulkBar.classList.toggle('is-open', count > 0);
   }
+
+  renderBulkActions() {
+    const ba = document.getElementById('bulk-actions');
+    if (!ba) return;
+    ba.innerHTML = `
+      <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
+      <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
+      <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
+      <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
+      <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
+      <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
+    ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
+    ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
+    ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
+    ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
+    ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
+    ba.querySelector('#bulk-clear').addEventListener('pointerup',   () => { this.selected.clear(); this.renderRows(); this.renderBulkBar(); });
+  }
+
+  bindSelectAll() {
+    const sa = document.getElementById('select-all');
+    if (!sa) return;
+    sa.addEventListener('change', (e) => {
+      const rows = this.getSorted(this.getFiltered());
+      if (e.target.checked) rows.forEach((c) => this.selected.add(c.id));
+      else this.selected.clear();
+      this.renderRows();
+      this.renderBulkBar();
+    });
+  }
+
+  syncSelectAll() {
+    const sa = document.getElementById('select-all');
+    if (!sa) return;
+    const rows = this.getSorted(this.getFiltered());
+    const sel  = rows.filter((c) => this.selected.has(c.id)).length;
+    sa.checked       = rows.length > 0 && sel === rows.length;
+    sa.indeterminate = sel > 0 && sel < rows.length;
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function chipLink(href, logo, label, extraClass = '') {
+  if (href) {
+    return `<a href="${href}" class="link-chip ${extraClass}" target="_blank" rel="noopener" title="${label}" aria-label="${label}">
+      <img src="${logo}" alt=""></a>`;
+  }
+  return `<span class="link-chip link-chip--missing ${extraClass}" aria-hidden="true"><img src="${logo}" alt=""></span>`;
 }
