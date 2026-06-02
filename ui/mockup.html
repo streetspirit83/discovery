@@ -1,1070 +1,1126 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discovery – UI Mockup</title>
 <style>
-/* ── Discovery Workspace – Styles (verbatim from styles.css) ── */
-:root {
-  --bg: #f8fafc;
-  --bg2: #f1f5f9;
-  --bg3: #e2e8f0;
-  --border: #cbd5e1;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --accent: #2563eb;
-  --accent2: #3b82f6;
-  --success: #16a34a;
-  --danger: #dc2626;
-  --warning: #d97706;
-  --ai: #7c3aed;
-  --tv: #2962ff;
-  --radius: 8px;
-  --radius-sm: 4px;
+/* ════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS (token-first — no hardcoded values in component CSS)
+   ════════════════════════════════════════════════════════════════════ */
+:root{
+  /* ─ Farbe ─ */
+  --bg:#f8fafc;
+  --surface:#ffffff;
+  --surface-2:#f1f5f9;
+  --surface-3:#e2e8f0;
+  --sheet-bg:#ffffff;
+  --border:#cbd5e1;
+  --text:#0f172a;
+  --muted:#475569;
+  --accent:#2563eb;
+  --accent-weak:#e3edfd;
+  --pos:#15803d;       --pos-weak:#dcfce7;
+  --neg:#b91c1c;       --neg-weak:#fee2e2;
+  --warn:#b45309;
+  --ai:#7c3aed;        --ai-weak:#ede9fe;
+  --scrim:rgba(0,23,31,0.32);
+
+  /* ─ Spacing ─ */
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:24px;
+
+  /* ─ Radii ─ */
+  --r-1:4px; --r-2:8px; --r-pill:999px;
+
+  /* ─ Typografie ─ */
+  --font-ui:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono:ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
+  --fs-1:11px; --fs-2:12px; --fs-3:13px; --fs-4:14px; --fs-5:16px; --fs-6:18px;
+  --fw-reg:400; --fw-med:500; --fw-bold:700;
+  --lh:1.45;
+
+  /* ─ Bar-Höhen ─ */
+  --h-topbar:52px; --h-subbar:44px; --h-filterbar:48px;
+  --h-bulkbar:52px; --h-botnav:56px;
+
+  /* ─ Motion ─ */
+  --t-fast:0.12s; --t-sheet:0.2s; --ease:ease;
+  --flash:1.2s;
+
+  /* ─ Z-Index-Leiter ─ */
+  --z-thead:2; --z-sticky-col:3; --z-sticky-corner:4;
+  --z-bulkbar:20; --z-botnav:30; --z-topbar:30;
+  --z-scrim:40; --z-sheet:50; --z-toast:60;
+
+  /* ─ Tabelle ─ */
+  --col-check-w:40px; --col-name-w:160px;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
-#app { display: flex; flex-direction: column; height: 100vh; }
-.app-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.app-header h1 { font-size: 18px; font-weight: 700; color: var(--accent2); flex: 1; }
-.header-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--bg3); color: var(--text-muted); border: 1px solid var(--border); }
-.header-badge.mock { color: var(--warning); border-color: var(--warning); }
-.app-body { display: flex; flex: 1; overflow: hidden; }
-.list-panel { flex: 1; overflow-y: auto; padding: 16px; }
-.btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg3); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity 0.1s; -webkit-tap-highlight-color: transparent; }
-.btn:active { opacity: 0.7; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary   { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-secondary { background: var(--bg2); color: var(--text-muted); }
-.btn-success   { background: color-mix(in srgb, var(--success) 12%, var(--bg)); border-color: var(--success); color: var(--success); }
-.btn-danger    { background: color-mix(in srgb, var(--danger)  10%, var(--bg)); border-color: var(--danger);  color: var(--danger);  }
-.btn-ai        { background: color-mix(in srgb, var(--ai)      10%, var(--bg)); border-color: var(--ai);      color: var(--ai);      }
-.btn-tv        { background: color-mix(in srgb, var(--tv)      10%, var(--bg)); border-color: var(--tv);      color: var(--tv);      }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
-.btn-icon { background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: var(--radius-sm); transition: background 0.1s; -webkit-tap-highlight-color: transparent; }
-.btn-icon:active { background: var(--bg3); }
-.btn-icon svg { display: block; width: 15px; height: 15px; }
-.btn-icon--promote { color: var(--success); }
-.btn-icon--promote:hover { background: color-mix(in srgb, var(--success) 12%, var(--bg)); }
-.btn-icon--dismiss { color: var(--danger); }
-.btn-icon--dismiss:hover { background: color-mix(in srgb, var(--danger) 10%, var(--bg)); }
-.filter-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 12px; background: var(--bg2); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 12px; }
-.filter-group { display: flex; flex-direction: column; gap: 4px; }
-.filter-group label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.filter-group select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; }
-.blob-switch { display: flex; gap: 4px; }
-.blob-btn { padding: 6px 12px; background: var(--bg3); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
-.blob-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.view-switch { display: flex; gap: 4px; }
-.view-btn { padding: 6px 12px; background: var(--bg3); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
-.view-btn.active { background: var(--tv); border-color: var(--tv); color: #fff; }
-.bulk-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); border: 1px solid var(--accent); border-radius: var(--radius); margin-bottom: 8px; flex-wrap: wrap; }
-.bulk-bar span { color: var(--accent); font-weight: 600; font-size: 13px; }
-.table-wrapper { overflow-x: auto; }
-.candidate-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.candidate-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
-.candidate-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.candidate-row { cursor: pointer; transition: background 0.1s; }
-.candidate-row:hover { background: var(--bg2); }
-.candidate-row.selected { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
-.candidate-row.active-row { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
-.candidate-row.state-dismissed { opacity: 0.5; }
-.candidate-row.state-dismissed .col-symbol strong { text-decoration: line-through; }
-.col-check { width: 36px; }
-.col-state { width: 36px; }
-.col-symbol { white-space: nowrap; }
-.col-name { max-width: 180px; }
-.col-signal { max-width: 260px; }
-.col-time { white-space: nowrap; }
-.col-links { white-space: nowrap; }
-.col-actions { white-space: nowrap; text-align: right; width: 60px; }
-.signal-text { font-size: 12px; color: var(--text-muted); }
-.badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-.state-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.state-dot--new       { background: var(--accent2); box-shadow: 0 0 7px color-mix(in srgb, var(--accent2), transparent 50%); }
-.state-dot--reviewed  { background: var(--text-muted); }
-.state-dot--promoted  { background: var(--success);  box-shadow: 0 0 7px color-mix(in srgb, var(--success),  transparent 50%); }
-.state-dot--dismissed { background: var(--danger); }
-.state-dot--imported  { background: var(--ai);     box-shadow: 0 0 7px color-mix(in srgb, var(--ai),     transparent 50%); }
-.symbol-cell { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
-.symbol-cell strong { font-size: 14px; }
-.exchange-tag { font-size: 10px; color: var(--text-muted); background: var(--bg3); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; }
-.enrich-badge { display: inline-flex; align-items: center; color: var(--ai); }
-.enrich-badge svg { width: 11px; height: 11px; }
-.time-chip { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.th-sort { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; white-space: nowrap; }
-.th-sort:hover { color: var(--text); }
-.sort-icon { display: inline-flex; align-items: center; opacity: 0.35; transition: opacity 0.1s; }
-.sort-icon--active { opacity: 1; color: var(--accent2); }
-.sort-icon svg { display: block; }
-.link-cluster { display: flex; align-items: center; gap: 3px; }
-.link-chip { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg3); text-decoration: none; cursor: pointer; color: var(--text-muted); transition: background 0.12s, color 0.12s, border-color 0.12s; }
-.link-chip svg { width: 14px; height: 14px; display: block; }
-.link-chip--missing { opacity: 0.25; cursor: default; pointer-events: none; }
-.link-chip--tv:hover    { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2), transparent 50%); background: color-mix(in srgb, var(--accent2) 8%, var(--bg)); }
-.link-chip--st:hover    { color: var(--success);  border-color: color-mix(in srgb, var(--success), transparent 50%);  background: color-mix(in srgb, var(--success)  8%, var(--bg)); }
-.link-chip--yahoo:hover { color: var(--ai);       border-color: color-mix(in srgb, var(--ai), transparent 50%);       background: color-mix(in srgb, var(--ai)       8%, var(--bg)); }
-.tv-col { white-space: nowrap; }
-.tv-num { text-align: right; font-variant-numeric: tabular-nums; }
-.tv-pos { color: var(--success); }
-.tv-neg { color: var(--danger); }
-.tv-rating-badge { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; line-height: 1.4; }
-.tv-rating-badge--strong-buy  { background: #bbf7d0; color: #14532d; }
-.tv-rating-badge--buy         { background: #dcfce7; color: #166534; }
-.tv-rating-badge--neutral     { background: var(--bg3); color: var(--text-muted); }
-.tv-rating-badge--sell        { background: #fee2e2; color: #7f1d1d; }
-.tv-rating-badge--strong-sell { background: #fca5a5; color: #7f1d1d; }
-.tv-rating-txt--strong-buy  { color: #16a34a; font-weight: 700; }
-.tv-rating-txt--buy         { color: #22c55e; font-weight: 700; }
-.tv-rating-txt--neutral     { color: var(--text-muted); }
-.tv-rating-txt--sell        { color: #ef4444; font-weight: 700; }
-.tv-rating-txt--strong-sell { color: #dc2626; font-weight: 700; }
-.sector-tag { display: inline-block; padding: 2px 7px; background: color-mix(in srgb, var(--tv) 10%, var(--bg)); border: 1px solid color-mix(in srgb, var(--tv), transparent 65%); border-radius: 20px; font-size: 11px; color: var(--tv); white-space: nowrap; }
-/* Detail drawer */
-.detail-drawer { width: 0; overflow: hidden; background: var(--bg2); border-left: 1px solid var(--border); transition: width 0.25s ease; flex-shrink: 0; overflow-y: auto; }
-.detail-drawer.open { width: min(480px, 100vw); }
-.detail-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2); z-index: 1; }
-.detail-title h2 { font-size: 20px; }
-.exchange-label { font-size: 13px; color: var(--text-muted); font-weight: 400; }
-.detail-name { color: var(--text-muted); margin-top: 4px; }
-.isin { color: var(--text-muted); font-size: 11px; }
-.detail-state { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.detail-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.detail-section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 12px; }
-.source-item { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; }
-.source-item summary { padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; list-style: none; }
-.source-item summary::-webkit-details-marker { display: none; }
-.source-adapter { font-weight: 700; color: var(--accent2); }
-.source-signal { color: var(--text-muted); font-size: 11px; }
-.source-body { padding: 12px; border-top: 1px solid var(--border); }
-.source-snippet { margin-bottom: 8px; color: var(--text); }
-.source-body a { color: var(--accent2); font-size: 12px; }
-.raw-signal { margin-top: 8px; }
-.raw-signal summary { font-size: 11px; color: var(--text-muted); cursor: pointer; }
-.raw-signal pre { margin-top: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-size: 11px; color: var(--text-muted); overflow-x: auto; white-space: pre-wrap; }
-.notes-editor { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 10px; font-family: inherit; font-size: 13px; resize: vertical; margin-bottom: 8px; }
-.no-enrichment { color: var(--text-muted); margin-bottom: 12px; font-size: 13px; }
-.enrichment-result { background: color-mix(in srgb, var(--ai) 8%, var(--bg)); border: 1px solid color-mix(in srgb, var(--ai), transparent 70%); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
-.enrichment-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-.enrichment-meta small { color: var(--text-muted); font-size: 11px; }
-.enrichment-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.tag { padding: 2px 8px; background: color-mix(in srgb, var(--accent) 8%, var(--bg)); border: 1px solid color-mix(in srgb, var(--accent), transparent 60%); border-radius: 20px; font-size: 11px; color: var(--accent); }
-.enrichment-thesis { margin-bottom: 10px; line-height: 1.5; }
-.enrichment-thesis p { margin-bottom: 8px; font-size: 13px; }
-.thesis-long { margin-top: 8px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
-.enrichment-section { margin-top: 10px; font-size: 13px; }
-.enrichment-section ul { margin-left: 16px; margin-top: 4px; }
-.enrichment-section li { margin-bottom: 4px; color: var(--text-muted); }
-.enrich-status { margin-top: 8px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; }
-.enrich-status--info  { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); color: var(--accent2); }
-.enrich-status--error { background: color-mix(in srgb, var(--danger)  8%,  var(--bg)); color: var(--danger);  }
-.tv-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.tv-kv { display: flex; flex-direction: column; gap: 2px; }
-.tv-kv span { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
-.tv-kv strong { font-size: 13px; }
-.tv-rating--strong-buy  { color: #16a34a; }
-.tv-rating--buy         { color: #22c55e; }
-.tv-rating--neutral     { color: var(--text-muted); }
-.tv-rating--sell        { color: #ef4444; }
-.tv-rating--strong-sell { color: #dc2626; }
-.tv-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.tv-fetched { color: var(--text-muted); font-size: 11px; }
-.link-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-sm); text-decoration: none; font-size: 12px; font-weight: 600; border: 1px solid var(--border); }
-.link-btn--missing { opacity: 0.35; cursor: default; pointer-events: none; }
-.link-tv    { background: color-mix(in srgb, var(--accent2) 8%, var(--bg)); color: var(--accent2); border-color: color-mix(in srgb, var(--accent2), transparent 65%); }
-.link-yahoo { background: color-mix(in srgb, var(--ai)      8%, var(--bg)); color: var(--ai);      border-color: color-mix(in srgb, var(--ai),      transparent 65%); }
-.link-st    { background: color-mix(in srgb, var(--success) 8%, var(--bg)); color: var(--success); border-color: color-mix(in srgb, var(--success),  transparent 65%); }
-.detail-links-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-.link-url-fields { display: flex; flex-direction: column; gap: 0; }
-.link-url-row { margin-bottom: 10px; }
-.link-url-row label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 3px; }
-.link-url-row input { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: var(--radius-sm); font-size: 12px; font-family: inherit; }
-.link-url-row input:focus { outline: none; border-color: var(--accent); }
-.link-btn-logo { width: 18px; height: 18px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
-.link-logo { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; display: block; pointer-events: none; }
-.toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; z-index: 200; animation: slideIn 0.2s ease; max-width: 320px; }
-.toast--info { border-color: var(--accent); color: var(--accent2); }
-@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-@media (max-width: 768px) {
-  .app-header h1 { font-size: 16px; }
-  .col-name, .col-signal { display: none; }
-  .detail-drawer.open { width: 100vw; position: fixed; inset: 0; z-index: 50; }
-  .filter-bar { gap: 8px; }
+[data-theme="dark"]{
+  --bg:#0b1220; --surface:#111827; --surface-2:#0f172a; --surface-3:#1e293b;
+  --sheet-bg:#0a0f1a;
+  --border:#334155; --text:#e2e8f0; --muted:#94a3b8;
+  --accent:#3b82f6; --accent-weak:#16243f;
+  --pos:#4ade80; --pos-weak:#0f2a1a; --neg:#f87171; --neg-weak:#3a1414;
+  --warn:#fbbf24; --ai:#a78bfa; --ai-weak:#241a3d;
+  --scrim:rgba(0,0,0,0.5);
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   RESET / BASE
+   ════════════════════════════════════════════════════════════════════ */
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  font-family:var(--font-ui);
+  background:var(--bg);
+  color:var(--text);
+  font-size:var(--fs-4);
+  line-height:var(--lh);
+  -webkit-tap-highlight-color:transparent;
+}
+button{ font-family:inherit; cursor:pointer; }
+svg{ display:block; }
+.icon{ width:20px; height:20px; stroke-width:2; flex-shrink:0; }
+.icon-sm{ width:16px; height:16px; stroke-width:2; flex-shrink:0; }
+
+/* Focus-visible ring for ALL interactive elements */
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-1); }
+:focus:not(:focus-visible){ outline:none; }
+
+/* ════════════════════════════════════════════════════════════════════
+   APP SHELL (CSS grid)
+   ════════════════════════════════════════════════════════════════════ */
+#app{
+  display:grid;
+  grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) 1fr var(--h-botnav);
+  height:100dvh;
+}
+
+/* ─ Topbar ─ */
+.topbar{
+  display:flex; align-items:center; gap:var(--s-2);
+  padding:0 var(--s-4);
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  z-index:var(--z-topbar);
+}
+.topbar__title{ font-size:var(--fs-6); font-weight:var(--fw-bold); color:var(--accent); flex:1; }
+.topbar__actions{ display:flex; align-items:center; gap:var(--s-1); }
+
+.icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:44px; height:44px; border:none; background:none;
+  color:var(--muted); border-radius:var(--r-1);
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.icon-btn:hover{ background:var(--surface-3); color:var(--text); }
+.icon-btn:active{ opacity:0.7; }
+.icon-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+.icon-btn--neg{ color:var(--neg); }
+.spin{ animation:spin 1s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* ─ Subbar (segmented view toggle) ─ */
+.subbar{
+  display:flex; align-items:center;
+  padding:0 var(--s-4);
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  overflow-x:auto; overflow-y:hidden;
+}
+.segmented{ display:inline-flex; gap:var(--s-1); }
+.seg-btn{
+  padding:var(--s-1) var(--s-3);
+  border:1px solid var(--border);
+  background:var(--surface-3);
+  color:var(--muted);
+  border-radius:var(--r-pill);
+  font-size:var(--fs-3); font-weight:var(--fw-med);
+  white-space:nowrap;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.seg-btn--active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* ─ Filterbar ─ */
+.filterbar{
+  display:flex; align-items:center; gap:var(--s-2);
+  padding:0 var(--s-4);
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  overflow-x:auto; overflow-y:hidden;
+  white-space:nowrap;
+}
+.pill-group{ display:inline-flex; align-items:center; gap:var(--s-1); }
+.pill{
+  padding:var(--s-1) var(--s-3);
+  border:1px solid var(--border);
+  background:var(--surface-3);
+  color:var(--muted);
+  border-radius:var(--r-pill);
+  font-size:var(--fs-2); font-weight:var(--fw-med);
+  white-space:nowrap;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.pill--active{ background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.filter-sep{ width:1px; height:24px; background:var(--border); flex-shrink:0; }
+.filter-select{
+  height:32px; padding:0 var(--s-2);
+  background:var(--surface-3); border:1px solid var(--border);
+  color:var(--text); border-radius:var(--r-pill); font-size:var(--fs-2);
+  font-family:var(--font-ui);
+}
+.filter-select--active{ background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.pill--reset{
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  background:var(--accent-weak); border-color:var(--accent); color:var(--accent);
+}
+
+/* ─ Content (the only scroll container) ─ */
+.content{ overflow:auto; min-height:0; position:relative; background:var(--bg); }
+
+/* ════════════════════════════════════════════════════════════════════
+   TABLE
+   ════════════════════════════════════════════════════════════════════ */
+.candidate-table{
+  width:100%;
+  border-collapse:separate;   /* required for sticky borders */
+  border-spacing:0;
+  font-family:var(--font-mono);
+  font-size:var(--fs-3);
+}
+.candidate-table th, .candidate-table td{
+  padding:var(--s-2) var(--s-3);
+  text-align:left;
+  white-space:nowrap;
+  box-shadow:inset 0 -1px 0 var(--border);  /* bottom border (sticky-safe) */
+}
+.candidate-table thead th{
+  position:sticky; top:0; z-index:var(--z-thead);
+  background:var(--surface-2);
+  color:var(--muted);
+  font-weight:var(--fw-bold);
+  font-size:var(--fs-1);
+  text-transform:uppercase; letter-spacing:0.4px;
+}
+.sort-btn{
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  background:none; border:none; color:inherit;
+  font:inherit; text-transform:inherit; letter-spacing:inherit;
+  padding:var(--s-1); margin:calc(-1 * var(--s-1));
+}
+.sort-btn:hover{ color:var(--text); }
+.sort-glyph{ color:var(--accent); font-size:var(--fs-2); }
+
+.num{ text-align:right; font-variant-numeric:tabular-nums; }
+th.num .sort-btn{ flex-direction:row-reverse; }
+.pos{ color:var(--pos); }
+.neg{ color:var(--neg); }
+
+/* sticky-left columns */
+.col-check{ width:var(--col-check-w); }
+th.col-check, td.col-check{ position:sticky; left:0; z-index:var(--z-sticky-col); }
+td.col-check{ background:var(--surface); }
+th.col-check{ background:var(--surface-2); z-index:var(--z-sticky-corner); }
+
+.col-anchor{
+  position:sticky; left:var(--col-check-w); z-index:var(--z-sticky-col);
+  max-width:var(--col-name-w);
+}
+td.col-anchor{ background:var(--surface); }
+th.col-anchor{ background:var(--surface-2); z-index:var(--z-sticky-corner); }
+td.col-anchor, th.col-anchor{ box-shadow:inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border); }
+td.col-check, th.col-check{ box-shadow:inset 0 -1px 0 var(--border); }
+
+/* rows */
+.candidate-row{ cursor:pointer; }
+.candidate-row td{ background:var(--surface); height:44px; }
+.candidate-row:hover td{ background:var(--surface-2); }
+.candidate-row.is-active td{ background:var(--accent-weak); }
+.candidate-row.is-selected td{ background:var(--accent-weak); }
+.candidate-row.state-dismissed{ opacity:0.5; }
+.candidate-row.state-dismissed .sym-strong{ text-decoration:line-through; }
+
+input[type="checkbox"]{ width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
+
+.sym-cell{ display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+.sym-strong{ font-weight:var(--fw-bold); }
+.exch-tag{
+  font-size:var(--fs-1); color:var(--muted);
+  background:var(--surface-3); border:1px solid var(--border);
+  padding:1px 5px; border-radius:var(--r-1);
+}
+.ai-badge{ display:inline-flex; color:var(--ai); }
+.rating-badge{ font-size:var(--fs-1); font-weight:var(--fw-bold); padding:1px 5px; border-radius:var(--r-1); line-height:1.4; }
+.rating-badge--strong-buy{ background:var(--pos-weak); color:var(--pos); }
+.rating-badge--buy{ background:var(--pos-weak); color:var(--pos); }
+.rating-badge--neutral{ background:var(--surface-3); color:var(--muted); }
+.rating-badge--sell{ background:var(--neg-weak); color:var(--neg); }
+.rating-badge--strong-sell{ background:var(--neg-weak); color:var(--neg); }
+
+.state-cell{ display:inline-flex; align-items:center; gap:var(--s-1); }
+.state-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.state-dot--new{ background:var(--accent); box-shadow:0 0 6px var(--accent); }
+.state-dot--reviewed{ background:var(--muted); }
+.state-dot--promoted{ background:var(--pos); box-shadow:0 0 6px var(--pos); }
+.state-dot--dismissed{ background:var(--neg); }
+.state-dot--imported{ background:var(--ai); box-shadow:0 0 6px var(--ai); }
+.state-letter{ font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+
+.name-cell{ overflow:hidden; text-overflow:ellipsis; max-width:var(--col-name-w); display:inline-block; vertical-align:middle; }
+
+.link-cluster{ display:flex; align-items:center; gap:var(--s-1); }
+.link-chip{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:6px;
+  border:1px solid var(--border); background:var(--surface-3);
+  color:var(--muted); text-decoration:none;
+  transition:background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.link-chip img{ width:14px; height:14px; border-radius:3px; object-fit:cover; pointer-events:none; }
+.link-chip:hover{ border-color:var(--accent); }
+.link-chip--missing{ opacity:0.25; pointer-events:none; }
+
+.signal-text{ font-size:var(--fs-2); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px; display:inline-block; vertical-align:middle; }
+.time-chip{ font-size:var(--fs-2); color:var(--muted); }
+
+.src-badge{ display:inline-block; padding:2px 7px; border-radius:var(--r-pill); font-size:var(--fs-1); font-weight:var(--fw-bold); }
+
+.row-actions{ display:inline-flex; gap:var(--s-1); justify-content:flex-end; }
+.act-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px; border:none; background:none; border-radius:var(--r-1);
+  transition:background var(--t-fast) var(--ease);
+}
+.act-btn--promote{ color:var(--pos); }
+.act-btn--promote:hover{ background:var(--pos-weak); }
+.act-btn--dismiss{ color:var(--neg); }
+.act-btn--dismiss:hover{ background:var(--neg-weak); }
+
+@keyframes data-flash{ from{ background:var(--accent-weak); } to{ background:transparent; } }
+.cell--updated{ animation:data-flash var(--flash) var(--ease); }
+
+.empty-state{ text-align:center; padding:60px var(--s-4); color:var(--muted); }
+.empty-state a{ color:var(--accent); cursor:pointer; text-decoration:underline; }
+
+/* ════════════════════════════════════════════════════════════════════
+   BULKBAR
+   ════════════════════════════════════════════════════════════════════ */
+.bulkbar{
+  position:sticky; bottom:0; z-index:var(--z-bulkbar);
+  display:flex; align-items:center; gap:var(--s-2);
+  height:var(--h-bulkbar); padding:0 var(--s-4);
+  background:var(--surface-2); border-top:1px solid var(--accent);
+  transform:translateY(100%);
+  transition:transform var(--t-sheet) var(--ease);
+}
+.bulkbar.is-open{ transform:translateY(0); }
+.bulk-count{ color:var(--accent); font-weight:var(--fw-bold); font-size:var(--fs-3); white-space:nowrap; }
+.bulk-actions{ display:flex; align-items:center; gap:var(--s-1); margin-left:auto; overflow-x:auto; }
+.bulk-btn{
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  height:36px; padding:0 var(--s-3); border-radius:var(--r-1);
+  border:1px solid var(--border); background:var(--surface-3);
+  color:var(--text); font-size:var(--fs-2); white-space:nowrap;
+  transition:opacity var(--t-fast) var(--ease);
+}
+.bulk-btn:active{ opacity:0.7; }
+.bulk-btn--neg{ background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+.bulk-btn--pos{ background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.bulk-btn--ai{ background:var(--ai-weak); border-color:var(--ai); color:var(--ai); }
+.bulk-btn--accent{ background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.bulk-btn--neutral{ background:none; border:none; color:var(--muted); width:36px; padding:0; justify-content:center; }
+
+/* ════════════════════════════════════════════════════════════════════
+   BOTNAV
+   ════════════════════════════════════════════════════════════════════ */
+.botnav{ display:flex; align-items:stretch; background:var(--surface-2); border-top:1px solid var(--border); z-index:var(--z-botnav); }
+.botnav__slot{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; border:none; background:none; color:var(--muted);
+  font-size:var(--fs-1); min-height:44px;
+  transition:color var(--t-fast) var(--ease);
+}
+.botnav__slot:hover{ color:var(--text); }
+.botnav__slot--active{ color:var(--accent); }
+.botnav__bucket-label{ font-weight:var(--fw-bold); }
+
+/* ════════════════════════════════════════════════════════════════════
+   SCRIM + SHEETS
+   ════════════════════════════════════════════════════════════════════ */
+.scrim{ position:fixed; inset:0; background:var(--scrim); z-index:var(--z-scrim); opacity:0; pointer-events:none; transition:opacity var(--t-fast) var(--ease); }
+.scrim.is-open{ opacity:1; pointer-events:auto; }
+
+.sheet{
+  position:fixed; top:0; right:0; bottom:0; z-index:var(--z-sheet);
+  width:min(320px,86vw);
+  background:var(--sheet-bg); border-left:1px solid var(--border);
+  transform:translateX(100%); transition:transform var(--t-sheet) var(--ease);
+  display:flex; flex-direction:column; overflow-y:auto;
+}
+.sheet.is-open{ transform:translateX(0); }
+.sheet--detail{ width:min(480px,86vw); }
+@media (max-width:767px){ .sheet--detail{ width:100vw; } }
+
+.sheet__header{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  padding:var(--s-4); border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--sheet-bg); z-index:1;
+}
+.sheet__title h2{ font-size:var(--fs-6); }
+.exch-label{ font-size:var(--fs-3); color:var(--muted); font-weight:var(--fw-reg); }
+.detail-name{ color:var(--muted); margin-top:var(--s-1); font-size:var(--fs-3); }
+.isin{ color:var(--muted); font-size:var(--fs-1); }
+
+.nav-item{
+  display:flex; align-items:center; gap:var(--s-3);
+  width:100%; min-height:48px; padding:0 var(--s-4);
+  border:none; background:none; color:var(--text); font-size:var(--fs-4);
+  text-align:left; border-bottom:1px solid var(--border);
+}
+.nav-item:hover{ background:var(--surface-2); }
+.nav-item--active{ color:var(--accent); }
+.nav-section-label{ padding:var(--s-3) var(--s-4) var(--s-1); font-size:var(--fs-1); text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); }
+
+.detail-state-bar{ padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap; font-size:var(--fs-3); }
+.detail-section{ padding:var(--s-4); border-bottom:1px solid var(--border); }
+.detail-section h3{ font-size:var(--fs-3); font-weight:var(--fw-bold); text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); margin-bottom:var(--s-3); }
+.btn{
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  padding:var(--s-1) var(--s-3); min-height:36px;
+  border-radius:var(--r-1); border:1px solid var(--border);
+  background:var(--surface-3); color:var(--text);
+  font-size:var(--fs-3); font-weight:var(--fw-med);
+  transition:opacity var(--t-fast) var(--ease);
+}
+.btn:active{ opacity:0.7; }
+.btn--pos{ background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.btn--neg{ background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+.btn--ai{ background:var(--ai-weak); border-color:var(--ai); color:var(--ai); }
+.btn--secondary{ background:var(--surface-2); color:var(--muted); }
+.btn--sm{ min-height:32px; padding:var(--s-1) var(--s-2); font-size:var(--fs-2); }
+
+.tv-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s-2); margin-bottom:var(--s-3); }
+.tv-kv{ display:flex; flex-direction:column; gap:2px; }
+.tv-kv span{ font-size:var(--fs-1); text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); }
+.tv-kv strong{ font-size:var(--fs-3); font-family:var(--font-mono); }
+.tv-rating--strong-buy,.tv-rating--buy{ color:var(--pos); }
+.tv-rating--neutral{ color:var(--muted); }
+.tv-rating--sell,.tv-rating--strong-sell{ color:var(--neg); }
+.tv-tints{ display:flex; flex-wrap:wrap; gap:var(--s-1); margin-bottom:var(--s-2); }
+.tag{ padding:2px 8px; background:var(--accent-weak); border:1px solid var(--accent); border-radius:var(--r-pill); font-size:var(--fs-1); color:var(--accent); }
+.tv-fetched{ color:var(--muted); font-size:var(--fs-1); }
+
+.source-item{ background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-1); margin-bottom:var(--s-2); }
+.source-item summary{ padding:var(--s-2) var(--s-3); cursor:pointer; display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-3); list-style:none; }
+.source-item summary::-webkit-details-marker{ display:none; }
+.source-adapter{ font-weight:var(--fw-bold); color:var(--accent); }
+.source-signal{ color:var(--muted); font-size:var(--fs-1); }
+.source-body{ padding:var(--s-3); border-top:1px solid var(--border); }
+.source-snippet{ margin-bottom:var(--s-2); }
+.source-body a{ color:var(--accent); font-size:var(--fs-2); }
+.raw-signal{ margin-top:var(--s-2); }
+.raw-signal summary{ font-size:var(--fs-1); color:var(--muted); cursor:pointer; }
+.raw-signal pre{ margin-top:var(--s-2); background:var(--bg); border:1px solid var(--border); border-radius:var(--r-1); padding:var(--s-2); font-size:var(--fs-1); color:var(--muted); overflow-x:auto; white-space:pre-wrap; font-family:var(--font-mono); }
+
+.detail-links{ display:flex; gap:var(--s-2); flex-wrap:wrap; }
+.link-btn{
+  display:inline-flex; align-items:center; gap:var(--s-2);
+  padding:var(--s-1) var(--s-3); min-height:36px; border-radius:var(--r-1);
+  text-decoration:none; font-size:var(--fs-2); font-weight:var(--fw-bold);
+  border:1px solid var(--border); background:var(--accent-weak); color:var(--accent);
+}
+.link-btn img{ width:18px; height:18px; border-radius:3px; object-fit:cover; }
+.link-btn--missing{ opacity:0.35; pointer-events:none; }
+
+.notes-editor{ width:100%; background:var(--surface-3); border:1px solid var(--border); color:var(--text); border-radius:var(--r-1); padding:var(--s-2); font-family:var(--font-ui); font-size:var(--fs-3); resize:vertical; margin-bottom:var(--s-2); }
+
+.no-enrichment{ color:var(--muted); margin-bottom:var(--s-3); font-size:var(--fs-3); }
+.enrichment{ background:var(--ai-weak); border:1px solid var(--ai); border-radius:var(--r-2); padding:var(--s-3); margin-bottom:var(--s-3); }
+.enrich-meta{ display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); flex-wrap:wrap; font-size:var(--fs-1); }
+.enrich-tags{ display:flex; gap:var(--s-1); flex-wrap:wrap; margin-bottom:var(--s-2); }
+.enrich-thesis{ margin-bottom:var(--s-2); line-height:1.5; font-size:var(--fs-3); }
+.enrich-thesis p{ margin-bottom:var(--s-2); }
+.thesis-long{ margin-top:var(--s-2); font-size:var(--fs-3); color:var(--muted); line-height:1.6; }
+.enrich-block{ margin-top:var(--s-2); font-size:var(--fs-3); }
+.enrich-block ul{ margin-left:var(--s-4); margin-top:var(--s-1); }
+.enrich-block li{ margin-bottom:var(--s-1); color:var(--muted); }
+
+.bucket-sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:var(--z-sheet);
+  background:var(--sheet-bg); border-top:1px solid var(--border);
+  border-radius:var(--r-2) var(--r-2) 0 0;
+  transform:translateY(100%); transition:transform var(--t-sheet) var(--ease);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.bucket-sheet.is-open{ transform:translateY(0); }
+.bucket-sheet__title{ padding:var(--s-3) var(--s-4); font-size:var(--fs-1); text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); }
+.bucket-opt{
+  display:flex; align-items:center; gap:var(--s-3);
+  width:100%; min-height:52px; padding:0 var(--s-4);
+  border:none; background:none; color:var(--text); font-size:var(--fs-4);
+  text-align:left; border-top:1px solid var(--border);
+}
+.bucket-opt--active{ color:var(--accent); font-weight:var(--fw-bold); }
+
+.toast{
+  position:fixed; left:50%; bottom:calc(var(--h-botnav) + var(--s-4)); transform:translateX(-50%);
+  background:var(--surface); border:1px solid var(--neg); color:var(--neg);
+  border-radius:var(--r-2); padding:var(--s-2) var(--s-4); font-size:var(--fs-3);
+  z-index:var(--z-toast); max-width:90vw;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RESPONSIVE — mobile-first. Name column hidden <768px (anchor=symbol)
+   ════════════════════════════════════════════════════════════════════ */
+.col-name-data{ display:none; }
+@media (min-width:768px){ .col-name-data{ display:table-cell; } }
+@media (max-width:767px){ .topbar__title{ font-size:var(--fs-5); } }
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body>
 <div id="app">
-  <header class="app-header">
-    <h1>Discovery Workspace</h1>
-    <span id="mode-badge" class="header-badge mock">Mockup</span>
-    <button class="btn btn-sm">Refresh</button>
-    <button class="btn btn-sm">Import</button>
-    <button class="btn btn-sm">Export</button>
-    <button class="btn btn-sm">Einstellungen</button>
+  <header class="topbar">
+    <span class="topbar__title">Discovery</span>
+    <div class="topbar__actions">
+      <button class="icon-btn" id="tb-cloud" aria-label="Synchronisieren"></button>
+      <button class="icon-btn" id="tb-import" aria-label="Import"></button>
+      <button class="icon-btn" id="tb-theme" aria-label="Theme umschalten"></button>
+      <button class="icon-btn" id="tb-export" aria-label="Export"></button>
+      <button class="icon-btn" id="tb-menu" aria-label="Menü öffnen" aria-haspopup="dialog"></button>
+    </div>
   </header>
-  <div class="app-body">
-    <main class="list-panel" id="list-panel"></main>
-    <aside id="detail-panel"></aside>
-  </div>
+
+  <nav class="subbar" aria-label="Spaltenansicht">
+    <div class="segmented" id="view-switch" role="tablist"></div>
+  </nav>
+
+  <div class="filterbar" id="filterbar" aria-label="Filter"></div>
+
+  <main class="content" id="content">
+    <table class="candidate-table">
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" style="display:none"></div>
+
+    <div class="bulkbar" id="bulkbar" role="region" aria-label="Massenaktionen">
+      <span class="bulk-count" id="bulk-count" aria-live="polite">0 ausgewählt</span>
+      <div class="bulk-actions" id="bulk-actions"></div>
+    </div>
+  </main>
+
+  <nav class="botnav" aria-label="Hauptnavigation">
+    <button class="botnav__slot botnav__slot--active" id="nav-home">
+      <span id="nav-home-icon"></span><span>Home</span>
+    </button>
+    <button class="botnav__slot" id="nav-bucket" aria-haspopup="dialog">
+      <span id="nav-bucket-icon"></span><span class="botnav__bucket-label" id="nav-bucket-label">Inbox</span>
+    </button>
+  </nav>
 </div>
 
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="nav-sheet" role="dialog" aria-modal="true" aria-label="Navigation"></aside>
+<aside class="sheet sheet--detail" id="detail-sheet" role="dialog" aria-modal="true" aria-label="Kandidaten-Detail"></aside>
+<div class="bucket-sheet" id="bucket-sheet" role="dialog" aria-modal="true" aria-label="Bucket wählen"></div>
+
 <script>
-// ── Icons ──────────────────────────────────────────────────────────────────────
-const IC = {
-  arrowUpDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg>`,
-  arrowUp:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m0 0-7 7m7-7 7 7"/></svg>`,
-  arrowDown:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m0 0 7-7m-7 7-7-7"/></svg>`,
-  check:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
-  xMark:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
-  sparkles:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"/></svg>`,
-  barChart:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16V8"/><path d="M11 16v-5"/><path d="M15 16V5"/><path d="M19 16V11"/></svg>`,
-  trash:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
-  pencil:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`,
-  tv:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="15" x="2" y="7" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>`,
-  yahoo:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7 8v6m5-14-5 8"/></svg>`,
-};
+/* ════════════════════════════════════════════════════════════════════
+   LUCIDE ICONS (inline SVG, currentColor, stroke-width 2)
+   ════════════════════════════════════════════════════════════════════ */
+function lucide(name, cls){
+  const P = {
+    Cloud:'<path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.7 1.5A4 4 0 0 0 6 19z"/>',
+    RefreshCw:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+    CloudOff:'<path d="m2 2 20 20"/><path d="M5.8 5.8A6 6 0 0 0 6 16h10"/><path d="M22 16a4.5 4.5 0 0 0-4-7"/>',
+    Upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+    Download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+    Moon:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
+    Sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    Menu:'<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+    Check:'<path d="M20 6 9 17l-5-5"/>',
+    X:'<path d="M18 6 6 18M6 6l12 12"/>',
+    Eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+    Sparkles:'<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/>',
+    BarChart3:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    Trash2:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+    XCircle:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
+    Home:'<path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/>',
+    Layers:'<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  };
+  return `<svg class="${cls||'icon'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]||''}</svg>`;
+}
 
-const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
-const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
-const YH_LOGO = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
+/* ════════════════════════════════════════════════════════════════════
+   MOCK DATA
+   ════════════════════════════════════════════════════════════════════ */
+const TV_LOGO='https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
+const ST_LOGO='https://avatars.githubusercontent.com/u/30304?s=200&v=4';
+const YH_LOGO='https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
+const ADAPTER_COLORS={ openinsider:'#e67e22','boerse-frankfurt':'#3498db','etf-holdings':'#2ecc71',stocktwits:'#1d9bf0','yahoo-trending':'#6001d2','tradingview-screener':'#2962ff' };
 
-// ── Adapter colours ────────────────────────────────────────────────────────────
-const ADAPTER_COLORS = {
-  openinsider:            '#e67e22',
-  'boerse-frankfurt':     '#3498db',
-  'etf-holdings':         '#2ecc71',
-  stocktwits:             '#1d9bf0',
-  'yahoo-trending':       '#6001d2',
-  'tradingview-screener': '#2962ff',
-};
+const MOCK=[
+  { id:'1', symbol:'NVDA', exchange:'NASDAQ', name:'NVIDIA Corporation', bucket:'inbox', workspace_state:'new',
+    first_discovered_at:new Date(Date.now()-2*3600000).toISOString(), sector:'Technology', sub_sector:'Semiconductors', isin:'US67066G1040',
+    links:{ tradingview:'https://www.tradingview.com/symbols/NASDAQ-NVDA/', stocktwits:'https://stocktwits.com/symbol/NVDA', yahoo:'https://finance.yahoo.com/quote/NVDA' },
+    tv_data:{ description:'NVIDIA Corporation', rating:0.72, market_cap:2.8e12, close:875.40, change_1d:3.2, change_1w:8.5, change_1m:22.1, volatility:45.2, rsi:68.4, ema20:842.10, ema50:791.30, ema200:612.80, macd:18.42, macd_signal:14.87, adx:38.5, cci20_1m:112.4, high_1m:892.00, low_1m:790.10, price_52_week_high:974.00, price_52_week_low:394.28, high_all:1208.88, low_all:1.11, perf_all:7850.2, aroon_down_120:7.1, aroon_down_1m:14.3, aroon_up_120:92.9, aroon_up_1m:85.7, donch_ch20_lower_1m:817.20, donch_ch20_upper_1m:892.00, pe_ttm:62.4, dividend_yield:0.03, earnings_next_date:1748736000, beta:1.72, beta_3_year:1.65, avg_vol_10d:42500000, average_volume_30d_calc:39800000, basic_eps_net_income:14.23, ebitda:32100000000, ebitda_yoy_growth_fy:121.4, gross_margin:74.6, gross_profit_yoy_growth_fy:112.8, mom_1m:0.42, recommend_all_1m:0.68, fetched_at:new Date(Date.now()-3600000).toISOString() },
+    enrichment:{ model:'claude-sonnet-4-6', confidence:'high', enriched_at:new Date(Date.now()-1800000).toISOString(), sector:'Technology', industry:'Semiconductors', market_cap_bucket:'mega', region:'US', thesis_short:'NVIDIA dominates the AI accelerator market with near-monopoly GPU supply for data centers.', thesis_long:'~80% market share in AI training hardware. H100/H200 supply remains constrained against explosive hyperscaler demand. Data center revenue grew 427% YoY last quarter. Blackwell ramp expected to extend the moat through 2026.', risks:['Valuation premium requires continued hypergrowth','AMD/Intel competing for enterprise GPU workloads','China export restrictions limit TAM'], catalysts:['Blackwell GPU ramp','Sovereign AI investments in EU/Asia','CUDA ecosystem lock-in'], sentiment:'bullish' },
+    sources:[ { adapter:'openinsider', signal_type:'insider-buy', discovered_at:new Date(Date.now()-2*3600000).toISOString(), info_snippet:'Jensen Huang purchased 100,000 shares at $870.00 — total $87.0M', source_url:'https://openinsider.com', raw_signal:{ name:'Jensen Huang', title:'CEO', shares:100000, price:870.0 } }, { adapter:'tradingview-screener', signal_type:'volume-spike', discovered_at:new Date(Date.now()-3600000).toISOString(), info_snippet:'Volume 3.2× 10-day average, NASDAQ, close $875.40', source_url:'https://www.tradingview.com/symbols/NASDAQ-NVDA/', raw_signal:{ rel_volume:3.2, close:875.40, change:3.2 } } ], notes:'' },
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK = [
-  {
-    id: '1', symbol: 'NVDA', exchange: 'NASDAQ', name: 'NVIDIA Corporation',
-    workspace_state: 'new',
-    first_discovered_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-    sector: 'Technology', sub_sector: 'Semiconductors',
-    isin: 'US67066G1040',
-    links: {
-      tradingview: 'https://www.tradingview.com/symbols/NASDAQ-NVDA/',
-      stocktwits:  'https://stocktwits.com/symbol/NVDA',
-      yahoo:       'https://finance.yahoo.com/quote/NVDA',
-    },
-    tv_data: {
-      description: 'NVIDIA Corporation',
-      rating: 0.72, market_cap: 2.8e12, close: 875.40,
-      change_1d: 3.2, change_1w: 8.5, change_1m: 22.1,
-      volatility: 45.2, rsi: 68.4,
-      ema20: 842.10, ema50: 791.30, ema200: 612.80,
-      macd: 18.42, macd_signal: 14.87,
-      adx: 38.5, cci20_1m: 112.4,
-      high_1m: 892.00, low_1m: 790.10,
-      price_52_week_high: 974.00, price_52_week_low: 394.28,
-      high_all: 1208.88, low_all: 1.11, perf_all: 7850.2,
-      aroon_down_120: 7.1, aroon_down_1m: 14.3,
-      aroon_up_120: 92.9, aroon_up_1m: 85.7,
-      donch_ch20_lower_1m: 817.20, donch_ch20_upper_1m: 892.00,
-      pe_ttm: 62.4, dividend_yield: 0.03,
-      earnings_next_date: 1748736000,
-      beta: 1.72, beta_3_year: 1.65,
-      avg_vol_10d: 42500000, average_volume_30d_calc: 39800000,
-      basic_eps_net_income: 14.23,
-      ebitda: 32100000000, ebitda_yoy_growth_fy: 121.4,
-      gross_margin: 74.6, gross_profit_yoy_growth_fy: 112.8,
-      mom_1m: 0.42, recommend_all_1m: 0.68,
-      fetched_at: new Date(Date.now() - 3600000).toISOString(),
-    },
-    enrichment: {
-      model: 'claude-sonnet-4-6',
-      confidence: 'high',
-      enriched_at: new Date(Date.now() - 1800000).toISOString(),
-      sector: 'Technology',
-      industry: 'Semiconductors',
-      market_cap_bucket: 'mega',
-      region: 'US',
-      thesis_short: 'NVIDIA dominates the AI accelerator market with near-monopoly GPU supply for data centers, benefiting from multi-year buildout of AI infrastructure.',
-      thesis_long: 'The company holds ~80% market share in AI training hardware. H100/H200 supply remains constrained against explosive demand from hyperscalers. Data center revenue grew 427% YoY last quarter. Blackwell architecture ramp-up expected to extend competitive moat through 2026.',
-      risks: ['Valuation premium requires continued hypergrowth execution', 'AMD and Intel competing aggressively for enterprise GPU workloads', 'Export restrictions to China limit addressable market'],
-      catalysts: ['Blackwell GPU ramp driving next revenue step-up', 'Sovereign AI investments in EU and Asia creating new demand', 'CUDA ecosystem lock-in deepening with software tooling'],
-      sentiment: 'bullish',
-    },
-    sources: [
-      {
-        adapter: 'openinsider', signal_type: 'insider-buy',
-        discovered_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-        info_snippet: 'Jensen Huang purchased 100,000 shares at $870.00 — total $87.0M',
-        source_url: 'https://openinsider.com',
-        raw_signal: { name: 'Jensen Huang', title: 'CEO', shares: 100000, price: 870.0 },
-      },
-      {
-        adapter: 'tradingview-screener', signal_type: 'volume-spike',
-        discovered_at: new Date(Date.now() - 1 * 3600000).toISOString(),
-        info_snippet: 'Volume 3.2× 10-day average, NASDAQ, close $875.40',
-        source_url: 'https://www.tradingview.com/symbols/NASDAQ-NVDA/',
-        raw_signal: { rel_volume: 3.2, close: 875.40, change: 3.2 },
-      },
-    ],
-    notes: '',
-  },
-  {
-    id: '2', symbol: 'AAPL', exchange: 'NASDAQ', name: 'Apple Inc.',
-    workspace_state: 'reviewed',
-    first_discovered_at: new Date(Date.now() - 18 * 3600000).toISOString(),
-    sector: 'Technology', sub_sector: 'Consumer Electronics',
-    isin: 'US0378331005',
-    links: { tradingview: 'https://www.tradingview.com/symbols/NASDAQ-AAPL/', yahoo: 'https://finance.yahoo.com/quote/AAPL' },
-    tv_data: {
-      description: 'Apple Inc.',
-      rating: 0.22, market_cap: 2.95e12, close: 189.30,
-      change_1d: 0.8, change_1w: -1.2, change_1m: 4.5,
-      volatility: 22.8, rsi: 52.1,
-      ema20: 186.40, ema50: 182.10, ema200: 174.50,
-      macd: 2.31, macd_signal: 1.98,
-      adx: 21.3, cci20_1m: 44.8,
-      high_1m: 198.00, low_1m: 182.50,
-      price_52_week_high: 199.62, price_52_week_low: 164.08,
-      high_all: 260.10, low_all: 0.35, perf_all: 54028.6,
-      aroon_down_120: 28.6, aroon_down_1m: 42.9,
-      aroon_up_120: 71.4, aroon_up_1m: 57.1,
-      donch_ch20_lower_1m: 183.20, donch_ch20_upper_1m: 198.00,
-      pe_ttm: 28.4, dividend_yield: 0.54,
-      earnings_next_date: 1753920000,
-      beta: 1.28, beta_3_year: 1.19,
-      avg_vol_10d: 58200000, average_volume_30d_calc: 61400000,
-      basic_eps_net_income: 6.67,
-      ebitda: 127400000000, ebitda_yoy_growth_fy: 8.2,
-      gross_margin: 45.9, gross_profit_yoy_growth_fy: 6.8,
-      mom_1m: 0.14, recommend_all_1m: 0.24,
-      fetched_at: new Date(Date.now() - 7200000).toISOString(),
-    },
-    enrichment: null,
-    sources: [
-      {
-        adapter: 'yahoo-trending', signal_type: 'trending',
-        discovered_at: new Date(Date.now() - 18 * 3600000).toISOString(),
-        info_snippet: 'Trending #3 on Yahoo Finance — high retail interest ahead of earnings',
-        source_url: 'https://finance.yahoo.com/trending-tickers',
-        raw_signal: { rank: 3, change_pct: 0.8 },
-      },
-    ],
-    notes: 'Wait for earnings beat before adding.',
-  },
-  {
-    id: '3', symbol: 'TSLA', exchange: 'NASDAQ', name: 'Tesla, Inc.',
-    workspace_state: 'promoted',
-    first_discovered_at: new Date(Date.now() - 3 * 24 * 3600000).toISOString(),
-    sector: 'Consumer Cyclical', sub_sector: 'Auto Manufacturers',
-    isin: 'US88160R1014',
-    links: { tradingview: 'https://www.tradingview.com/symbols/NASDAQ-TSLA/', stocktwits: 'https://stocktwits.com/symbol/TSLA' },
-    tv_data: {
-      description: 'Tesla, Inc.',
-      rating: -0.15, market_cap: 580e9, close: 182.60,
-      change_1d: -2.4, change_1w: -5.8, change_1m: -12.3,
-      volatility: 58.4, rsi: 38.2,
-      ema20: 196.40, ema50: 214.80, ema200: 231.20,
-      macd: -8.24, macd_signal: -5.91,
-      adx: 28.7, cci20_1m: -88.4,
-      high_1m: 214.40, low_1m: 177.20,
-      price_52_week_high: 299.29, price_52_week_low: 138.80,
-      high_all: 414.50, low_all: 1.05, perf_all: 17290.5,
-      aroon_down_120: 71.4, aroon_down_1m: 85.7,
-      aroon_up_120: 28.6, aroon_up_1m: 14.3,
-      donch_ch20_lower_1m: 177.20, donch_ch20_upper_1m: 214.40,
-      pe_ttm: 48.1, dividend_yield: null,
-      earnings_next_date: 1751155200,
-      beta: 2.34, beta_3_year: 2.21,
-      avg_vol_10d: 89400000, average_volume_30d_calc: 102100000,
-      basic_eps_net_income: 3.79,
-      ebitda: 12400000000, ebitda_yoy_growth_fy: -24.8,
-      gross_margin: 17.4, gross_profit_yoy_growth_fy: -8.2,
-      mom_1m: -0.18, recommend_all_1m: -0.12,
-      fetched_at: new Date(Date.now() - 5400000).toISOString(),
-    },
-    enrichment: {
-      model: 'claude-sonnet-4-6',
-      confidence: 'medium',
-      enriched_at: new Date(Date.now() - 2 * 24 * 3600000).toISOString(),
-      sector: 'Consumer Cyclical',
-      industry: 'Auto Manufacturers',
-      market_cap_bucket: 'large',
-      region: 'US',
-      thesis_short: 'Tesla oversold after margin compression — FSD v12 revenue recognition and energy storage growth may re-rate valuation.',
-      risks: ['Margin pressure from aggressive price cuts persists', 'Competition from Chinese EVs (BYD) intensifying', 'Execution risk on Cybertruck ramp'],
-      catalysts: ['Full Self-Driving commercial licensing could be high-margin revenue stream', 'Energy storage (Megapack) growing 100%+ YoY', 'Model 2 affordable EV expected to drive volume inflection'],
-      sentiment: 'neutral',
-    },
-    sources: [
-      {
-        adapter: 'stocktwits', signal_type: 'trending',
-        discovered_at: new Date(Date.now() - 3 * 24 * 3600000).toISOString(),
-        info_snippet: 'Trending with 4,821 messages in 24h — bearish sentiment spike',
-        source_url: 'https://stocktwits.com/symbol/TSLA',
-        raw_signal: { messages: 4821, sentiment: 'bearish' },
-      },
-      {
-        adapter: 'tradingview-screener', signal_type: 'volume-spike',
-        discovered_at: new Date(Date.now() - 2 * 24 * 3600000).toISOString(),
-        info_snippet: 'Volume 2.8× average on breakdown below 200-day EMA',
-        source_url: 'https://www.tradingview.com/symbols/NASDAQ-TSLA/',
-        raw_signal: { rel_volume: 2.8, close: 182.60, change: -2.4 },
-      },
-    ],
-    notes: 'Contrarian position — watching for FSD catalyst.',
-  },
-  {
-    id: '4', symbol: 'META', exchange: 'NASDAQ', name: 'Meta Platforms, Inc.',
-    workspace_state: 'dismissed',
-    first_discovered_at: new Date(Date.now() - 5 * 24 * 3600000).toISOString(),
-    sector: 'Communication Services', sub_sector: 'Internet Content & Information',
-    isin: 'US30303M1027',
-    links: { tradingview: 'https://www.tradingview.com/symbols/NASDAQ-META/', yahoo: 'https://finance.yahoo.com/quote/META' },
-    tv_data: {
-      description: 'Meta Platforms, Inc.',
-      rating: 0.44, market_cap: 1.24e12, close: 487.20,
-      change_1d: 1.1, change_1w: 3.2, change_1m: 9.8,
-      volatility: 31.4, rsi: 61.8,
-      ema20: 472.10, ema50: 448.30, ema200: 392.50,
-      macd: 12.84, macd_signal: 10.21,
-      adx: 32.1, cci20_1m: 78.4,
-      high_1m: 531.49, low_1m: 452.80,
-      price_52_week_high: 531.49, price_52_week_low: 279.40,
-      high_all: 584.77, low_all: 8.74, perf_all: 5473.8,
-      aroon_down_120: 35.7, aroon_down_1m: 28.6,
-      aroon_up_120: 64.3, aroon_up_1m: 71.4,
-      donch_ch20_lower_1m: 452.80, donch_ch20_upper_1m: 531.49,
-      pe_ttm: 24.8, dividend_yield: 0.42,
-      earnings_next_date: 1751760000,
-      beta: 1.18, beta_3_year: 1.24,
-      avg_vol_10d: 14800000, average_volume_30d_calc: 16200000,
-      basic_eps_net_income: 19.63,
-      ebitda: 62400000000, ebitda_yoy_growth_fy: 54.2,
-      gross_margin: 81.5, gross_profit_yoy_growth_fy: 24.1,
-      mom_1m: 0.21, recommend_all_1m: 0.40,
-      fetched_at: new Date(Date.now() - 10800000).toISOString(),
-    },
-    enrichment: null,
-    sources: [
-      {
-        adapter: 'etf-holdings', signal_type: 'etf-add',
-        discovered_at: new Date(Date.now() - 5 * 24 * 3600000).toISOString(),
-        info_snippet: 'Added to ARK Next Generation Internet ETF (ARKW) — 1.2% position',
-        source_url: 'https://ark-funds.com/funds/arkw/',
-        raw_signal: { etf: 'ARKW', weight: 1.2, action: 'add' },
-      },
-    ],
-    notes: 'Already have large position. Skipping for now.',
-  },
-  {
-    id: '5', symbol: 'SMCI', exchange: 'NASDAQ', name: 'Super Micro Computer',
-    workspace_state: 'new',
-    first_discovered_at: new Date(Date.now() - 4 * 3600000).toISOString(),
-    sector: 'Technology', sub_sector: 'Computer Hardware',
-    isin: 'US86800U1016',
-    links: {},
-    tv_data: null,
-    enrichment: null,
-    sources: [
-      {
-        adapter: 'openinsider', signal_type: 'insider-buy',
-        discovered_at: new Date(Date.now() - 4 * 3600000).toISOString(),
-        info_snippet: 'Director Charles Liang purchased 50,000 shares at $92.40 — total $4.6M',
-        source_url: 'https://openinsider.com',
-        raw_signal: { name: 'Charles Liang', title: 'Director/CEO', shares: 50000, price: 92.4 },
-      },
-    ],
-    notes: '',
-  },
+  { id:'2', symbol:'AAPL', exchange:'NASDAQ', name:'Apple Inc.', bucket:'inbox', workspace_state:'reviewed',
+    first_discovered_at:new Date(Date.now()-18*3600000).toISOString(), sector:'Technology', sub_sector:'Consumer Electronics', isin:'US0378331005',
+    links:{ tradingview:'https://www.tradingview.com/symbols/NASDAQ-AAPL/', yahoo:'https://finance.yahoo.com/quote/AAPL' },
+    tv_data:{ description:'Apple Inc.', rating:0.22, market_cap:2.95e12, close:189.30, change_1d:0.8, change_1w:-1.2, change_1m:4.5, volatility:22.8, rsi:52.1, ema20:186.40, ema50:182.10, ema200:174.50, macd:2.31, macd_signal:1.98, adx:21.3, cci20_1m:44.8, high_1m:198.00, low_1m:182.50, price_52_week_high:199.62, price_52_week_low:164.08, high_all:260.10, low_all:0.35, perf_all:54028.6, aroon_down_120:28.6, aroon_down_1m:42.9, aroon_up_120:71.4, aroon_up_1m:57.1, donch_ch20_lower_1m:183.20, donch_ch20_upper_1m:198.00, pe_ttm:28.4, dividend_yield:0.54, earnings_next_date:1753920000, beta:1.28, beta_3_year:1.19, avg_vol_10d:58200000, average_volume_30d_calc:61400000, basic_eps_net_income:6.67, ebitda:127400000000, ebitda_yoy_growth_fy:8.2, gross_margin:45.9, gross_profit_yoy_growth_fy:6.8, mom_1m:0.14, recommend_all_1m:0.24, fetched_at:new Date(Date.now()-7200000).toISOString() },
+    enrichment:null,
+    sources:[ { adapter:'yahoo-trending', signal_type:'trending', discovered_at:new Date(Date.now()-18*3600000).toISOString(), info_snippet:'Trending #3 on Yahoo Finance — high retail interest ahead of earnings', source_url:'https://finance.yahoo.com/trending-tickers', raw_signal:{ rank:3, change_pct:0.8 } } ], notes:'Wait for earnings beat before adding.' },
+
+  { id:'3', symbol:'TSLA', exchange:'NASDAQ', name:'Tesla, Inc.', bucket:'export', workspace_state:'promoted',
+    first_discovered_at:new Date(Date.now()-3*24*3600000).toISOString(), sector:'Consumer Cyclical', sub_sector:'Auto Manufacturers', isin:'US88160R1014',
+    links:{ tradingview:'https://www.tradingview.com/symbols/NASDAQ-TSLA/', stocktwits:'https://stocktwits.com/symbol/TSLA' },
+    tv_data:{ description:'Tesla, Inc.', rating:-0.15, market_cap:580e9, close:182.60, change_1d:-2.4, change_1w:-5.8, change_1m:-12.3, volatility:58.4, rsi:38.2, ema20:196.40, ema50:214.80, ema200:231.20, macd:-8.24, macd_signal:-5.91, adx:28.7, cci20_1m:-88.4, high_1m:214.40, low_1m:177.20, price_52_week_high:299.29, price_52_week_low:138.80, high_all:414.50, low_all:1.05, perf_all:17290.5, aroon_down_120:71.4, aroon_down_1m:85.7, aroon_up_120:28.6, aroon_up_1m:14.3, donch_ch20_lower_1m:177.20, donch_ch20_upper_1m:214.40, pe_ttm:48.1, dividend_yield:null, earnings_next_date:1751155200, beta:2.34, beta_3_year:2.21, avg_vol_10d:89400000, average_volume_30d_calc:102100000, basic_eps_net_income:3.79, ebitda:12400000000, ebitda_yoy_growth_fy:-24.8, gross_margin:17.4, gross_profit_yoy_growth_fy:-8.2, mom_1m:-0.18, recommend_all_1m:-0.12, fetched_at:new Date(Date.now()-5400000).toISOString() },
+    enrichment:{ model:'claude-sonnet-4-6', confidence:'medium', enriched_at:new Date(Date.now()-2*24*3600000).toISOString(), sector:'Consumer Cyclical', industry:'Auto Manufacturers', market_cap_bucket:'large', region:'US', thesis_short:'Tesla oversold after margin compression — FSD v12 and energy storage may re-rate.', risks:['Margin pressure from price cuts','Chinese EV competition (BYD)','Cybertruck ramp risk'], catalysts:['FSD commercial licensing','Megapack energy storage +100% YoY','Model 2 volume inflection'], sentiment:'neutral' },
+    sources:[ { adapter:'stocktwits', signal_type:'trending', discovered_at:new Date(Date.now()-3*24*3600000).toISOString(), info_snippet:'Trending with 4,821 messages in 24h — bearish sentiment spike', source_url:'https://stocktwits.com/symbol/TSLA', raw_signal:{ messages:4821, sentiment:'bearish' } }, { adapter:'tradingview-screener', signal_type:'volume-spike', discovered_at:new Date(Date.now()-2*24*3600000).toISOString(), info_snippet:'Volume 2.8× average on breakdown below 200-day EMA', source_url:'https://www.tradingview.com/symbols/NASDAQ-TSLA/', raw_signal:{ rel_volume:2.8, close:182.60, change:-2.4 } } ], notes:'Contrarian position — watching for FSD catalyst.' },
+
+  { id:'4', symbol:'META', exchange:'NASDAQ', name:'Meta Platforms, Inc.', bucket:'archive', workspace_state:'dismissed',
+    first_discovered_at:new Date(Date.now()-5*24*3600000).toISOString(), sector:'Communication Services', sub_sector:'Internet Content & Information', isin:'US30303M1027',
+    links:{ tradingview:'https://www.tradingview.com/symbols/NASDAQ-META/', yahoo:'https://finance.yahoo.com/quote/META' },
+    tv_data:{ description:'Meta Platforms, Inc.', rating:0.44, market_cap:1.24e12, close:487.20, change_1d:1.1, change_1w:3.2, change_1m:9.8, volatility:31.4, rsi:61.8, ema20:472.10, ema50:448.30, ema200:392.50, macd:12.84, macd_signal:10.21, adx:32.1, cci20_1m:78.4, high_1m:531.49, low_1m:452.80, price_52_week_high:531.49, price_52_week_low:279.40, high_all:584.77, low_all:8.74, perf_all:5473.8, aroon_down_120:35.7, aroon_down_1m:28.6, aroon_up_120:64.3, aroon_up_1m:71.4, donch_ch20_lower_1m:452.80, donch_ch20_upper_1m:531.49, pe_ttm:24.8, dividend_yield:0.42, earnings_next_date:1751760000, beta:1.18, beta_3_year:1.24, avg_vol_10d:14800000, average_volume_30d_calc:16200000, basic_eps_net_income:19.63, ebitda:62400000000, ebitda_yoy_growth_fy:54.2, gross_margin:81.5, gross_profit_yoy_growth_fy:24.1, mom_1m:0.21, recommend_all_1m:0.40, fetched_at:new Date(Date.now()-10800000).toISOString() },
+    enrichment:null,
+    sources:[ { adapter:'etf-holdings', signal_type:'etf-add', discovered_at:new Date(Date.now()-5*24*3600000).toISOString(), info_snippet:'Added to ARK Next Generation Internet ETF (ARKW) — 1.2% position', source_url:'https://ark-funds.com/funds/arkw/', raw_signal:{ etf:'ARKW', weight:1.2, action:'add' } } ], notes:'Already have large position. Skipping for now.' },
+
+  { id:'5', symbol:'SMCI', exchange:'NASDAQ', name:'Super Micro Computer', bucket:'inbox', workspace_state:'new',
+    first_discovered_at:new Date(Date.now()-4*3600000).toISOString(), sector:'Technology', sub_sector:'Computer Hardware', isin:'US86800U1016',
+    links:{}, tv_data:null, enrichment:null,
+    sources:[ { adapter:'openinsider', signal_type:'insider-buy', discovered_at:new Date(Date.now()-4*3600000).toISOString(), info_snippet:'Director Charles Liang purchased 50,000 shares at $92.40 — total $4.6M', source_url:'https://openinsider.com', raw_signal:{ name:'Charles Liang', title:'Director/CEO', shares:50000, price:92.4 } } ], notes:'' },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmtPct(v) { if (v == null) return '—'; return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
-function fmtNum(v, dec = 2) { if (v == null) return '—'; return Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
-function fmtMCap(mc) { if (mc == null) return '—'; if (mc >= 1e12) return `${(mc/1e12).toFixed(1)}T`; if (mc >= 1e9) return `${(mc/1e9).toFixed(1)}B`; if (mc >= 1e6) return `${(mc/1e6).toFixed(0)}M`; return mc.toLocaleString(); }
-function fmtDate(ts) { if (!ts) return '—'; return new Date(ts * 1000).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' }); }
-function fmtDateTime(isoStr) { if (!isoStr) return ''; return new Date(isoStr).toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
-function posNeg(v) { if (v == null) return ''; return v > 0 ? ' tv-pos' : v < 0 ? ' tv-neg' : ''; }
-function rsiClass(v) { if (v == null) return ''; if (v >= 70) return ' tv-neg'; if (v <= 30) return ' tv-pos'; return ''; }
-function tvRatingClass(r) { if (r == null) return 'neutral'; if (r > 0.5) return 'strong-buy'; if (r > 0.1) return 'buy'; if (r < -0.5) return 'strong-sell'; if (r < -0.1) return 'sell'; return 'neutral'; }
-function tvRatingLabel(r) { if (r == null) return '?'; if (r > 0.5) return '↑↑'; if (r > 0.1) return '↑'; if (r < -0.5) return '↓↓'; if (r < -0.1) return '↓'; return '→'; }
-function tvRatingLabelFull(r) { if (r == null) return '—'; if (r > 0.5) return 'Strong Buy ↑↑'; if (r > 0.1) return 'Buy ↑'; if (r < -0.5) return 'Strong Sell ↓↓'; if (r < -0.1) return 'Sell ↓'; return 'Neutral →'; }
-function timeAgo(isoStr) {
-  if (!isoStr) return '–';
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-function sourceBadges(sources) {
-  return [...new Set(sources.map(s => s.adapter))].map(a => {
-    const col = ADAPTER_COLORS[a] ?? '#888';
-    return `<span class="badge" style="background:${col}18;color:${col};border:1px solid ${col}55">${a}</span>`;
-  }).join(' ');
-}
+/* ════════════════════════════════════════════════════════════════════
+   FORMATTERS
+   ════════════════════════════════════════════════════════════════════ */
+const DASH='—';
+function fmtPct(v){ if(v==null) return DASH; return (v>=0?'+':'−')+Math.abs(v).toFixed(2)+'%'; }
+function fmtNum(v,d=2){ if(v==null) return DASH; return Number(v).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtSigned(v,d=2){ if(v==null) return DASH; return (v>=0?'+':'−')+Math.abs(v).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtMCap(mc){ if(mc==null) return DASH; if(mc>=1e12) return (mc/1e12).toFixed(1)+'T'; if(mc>=1e9) return (mc/1e9).toFixed(1)+'B'; if(mc>=1e6) return (mc/1e6).toFixed(0)+'M'; return mc.toLocaleString(); }
+function fmtDate(ts){ if(!ts) return DASH; return new Date(ts*1000).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}); }
+function fmtDateTime(iso){ if(!iso) return ''; return new Date(iso).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function posNegClass(v){ if(v==null) return ''; return v>0?'pos':v<0?'neg':''; }
+function rsiClass(v){ if(v==null) return ''; if(v>=70) return 'neg'; if(v<=30) return 'pos'; return ''; }
+function timeAgo(iso){ if(!iso) return DASH; const m=Math.floor((Date.now()-new Date(iso).getTime())/60000); if(m<60) return m+'m'; const h=Math.floor(m/60); if(h<24) return h+'h'; return Math.floor(h/24)+'d'; }
+function ratingClass(r){ if(r==null) return 'neutral'; if(r>0.5) return 'strong-buy'; if(r>0.1) return 'buy'; if(r<-0.5) return 'strong-sell'; if(r<-0.1) return 'sell'; return 'neutral'; }
+function ratingGlyph(r){ if(r==null) return '?'; if(r>0.5) return '↑↑'; if(r>0.1) return '↑'; if(r<-0.5) return '↓↓'; if(r<-0.1) return '↓'; return '→'; }
+function ratingFull(r){ if(r==null) return DASH; if(r>0.5) return 'Strong Buy ↑↑'; if(r>0.1) return 'Buy ↑'; if(r<-0.5) return 'Strong Sell ↓↓'; if(r<-0.1) return 'Sell ↓'; return 'Neutral →'; }
+function srcBadges(sources){ return [...new Set(sources.map(s=>s.adapter))].map(a=>{ const c=ADAPTER_COLORS[a]||'#888'; return `<span class="src-badge" style="background:${c}22;color:${c};border:1px solid ${c}66">${a}</span>`; }).join(' '); }
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let viewMode = 'standard';
-let sortCol = 'discovered';
-let sortDir = 'desc';
-let selectedIds = new Set();
-let activeId = null;
-let blobTab = 'inbox';
-let filterState = '';
-let filterSector = '';
-let filterCapSize = '';
+const STATE_LABELS={ new:'Neu', reviewed:'Gesehen', promoted:'Promoted', dismissed:'Abgelehnt', imported:'Importiert' };
+const STATE_LETTER={ new:'N', reviewed:'G', promoted:'P', dismissed:'A', imported:'I' };
+const STATE_ORDER=['new','reviewed','promoted','dismissed','imported'];
 
-// ── Sort ──────────────────────────────────────────────────────────────────────
-function sortValue(c, col) {
-  const tv = c.tv_data;
-  switch (col) {
-    case 'symbol':    return c.symbol.toLowerCase();
-    case 'name':      return (c.name ?? '').toLowerCase();
-    case 'discovered':return new Date(c.first_discovered_at).getTime();
-    case 'state':     return ['new','reviewed','promoted','dismissed','imported'].indexOf(c.workspace_state);
-    case 'tv_close':  return tv?.close ?? -Infinity;
-    case 'tv_chg1d':  return tv?.change_1d ?? -Infinity;
-    case 'tv_chg1w':  return tv?.change_1w ?? -Infinity;
-    case 'tv_chg1m':  return tv?.change_1m ?? -Infinity;
-    case 'tv_vol':    return tv?.volatility ?? -Infinity;
-    case 'tv_rsi':    return tv?.rsi ?? -Infinity;
-    case 'tv_ema20':  return tv?.ema20 ?? -Infinity;
-    case 'tv_ema50':  return tv?.ema50 ?? -Infinity;
-    case 'tv_ema200': return tv?.ema200 ?? -Infinity;
-    case 'tv_macd':   return tv?.macd ?? -Infinity;
-    case 'tv_adx':    return tv?.adx ?? -Infinity;
-    case 'tv_rating': return tv?.rating ?? -Infinity;
-    case 'tv_mcap':   return tv?.market_cap ?? -Infinity;
-    case 'tv_pe':     return tv?.pe_ttm ?? -Infinity;
-    case 'tv_div':    return tv?.dividend_yield ?? -Infinity;
-    case 'tv_beta':   return tv?.beta ?? -Infinity;
-    case 'tv_vol10d': return tv?.avg_vol_10d ?? -Infinity;
-    case 'tv_h1m':    return tv?.high_1m ?? -Infinity;
-    case 'tv_l1m':    return tv?.low_1m ?? -Infinity;
-    case 'tv_h52hi':  return tv?.price_52_week_high ?? -Infinity;
-    case 'tv_h52lo':  return tv?.price_52_week_low ?? -Infinity;
-    case 'tv_hall':   return tv?.high_all ?? -Infinity;
-    case 'tv_lall':   return tv?.low_all ?? -Infinity;
-    case 'tv_perfall':return tv?.perf_all ?? -Infinity;
+/* ════════════════════════════════════════════════════════════════════
+   UI STATE (persisted in localStorage — static client app, no server state)
+   ════════════════════════════════════════════════════════════════════ */
+const LS_KEY='discovery.ui.v1';
+const persisted=(()=>{ try{ return JSON.parse(localStorage.getItem(LS_KEY))||{}; }catch{ return {}; } })();
+const ui={
+  view:persisted.view||'standard',
+  bucket:persisted.bucket||'inbox',
+  theme:persisted.theme||'light',
+  sortCol:persisted.sortCol||'discovered',
+  sortDir:persisted.sortDir||'desc',
+  fState:'', fCap:'', fSector:'',
+};
+function saveUI(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({ view:ui.view, bucket:ui.bucket, theme:ui.theme, sortCol:ui.sortCol, sortDir:ui.sortDir })); }catch{} }
+
+let selectedIds=new Set();
+let activeId=null;
+let lastTrigger=null;
+
+/* ════════════════════════════════════════════════════════════════════
+   SORT
+   ════════════════════════════════════════════════════════════════════ */
+const TEXT_COLS=new Set(['symbol','name']);
+function sortValue(c,col){
+  const tv=c.tv_data;
+  switch(col){
+    case 'symbol': return c.symbol.toLowerCase();
+    case 'name': return (c.name||'').toLowerCase();
+    case 'discovered': return new Date(c.first_discovered_at).getTime();
+    case 'state': return STATE_ORDER.indexOf(c.workspace_state);
+    case 'sources': return c.sources.length;
+    case 'tv_chg1w': return tv?.change_1w ?? -Infinity;
+    case 'tv_chg1m': return tv?.change_1m ?? -Infinity;
+    case 'tv_h1m': return tv?.high_1m ?? -Infinity;
+    case 'tv_l1m': return tv?.low_1m ?? -Infinity;
+    case 'tv_h52hi': return tv?.price_52_week_high ?? -Infinity;
+    case 'tv_h52lo': return tv?.price_52_week_low ?? -Infinity;
+    case 'tv_hall': return tv?.high_all ?? -Infinity;
+    case 'tv_lall': return tv?.low_all ?? -Infinity;
+    case 'tv_perfall': return tv?.perf_all ?? -Infinity;
     case 'tv_aroondn120': return tv?.aroon_down_120 ?? -Infinity;
-    case 'tv_aroondn1m':  return tv?.aroon_down_1m ?? -Infinity;
+    case 'tv_aroondn1m': return tv?.aroon_down_1m ?? -Infinity;
     case 'tv_aroonup120': return tv?.aroon_up_120 ?? -Infinity;
-    case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? -Infinity;
-    case 'tv_macdsig':    return tv?.macd_signal ?? -Infinity;
-    case 'tv_cci':    return tv?.cci20_1m ?? -Infinity;
-    case 'tv_donchlo':return tv?.donch_ch20_lower_1m ?? -Infinity;
-    case 'tv_donchhi':return tv?.donch_ch20_upper_1m ?? -Infinity;
-    case 'tv_eps':    return tv?.basic_eps_net_income ?? -Infinity;
-    case 'tv_earnings':   return tv?.earnings_next_date ?? -Infinity;
+    case 'tv_aroonup1m': return tv?.aroon_up_1m ?? -Infinity;
+    case 'tv_macdsig': return tv?.macd_signal ?? -Infinity;
+    case 'tv_rsi': return tv?.rsi ?? -Infinity;
+    case 'tv_ema20': return tv?.ema20 ?? -Infinity;
+    case 'tv_ema50': return tv?.ema50 ?? -Infinity;
+    case 'tv_ema200': return tv?.ema200 ?? -Infinity;
+    case 'tv_macd': return tv?.macd ?? -Infinity;
+    case 'tv_adx': return tv?.adx ?? -Infinity;
+    case 'tv_cci': return tv?.cci20_1m ?? -Infinity;
+    case 'tv_donchlo': return tv?.donch_ch20_lower_1m ?? -Infinity;
+    case 'tv_donchhi': return tv?.donch_ch20_upper_1m ?? -Infinity;
+    case 'tv_pe': return tv?.pe_ttm ?? -Infinity;
+    case 'tv_div': return tv?.dividend_yield ?? -Infinity;
+    case 'tv_eps': return tv?.basic_eps_net_income ?? -Infinity;
+    case 'tv_earnings': return tv?.earnings_next_date ?? -Infinity;
     case 'tv_ebitdagrowth': return tv?.ebitda_yoy_growth_fy ?? -Infinity;
     case 'tv_ebitda': return tv?.ebitda ?? -Infinity;
     case 'tv_grossmargin': return tv?.gross_margin ?? -Infinity;
     case 'tv_grossgrowth': return tv?.gross_profit_yoy_growth_fy ?? -Infinity;
-    case 'tv_mom1m':  return tv?.mom_1m ?? -Infinity;
+    case 'tv_mom1m': return tv?.mom_1m ?? -Infinity;
+    case 'tv_vol': return tv?.volatility ?? -Infinity;
+    case 'tv_beta': return tv?.beta ?? -Infinity;
     case 'tv_beta3y': return tv?.beta_3_year ?? -Infinity;
+    case 'tv_vol10d': return tv?.avg_vol_10d ?? -Infinity;
     case 'tv_vol30d': return tv?.average_volume_30d_calc ?? -Infinity;
     case 'tv_rating1m': return tv?.recommend_all_1m ?? -Infinity;
+    case 'tv_mcap': return tv?.market_cap ?? -Infinity;
     default: return '';
   }
 }
 
-const SORT_LABELS = {
-  state:'', symbol:'Symbol', name:'Name', discovered:'Entdeckt',
-  tv_close:'Kurs', tv_chg1d:'Δ1D', tv_chg1w:'Δ1W', tv_chg1m:'Δ1M',
-  tv_vol:'Vola', tv_rsi:'RSI', tv_ema20:'EMA20', tv_ema50:'EMA50',
-  tv_ema200:'EMA200', tv_macd:'MACD', tv_adx:'ADX',
-  tv_rating:'Rating', tv_mcap:'Mkt Cap', tv_pe:'KGV', tv_div:'Div%',
-  tv_beta:'Beta', tv_vol10d:'V10d',
-  tv_h1m:'H1M', tv_l1m:'L1M', tv_h52hi:'52W↑', tv_h52lo:'52W↓',
-  tv_hall:'ATH', tv_lall:'ATL', tv_perfall:'%ATH',
-  tv_aroondn120:'Ar↓120', tv_aroondn1m:'Ar↓1M',
-  tv_aroonup120:'Ar↑120', tv_aroonup1m:'Ar↑1M',
-  tv_macdsig:'MACD·S', tv_cci:'CCI', tv_donchlo:'DC↓', tv_donchhi:'DC↑',
-  tv_eps:'EPS', tv_earnings:'Earnings',
-  tv_ebitdagrowth:'EBITDA%', tv_ebitda:'EBITDA',
-  tv_grossmargin:'GM%', tv_grossgrowth:'Gross%',
-  tv_mom1m:'Mom', tv_beta3y:'β3Y', tv_vol30d:'V30d', tv_rating1m:'Rat1M',
+function cell(cls,html){ return `<td class="${cls}">${html}</td>`; }
+const VIEWS={
+  technicals:[
+    { key:'tv_chg1w', label:'Δ1W', title:'Veränderung 1 Woche', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1w)}">${fmtPct(c.tv_data?.change_1w)}</span>` },
+    { key:'tv_chg1m', label:'Δ1M', title:'Veränderung 1 Monat', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1m)}">${fmtPct(c.tv_data?.change_1m)}</span>` },
+    { key:'tv_h1m', label:'H1M', title:'Hoch 1 Monat', num:true, fmt:c=>fmtNum(c.tv_data?.high_1m) },
+    { key:'tv_l1m', label:'L1M', title:'Tief 1 Monat', num:true, fmt:c=>fmtNum(c.tv_data?.low_1m) },
+    { key:'tv_h52hi', label:'52W↑', title:'52-Wochen-Hoch', num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_high) },
+    { key:'tv_h52lo', label:'52W↓', title:'52-Wochen-Tief', num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_low) },
+    { key:'tv_hall', label:'ATH', title:'All-Time-High', num:true, fmt:c=>fmtNum(c.tv_data?.high_all) },
+    { key:'tv_lall', label:'ATL', title:'All-Time-Low', num:true, fmt:c=>fmtNum(c.tv_data?.low_all) },
+    { key:'tv_perfall', label:'%ATH', title:'Performance seit Beginn', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_all)}">${c.tv_data?.perf_all!=null?fmtNum(c.tv_data.perf_all,1)+'%':DASH}</span>` },
+    { key:'tv_aroondn120', label:'Ar↓120', title:'Aroon Down 120', num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_120,1) },
+    { key:'tv_aroondn1m', label:'Ar↓1M', title:'Aroon Down 1 Monat', num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_1m,1) },
+    { key:'tv_aroonup120', label:'Ar↑120', title:'Aroon Up 120', num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_120,1) },
+    { key:'tv_aroonup1m', label:'Ar↑1M', title:'Aroon Up 1 Monat', num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_1m,1) },
+    { key:'tv_macdsig', label:'MACD·S', title:'MACD Signal', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd_signal)}">${fmtSigned(c.tv_data?.macd_signal,3)}</span>` },
+    { key:'tv_rsi', label:'RSI', title:'Relative Strength Index', num:true, fmt:c=>`<span class="${rsiClass(c.tv_data?.rsi)}">${fmtNum(c.tv_data?.rsi,1)}</span>` },
+    { key:'tv_ema20', label:'EMA20', title:'EMA 20', num:true, fmt:c=>fmtNum(c.tv_data?.ema20) },
+    { key:'tv_ema50', label:'EMA50', title:'EMA 50', num:true, fmt:c=>fmtNum(c.tv_data?.ema50) },
+    { key:'tv_ema200', label:'EMA200', title:'EMA 200', num:true, fmt:c=>fmtNum(c.tv_data?.ema200) },
+    { key:'tv_macd', label:'MACD', title:'MACD', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd)}">${fmtSigned(c.tv_data?.macd,3)}</span>` },
+    { key:'tv_adx', label:'ADX', title:'Average Directional Index', num:true, fmt:c=>fmtNum(c.tv_data?.adx,1) },
+    { key:'tv_cci', label:'CCI', title:'Commodity Channel Index 20 (1M)', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.cci20_1m)}">${fmtSigned(c.tv_data?.cci20_1m,1)}</span>` },
+    { key:'tv_donchlo', label:'DC↓', title:'Donchian Channel 20 Lower (1M)', num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
+    { key:'tv_donchhi', label:'DC↑', title:'Donchian Channel 20 Upper (1M)', num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
+  ],
+  fundamentals:[
+    { key:'tv_pe', label:'KGV', title:'Kurs-Gewinn-Verhältnis (TTM)', num:true, fmt:c=>fmtNum(c.tv_data?.pe_ttm,1) },
+    { key:'tv_div', label:'Div%', title:'Dividendenrendite', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.dividend_yield)}">${c.tv_data?.dividend_yield!=null?fmtNum(c.tv_data.dividend_yield,2)+'%':DASH}</span>` },
+    { key:'tv_eps', label:'EPS', title:'Gewinn je Aktie', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.basic_eps_net_income)}">${fmtNum(c.tv_data?.basic_eps_net_income,2)}</span>` },
+    { key:'tv_earnings', label:'Earnings', title:'Nächster Earnings-Termin', num:false, fmt:c=>c.tv_data?.earnings_next_date?fmtDate(c.tv_data.earnings_next_date):DASH },
+    { key:'tv_ebitdagrowth', label:'EBITDA%', title:'EBITDA YoY Wachstum', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.ebitda_yoy_growth_fy)}">${c.tv_data?.ebitda_yoy_growth_fy!=null?fmtNum(c.tv_data.ebitda_yoy_growth_fy,1)+'%':DASH}</span>` },
+    { key:'tv_ebitda', label:'EBITDA', title:'EBITDA', num:true, fmt:c=>fmtMCap(c.tv_data?.ebitda) },
+    { key:'tv_grossmargin', label:'GM%', title:'Bruttomarge', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_margin)}">${c.tv_data?.gross_margin!=null?fmtNum(c.tv_data.gross_margin,1)+'%':DASH}</span>` },
+    { key:'tv_grossgrowth', label:'Gross%', title:'Bruttogewinn YoY Wachstum', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_profit_yoy_growth_fy)}">${c.tv_data?.gross_profit_yoy_growth_fy!=null?fmtNum(c.tv_data.gross_profit_yoy_growth_fy,1)+'%':DASH}</span>` },
+    { key:'tv_mom1m', label:'Mom', title:'Momentum 1 Monat', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.mom_1m)}">${fmtSigned(c.tv_data?.mom_1m,2)}</span>` },
+    { key:'tv_vol', label:'Vola', title:'Volatilität', num:true, fmt:c=>fmtNum(c.tv_data?.volatility,1) },
+    { key:'tv_beta', label:'Beta', title:'Beta (1 Jahr)', num:true, fmt:c=>fmtNum(c.tv_data?.beta,2) },
+    { key:'tv_beta3y', label:'β3Y', title:'Beta (3 Jahre)', num:true, fmt:c=>fmtNum(c.tv_data?.beta_3_year,2) },
+    { key:'tv_vol10d', label:'V10d', title:'Ø Volumen 10 Tage', num:true, fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
+    { key:'tv_vol30d', label:'V30d', title:'Ø Volumen 30 Tage', num:true, fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
+    { key:'tv_rating1m', label:'Rat1M', title:'Empfehlung 1 Monat', num:true, fmt:c=>`<span class="tv-rating--${ratingClass(c.tv_data?.recommend_all_1m)}">${fmtNum(c.tv_data?.recommend_all_1m,2)}</span>` },
+  ],
 };
 
-function sortIcon(col) {
-  if (sortCol !== col) return `<span class="sort-icon">${IC.arrowUpDown}</span>`;
-  return `<span class="sort-icon sort-icon--active">${sortDir === 'asc' ? IC.arrowUp : IC.arrowDown}</span>`;
-}
-function th(col, label) {
-  const lbl = label ?? SORT_LABELS[col] ?? col;
-  return `<span class="th-sort" data-sort="${col}">${lbl} ${sortIcon(col)}</span>`;
-}
-
-// ── Rendering ─────────────────────────────────────────────────────────────────
-function getRows() {
-  let rows = MOCK.filter(c => {
-    if (filterState && c.workspace_state !== filterState) return false;
-    if (filterSector && c.sector !== filterSector) return false;
-    if (filterCapSize) {
-      const mc = c.tv_data?.market_cap;
-      let size = null;
-      if (mc != null) { if (mc < 300e6) size = 'micro'; else if (mc < 2e9) size = 'small'; else if (mc < 50e9) size = 'mid'; else size = 'large'; }
-      if (size !== filterCapSize) return false;
-    }
+/* ════════════════════════════════════════════════════════════════════
+   FILTER / SORT PIPELINE
+   ════════════════════════════════════════════════════════════════════ */
+function capSize(mc){ if(mc==null) return null; if(mc<300e6) return 'micro'; if(mc<2e9) return 'small'; if(mc<50e9) return 'mid'; return 'large'; }
+function activeFilterCount(){ return [ui.fState, ui.fCap, ui.fSector].filter(Boolean).length; }
+function getRows(){
+  let rows=MOCK.filter(c=>c.bucket===ui.bucket);
+  rows=rows.filter(c=>{
+    if(ui.fState && c.workspace_state!==ui.fState) return false;
+    if(ui.fCap && capSize(c.tv_data?.market_cap)!==ui.fCap) return false;
+    if(ui.fSector && c.sector!==ui.fSector) return false;
     return true;
   });
-  return rows.sort((a, b) => {
-    const va = sortValue(a, sortCol), vb = sortValue(b, sortCol);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ? 1 : -1;
-    return 0;
-  });
+  return rows.sort((a,b)=>{ const va=sortValue(a,ui.sortCol), vb=sortValue(b,ui.sortCol); if(va<vb) return ui.sortDir==='asc'?-1:1; if(va>vb) return ui.sortDir==='asc'?1:-1; return 0; });
 }
 
-function renderThead() {
-  const stateTh = `<th class="col-state">${th('state', '')}</th>`;
-  if (viewMode === 'technicals') {
-    return `<tr>
-      <th class="col-check"><input type="checkbox" id="select-all"></th>
-      ${stateTh}
-      <th class="col-symbol">${th('symbol')}</th>
-      <th class="tv-col">${th('tv_chg1w')}</th>
-      <th class="tv-col">${th('tv_chg1m')}</th>
-      <th class="tv-col">${th('tv_h1m')}</th>
-      <th class="tv-col">${th('tv_l1m')}</th>
-      <th class="tv-col">${th('tv_h52hi')}</th>
-      <th class="tv-col">${th('tv_h52lo')}</th>
-      <th class="tv-col">${th('tv_hall')}</th>
-      <th class="tv-col">${th('tv_lall')}</th>
-      <th class="tv-col">${th('tv_perfall')}</th>
-      <th class="tv-col">${th('tv_aroondn120')}</th>
-      <th class="tv-col">${th('tv_aroondn1m')}</th>
-      <th class="tv-col">${th('tv_aroonup120')}</th>
-      <th class="tv-col">${th('tv_aroonup1m')}</th>
-      <th class="tv-col">${th('tv_macdsig')}</th>
-      <th class="tv-col">${th('tv_rsi')}</th>
-      <th class="tv-col">${th('tv_ema20')}</th>
-      <th class="tv-col">${th('tv_ema50')}</th>
-      <th class="tv-col">${th('tv_ema200')}</th>
-      <th class="tv-col">${th('tv_macd')}</th>
-      <th class="tv-col">${th('tv_adx')}</th>
-      <th class="tv-col">${th('tv_cci')}</th>
-      <th class="tv-col">${th('tv_donchlo')}</th>
-      <th class="tv-col">${th('tv_donchhi')}</th>
-      <th class="col-actions">Aktion</th>
-    </tr>`;
-  } else if (viewMode === 'fundamentals') {
-    return `<tr>
-      <th class="col-check"><input type="checkbox" id="select-all"></th>
-      ${stateTh}
-      <th class="col-symbol">${th('symbol')}</th>
-      <th class="tv-col">${th('tv_pe')}</th>
-      <th class="tv-col">${th('tv_div')}</th>
-      <th class="tv-col">${th('tv_eps')}</th>
-      <th class="tv-col">${th('tv_earnings')}</th>
-      <th class="tv-col">${th('tv_ebitdagrowth')}</th>
-      <th class="tv-col">${th('tv_ebitda')}</th>
-      <th class="tv-col">${th('tv_grossmargin')}</th>
-      <th class="tv-col">${th('tv_grossgrowth')}</th>
-      <th class="tv-col">${th('tv_mom1m')}</th>
-      <th class="tv-col">${th('tv_vol')}</th>
-      <th class="tv-col">${th('tv_beta')}</th>
-      <th class="tv-col">${th('tv_beta3y')}</th>
-      <th class="tv-col">${th('tv_vol10d')}</th>
-      <th class="tv-col">${th('tv_vol30d')}</th>
-      <th class="tv-col">${th('tv_rating1m')}</th>
-      <th class="col-actions">Aktion</th>
-    </tr>`;
+/* ════════════════════════════════════════════════════════════════════
+   RENDER: TOPBAR / SUBBAR / FILTERBAR / BOTNAV
+   ════════════════════════════════════════════════════════════════════ */
+function renderTopbar(){
+  document.getElementById('tb-cloud').innerHTML=lucide('Cloud');
+  document.getElementById('tb-import').innerHTML=lucide('Upload');
+  document.getElementById('tb-theme').innerHTML=lucide(ui.theme==='dark'?'Sun':'Moon');
+  document.getElementById('tb-export').innerHTML=lucide('Download');
+  document.getElementById('tb-menu').innerHTML=lucide('Menu');
+}
+function renderSubbar(){
+  const views=[['standard','Standard'],['technicals','Technicals'],['fundamentals','Fundamentals']];
+  document.getElementById('view-switch').innerHTML=views.map(([v,l])=>
+    `<button class="seg-btn ${ui.view===v?'seg-btn--active':''}" role="tab" aria-selected="${ui.view===v}" data-view="${v}">${l}</button>`
+  ).join('');
+  document.querySelectorAll('#view-switch .seg-btn').forEach(b=>b.addEventListener('click',()=>{
+    ui.view=b.dataset.view;
+    ui.sortCol = ui.view==='standard'?'discovered':'tv_mcap';
+    ui.sortDir='desc'; saveUI(); renderSubbar(); renderTable();
+  }));
+}
+function renderFilterbar(){
+  const sectors=[...new Set(MOCK.map(c=>c.sector).filter(Boolean))].sort();
+  const states=[['new','Neu'],['reviewed','Gesehen'],['promoted','Promoted'],['dismissed','Abgelehnt']];
+  const caps=[['micro','Micro','<300M'],['small','Small','300M–2B'],['mid','Mid','2–50B'],['large','Large','>50B']];
+  const n=activeFilterCount();
+  document.getElementById('filterbar').innerHTML=`
+    <div class="pill-group" role="group" aria-label="Status">
+      ${states.map(([v,l])=>`<button class="pill ${ui.fState===v?'pill--active':''}" data-f="state" data-v="${v}" aria-pressed="${ui.fState===v}">${l}</button>`).join('')}
+    </div>
+    <span class="filter-sep"></span>
+    <div class="pill-group" role="group" aria-label="Marktkapitalisierung">
+      ${caps.map(([v,l,t])=>`<button class="pill ${ui.fCap===v?'pill--active':''}" data-f="cap" data-v="${v}" aria-pressed="${ui.fCap===v}" title="${t}">${l}</button>`).join('')}
+    </div>
+    <span class="filter-sep"></span>
+    <select class="filter-select ${ui.fSector?'filter-select--active':''}" id="f-sector" aria-label="Sektor">
+      <option value="">Alle Sektoren</option>
+      ${sectors.map(s=>`<option value="${s}" ${ui.fSector===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    ${n>0?`<button class="pill pill--reset" id="f-reset">${lucide('XCircle','icon-sm')} Filter (${n})</button>`:''}
+  `;
+  document.querySelectorAll('#filterbar .pill[data-f]').forEach(b=>b.addEventListener('click',()=>{
+    const f=b.dataset.f, v=b.dataset.v;
+    if(f==='state') ui.fState = ui.fState===v?'':v;
+    if(f==='cap') ui.fCap = ui.fCap===v?'':v;
+    selectedIds.clear(); renderFilterbar(); renderTable();
+  }));
+  const sel=document.getElementById('f-sector');
+  if(sel) sel.addEventListener('change',e=>{ ui.fSector=e.target.value; selectedIds.clear(); renderFilterbar(); renderTable(); });
+  const reset=document.getElementById('f-reset');
+  if(reset) reset.addEventListener('click',()=>{ ui.fState=ui.fCap=ui.fSector=''; selectedIds.clear(); renderFilterbar(); renderTable(); });
+}
+function renderBotnav(){
+  document.getElementById('nav-home-icon').innerHTML=lucide('Home');
+  document.getElementById('nav-bucket-icon').innerHTML=lucide('Layers');
+  const labels={ inbox:'Inbox', archive:'Archiv', export:'Export' };
+  document.getElementById('nav-bucket-label').textContent=labels[ui.bucket];
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RENDER: TABLE
+   ════════════════════════════════════════════════════════════════════ */
+function sortGlyph(col){ return ui.sortCol===col?`<span class="sort-glyph" aria-hidden="true">${ui.sortDir==='asc'?'▲':'▼'}</span>`:''; }
+function ariaSort(col){ return ui.sortCol===col?(ui.sortDir==='asc'?'ascending':'descending'):'none'; }
+
+function renderTable(){
+  const thead=document.getElementById('thead');
+  const tbody=document.getElementById('tbody');
+  const empty=document.getElementById('empty');
+
+  /* THEAD */
+  let cols='';
+  cols += `<th class="col-check"><input type="checkbox" id="select-all" aria-label="Alle auswählen"></th>`;
+  cols += `<th class="col-state" aria-sort="${ariaSort('state')}"><button class="sort-btn" data-sort="state" title="Workspace-Status">S ${sortGlyph('state')}</button></th>`;
+  cols += `<th class="col-anchor" aria-sort="${ariaSort('symbol')}"><button class="sort-btn" data-sort="symbol">Symbol ${sortGlyph('symbol')}</button></th>`;
+  if(ui.view==='standard'){
+    cols += `<th class="col-name-data" aria-sort="${ariaSort('name')}"><button class="sort-btn" data-sort="name">Name ${sortGlyph('name')}</button></th>`;
+    cols += `<th>Links</th>`;
+    cols += `<th>Letztes Signal</th>`;
+    cols += `<th aria-sort="${ariaSort('discovered')}"><button class="sort-btn" data-sort="discovered">Entdeckt ${sortGlyph('discovered')}</button></th>`;
+    cols += `<th class="num">Aktion</th>`;
+    cols += `<th aria-sort="${ariaSort('sources')}"><button class="sort-btn" data-sort="sources">Quellen ${sortGlyph('sources')}</button></th>`;
   } else {
-    return `<tr>
-      <th class="col-check"><input type="checkbox" id="select-all"></th>
-      ${stateTh}
-      <th class="col-symbol">${th('symbol')}</th>
-      <th class="col-name">${th('name')}</th>
-      <th class="col-links">Links</th>
-      <th class="col-signal">Letztes Signal</th>
-      <th class="col-time">${th('discovered')}</th>
-      <th class="col-actions">Aktion</th>
-      <th>Quellen</th>
-    </tr>`;
+    cols += VIEWS[ui.view].map(d=>
+      `<th class="${d.num?'num':''}" aria-sort="${ariaSort(d.key)}" title="${d.title}"><button class="sort-btn" data-sort="${d.key}">${d.label} ${sortGlyph(d.key)}</button></th>`
+    ).join('');
+    cols += `<th class="num">Aktion</th>`;
   }
-}
+  thead.innerHTML=`<tr>${cols}</tr>`;
+  thead.querySelectorAll('.sort-btn[data-sort]').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const col=btn.dataset.sort;
+    if(ui.sortCol===col){ ui.sortDir=ui.sortDir==='asc'?'desc':'asc'; }
+    else { ui.sortCol=col; ui.sortDir=TEXT_COLS.has(col)?'asc':'desc'; }
+    saveUI(); renderTable();
+  }));
 
-function renderRows() {
-  const rows = getRows();
-  if (rows.length === 0) return '<tr><td colspan="20" class="empty-state">Keine Kandidaten gefunden.</td></tr>';
-  return rows.map(c => {
-    const tv = c.tv_data;
-    const links = c.links ?? {};
-    const symbolTd = `<td class="col-symbol"><div class="symbol-cell">
-      <strong>${c.symbol}</strong>
-      <span class="exchange-tag">${c.exchange}</span>
-      ${c.enrichment ? `<span class="enrich-badge" title="AI Enrichment">${IC.sparkles}</span>` : ''}
-      ${tv ? `<span class="tv-rating-badge tv-rating-badge--${tvRatingClass(tv.rating)}">${tvRatingLabel(tv.rating)}</span>` : ''}
+  /* TBODY */
+  const rows=getRows();
+  if(rows.length===0){
+    tbody.innerHTML='';
+    empty.style.display='block'; empty.className='empty-state';
+    const msg = activeFilterCount()>0 ? 'Keine Treffer für die aktiven Filter.' : 'Keine Kandidaten in diesem Bucket.';
+    const reset = activeFilterCount()>0 ? ` <a id="empty-reset">Filter zurücksetzen</a>` : '';
+    empty.innerHTML=`<p>${msg}${reset}</p>`;
+    const er=document.getElementById('empty-reset');
+    if(er) er.addEventListener('click',()=>{ ui.fState=ui.fCap=ui.fSector=''; renderFilterbar(); renderTable(); });
+    updateBulk(); return;
+  }
+  empty.style.display='none';
+
+  tbody.innerHTML=rows.map(c=>{
+    const tv=c.tv_data, links=c.links||{};
+    const checked=selectedIds.has(c.id);
+    const symHtml=`<div class="sym-cell">
+      <span class="sym-strong">${c.symbol}</span>
+      <span class="exch-tag">${c.exchange}</span>
+      ${c.enrichment?`<span class="ai-badge" title="AI Enrichment">${lucide('Sparkles','icon-sm')}</span>`:''}
+      ${tv?`<span class="rating-badge rating-badge--${ratingClass(tv.rating)}" title="TV Rating ${tv.rating?.toFixed(2)??'?'}">${ratingGlyph(tv.rating)}</span>`:''}
+    </div>`;
+    const actHtml=`<td class="num"><div class="row-actions">
+      ${!['promoted','imported'].includes(c.workspace_state)?`<button class="act-btn act-btn--promote" data-act="promote" data-id="${c.id}" aria-label="Promoten">${lucide('Check','icon-sm')}</button>`:''}
+      ${c.workspace_state!=='dismissed'?`<button class="act-btn act-btn--dismiss" data-act="dismiss" data-id="${c.id}" aria-label="Ablehnen">${lucide('X','icon-sm')}</button>`:''}
     </div></td>`;
-    const actionTd = `<td class="col-actions">
-      ${!['promoted','imported'].includes(c.workspace_state) ? `<button class="btn-icon btn-icon--promote" data-action="promote" data-id="${c.id}" title="Promoten">${IC.check}</button>` : ''}
-      ${c.workspace_state !== 'dismissed' ? `<button class="btn-icon btn-icon--dismiss" data-action="dismiss" data-id="${c.id}" title="Ablehnen">${IC.xMark}</button>` : ''}
-    </td>`;
+
     let dataCols;
-    if (viewMode === 'technicals') {
-      dataCols = `
-        <td class="tv-col tv-num${posNeg(tv?.change_1w)}">${fmtPct(tv?.change_1w)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.change_1m)}">${fmtPct(tv?.change_1m)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.high_1m)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.low_1m)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.price_52_week_high)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.price_52_week_low)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.high_all)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.low_all)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.perf_all)}">${tv?.perf_all != null ? fmtNum(tv.perf_all,1)+'%' : '—'}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.aroon_down_120,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.aroon_down_1m,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.aroon_up_120,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.aroon_up_1m,1)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.macd_signal)}">${fmtNum(tv?.macd_signal,3)}</td>
-        <td class="tv-col tv-num${rsiClass(tv?.rsi)}">${fmtNum(tv?.rsi,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.ema20)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.ema50)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.ema200)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.macd)}">${fmtNum(tv?.macd,3)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.adx,1)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.cci20_1m)}">${fmtNum(tv?.cci20_1m,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.donch_ch20_lower_1m)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.donch_ch20_upper_1m)}</td>
-        ${actionTd}`;
-    } else if (viewMode === 'fundamentals') {
-      dataCols = `
-        <td class="tv-col tv-num">${fmtNum(tv?.pe_ttm,1)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.dividend_yield)}">${tv?.dividend_yield != null ? fmtNum(tv.dividend_yield,2)+'%' : '—'}</td>
-        <td class="tv-col tv-num${posNeg(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income,2)}</td>
-        <td class="tv-col">${tv?.earnings_next_date ? fmtDate(tv.earnings_next_date) : '—'}</td>
-        <td class="tv-col tv-num${posNeg(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy,1)+'%' : '—'}</td>
-        <td class="tv-col tv-num">${fmtMCap(tv?.ebitda)}</td>
-        <td class="tv-col tv-num${posNeg(tv?.gross_margin)}">${tv?.gross_margin != null ? fmtNum(tv.gross_margin,1)+'%' : '—'}</td>
-        <td class="tv-col tv-num${posNeg(tv?.gross_profit_yoy_growth_fy)}">${tv?.gross_profit_yoy_growth_fy != null ? fmtNum(tv.gross_profit_yoy_growth_fy,1)+'%' : '—'}</td>
-        <td class="tv-col tv-num${posNeg(tv?.mom_1m)}">${fmtNum(tv?.mom_1m,2)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.volatility,1)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.beta,2)}</td>
-        <td class="tv-col tv-num">${fmtNum(tv?.beta_3_year,2)}</td>
-        <td class="tv-col tv-num">${fmtMCap(tv?.avg_vol_10d)}</td>
-        <td class="tv-col tv-num">${fmtMCap(tv?.average_volume_30d_calc)}</td>
-        <td class="tv-col tv-num tv-rating-txt--${tvRatingClass(tv?.recommend_all_1m)}">${fmtNum(tv?.recommend_all_1m,2)}</td>
-        ${actionTd}`;
+    if(ui.view==='standard'){
+      dataCols =
+        cell('col-name-data', `<span class="name-cell" title="${c.name}">${c.name}</span>`)
+        + cell('', `<div class="link-cluster">${chip(links.tradingview,TV_LOGO,'TradingView')}${chip(links.stocktwits,ST_LOGO,'StockTwits')}${chip(links.yahoo,YH_LOGO,'Yahoo Finance')}</div>`)
+        + cell('', `<span class="signal-text">${c.sources[c.sources.length-1]?.info_snippet??''}</span>`)
+        + cell('', `<span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>`)
+        + actHtml
+        + cell('', srcBadges(c.sources));
     } else {
-      dataCols = `
-        <td class="col-name">${c.name}</td>
-        <td class="col-links"><div class="link-cluster">
-          ${links.tradingview
-            ? `<a href="${links.tradingview}" class="link-chip link-chip--tv" target="_blank" title="TradingView"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></a>`
-            : `<span class="link-chip link-chip--missing"><img src="${TV_LOGO}" class="link-logo" alt="TV" loading="lazy"></span>`}
-          ${links.stocktwits
-            ? `<a href="${links.stocktwits}" class="link-chip link-chip--st" target="_blank" title="StockTwits"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></a>`
-            : `<span class="link-chip link-chip--missing"><img src="${ST_LOGO}" class="link-logo" alt="ST" loading="lazy"></span>`}
-          ${links.yahoo
-            ? `<a href="${links.yahoo}" class="link-chip link-chip--yahoo" target="_blank" title="Yahoo Finance"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></a>`
-            : `<span class="link-chip link-chip--missing"><img src="${YH_LOGO}" class="link-logo" alt="Y!" loading="lazy"></span>`}
-        </div></td>
-        <td class="col-signal"><span class="signal-text">${c.sources[c.sources.length-1]?.info_snippet ?? ''}</span></td>
-        <td class="col-time"><span class="time-chip">${timeAgo(c.first_discovered_at)}</span></td>
-        ${actionTd}
-        <td>${sourceBadges(c.sources)}</td>`;
+      dataCols = VIEWS[ui.view].map(d=>cell(d.num?'num':'', d.fmt(c))).join('') + actHtml;
     }
-    return `<tr class="candidate-row state-${c.workspace_state}${c.id === activeId ? ' active-row' : ''}${selectedIds.has(c.id) ? ' selected' : ''}" data-id="${c.id}">
-      <td class="col-check"><input type="checkbox" class="row-check" ${selectedIds.has(c.id) ? 'checked' : ''} data-id="${c.id}"></td>
-      <td class="col-state"><span class="state-dot state-dot--${c.workspace_state}"></span></td>
-      ${symbolTd}
+
+    return `<tr class="candidate-row state-${c.workspace_state} ${c.id===activeId?'is-active':''} ${checked?'is-selected':''}"
+        data-id="${c.id}" tabindex="0" role="button" aria-expanded="${c.id===activeId}"
+        aria-label="${c.symbol} ${c.name}, ${STATE_LABELS[c.workspace_state]}">
+      <td class="col-check"><input type="checkbox" class="row-check" data-id="${c.id}" ${checked?'checked':''} aria-label="${c.symbol} auswählen"></td>
+      <td class="col-state"><span class="state-cell" aria-label="${STATE_LABELS[c.workspace_state]}">
+        <span class="state-dot state-dot--${c.workspace_state}"></span>
+        <span class="state-letter">${STATE_LETTER[c.workspace_state]}</span>
+      </span></td>
+      <td class="col-anchor">${symHtml}</td>
       ${dataCols}
     </tr>`;
   }).join('');
+
+  /* row interactions */
+  tbody.querySelectorAll('.candidate-row').forEach(tr=>{
+    const open=()=>{ lastTrigger=tr; openDetail(tr.dataset.id); };
+    tr.addEventListener('click',e=>{ if(e.target.closest('button,a,input')) return; open(); });
+    tr.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); open(); } });
+  });
+  tbody.querySelectorAll('.row-check').forEach(cb=>cb.addEventListener('change',e=>{
+    const id=e.target.dataset.id;
+    if(e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
+    e.target.closest('tr').classList.toggle('is-selected',e.target.checked);
+    updateBulk(); syncSelectAll();
+  }));
+  tbody.querySelectorAll('[data-act="promote"]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const c=MOCK.find(x=>x.id===b.dataset.id); c.workspace_state='promoted'; renderTable(); if(activeId===c.id) renderDetail(c); }));
+  tbody.querySelectorAll('[data-act="dismiss"]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const c=MOCK.find(x=>x.id===b.dataset.id); c.workspace_state='dismissed'; renderTable(); if(activeId===c.id) renderDetail(c); }));
+
+  const sa=document.getElementById('select-all');
+  sa.addEventListener('change',e=>{
+    const rs=getRows();
+    if(e.target.checked) rs.forEach(c=>selectedIds.add(c.id)); else selectedIds.clear();
+    renderTable(); updateBulk();
+  });
+  syncSelectAll();
+  updateBulk();
 }
 
-function renderDetail(c) {
-  const panel = document.getElementById('detail-panel');
-  panel.className = 'detail-drawer open';
-  const tv = c.tv_data;
-  const links = c.links ?? {};
-  const stateMap = { new:'Neu', reviewed:'Gesehen', promoted:'Promoted', dismissed:'Abgelehnt', imported:'Importiert' };
+function chip(href,logo,label){
+  if(href) return `<a href="${href}" class="link-chip" target="_blank" rel="noopener" title="${label}" aria-label="${label}"><img src="${logo}" alt=""></a>`;
+  return `<span class="link-chip link-chip--missing" aria-hidden="true"><img src="${logo}" alt=""></span>`;
+}
+function syncSelectAll(){
+  const sa=document.getElementById('select-all'); if(!sa) return;
+  const rows=getRows(); const sel=rows.filter(c=>selectedIds.has(c.id)).length;
+  sa.checked = rows.length>0 && sel===rows.length;
+  sa.indeterminate = sel>0 && sel<rows.length;
+}
 
-  const tvSection = tv ? `
+/* ════════════════════════════════════════════════════════════════════
+   BULKBAR
+   ════════════════════════════════════════════════════════════════════ */
+function renderBulkActions(){
+  document.getElementById('bulk-actions').innerHTML=`
+    <button class="bulk-btn bulk-btn--neg" data-bulk="dismiss">${lucide('X','icon-sm')} Ablehnen</button>
+    <button class="bulk-btn bulk-btn--pos" data-bulk="promote">${lucide('Check','icon-sm')} Promoten</button>
+    <button class="bulk-btn bulk-btn--ai" data-bulk="enrich">${lucide('Sparkles','icon-sm')} Enrich</button>
+    <button class="bulk-btn bulk-btn--accent" data-bulk="tv">${lucide('BarChart3','icon-sm')} TV-Daten</button>
+    <button class="bulk-btn bulk-btn--neg" data-bulk="delete">${lucide('Trash2','icon-sm')} Löschen</button>
+    <button class="bulk-btn bulk-btn--neutral" data-bulk="clear" aria-label="Auswahl leeren">${lucide('XCircle','icon-sm')}</button>`;
+  document.querySelectorAll('#bulk-actions [data-bulk]').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.bulk==='clear'){ selectedIds.clear(); renderTable(); updateBulk(); }
+  }));
+}
+function updateBulk(){
+  const bar=document.getElementById('bulkbar');
+  document.getElementById('bulk-count').textContent=`${selectedIds.size} ausgewählt`;
+  bar.classList.toggle('is-open', selectedIds.size>0);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SHEETS: scrim, focus trap, open/close
+   ════════════════════════════════════════════════════════════════════ */
+const scrim=document.getElementById('scrim');
+let openSheetEl=null;
+function trapFocus(el,e){
+  const f=el.querySelectorAll('button,a,input,textarea,select,[tabindex]:not([tabindex="-1"])');
+  if(!f.length) return; const first=f[0], last=f[f.length-1];
+  if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+}
+function openSheet(el){
+  openSheetEl=el; scrim.classList.add('is-open'); el.classList.add('is-open');
+  const f=el.querySelector('button,a,input,textarea,select'); if(f) f.focus();
+}
+function closeSheet(){
+  if(!openSheetEl) return;
+  openSheetEl.classList.remove('is-open');
+  document.getElementById('bucket-sheet').classList.remove('is-open');
+  scrim.classList.remove('is-open');
+  if(activeId){ activeId=null; renderTable(); }
+  if(lastTrigger){ lastTrigger.focus?.(); lastTrigger=null; }
+  openSheetEl=null;
+}
+scrim.addEventListener('click',closeSheet);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closeSheet();
+  if(e.key==='Tab' && openSheetEl) trapFocus(openSheetEl,e);
+});
+
+/* NAV SHEET */
+function openNav(){
+  lastTrigger=document.getElementById('tb-menu');
+  const buckets=[['inbox','Inbox'],['archive','Archiv'],['export','Export']];
+  document.getElementById('nav-sheet').innerHTML=`
+    <div class="sheet__header">
+      <div class="sheet__title"><h2>Menü</h2></div>
+      <button class="icon-btn" id="nav-close" aria-label="Schließen">${lucide('X')}</button>
+    </div>
+    <div class="nav-section-label">Buckets</div>
+    ${buckets.map(([v,l])=>`<button class="nav-item ${ui.bucket===v?'nav-item--active':''}" data-bucket="${v}">${lucide('Layers')} ${l}</button>`).join('')}
+    <div class="nav-section-label">Aktionen</div>
+    <button class="nav-item">${lucide('Upload')} Import</button>
+    <button class="nav-item">${lucide('Download')} Export</button>
+    <button class="nav-item" id="nav-theme">${lucide(ui.theme==='dark'?'Sun':'Moon')} Theme: ${ui.theme==='dark'?'Dark':'Light'}</button>
+    <div class="nav-section-label">Einstellungen</div>
+    <button class="nav-item">Backend-URL &amp; Secret</button>
+    <button class="nav-item">Claude API-Key</button>
+  `;
+  document.getElementById('nav-close').addEventListener('click',closeSheet);
+  document.querySelectorAll('#nav-sheet [data-bucket]').forEach(b=>b.addEventListener('click',()=>{ setBucket(b.dataset.bucket); closeSheet(); }));
+  document.getElementById('nav-theme').addEventListener('click',toggleTheme);
+  openSheet(document.getElementById('nav-sheet'));
+}
+
+/* DETAIL SHEET */
+function openDetail(id){ activeId=id; renderTable(); renderDetail(MOCK.find(x=>x.id===id)); openSheet(document.getElementById('detail-sheet')); }
+function renderDetail(c){
+  const tv=c.tv_data, links=c.links||{};
+  const tvBlock = tv?`
     <div class="detail-section">
       <h3>TV Daten</h3>
-      ${tv.description ? `<p style="margin-bottom:8px;font-size:13px;color:var(--text)">${tv.description}</p>` : ''}
-      ${c.sub_sector ? `<p style="margin-bottom:10px;font-size:12px;color:var(--text-muted)">${c.sub_sector}${c.sector ? ' · '+c.sector : ''}</p>` : ''}
-      <div class="tv-data-grid">
-        <div class="tv-kv"><span>Rating</span><strong class="tv-rating tv-rating--${tvRatingClass(tv.rating)}">${tvRatingLabelFull(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</strong></div>
+      ${tv.description?`<p style="margin-bottom:8px;font-size:var(--fs-3)">${tv.description}</p>`:''}
+      ${c.sub_sector?`<p style="margin-bottom:12px;font-size:var(--fs-2);color:var(--muted)">${c.sub_sector}${c.sector?' · '+c.sector:''}</p>`:''}
+      <div class="tv-grid">
+        <div class="tv-kv"><span>Rating</span><strong class="tv-rating--${ratingClass(tv.rating)}">${ratingFull(tv.rating)}${tv.rating!=null?` (${tv.rating.toFixed(2)})`:''}</strong></div>
         <div class="tv-kv"><span>Market Cap</span><strong>${fmtMCap(tv.market_cap)}</strong></div>
-        <div class="tv-kv"><span>Kurs</span><strong>${tv.close != null ? tv.close.toLocaleString('de-DE', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</strong></div>
-        <div class="tv-kv"><span>KGV (TTM)</span><strong>${tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—'}</strong></div>
-        <div class="tv-kv"><span>Dividende</span><strong>${tv.dividend_yield != null ? tv.dividend_yield.toFixed(2)+'%' : '—'}</strong></div>
-        <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date ? fmtDate(tv.earnings_next_date) : '—'}</strong></div>
-        <div class="tv-kv"><span>RSI</span><strong>${tv.rsi != null ? tv.rsi.toFixed(1) : '—'}</strong></div>
-        <div class="tv-kv"><span>Beta</span><strong>${tv.beta != null ? tv.beta.toFixed(2) : '—'}</strong></div>
+        <div class="tv-kv"><span>Kurs</span><strong>${tv.close!=null?fmtNum(tv.close):DASH}</strong></div>
+        <div class="tv-kv"><span>KGV (TTM)</span><strong>${tv.pe_ttm!=null?tv.pe_ttm.toFixed(1):DASH}</strong></div>
+        <div class="tv-kv"><span>Dividende</span><strong>${tv.dividend_yield!=null?tv.dividend_yield.toFixed(2)+'%':DASH}</strong></div>
+        <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date?fmtDate(tv.earnings_next_date):DASH}</strong></div>
+        <div class="tv-kv"><span>RSI</span><strong>${tv.rsi!=null?tv.rsi.toFixed(1):DASH}</strong></div>
+        <div class="tv-kv"><span>Beta</span><strong>${tv.beta!=null?tv.beta.toFixed(2):DASH}</strong></div>
       </div>
-      ${c.sector ? `<div class="tv-meta"><span class="tag">${c.sector}</span>${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}</div>` : ''}
+      ${c.sector?`<div class="tv-tints"><span class="tag">${c.sector}</span>${c.sub_sector?`<span class="tag">${c.sub_sector}</span>`:''}</div>`:''}
       <small class="tv-fetched">Stand: ${fmtDateTime(tv.fetched_at)}</small>
-    </div>` : '';
+    </div>`:'';
 
-  const enrichSection = c.enrichment ? (() => {
-    const e = c.enrichment;
-    const confColor = { high: '#2ecc71', medium: '#f39c12', low: '#e74c3c' }[e.confidence] ?? '#999';
-    return `<div class="enrichment-result">
-      <div class="enrichment-meta">
-        <span class="badge" style="background:#6c3483;color:#fff">${e.model}</span>
-        <span style="font-size:11px;color:${confColor};font-weight:600">${e.confidence} confidence</span>
-        <small>${fmtDateTime(e.enriched_at)}</small>
-      </div>
-      <div class="enrichment-tags">
-        ${e.sector ? `<span class="tag">${e.sector}</span>` : ''}
-        ${e.industry ? `<span class="tag">${e.industry}</span>` : ''}
-        ${e.market_cap_bucket ? `<span class="tag">${e.market_cap_bucket} cap</span>` : ''}
-        ${e.region ? `<span class="tag">${e.region}</span>` : ''}
-      </div>
-      <div class="enrichment-thesis">
-        <p><strong>These:</strong> ${e.thesis_short ?? ''}</p>
-        ${e.thesis_long ? `<details><summary>Ausführliche These</summary><div class="thesis-long">${e.thesis_long}</div></details>` : ''}
-      </div>
-      ${e.risks?.length ? `<div class="enrichment-section"><strong>Risiken:</strong><ul>${e.risks.map(r=>`<li>${r}</li>`).join('')}</ul></div>` : ''}
-      ${e.catalysts?.length ? `<div class="enrichment-section"><strong>Katalysatoren:</strong><ul>${e.catalysts.map(r=>`<li>${r}</li>`).join('')}</ul></div>` : ''}
-      ${e.sentiment ? `<div class="enrichment-section"><strong>Sentiment:</strong> <span class="tag">${e.sentiment}</span></div>` : ''}
-    </div>`;
-  })() : `<p class="no-enrichment">Noch kein Enrichment vorhanden.</p>`;
+  const enrich = c.enrichment?(()=>{ const e=c.enrichment; return `<div class="enrichment">
+      <div class="enrich-meta"><span class="tag">${e.model}</span><span style="color:var(--ai);font-weight:var(--fw-bold)">${e.confidence} confidence</span><span style="color:var(--muted)">${fmtDateTime(e.enriched_at)}</span></div>
+      <div class="enrich-tags">${[e.sector,e.industry,e.market_cap_bucket&&e.market_cap_bucket+' cap',e.region].filter(Boolean).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      <div class="enrich-thesis"><p><strong>These:</strong> ${e.thesis_short||''}</p>${e.thesis_long?`<details><summary>Ausführliche These</summary><div class="thesis-long">${e.thesis_long}</div></details>`:''}</div>
+      ${e.risks?.length?`<div class="enrich-block"><strong>Risiken:</strong><ul>${e.risks.map(r=>`<li>${r}</li>`).join('')}</ul></div>`:''}
+      ${e.catalysts?.length?`<div class="enrich-block"><strong>Katalysatoren:</strong><ul>${e.catalysts.map(r=>`<li>${r}</li>`).join('')}</ul></div>`:''}
+      ${e.sentiment?`<div class="enrich-block"><strong>Sentiment:</strong> <span class="tag">${e.sentiment}</span></div>`:''}
+    </div>`; })() : `<p class="no-enrichment">Noch kein Enrichment vorhanden.</p>`;
 
-  const sourcesHtml = c.sources.map((s, i) => `
-    <details class="source-item" ${i===0?'open':''}>
-      <summary>
-        <span class="source-adapter">${s.adapter}</span>
-        <span class="source-signal">${s.signal_type}</span>
-        <small>${fmtDateTime(s.discovered_at)}</small>
-      </summary>
-      <div class="source-body">
-        <p class="source-snippet">${s.info_snippet ?? ''}</p>
-        <a href="${s.source_url}" target="_blank" rel="noopener">Quelle öffnen ↗</a>
-        <details class="raw-signal">
-          <summary>Raw Signal</summary>
-          <pre>${JSON.stringify(s.raw_signal ?? {}, null, 2)}</pre>
-        </details>
-      </div>
-    </details>`).join('');
+  const sources = c.sources.map((s,i)=>`<details class="source-item" ${i===0?'open':''}>
+      <summary><span class="source-adapter">${s.adapter}</span><span class="source-signal">${s.signal_type}</span><span style="margin-left:auto;color:var(--muted);font-size:var(--fs-1)">${fmtDateTime(s.discovered_at)}</span></summary>
+      <div class="source-body"><p class="source-snippet">${s.info_snippet||''}</p><a href="${s.source_url}" target="_blank" rel="noopener">Quelle öffnen ↗</a>
+      <details class="raw-signal"><summary>Raw Signal</summary><pre>${JSON.stringify(s.raw_signal||{},null,2)}</pre></details></div></details>`).join('');
 
-  function linkBtn(href, logo, label, cls) {
-    if (href) return `<a href="${href}" target="_blank" rel="noopener" class="link-btn ${cls}"><img src="${logo}" class="link-btn-logo" alt=""> ${label} ↗</a>`;
-    return `<span class="link-btn ${cls} link-btn--missing"><img src="${logo}" class="link-btn-logo" alt=""> ${label}</span>`;
-  }
+  const linkBtn=(href,logo,label)=> href
+    ? `<a href="${href}" target="_blank" rel="noopener" class="link-btn"><img src="${logo}" alt=""> ${label} ↗</a>`
+    : `<span class="link-btn link-btn--missing"><img src="${logo}" alt=""> ${label}</span>`;
 
-  panel.innerHTML = `
-    <div class="detail-header">
-      <div class="detail-title">
-        <h2>${c.symbol} <span class="exchange-label">${c.exchange}</span></h2>
-        <p class="detail-name">${tv?.description ?? c.name}</p>
-        ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
+  document.getElementById('detail-sheet').innerHTML=`
+    <div class="sheet__header">
+      <div class="sheet__title">
+        <h2>${c.symbol} <span class="exch-label">${c.exchange}</span></h2>
+        <p class="detail-name">${tv?.description??c.name}</p>
+        ${c.isin?`<small class="isin">ISIN: ${c.isin}</small>`:''}
       </div>
-      <button class="btn-icon" id="detail-close">✕</button>
+      <button class="icon-btn" id="detail-close" aria-label="Schließen">${lucide('X')}</button>
     </div>
-    <div class="detail-state">
-      Status: <strong>${stateMap[c.workspace_state] ?? c.workspace_state}</strong>&nbsp;
-      ${!['promoted','imported'].includes(c.workspace_state) ? `<button class="btn btn-sm btn-success">✓ Promoten</button>` : ''}
-      ${c.workspace_state !== 'dismissed' ? `<button class="btn btn-sm btn-danger">✗ Ablehnen</button>` : ''}
-      ${c.workspace_state === 'new' ? `<button class="btn btn-sm">👁 Als gesehen markieren</button>` : ''}
+    <div class="detail-state-bar">
+      Status: <strong>${STATE_LABELS[c.workspace_state]}</strong>
+      ${!['promoted','imported'].includes(c.workspace_state)?`<button class="btn btn--sm btn--pos" id="d-promote">${lucide('Check','icon-sm')} Promoten</button>`:''}
+      ${c.workspace_state!=='dismissed'?`<button class="btn btn--sm btn--neg" id="d-dismiss">${lucide('X','icon-sm')} Ablehnen</button>`:''}
+      ${c.workspace_state==='new'?`<button class="btn btn--sm btn--secondary" id="d-review">${lucide('Eye','icon-sm')} Gesehen</button>`:''}
     </div>
-    ${tvSection}
-    <div class="detail-section">
-      <h3>Quellen (${c.sources.length})</h3>
-      ${sourcesHtml}
-    </div>
-    <div class="detail-section">
-      <h3>Links</h3>
-      <div class="detail-links-btns">
-        ${linkBtn(links.tradingview, TV_LOGO, 'TradingView', 'link-tv')}
-        ${linkBtn(links.stocktwits, ST_LOGO, 'StockTwits', 'link-st')}
-        ${linkBtn(links.yahoo, YH_LOGO, 'Yahoo Finance', 'link-yahoo')}
-      </div>
-    </div>
-    <div class="detail-section">
-      <h3>Notizen</h3>
-      <textarea class="notes-editor" rows="3" placeholder="Notizen…">${c.notes ?? ''}</textarea>
-      <button class="btn btn-sm btn-secondary">Speichern</button>
-    </div>
-    <div class="detail-section">
-      <h3>AI-Enrichment</h3>
-      ${enrichSection}
-      <button class="btn btn-sm btn-ai">${c.enrichment ? '🔄 Neu enrichen' : '✨ AI-Enrichment ausführen'}</button>
-    </div>`;
-
-  panel.querySelector('#detail-close').addEventListener('click', () => {
-    panel.className = 'detail-drawer';
-    activeId = null;
-    refreshTable();
-  });
+    ${tvBlock}
+    <div class="detail-section"><h3>Quellen (${c.sources.length})</h3>${sources}</div>
+    <div class="detail-section"><h3>Links</h3><div class="detail-links">${linkBtn(links.tradingview,TV_LOGO,'TradingView')}${linkBtn(links.stocktwits,ST_LOGO,'StockTwits')}${linkBtn(links.yahoo,YH_LOGO,'Yahoo Finance')}</div></div>
+    <div class="detail-section"><h3>Notizen</h3><textarea class="notes-editor" rows="3" placeholder="Notizen…">${c.notes||''}</textarea><button class="btn btn--sm btn--secondary">Speichern</button></div>
+    <div class="detail-section"><h3>AI-Enrichment</h3>${enrich}<button class="btn btn--sm btn--ai">${lucide(c.enrichment?'RefreshCw':'Sparkles','icon-sm')} ${c.enrichment?'Neu enrichen':'AI-Enrichment ausführen'}</button></div>
+  `;
+  document.getElementById('detail-close').addEventListener('click',closeSheet);
+  document.getElementById('d-promote')?.addEventListener('click',()=>{ c.workspace_state='promoted'; renderTable(); renderDetail(c); });
+  document.getElementById('d-dismiss')?.addEventListener('click',()=>{ c.workspace_state='dismissed'; renderTable(); renderDetail(c); });
+  document.getElementById('d-review')?.addEventListener('click',()=>{ c.workspace_state='reviewed'; renderTable(); renderDetail(c); });
 }
 
-function refreshTable() {
-  const thead = document.getElementById('candidate-thead');
-  const tbody = document.getElementById('candidate-tbody');
-  const bulkBar = document.getElementById('bulk-bar');
-  const bulkCount = document.getElementById('bulk-count');
-  if (!thead) return;
-  thead.innerHTML = renderThead();
-  tbody.innerHTML = renderRows();
-  thead.querySelectorAll('.th-sort[data-sort]').forEach(el => {
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      const col = el.dataset.sort;
-      if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-      else { sortCol = col; sortDir = col === 'discovered' ? 'desc' : 'asc'; }
-      refreshTable();
-    });
-  });
-  tbody.querySelectorAll('.candidate-row').forEach(tr => {
-    tr.addEventListener('click', e => {
-      if (['INPUT','BUTTON','A'].includes(e.target.tagName)) return;
-      const id = tr.dataset.id;
-      activeId = id;
-      refreshTable();
-      const c = MOCK.find(x => x.id === id);
-      if (c) renderDetail(c);
-    });
-  });
-  tbody.querySelectorAll('.row-check').forEach(cb => {
-    cb.addEventListener('change', e => {
-      const id = e.target.dataset.id;
-      if (e.target.checked) selectedIds.add(id); else selectedIds.delete(id);
-      const row = tbody.querySelector(`tr[data-id="${id}"]`);
-      if (row) row.classList.toggle('selected', e.target.checked);
-      updateBulkBar();
-    });
-  });
-  tbody.querySelectorAll('[data-action="promote"]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const c = MOCK.find(x => x.id === btn.dataset.id);
-      if (c) { c.workspace_state = 'promoted'; refreshTable(); if (activeId === c.id) renderDetail(c); }
-    });
-  });
-  tbody.querySelectorAll('[data-action="dismiss"]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const c = MOCK.find(x => x.id === btn.dataset.id);
-      if (c) { c.workspace_state = 'dismissed'; refreshTable(); if (activeId === c.id) renderDetail(c); }
-    });
-  });
-  const selectAll = thead.querySelector('#select-all');
-  if (selectAll) {
-    selectAll.addEventListener('change', e => {
-      const rows = getRows();
-      if (e.target.checked) rows.forEach(c => selectedIds.add(c.id));
-      else selectedIds.clear();
-      refreshTable();
-    });
-    selectAll.checked = getRows().length > 0 && getRows().every(c => selectedIds.has(c.id));
-  }
-  updateBulkBar();
+/* BUCKET PICKER */
+function openBucketPicker(){
+  lastTrigger=document.getElementById('nav-bucket');
+  const buckets=[['inbox','Inbox'],['archive','Archiv'],['export','Export']];
+  const el=document.getElementById('bucket-sheet');
+  el.innerHTML=`<div class="bucket-sheet__title">Bucket wählen</div>
+    ${buckets.map(([v,l])=>`<button class="bucket-opt ${ui.bucket===v?'bucket-opt--active':''}" data-bucket="${v}">${lucide('Layers')} ${l}</button>`).join('')}`;
+  el.querySelectorAll('[data-bucket]').forEach(b=>b.addEventListener('click',()=>{ setBucket(b.dataset.bucket); closeSheet(); }));
+  openSheetEl=el; scrim.classList.add('is-open'); el.classList.add('is-open');
+  const f=el.querySelector('button'); if(f) f.focus();
 }
 
-function updateBulkBar() {
-  const bulkBar = document.getElementById('bulk-bar');
-  const bulkCount = document.getElementById('bulk-count');
-  if (!bulkBar) return;
-  if (selectedIds.size === 0) { bulkBar.style.display = 'none'; return; }
-  bulkBar.style.display = 'flex';
-  bulkCount.textContent = `${selectedIds.size} ausgewählt`;
+/* ════════════════════════════════════════════════════════════════════
+   ACTIONS
+   ════════════════════════════════════════════════════════════════════ */
+function setBucket(b){ ui.bucket=b; selectedIds.clear(); saveUI(); renderBotnav(); renderFilterbar(); renderTable(); }
+function toggleTheme(){ ui.theme=ui.theme==='dark'?'light':'dark'; document.documentElement.setAttribute('data-theme',ui.theme); saveUI(); renderTopbar(); if(openSheetEl===document.getElementById('nav-sheet')) openNav(); }
+function simulateSync(){
+  const btn=document.getElementById('tb-cloud');
+  btn.innerHTML=lucide('RefreshCw'); btn.querySelector('svg').classList.add('spin');
+  setTimeout(()=>{
+    btn.innerHTML=lucide('Cloud');
+    document.querySelectorAll('#tbody tr:first-child td').forEach(td=>{ td.classList.add('cell--updated'); setTimeout(()=>td.classList.remove('cell--updated'),1300); });
+  },1100);
 }
 
-function renderListPanel() {
-  const sectors = [...new Set(MOCK.filter(c => c.sector).map(c => c.sector))].sort();
-  document.getElementById('list-panel').innerHTML = `
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label>Ansicht</label>
-        <div class="blob-switch" id="blob-switch">
-          <button class="blob-btn ${blobTab==='inbox'?'active':''}" data-blob="inbox">Inbox</button>
-          <button class="blob-btn ${blobTab==='archive'?'active':''}" data-blob="archive">Archiv</button>
-          <button class="blob-btn ${blobTab==='export'?'active':''}" data-blob="export">Export</button>
-        </div>
-      </div>
-      <div class="filter-group">
-        <label>Spalten</label>
-        <div class="view-switch" id="view-switch">
-          <button class="view-btn ${viewMode==='standard'?'active':''}" data-view="standard">Standard</button>
-          <button class="view-btn ${viewMode==='technicals'?'active':''}" data-view="technicals">Technicals</button>
-          <button class="view-btn ${viewMode==='fundamentals'?'active':''}" data-view="fundamentals">Fundamentals</button>
-        </div>
-      </div>
-      <div class="filter-group">
-        <label>Status</label>
-        <select id="filter-state">
-          <option value="">Alle</option>
-          <option value="new" ${filterState==='new'?'selected':''}>Neu</option>
-          <option value="reviewed" ${filterState==='reviewed'?'selected':''}>Gesehen</option>
-          <option value="promoted" ${filterState==='promoted'?'selected':''}>Promoted</option>
-          <option value="dismissed" ${filterState==='dismissed'?'selected':''}>Abgelehnt</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label>Sektor</label>
-        <select id="filter-sector">
-          <option value="">Alle Sektoren</option>
-          ${sectors.map(s => `<option value="${s}" ${filterSector===s?'selected':''}>${s}</option>`).join('')}
-        </select>
-      </div>
-      <div class="filter-group">
-        <label>Marktkapitalisierung</label>
-        <select id="filter-capsize">
-          <option value="">Alle</option>
-          <option value="micro" ${filterCapSize==='micro'?'selected':''}>Micro (&lt;300M)</option>
-          <option value="small" ${filterCapSize==='small'?'selected':''}>Small (300M–2B)</option>
-          <option value="mid" ${filterCapSize==='mid'?'selected':''}>Mid (2–50B)</option>
-          <option value="large" ${filterCapSize==='large'?'selected':''}>Large (&gt;50B)</option>
-        </select>
-      </div>
-    </div>
+/* ════════════════════════════════════════════════════════════════════
+   WIRE-UP
+   ════════════════════════════════════════════════════════════════════ */
+document.documentElement.setAttribute('data-theme',ui.theme);
+renderTopbar(); renderSubbar(); renderFilterbar(); renderBotnav(); renderBulkActions(); renderTable();
 
-    <div class="bulk-bar" id="bulk-bar" style="display:none">
-      <span id="bulk-count">0 ausgewählt</span>
-      <button class="btn btn-sm btn-danger">${IC.xMark} Ablehnen</button>
-      <button class="btn btn-sm btn-success">${IC.check} Promoten</button>
-      <button class="btn btn-sm btn-ai">${IC.sparkles} Enrich</button>
-      <button class="btn btn-sm btn-tv">${IC.barChart} TV Daten</button>
-      <button class="btn btn-sm btn-danger">${IC.trash} Löschen</button>
-      <button class="btn btn-sm" id="bulk-clear">Auswahl leeren</button>
-    </div>
-
-    <div class="table-wrapper">
-      <table class="candidate-table">
-        <thead id="candidate-thead"></thead>
-        <tbody id="candidate-tbody"></tbody>
-      </table>
-    </div>`;
-
-  document.querySelectorAll('.blob-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      blobTab = btn.dataset.blob;
-      document.querySelectorAll('.blob-btn').forEach(b => b.classList.toggle('active', b.dataset.blob === blobTab));
-    });
-  });
-  document.querySelectorAll('.view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      viewMode = btn.dataset.view;
-      sortCol = viewMode === 'standard' ? 'discovered' : 'tv_mcap';
-      sortDir = 'desc';
-      document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewMode));
-      refreshTable();
-    });
-  });
-  document.getElementById('filter-state').addEventListener('change', e => { filterState = e.target.value; selectedIds.clear(); refreshTable(); });
-  document.getElementById('filter-sector').addEventListener('change', e => { filterSector = e.target.value; selectedIds.clear(); refreshTable(); });
-  document.getElementById('filter-capsize').addEventListener('change', e => { filterCapSize = e.target.value; selectedIds.clear(); refreshTable(); });
-  document.getElementById('bulk-clear').addEventListener('click', () => { selectedIds.clear(); refreshTable(); });
-
-  refreshTable();
-}
-
-// ── Boot ──────────────────────────────────────────────────────────────────────
-renderListPanel();
-
-// Open NVDA detail by default
-activeId = '1';
-refreshTable();
-renderDetail(MOCK[0]);
+document.getElementById('tb-menu').addEventListener('click',openNav);
+document.getElementById('tb-theme').addEventListener('click',toggleTheme);
+document.getElementById('tb-cloud').addEventListener('click',simulateSync);
+document.getElementById('nav-bucket').addEventListener('click',openBucketPicker);
+document.getElementById('nav-home').addEventListener('click',()=>{ ui.fState=ui.fCap=ui.fSector=''; selectedIds.clear(); ui.view='standard'; ui.sortCol='discovered'; ui.sortDir='desc'; saveUI(); renderSubbar(); renderFilterbar(); renderTable(); });
 </script>
 </body>
 </html>
