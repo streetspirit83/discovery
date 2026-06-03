@@ -114,6 +114,7 @@ const TV_COLUMNS = [
   'EMA20|1W',       // 60
   'EMA50|1W',       // 61
   'EMA200|1W',      // 62
+  'Perf.W',         // 63 — rolling ~5 trading days (equivalent of Perf.1M for 1 week)
 ];
 
 const COL = {
@@ -180,6 +181,7 @@ recommendMA1M: 53,
   ema20_1w:     60,
   ema50_1w:     61,
   ema200_1w:    62,
+  perfW:        63,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -329,6 +331,7 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       ema20_1w:     d[COL.ema20_1w]      ?? null,
       ema50_1w:     d[COL.ema50_1w]      ?? null,
       ema200_1w:    d[COL.ema200_1w]     ?? null,
+      perf_w:       d[COL.perfW]         ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };

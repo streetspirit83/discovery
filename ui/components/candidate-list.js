@@ -108,8 +108,9 @@ function sortValue(c, col) {
     case 'state':     return STATE_ORDER.indexOf(c.workspace_state);
     case 'sources':   return c.sources.length;
     case 'tv_chg1w':  return tv?.change_1w ?? null;
-    case 'tv_chg1m':      return tv?.change_1m ?? null;
-    case 'tv_perf1m':     return tv?.perf_1m ?? null;
+    case 'tv_chg1m':  return tv?.change_1m ?? null;
+    case 'tv_perfw':  return tv?.perf_w ?? null;
+    case 'tv_perf1m': return tv?.perf_1m ?? null;
     case 'tv_h1m':    return tv?.high_1m ?? null;
     case 'tv_l1m':    return tv?.low_1m ?? null;
     case 'tv_h52hi':  return tv?.price_52_week_high ?? null;
@@ -337,9 +338,8 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
-      cols += this.thNum('tv_chg1w',       'Δ1W',     'Veränderung 1 Woche');
-      cols += this.thNum('tv_chg1m',       'Δ1M',     'change|1M – Veränderung laufender Monatskerze');
-      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück (≠ Δ1M = laufende Monatskerze)');
+      cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W – rollierend ~5 Handelstage zurück');
+      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück');
       cols += this.thNum('tv_trend_score',  'Score',   'Composite Trend Score 0–20: MA Stack + ADX + Momentum + Oscillators + TV Rating');
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
@@ -403,8 +403,7 @@ export class CandidateList {
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           actionTd +
           `<td class="num">${trendCell}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.change_1w)}">${fmtPct(tv?.change_1w)}</span></td>` +
-          `<td class="num"><span class="${posNegClass(tv?.change_1m)}">${fmtPct(tv?.change_1m)}</span></td>` +
+          `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
           `<td class="num">${renderTrendScore(tv?.trend_score)}</td>` +
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
