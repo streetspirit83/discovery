@@ -108,7 +108,9 @@ function sortValue(c, col) {
     case 'state':     return STATE_ORDER.indexOf(c.workspace_state);
     case 'sources':   return c.sources.length;
     case 'tv_chg1w':  return tv?.change_1w ?? null;
-    case 'tv_chg1m':  return tv?.change_1m ?? null;
+    case 'tv_chg1m':      return tv?.change_1m ?? null;
+    case 'tv_perf1m':     return tv?.perf_1m ?? null;
+    case 'tv_perf21d':    return tv?.perf_21d_calc ?? null;
     case 'tv_h1m':    return tv?.high_1m ?? null;
     case 'tv_l1m':    return tv?.low_1m ?? null;
     case 'tv_h52hi':  return tv?.price_52_week_high ?? null;
@@ -337,7 +339,9 @@ export class CandidateList {
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1w',       'Δ1W',     'Veränderung 1 Woche');
-      cols += this.thNum('tv_chg1m',       'Δ1M',     'Veränderung 1 Monat');
+      cols += this.thNum('tv_chg1m',       'Δ1M',     'change|1M – Veränderung laufender Monatskerze');
+      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – TradingView Performance letzter Monat (~21 Handelstage)');
+      cols += this.thNum('tv_perf21d',     'P21d',    '(close / close[21] − 1) × 100 – eigene Berechnung 21 Handelstage');
       cols += this.thNum('tv_trend_score',  'Score',   'Composite Trend Score 0–20: MA Stack + ADX + Momentum + Oscillators + TV Rating');
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
@@ -403,6 +407,8 @@ export class CandidateList {
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1w)}">${fmtPct(tv?.change_1w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1m)}">${fmtPct(tv?.change_1m)}</span></td>` +
+          `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
+          `<td class="num"><span class="${posNegClass(tv?.perf_21d_calc)}">${fmtPct(tv?.perf_21d_calc)}</span></td>` +
           `<td class="num">${renderTrendScore(tv?.trend_score)}</td>` +
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
