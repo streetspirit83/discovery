@@ -91,7 +91,7 @@ export default async function handler(req) {
     return respond(400, { ok: false, error: 'Missing op' });
   }
 
-  const store = getStore('discovery-data', { consistency: 'strong' });
+  const store = getStore({ name: 'discovery-data', consistency: 'strong' });
 
   // --- op: read ---
   if (op === 'read') {
