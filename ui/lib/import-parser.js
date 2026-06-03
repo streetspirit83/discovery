@@ -40,7 +40,7 @@ export function normalizeCandidate(obj) {
   const symbol = up(getField(obj, ['symbol', 'ticker', 'sym']));
   if (!symbol) return null;
 
-  const exchange = up(getField(obj, ['exchange', 'exch', 'mic', 'market'])) || '';
+  const exchange = up(getField(obj, ['exchange', 'exch', 'mic', 'market'])) || 'UNKNOWN';
   const yahoo_symbol = getField(obj, ['yahoo_symbol', 'yahoo', 'yahoo symbol']) || symbol;
   const isin = getField(obj, ['isin']) || null;
   const name = getField(obj, ['name', 'company', 'company name', 'firma', 'bezeichnung']) || symbol;

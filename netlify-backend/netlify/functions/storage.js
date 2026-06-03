@@ -91,7 +91,7 @@ export default async function handler(req) {
     return respond(400, { ok: false, error: 'Missing op' });
   }
 
-  const store = getStore('discovery-data');
+  const store = getStore('discovery-data', { consistency: 'strong' });
 
   // --- op: read ---
   if (op === 'read') {
@@ -119,12 +119,13 @@ export default async function handler(req) {
   if (op === 'append_candidate') {
     const { candidate } = body;
     if (!candidate) return respond(400, { ok: false, error: 'Missing candidate' });
-    if (!candidate.symbol || !candidate.exchange) {
-      return respond(400, { ok: false, error: 'candidate.symbol and candidate.exchange are required' });
+    if (!candidate.symbol) {
+      return respond(400, { ok: false, error: 'candidate.symbol is required' });
     }
 
     const sym = candidate.symbol.toUpperCase();
-    const exch = candidate.exchange.toUpperCase();
+    const exch = (candidate.exchange || 'UNKNOWN').toUpperCase();
+    candidate.exchange = exch; // normalise before writing
 
     // Check archive and export first – no resurrection
     for (const bt of ['archive', 'export']) {
@@ -182,12 +183,13 @@ export default async function handler(req) {
     const results = [];
 
     for (const candidate of candidates) {
-      if (!candidate.symbol || !candidate.exchange) {
-        results.push({ action: 'error', error: 'Missing symbol or exchange' });
+      if (!candidate.symbol) {
+        results.push({ action: 'error', error: 'Missing symbol' });
         continue;
       }
       const sym  = candidate.symbol.toUpperCase();
-      const exch = candidate.exchange.toUpperCase();
+      const exch = (candidate.exchange || 'UNKNOWN').toUpperCase();
+      candidate.exchange = exch; // normalise before writing
       const key  = `${sym}:${exch}`;
 
       if (archiveKeys.has(key) || exportKeys.has(key)) {
@@ -315,7 +317,17 @@ export default async function handler(req) {
     candidate.last_updated_at = new Date().toISOString();
 
     const toDoc = await readBlobDoc(store, toBlob);
-    toDoc.candidates.push(candidate);
+    const dupIdx = toDoc.candidates.findIndex(
+      (c) => c.symbol.toUpperCase() === candidate.symbol.toUpperCase() &&
+             c.exchange.toUpperCase() === candidate.exchange.toUpperCase(),
+    );
+    if (dupIdx !== -1) {
+      // Already in target – merge sources, don't duplicate
+      toDoc.candidates[dupIdx].sources.push(...(candidate.sources ?? []));
+      toDoc.candidates[dupIdx].last_updated_at = candidate.last_updated_at;
+    } else {
+      toDoc.candidates.push(candidate);
+    }
 
     await writeBlobDoc(store, fromBlob, fromDoc);
     await writeBlobDoc(store, toBlob, toDoc);

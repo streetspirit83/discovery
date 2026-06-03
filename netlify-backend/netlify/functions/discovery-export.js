@@ -16,7 +16,7 @@ export default async function handler(req) {
     });
   }
 
-  const store = getStore('discovery-data');
+  const store = getStore('discovery-data', { consistency: 'strong' });
   const data = await store.get('discovery-export', { type: 'json' });
 
   const body = data ?? { candidates: [] };
