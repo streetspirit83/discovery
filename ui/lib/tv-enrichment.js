@@ -114,7 +114,6 @@ const TV_COLUMNS = [
   'EMA20|1W',       // 60
   'EMA50|1W',       // 61
   'EMA200|1W',      // 62
-  'close[21]',      // 63 — close 21 trading days ago (for manual Perf.1M calc)
 ];
 
 const COL = {
@@ -181,7 +180,6 @@ recommendMA1M: 53,
   ema20_1w:     60,
   ema50_1w:     61,
   ema200_1w:    62,
-  close21d:     63,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -331,18 +329,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       ema20_1w:     d[COL.ema20_1w]      ?? null,
       ema50_1w:     d[COL.ema50_1w]      ?? null,
       ema200_1w:    d[COL.ema200_1w]     ?? null,
-      // Manual 21-trading-day return for comparison with Perf.1M
-      close_21d:    d[COL.close21d]      ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
-
-  // Compute manual 21-day performance: (close / close[21] - 1) * 100
-  const c0 = updates.tv_data.close;
-  const c21 = updates.tv_data.close_21d;
-  updates.tv_data.perf_21d_calc = (c0 != null && c21 != null && c21 !== 0)
-    ? parseFloat(((c0 / c21 - 1) * 100).toFixed(3))
-    : null;
 
   // Compute composite trend score from the freshly built tv_data
   updates.tv_data.trend_score = computeTrendScore({
