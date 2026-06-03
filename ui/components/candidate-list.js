@@ -121,7 +121,8 @@ function sortValue(c, col) {
     case 'tv_aroonup120': return tv?.aroon_up_120 ?? null;
     case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? null;
     case 'tv_macdsig': return tv?.macd_signal ?? null;
-    case 'tv_rsi':    return tv?.rsi ?? null;
+    case 'tv_rsi':         return tv?.rsi ?? null;
+    case 'tv_trend_score': return tv?.trend_score?.total ?? null;
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
@@ -337,8 +338,7 @@ export class CandidateList {
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1w',       'Δ1W',     'Veränderung 1 Woche');
       cols += this.thNum('tv_chg1m',       'Δ1M',     'Veränderung 1 Monat');
-      cols += this.thNum('tv_aroonup1m',   'Ar↑1M',   'Aroon Up 1 Monat');
-      cols += this.thNum('tv_rsi',         'RSI',     'Relative Strength Index');
+      cols += this.thNum('tv_trend_score',  'Score',   'Composite Trend Score 0–20: MA Stack + ADX + Momentum + Oscillators + TV Rating');
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
@@ -403,8 +403,7 @@ export class CandidateList {
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1w)}">${fmtPct(tv?.change_1w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1m)}">${fmtPct(tv?.change_1m)}</span></td>` +
-          `<td class="num">${fmtNum(tv?.aroon_up_1m, 1)}</td>` +
-          `<td class="num"><span class="${rsiClass(tv?.rsi)}">${fmtNum(tv?.rsi, 1)}</span></td>` +
+          `<td class="num">${renderTrendScore(tv?.trend_score)}</td>` +
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
@@ -509,6 +508,13 @@ export class CandidateList {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function renderTrendScore(ts) {
+  if (!ts) return '<span class="muted-dash">—</span>';
+  const weekly = ts.weeklyAlign ? ' 🗓' : '';
+  const tip = `${ts.label} (${Object.entries(ts.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${ts.weeklyAlign ? ' · Wochentrend bestätigt' : ''}`;
+  return `<span class="trend-score trend-score--${ts.labelCode}" title="${tip}">${ts.total}${weekly}</span>`;
+}
 
 function chipLink(href, logo, label, extraClass = '') {
   if (href) {

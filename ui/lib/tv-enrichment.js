@@ -8,6 +8,8 @@
  * This is the correct per-ticker API — no filter needed, no client-side matching.
  */
 
+import { computeTrendScore } from './tv-trend-score.js';
+
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
   NYSE:     'america',
@@ -102,7 +104,16 @@ const TV_COLUMNS = [
 'Mom|1M', // 51
 'Perf.1M', // 52
 'Recommend.MA|1M', // 53
-
+  // Scoring fields (new)
+  'ADX+DI',         // 54
+  'ADX-DI',         // 55
+  'Stoch.K',        // 56
+  'Stoch.D',        // 57
+  'CCI20',          // 58 — daily (scoring uses daily, not 1M)
+  'Recommend.MA',   // 59 — daily
+  'EMA20|1W',       // 60
+  'EMA50|1W',       // 61
+  'EMA200|1W',      // 62
 ];
 
 const COL = {
@@ -160,7 +171,15 @@ macdSignal: 50,
 mom1M: 51,
 perf1M: 52,
 recommendMA1M: 53,
-
+  adxPlusDI:    54,
+  adxMinusDI:   55,
+  stochK:       56,
+  stochD:       57,
+  cci20d:       58,
+  recommendMAd: 59,
+  ema20_1w:     60,
+  ema50_1w:     61,
+  ema200_1w:    62,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -300,9 +319,41 @@ macd_signal: d[COL.macdSignal] ?? null,
 mom_1m: d[COL.mom1M] ?? null,
 perf_1m: d[COL.perf1M] ?? null,
 recommend_ma_1m: d[COL.recommendMA1M] ?? null,
-      fetched_at:         new Date().toISOString(),
+      // Scoring fields
+      adx_plus_di:  d[COL.adxPlusDI]    ?? null,
+      adx_minus_di: d[COL.adxMinusDI]   ?? null,
+      stoch_k:      d[COL.stochK]        ?? null,
+      stoch_d:      d[COL.stochD]        ?? null,
+      cci20_d:      d[COL.cci20d]        ?? null,
+      recommend_ma_d: d[COL.recommendMAd] ?? null,
+      ema20_1w:     d[COL.ema20_1w]      ?? null,
+      ema50_1w:     d[COL.ema50_1w]      ?? null,
+      ema200_1w:    d[COL.ema200_1w]     ?? null,
+      fetched_at:   new Date().toISOString(),
     },
   };
+
+  // Compute composite trend score from the freshly built tv_data
+  updates.tv_data.trend_score = computeTrendScore({
+    close:           updates.tv_data.close,
+    EMA20:           updates.tv_data.ema20,
+    EMA50:           updates.tv_data.ema50,
+    EMA200:          updates.tv_data.ema200,
+    ADX:             updates.tv_data.adx,
+    'ADX+DI':        updates.tv_data.adx_plus_di,
+    'ADX-DI':        updates.tv_data.adx_minus_di,
+    RSI:             updates.tv_data.rsi,
+    'MACD.macd':     updates.tv_data.macd,
+    'MACD.signal':   updates.tv_data.macd_signal,
+    'Stoch.K':       updates.tv_data.stoch_k,
+    'Stoch.D':       updates.tv_data.stoch_d,
+    CCI20:           updates.tv_data.cci20_d,
+    'Recommend.All': updates.tv_data.rating,
+    'Recommend.MA':  updates.tv_data.recommend_ma_d,
+    'EMA20|1W':      updates.tv_data.ema20_1w,
+    'EMA50|1W':      updates.tv_data.ema50_1w,
+    'EMA200|1W':     updates.tv_data.ema200_1w,
+  });
 
   if (d[COL.description] && (!candidate.name || candidate.name === candidate.symbol)) {
     updates.name = d[COL.description];

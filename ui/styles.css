@@ -360,6 +360,18 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .tv-rating-txt--sell        { color:var(--neg); font-weight:var(--fw-bold); }
 .tv-rating-txt--strong-sell { color:var(--neg); font-weight:var(--fw-bold); }
 
+/* Composite Trend Score badge (0–20) */
+.trend-score {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.trend-score--STRONG   { background:rgba(46,204,113,.15);  color:#27ae60; }
+.trend-score--MODERATE { background:rgba(243,156,18,.15);  color:#d68910; }
+.trend-score--NEUTRAL  { background:rgba(127,140,141,.15); color:var(--muted); }
+.trend-score--WEAK     { background:rgba(231,76,60,.15);   color:var(--neg); }
+.muted-dash            { color:var(--muted); }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }
