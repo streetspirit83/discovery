@@ -8,7 +8,8 @@
  * This is the correct per-ticker API — no filter needed, no client-side matching.
  */
 
-import { computeTrendScore } from './tv-trend-score.js';
+import { computeTrendScore }  from './tv-trend-score.js';
+import { computeHealthScore } from './tv-health-score.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -115,6 +116,25 @@ const TV_COLUMNS = [
   'EMA50|1W',       // 61
   'EMA200|1W',      // 62
   'Perf.W',         // 63 — rolling ~5 trading days (equivalent of Perf.1M for 1 week)
+  // Financial Health Score fields
+  'return_on_equity',                          // 64
+  'return_on_invested_capital',                // 65
+  'after_tax_margin',                          // 66
+  'operating_margin',                          // 67
+  'current_ratio',                             // 68
+  'quick_ratio',                               // 69
+  'debt_to_equity',                            // 70
+  'total_revenue_yoy_growth_ttm',              // 71
+  'total_revenue_yoy_growth_fy',               // 72
+  'earnings_per_share_diluted_yoy_growth_ttm', // 73
+  'earnings_per_share_diluted_yoy_growth_fy',  // 74
+  'free_cash_flow_margin_ttm',                 // 75
+  'free_cash_flow_margin_fy',                  // 76
+  'free_cash_flow_yoy_growth_ttm',             // 77
+  'free_cash_flow_yoy_growth_fy',              // 78
+  'earnings_per_share_basic_ttm',              // 79
+  'enterprise_value_ebitda_ttm',               // 80
+  'price_free_cash_flow_ttm',                  // 81
 ];
 
 const COL = {
@@ -182,6 +202,25 @@ recommendMA1M: 53,
   ema50_1w:     61,
   ema200_1w:    62,
   perfW:        63,
+  // health score fields
+  roe:                   64,
+  roic:                  65,
+  afterTaxMargin:        66,
+  operatingMargin:       67,
+  currentRatio:          68,
+  quickRatio:            69,
+  debtToEquity:          70,
+  revGrowthTtm:          71,
+  revGrowthFy:           72,
+  epsDilutedGrowthTtm:   73,
+  epsDilutedGrowthFy:    74,
+  fcfMarginTtm:          75,
+  fcfMarginFy:           76,
+  fcfGrowthTtm:          77,
+  fcfGrowthFy:           78,
+  epsBasicTtm:           79,
+  evEbitdaTtm:           80,
+  pFcfTtm:               81,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -332,11 +371,30 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       ema50_1w:     d[COL.ema50_1w]      ?? null,
       ema200_1w:    d[COL.ema200_1w]     ?? null,
       perf_w:       d[COL.perfW]         ?? null,
+      // Health Score fields
+      return_on_equity:                          d[COL.roe]                 ?? null,
+      return_on_invested_capital:                d[COL.roic]                ?? null,
+      after_tax_margin:                          d[COL.afterTaxMargin]      ?? null,
+      operating_margin:                          d[COL.operatingMargin]     ?? null,
+      current_ratio:                             d[COL.currentRatio]        ?? null,
+      quick_ratio:                               d[COL.quickRatio]          ?? null,
+      debt_to_equity:                            d[COL.debtToEquity]        ?? null,
+      total_revenue_yoy_growth_ttm:              d[COL.revGrowthTtm]        ?? null,
+      total_revenue_yoy_growth_fy:               d[COL.revGrowthFy]         ?? null,
+      earnings_per_share_diluted_yoy_growth_ttm: d[COL.epsDilutedGrowthTtm] ?? null,
+      earnings_per_share_diluted_yoy_growth_fy:  d[COL.epsDilutedGrowthFy]  ?? null,
+      free_cash_flow_margin_ttm:                 d[COL.fcfMarginTtm]        ?? null,
+      free_cash_flow_margin_fy:                  d[COL.fcfMarginFy]         ?? null,
+      free_cash_flow_yoy_growth_ttm:             d[COL.fcfGrowthTtm]        ?? null,
+      free_cash_flow_yoy_growth_fy:              d[COL.fcfGrowthFy]         ?? null,
+      earnings_per_share_basic_ttm:              d[COL.epsBasicTtm]         ?? null,
+      enterprise_value_ebitda_ttm:               d[COL.evEbitdaTtm]         ?? null,
+      price_free_cash_flow_ttm:                  d[COL.pFcfTtm]             ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
 
-  // Compute composite trend score from the freshly built tv_data
+  // Compute scores from the freshly built tv_data
   updates.tv_data.trend_score = computeTrendScore({
     close:           updates.tv_data.close,
     EMA20:           updates.tv_data.ema20,
@@ -356,6 +414,28 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     'EMA20|1W':      updates.tv_data.ema20_1w,
     'EMA50|1W':      updates.tv_data.ema50_1w,
     'EMA200|1W':     updates.tv_data.ema200_1w,
+  });
+
+  updates.tv_data.health_score = computeHealthScore({
+    return_on_equity:                          updates.tv_data.return_on_equity,
+    return_on_invested_capital:                updates.tv_data.return_on_invested_capital,
+    after_tax_margin:                          updates.tv_data.after_tax_margin,
+    operating_margin:                          updates.tv_data.operating_margin,
+    current_ratio:                             updates.tv_data.current_ratio,
+    quick_ratio:                               updates.tv_data.quick_ratio,
+    debt_to_equity:                            updates.tv_data.debt_to_equity,
+    total_revenue_yoy_growth_ttm:              updates.tv_data.total_revenue_yoy_growth_ttm,
+    total_revenue_yoy_growth_fy:               updates.tv_data.total_revenue_yoy_growth_fy,
+    earnings_per_share_diluted_yoy_growth_ttm: updates.tv_data.earnings_per_share_diluted_yoy_growth_ttm,
+    earnings_per_share_diluted_yoy_growth_fy:  updates.tv_data.earnings_per_share_diluted_yoy_growth_fy,
+    free_cash_flow_margin_ttm:                 updates.tv_data.free_cash_flow_margin_ttm,
+    free_cash_flow_margin_fy:                  updates.tv_data.free_cash_flow_margin_fy,
+    free_cash_flow_yoy_growth_ttm:             updates.tv_data.free_cash_flow_yoy_growth_ttm,
+    free_cash_flow_yoy_growth_fy:              updates.tv_data.free_cash_flow_yoy_growth_fy,
+    earnings_per_share_basic_ttm:              updates.tv_data.earnings_per_share_basic_ttm,
+    enterprise_value_ebitda_ttm:               updates.tv_data.enterprise_value_ebitda_ttm,
+    price_free_cash_flow_ttm:                  updates.tv_data.price_free_cash_flow_ttm,
+    gross_margin:                              updates.tv_data.gross_margin,
   });
 
   if (d[COL.description] && (!candidate.name || candidate.name === candidate.symbol)) {
