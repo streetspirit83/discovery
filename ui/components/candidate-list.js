@@ -124,7 +124,8 @@ function sortValue(c, col) {
     case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? null;
     case 'tv_macdsig': return tv?.macd_signal ?? null;
     case 'tv_rsi':         return tv?.rsi ?? null;
-    case 'tv_trend_score': return tv?.trend_score?.total ?? null;
+    case 'tv_trend_score':  return tv?.trend_score?.total  ?? null;
+    case 'tv_health_score': return tv?.health_score?.total ?? null;
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
@@ -344,6 +345,7 @@ export class CandidateList {
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
+      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–20: Profitabilität + Liquidität + Wachstum + Cashflow + Earnings');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
       cols += this.th('sources', 'Quellen');
@@ -409,6 +411,7 @@ export class CandidateList {
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
+          `<td class="num">${renderHealthScore(tv?.health_score)}</td>` +
           `<td><div class="link-cluster">
             ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
@@ -516,6 +519,13 @@ function renderTrendScore(ts) {
   const weekly = ts.weeklyAlign ? ' 🗓' : '';
   const tip = `${ts.label} (${Object.entries(ts.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${ts.weeklyAlign ? ' · Wochentrend bestätigt' : ''}`;
   return `<span class="trend-score trend-score--${ts.labelCode}" title="${tip}">${ts.total}${weekly}</span>`;
+}
+
+function renderHealthScore(hs) {
+  if (!hs) return '<span class="muted-dash">—</span>';
+  const flags = hs.flags?.length ? ` · ⚠ ${hs.flags.join(', ')}` : '';
+  const tip = `${hs.label} (${Object.entries(hs.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${flags}`;
+  return `<span class="health-score health-score--${hs.labelCode}" title="${tip}">${hs.total}</span>`;
 }
 
 function chipLink(href, logo, label, extraClass = '') {
