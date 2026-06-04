@@ -18,6 +18,7 @@ const ADAPTERS = {
   'etf-holdings':           './etf-holdings.js',
   stocktwits:               './stocktwits.js',
   'yahoo-trending':         './yahoo-trending.js',
+  'yahoo-growth':           './yahoo-growth.js',
   'tradingview-screener':   './tradingview-screener.js',
 };
 

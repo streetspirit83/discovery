@@ -21,6 +21,7 @@ export const ADAPTERS = [
   { key: 'etf-holdings',          label: 'ETF Holdings',         workflow: 'adapter-etf-holdings.yml' },
   { key: 'stocktwits',            label: 'StockTwits Trending',  workflow: 'adapter-stocktwits.yml' },
   { key: 'yahoo-trending',        label: 'Yahoo Trending',       workflow: 'adapter-yahoo-trending.yml' },
+  { key: 'yahoo-growth',          label: 'Yahoo Growth Stocks',  workflow: 'adapter-yahoo-growth.yml' },
   { key: 'tradingview-screener',  label: 'TradingView Screener', workflow: 'adapter-tradingview-screener.yml' },
 ];
 

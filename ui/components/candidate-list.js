@@ -16,6 +16,7 @@ const ADAPTER_COLORS = {
   'etf-holdings':         '#2ecc71',
   stocktwits:             '#1d9bf0',
   'yahoo-trending':       '#6001d2',
+  'yahoo-growth':         '#9b59b6',
   'tradingview-screener': '#2962ff',
 };
 
