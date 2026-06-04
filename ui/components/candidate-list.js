@@ -336,6 +336,7 @@ export class CandidateList {
     if (this.viewMode === 'standard') {
       cols += this.th('name', 'Name', 'class="col-name-data"');
       cols += this.th('sector', 'Sektor');
+      cols += this.th('sources', 'Quellen');
       cols += this.th('discovered', 'in');
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
@@ -348,7 +349,6 @@ export class CandidateList {
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–20: Profitabilität + Liquidität + Wachstum + Cashflow + Earnings');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
-      cols += this.th('sources', 'Quellen');
     } else {
       cols += VIEWS[this.viewMode].map((d) =>
         `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
@@ -402,6 +402,7 @@ export class CandidateList {
         dataCols =
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
           `<td><span class="sector-cell">${c.sector ?? '—'}</span></td>` +
+          `<td>${renderSourceBadges(c.sources)}</td>` +
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           actionTd +
           `<td class="num">${trendCell}</td>` +
@@ -417,8 +418,7 @@ export class CandidateList {
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
             ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
           </div></td>` +
-          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
-          `<td>${renderSourceBadges(c.sources)}</td>`;
+          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>`;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
