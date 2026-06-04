@@ -1,0 +1,26 @@
+name: Adapter – Yahoo Finance Growth Stocks
+
+on:
+  schedule:
+    - cron: '17 9,14 * * 1-5'  # 2× weekdays: ~09:17 (EU morning), 14:17 (US pre-open) UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      - name: Run Yahoo Finance Growth Stocks adapter
+        run: node adapters/_run.js yahoo-growth
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
