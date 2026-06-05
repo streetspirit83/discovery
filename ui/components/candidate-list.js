@@ -127,6 +127,7 @@ function sortValue(c, col) {
     case 'tv_rsi':         return tv?.rsi ?? null;
     case 'tv_trend_score':  return tv?.trend_score?.total  ?? null;
     case 'tv_health_score': return tv?.health_score?.total ?? null;
+    case 'tv_cycle_score':  return tv?.cycle_score?.total  ?? null;
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
@@ -348,6 +349,7 @@ export class CandidateList {
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–20: Profitabilität + Liquidität + Wachstum + Cashflow + Earnings');
+      cols += this.thNum('tv_cycle_score', 'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
     } else {
@@ -414,6 +416,7 @@ export class CandidateList {
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
           `<td class="num">${renderHealthScore(tv?.health_score)}</td>` +
+          `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
           `<td><div class="link-cluster">
             ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
@@ -520,6 +523,13 @@ function renderTrendScore(ts) {
   const weekly = ts.weeklyAlign ? ' 🗓' : '';
   const tip = `${ts.label} (${Object.entries(ts.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${ts.weeklyAlign ? ' · Wochentrend bestätigt' : ''}`;
   return `<span class="trend-score trend-score--${ts.labelCode}" title="${tip}">${ts.total}${weekly}</span>`;
+}
+
+function renderCycleScore(cs) {
+  if (!cs) return '<span class="muted-dash">—</span>';
+  const { s_lt, s_ath, s_52w, s_6m } = cs.components;
+  const tip = `${cs.label} · LT:${s_lt} ATH:${s_ath} 52W:${s_52w} 6M:${s_6m}`;
+  return `<span class="cycle-score cycle-score--${cs.labelCode}" title="${tip}">${cs.total}</span>`;
 }
 
 function renderHealthScore(hs) {

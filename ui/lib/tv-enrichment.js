@@ -10,6 +10,7 @@
 
 import { computeTrendScore }  from './tv-trend-score.js';
 import { computeHealthScore } from './tv-health-score.js';
+import { computeCycleScore }  from './tv-cycle-score.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -135,6 +136,9 @@ const TV_COLUMNS = [
   'earnings_per_share_basic_ttm',              // 79
   'enterprise_value_ebitda_ttm',               // 80
   'price_free_cash_flow_ttm',                  // 81
+  // Cycle score fields
+  'High.6M',                                   // 82
+  'Low.6M',                                    // 83
 ];
 
 const COL = {
@@ -221,6 +225,8 @@ recommendMA1M: 53,
   epsBasicTtm:           79,
   evEbitdaTtm:           80,
   pFcfTtm:               81,
+  high6m:                82,
+  low6m:                 83,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -390,6 +396,8 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       earnings_per_share_basic_ttm:              d[COL.epsBasicTtm]         ?? null,
       enterprise_value_ebitda_ttm:               d[COL.evEbitdaTtm]         ?? null,
       price_free_cash_flow_ttm:                  d[COL.pFcfTtm]             ?? null,
+      high_6m:      d[COL.high6m] ?? null,
+      low_6m:       d[COL.low6m]  ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -436,6 +444,16 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     enterprise_value_ebitda_ttm:               updates.tv_data.enterprise_value_ebitda_ttm,
     price_free_cash_flow_ttm:                  updates.tv_data.price_free_cash_flow_ttm,
     gross_margin:                              updates.tv_data.gross_margin,
+  });
+
+  updates.tv_data.cycle_score = computeCycleScore({
+    close:               updates.tv_data.close,
+    'High.All':          updates.tv_data.high_all,
+    'Low.All':           updates.tv_data.low_all,
+    price_52_week_high:  updates.tv_data.price_52_week_high,
+    price_52_week_low:   updates.tv_data.price_52_week_low,
+    'High.6M':           updates.tv_data.high_6m,
+    'Low.6M':            updates.tv_data.low_6m,
   });
 
   if (d[COL.description] && (!candidate.name || candidate.name === candidate.symbol)) {
