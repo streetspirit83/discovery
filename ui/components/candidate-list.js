@@ -1,4 +1,5 @@
 import { icons } from '../lib/icons.js';
+import { computeHealthScore } from '../lib/tv-health-score.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -348,7 +349,7 @@ export class CandidateList {
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–20: Profitabilität + Liquidität + Wachstum + Cashflow + Earnings');
+      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score', 'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
@@ -415,7 +416,7 @@ export class CandidateList {
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
-          `<td class="num">${renderHealthScore(tv?.health_score)}</td>` +
+          `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
           `<td><div class="link-cluster">
             ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
@@ -530,6 +531,25 @@ function renderCycleScore(cs) {
   const { s_lt, s_ath, s_52w, s_6m } = cs.components;
   const tip = `${cs.label} · LT:${s_lt} ATH:${s_ath} 52W:${s_52w} 6M:${s_6m}`;
   return `<span class="cycle-score cycle-score--${cs.labelCode}" title="${tip}">${cs.total}</span>`;
+}
+
+// Returns a v2 health score, re-computing from stored tv_data if the cached value is v1 (0–20).
+function liveHealthScore(tv) {
+  if (!tv) return null;
+  const hs = tv.health_score;
+  const isV2 = hs && hs.breakdown && 'A_Size' in hs.breakdown;
+  if (isV2) return hs;
+  // Derive v2 on the fly from whatever fields are already stored
+  return computeHealthScore({
+    market_cap_basic:              tv.market_cap,
+    ebitda:                        tv.ebitda,
+    total_revenue_yoy_growth_ttm:  tv.total_revenue_yoy_growth_ttm,
+    ebitda_yoy_growth_ttm:         tv.ebitda_yoy_growth_ttm,
+    free_cash_flow_yoy_growth_ttm: tv.free_cash_flow_yoy_growth_ttm,
+    operating_margin:              tv.operating_margin,
+    debt_to_equity:                tv.debt_to_equity,
+    total_debt_to_ebitda_fy:       tv.total_debt_to_ebitda_fy,
+  });
 }
 
 function renderHealthScore(hs) {

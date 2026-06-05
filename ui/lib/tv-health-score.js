@@ -1,124 +1,115 @@
 /**
- * Financial Health Score (0–20 pts)
- * Spec: TradingView Financial Health Score — JS Developer Briefing v1.0
+ * Financial Health Score v2 (0–100 pts)
+ *
+ * Spec: docs/tvfinancialhealthscoringspec.md
+ *
+ * A growth-and-solvency oriented model on a 0–100 scale. Four categories:
+ *   A. Size & Scale        (15 pts) — market_cap_basic, ebitda
+ *   B. YoY Core Growth     (35 pts) — total_revenue_yoy_growth_ttm, ebitda_yoy_growth_ttm
+ *   C. Cash & Efficiency   (25 pts) — free_cash_flow_yoy_growth_ttm, operating_margin
+ *   D. Leverage & Risk     (25 pts) — debt_to_equity, total_debt_to_ebitda_fy
+ *
+ * Target grade: 75+ for "safe allocation".
+ *
+ * TV percent fields are raw numbers (15.3 = 15.3%, not 0.153).
+ * TV ratio fields (debt_to_equity, total_debt_to_ebitda_fy) are plain decimals.
  *
  * Input:  object keyed by verbatim TradingView field names
  * Output: { total, breakdown, label, labelCode, flags }
- *
- * TV percent fields are raw numbers (15.3 = 15.3%, not 0.153).
- * TV ratio fields (current_ratio, debt_to_equity) are plain decimals.
  */
 export function computeHealthScore(r) {
   const breakdown = {};
   const flags     = []; // qualitative warnings, not deducted from score
 
-  const ttmOrFy = (ttm, fy) => (ttm != null ? ttm : (fy ?? null));
-
-  // ── Category A: Profitability (0–5 pts) ──────────────────────────────────
+  // ── Category A: Size & Scale (0–15 pts) ──────────────────────────────────
   let a = 0;
-  const roe = r.return_on_equity;
-  if (roe != null) {
-    const roeCapped = Math.min(roe, 100); // cap distorted near-zero-equity values
-    if (roeCapped > 15)     a += 2;
-    else if (roeCapped > 8) a += 1;
-    else if (roeCapped < 0) flags.push('NEGATIVE_ROE');
+  const mcap = r.market_cap_basic;
+  if (mcap != null) {
+    if (mcap >= 10e9)       a += 8;  // large / mega
+    else if (mcap >= 2e9)   a += 6;  // mid
+    else if (mcap >= 300e6) a += 4;  // small
+    else if (mcap >= 50e6)  a += 2;  // micro
+    else                    flags.push('NANO_CAP');
   }
-  const netMargin = r.after_tax_margin;
-  if (netMargin != null) {
-    if (netMargin > 15) a += 1;
-    if (netMargin < 0)  flags.push('NEGATIVE_NET_MARGIN');
+  const ebitda = r.ebitda;
+  if (ebitda != null) {
+    if (ebitda > 1e9)        a += 7;
+    else if (ebitda > 100e6) a += 5;
+    else if (ebitda > 0)     a += 3;
+    else                     flags.push('NEGATIVE_EBITDA');
   }
-  const roic = r.return_on_invested_capital;
-  if (roic != null) {
-    if (roic > 12)     a += 1;
-    else if (roic < 0) flags.push('NEGATIVE_ROIC');
-  }
-  const opMargin = r.operating_margin;
-  if (opMargin != null && opMargin > 15) a += 1;
-  breakdown.A_Profitability = Math.min(a, 5);
+  breakdown.A_Size = Math.min(a, 15);
 
-  // ── Category B: Liquidity & Solvency (0–5 pts) ───────────────────────────
+  // ── Category B: YoY Core Growth (0–35 pts) ───────────────────────────────
   let b = 0;
-  const cr = r.current_ratio;
-  if (cr != null) {
-    if (cr >= 2.0)      b += 2;
-    else if (cr >= 1.5) b += 1;
-    else if (cr < 1.0)  flags.push('LOW_CURRENT_RATIO');
+  const revGrowth = r.total_revenue_yoy_growth_ttm;
+  if (revGrowth != null) {
+    if (revGrowth > 25)      b += 17;
+    else if (revGrowth > 15) b += 13;
+    else if (revGrowth > 10) b += 9;
+    else if (revGrowth > 0)  b += 4;
+    else                     flags.push('REVENUE_SHRINKING');
   }
-  const qr = r.quick_ratio;
-  if (qr != null) {
-    if (qr >= 1.0) b += 1;
-    else flags.push('QUICK_RATIO_BELOW_1');
+  const ebitdaGrowth = r.ebitda_yoy_growth_ttm;
+  if (ebitdaGrowth != null) {
+    if (ebitdaGrowth > 25)      b += 18;  // operational leverage
+    else if (ebitdaGrowth > 15) b += 14;
+    else if (ebitdaGrowth > 10) b += 10;
+    else if (ebitdaGrowth > 0)  b += 5;
+    else                        flags.push('EBITDA_DECLINING');
   }
+  breakdown.B_Growth = Math.min(b, 35);
+
+  // ── Category C: Cash & Efficiency (0–25 pts) ─────────────────────────────
+  let c = 0;
+  const opMargin = r.operating_margin;
+  if (opMargin != null) {
+    if (opMargin > 25)      c += 13;
+    else if (opMargin > 15) c += 10;
+    else if (opMargin > 8)  c += 6;
+    else if (opMargin > 0)  c += 3;
+    else                    flags.push('NEGATIVE_OP_MARGIN');
+  }
+  const fcfGrowth = r.free_cash_flow_yoy_growth_ttm;
+  if (fcfGrowth != null) {
+    if (fcfGrowth > 20)      c += 12;
+    else if (fcfGrowth > 10) c += 9;
+    else if (fcfGrowth > 0)  c += 5;
+    else                     flags.push('FCF_DECLINING');
+  }
+  breakdown.C_Cash = Math.min(c, 25);
+
+  // ── Category D: Leverage & Risk (0–25 pts) ───────────────────────────────
+  let d = 0;
   const de = r.debt_to_equity;
   if (de != null) {
-    if (de < 0.5)      b += 2;
-    else if (de < 1.5) b += 1;
-    else if (de > 3.0) flags.push('HIGH_LEVERAGE');
+    if (de < 0.5)      d += 13;
+    else if (de < 1.0) d += 10;
+    else if (de < 2.0) d += 5;
+    else               flags.push('HIGH_LEVERAGE');
   }
-  breakdown.B_LiquiditySolvency = Math.min(b, 5);
-
-  // ── Category C: Growth Quality (0–4 pts) ─────────────────────────────────
-  let c = 0;
-  const revGrowth = ttmOrFy(r.total_revenue_yoy_growth_ttm, r.total_revenue_yoy_growth_fy);
-  if (revGrowth != null) {
-    if (revGrowth > 20)     c += 2;
-    else if (revGrowth > 8) c += 1;
-    else if (revGrowth < 0) flags.push('REVENUE_SHRINKING');
+  const debtEbitda = r.total_debt_to_ebitda_fy;
+  if (debtEbitda != null) {
+    if (debtEbitda < 0)        flags.push('NEGATIVE_DEBT_EBITDA'); // negative EBITDA distortion
+    else if (debtEbitda < 1.0) d += 12;
+    else if (debtEbitda < 2.0) d += 9;
+    else if (debtEbitda < 4.0) d += 4;
+    else                       flags.push('HIGH_DEBT_EBITDA');
   }
-  const epsGrowth = ttmOrFy(
-    r.earnings_per_share_diluted_yoy_growth_ttm,
-    r.earnings_per_share_diluted_yoy_growth_fy,
-  );
-  if (epsGrowth != null) {
-    if (epsGrowth > 20)       c += 2;
-    else if (epsGrowth > 8)   c += 1;
-    else if (epsGrowth < -10) flags.push('EPS_DECLINING');
-  }
-  breakdown.C_Growth = Math.min(c, 4);
-
-  // ── Category D: Cash Flow Strength (0–3 pts) ─────────────────────────────
-  let d = 0;
-  const fcfMargin = ttmOrFy(r.free_cash_flow_margin_ttm, r.free_cash_flow_margin_fy);
-  if (fcfMargin != null) {
-    if (fcfMargin > 20)     d += 2;
-    else if (fcfMargin > 8) d += 1;
-    else if (fcfMargin < 0) flags.push('NEGATIVE_FCF');
-  }
-  const fcfGrowth = ttmOrFy(r.free_cash_flow_yoy_growth_ttm, r.free_cash_flow_yoy_growth_fy);
-  if (fcfGrowth != null && fcfGrowth > 0) d += 1;
-  breakdown.D_CashFlow = Math.min(d, 3);
-
-  // ── Category E: Earnings Quality (0–3 pts) ───────────────────────────────
-  let e = 0;
-  const eps = r.earnings_per_share_basic_ttm;
-  if (eps != null) {
-    if (eps > 0) e += 1;
-    else flags.push('NEGATIVE_EPS');
-  }
-  const evEbitda = r.enterprise_value_ebitda_ttm;
-  if (evEbitda != null) {
-    if (evEbitda > 0 && evEbitda <= 25) e += 1;
-    else if (evEbitda > 25)             flags.push('HIGH_EV_EBITDA');
-    else if (evEbitda < 0)              flags.push('NEGATIVE_EBITDA');
-  }
-  const pFcf = r.price_free_cash_flow_ttm;
-  if (pFcf != null && pFcf > 0 && pFcf <= 30) e += 1;
-  breakdown.E_EarningsQuality = Math.min(e, 3);
+  breakdown.D_Leverage = Math.min(d, 25);
 
   // ── Total ─────────────────────────────────────────────────────────────────
   const total =
-    breakdown.A_Profitability +
-    breakdown.B_LiquiditySolvency +
-    breakdown.C_Growth +
-    breakdown.D_CashFlow +
-    breakdown.E_EarningsQuality;
+    breakdown.A_Size +
+    breakdown.B_Growth +
+    breakdown.C_Cash +
+    breakdown.D_Leverage;
 
   let label, labelCode;
-  if      (total >= 16) { label = 'Financially Strong'; labelCode = 'STRONG'; }
-  else if (total >= 11) { label = 'Financially Sound';  labelCode = 'SOUND'; }
-  else if (total >= 6)  { label = 'Mixed Health';       labelCode = 'MIXED'; }
-  else                  { label = 'Financial Weakness'; labelCode = 'WEAK'; }
+  if      (total >= 75) { label = 'Safe Allocation'; labelCode = 'STRONG'; }
+  else if (total >= 55) { label = 'Solide';          labelCode = 'SOUND'; }
+  else if (total >= 35) { label = 'Gemischt';        labelCode = 'MIXED'; }
+  else                  { label = 'Fragil';          labelCode = 'WEAK'; }
 
   return { total, breakdown, label, labelCode, flags };
 }
