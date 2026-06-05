@@ -1,299 +1,242 @@
-# TradingView Composite Trend Score — JS Developer Briefing
+# TradingView Entry Timing Score — JS Developer Briefing
 
-**Version:** 1.0  
-**Last updated:** 2026-06-03  
+**Version:** 2.0
+**Last updated:** 2026-06-05
+**Companion to:** `tvfinancialhealthscoringspec.md`
+**Scope:** Field definitions, scoring algorithm, JS implementation — no API/backend sections.
+
+> **Changelog v1.0 → v2.0:** Repurposed from the 0–20 *Composite Trend Beginning Score* into a
+> **0–100 Entry Timing Score**. The previous model graded whether a confirmed uptrend was *forming*;
+> this model grades whether *right now* is a good short-term moment to **enter** a position. It
+> rewards oversold-but-curling-up conditions and penalises chasing overextended price.
+> **Target grade: 80+ for a prime entry.**
 
 ---
 
-##  Overview
+## 1. Overview
 
-This document specifies the full implementation of a **Composite Trend Beginning Score** (0–20 pts) derived from TradingView screener data. 
-The score identifies assets that are at or near the beginning of a confirmed uptrend by converging signals across five independent categories.
+This document specifies an **Entry Timing Score** (0–100 pts) built from TradingView technical
+screener fields. It helps determine the best short-term moment to enter a trade by identifying
+oversold conditions or accelerating momentum — so you avoid buying at the top.
 
-The system works on any market supported by TradingView's scanner endpoint (`america`, `germany`, `crypto`, `forex`, etc.).
+The score is **independent of financial quality** (see the Financial Health Score) and of the
+longer-horizon price cycle (see the Price Cycle Score). A strong overall signal pairs a healthy,
+well-positioned company with a favourable entry window.
 
 ---
 
-##  Exact Field Names to Request
+## 2. Scoring Indicators
 
-These are the **verbatim TradingView field names** (from the screener field dictionary). Use them exactly as shown in the `columns` array — casing is significant.
+| Indicator / Metric | Condition for Max Points | Max Pts | Rationale |
+|---|---|---|---|
+| RSI (14) | Between 30 and 50 (bullish reversal setup) | 25 | RSI < 30 is oversold but can keep dropping; 30–50 shows momentum curling up. |
+| MACD | MACD Line > Signal Line (or recent crossover) | 20 | Indicates short-term bullish momentum acceleration. |
+| Stochastic (%K vs %D) | %K > %D and %K crossing up from below 20 | 20 | Confirms an exit from oversold territory. |
+| Price vs EMA20 | Price within ±2% of the EMA20 | 20 | Buying near the short-term mean prevents chasing overextended pullbacks. |
+| Bollinger Bands | Price touches or crosses the Lower Band | 15 | Provides an asymmetric risk/reward entry point for a bounce. |
+| **Total** | | **100** | **80+ for a prime entry** |
 
-### 1 Core Fields (always include)
+---
+
+## 3. Exact Field Names
+
+All names are verbatim TradingView screener field identifiers. Case-sensitive.
 
 | TV Field Name | Display Name | Type |
 |---|---|---|
-| `name` | Ticker Symbol | text |
-| `description` | Company Name | text |
+| `RSI` | Relative Strength Index (14) | number |
+| `MACD.macd` | MACD Level (12, 26) | number |
+| `MACD.signal` | MACD Signal (12, 26) | number |
+| `Stoch.K` | Stochastic %K (14, 3, 3) | number |
+| `Stoch.D` | Stochastic %D (14, 3, 3) | number |
 | `close` | Price | price |
-| `change` | Change % | percent |
-| `volume` | Volume | number |
-| `market_cap_basic` | Market Capitalization | fundamental_price |
-
-### 2 Category A — MA Stack
-
-| TV Field Name | Display Name |
-|---|---|
-| `EMA20` | Exponential Moving Average (20) |
-| `EMA50` | Exponential Moving Average (50) |
-| `EMA200` | Exponential Moving Average (200) |
-
-### 3 Category B — Trend Strength
-
-| TV Field Name | Display Name |
-|---|---|
-| `ADX` | Average Directional Index (14) |
-| `ADX+DI` | Positive Directional Indicator (14) |
-| `ADX-DI` | Negative Directional Indicator (14) |
-
-### 4 Category C — Momentum
-
-| TV Field Name | Display Name |
-|---|---|
-| `RSI` | Relative Strength Index (14) |
-| `MACD.macd` | MACD Level (12, 26) |
-| `MACD.signal` | MACD Signal (12, 26) |
-
-### 5 Category D — Oscillators
-
-| TV Field Name | Display Name |
-|---|---|
-| `Stoch.K` | Stochastic %K (14, 3, 3) |
-| `Stoch.D` | Stochastic %D (14, 3, 3) |
-| `CCI20` | Commodity Channel Index (20) |
-
-### 6 Category E — TradingView Rating
-
-| TV Field Name | Display Name | Range |
-|---|---|---|
-| `Recommend.All` | Technical Rating | −1.0 to +1.0 |
-| `Recommend.MA` | Moving Averages Rating | −1.0 to +1.0 |
-| `Recommend.Other` | Oscillators Rating | −1.0 to +1.0 |
-
-### 7 Supporting Context Fields
-
-| TV Field Name | Display Name |
-|---|---|
-| `ATR` | Average True Range (14) |
-| `BB.upper` | Bollinger Upper Band (20) |
-| `BB.lower` | Bollinger Lower Band (20) |
-| `High.1M` | 1-Month High |
-| `Low.1M` | 1-Month Low |
-| `price_52_week_high` | 52 Week High |
-| `price_52_week_low` | 52 Week Low |
-
-### 8 Multi-Timeframe Suffix Convention
-
-Append a pipe + timeframe code to any field to get a different resolution:
-
-| Suffix | Timeframe |
-|---|---|
-| *(none)* | Daily (default) |
-| `\|60` | 1 Hour |
-| `\|240` | 4 Hours |
-| `\|1W` | 1 Week |
-| `\|1M` | 1 Month |
-
-**Example:** `EMA20|240` = EMA(20) on the 4H chart. `RSI|1W` = RSI(14) on the Weekly.
-
-For cross-timeframe confirmation, request both daily and weekly variants in the same call:
-
-```js
-columns: ["close", "EMA20", "EMA50", "EMA200", "EMA20|1W", "EMA50|1W", "RSI", "RSI|1W", ...]
-```
+| `EMA20` | Exponential Moving Average (20) | price |
+| `BB.lower` | Bollinger Lower Band (20) | price |
+| `BB.upper` | Bollinger Upper Band (20) | price |
 
 ---
 
-##  Complete `columns` Array (copy-paste ready)
+## 4. Complete `ENTRY_COLUMNS` Array
 
 ```js
-const TV_COLUMNS = [
-  // Core
-  "name", "description", "close", "change", "volume", "market_cap_basic",
-  // Category A — MA Stack (Daily)
-  "EMA20", "EMA50", "EMA200",
-  // Category B — Trend Strength (Daily)
-  "ADX", "ADX+DI", "ADX-DI",
-  // Category C — Momentum (Daily)
+const ENTRY_COLUMNS = [
+  // Momentum
   "RSI", "MACD.macd", "MACD.signal",
-  // Category D — Oscillators (Daily)
-  "Stoch.K", "Stoch.D", "CCI20",
-  // Category E — TV Rating (Daily)
-  "Recommend.All", "Recommend.MA", "Recommend.Other",
-  // Supporting
-  "ATR", "BB.upper", "BB.lower", "price_52_week_high", "price_52_week_low",
-  // Weekly cross-confirmation
-  "EMA20|1W", "EMA50|1W", "EMA200|1W",
-  "RSI|1W", "ADX|1W", "ADX+DI|1W", "ADX-DI|1W",
-  "Recommend.All|1W"
+  // Oscillator
+  "Stoch.K", "Stoch.D",
+  // Mean reversion
+  "close", "EMA20", "BB.lower", "BB.upper"
 ];
 ```
 
 ---
 
-##  Response Parsing — Field Map Builder
+## 5. Scoring Algorithm
 
 ```js
 /**
- * Builds a field-name → value map from a single TV scan row.
- * @param {string[]} columns  - the columns array sent in the request
- * @param {any[]}    d        - the d[] array from a single response row
- * @returns {Object}
- */
-function parseRow(columns, d) {
-  return Object.fromEntries(columns.map((col, i) => [col, d[i] ?? null]));
-}
-
-// Usage
-const rows = response.data.map(row => ({
-  symbol: row.s,
-  ...parseRow(TV_COLUMNS, row.d)
-}));
-```
-
----
-
-## Composite Scoring Algorithm
-
-```js
-/**
- * Computes the Composite Trend Beginning Score (0–20).
+ * Computes the Entry Timing Score (0–100).
  * Input: a parsed row object (keys = TV field names, values = numbers or null).
- * Returns: { total, breakdown, label, labelCode }
+ * Returns: { total, breakdown, label, labelCode, flags }
+ *
+ * The score grades how favourable the *current* moment is for a short-term entry.
+ * Conditions are graduated: full points for the ideal setup, partial credit for
+ * near-setups, zero for overextended/overbought conditions.
  */
-function computeTrendScore(r) {
-  let score = 0;
+function computeEntryScore(r) {
   const breakdown = {};
+  const flags     = []; // qualitative warnings, not deducted from score
 
-  // ── Category A: MA Stack Alignment (0–5 pts) ──────────────────────────────
-  let a = 0;
-  if (r.close  !== null && r.EMA20  !== null && r.close  > r.EMA20)  a++;
-  if (r.EMA20  !== null && r.EMA50  !== null && r.EMA20  > r.EMA50)  a++;
-  if (r.EMA50  !== null && r.EMA200 !== null && r.EMA50  > r.EMA200) a++;
-  if (r.close  !== null && r.EMA200 !== null && r.close  > r.EMA200) a++;
-  if (r.EMA20  !== null && r.EMA50  !== null && r.EMA20  > r.EMA50)  {} // already counted
-  // 5th point: price near but above EMA20 (within 3% = early-stage, not extended)
-  if (r.close && r.EMA20 && r.close > r.EMA20 && ((r.close - r.EMA20) / r.EMA20) < 0.03) a++;
-  a = Math.min(a, 5);
-  breakdown.A_MAStack = a;
-  score += a;
-
-  // ── Category B: Trend Strength — ADX (0–4 pts) ───────────────────────────
-  let b = 0;
-  const adx = r.ADX;
-  if (adx !== null) {
-    if (adx > 20) b = 1;
-    if (adx > 25) b = 2;
-    if (adx > 30) b = 3;
-  }
-  if (r["ADX+DI"] !== null && r["ADX-DI"] !== null && r["ADX+DI"] > r["ADX-DI"]) b++;
-  b = Math.min(b, 4);
-  breakdown.B_ADX = b;
-  score += b;
-
-  // ── Category C: Momentum (0–5 pts) ───────────────────────────────────────
-  let c = 0;
+  // ── RSI (14) — 0–25 pts ──────────────────────────────────────────────────
+  // Sweet spot 30–50: oversold pressure releasing, momentum curling up.
+  let rsiPts = 0;
   const rsi = r.RSI;
-  if (rsi !== null) {
-    if (rsi > 50) c++;
-    if (rsi >= 50 && rsi <= 65) c++;   // sweet spot: not yet overbought
+  if (rsi != null) {
+    if (rsi >= 30 && rsi <= 50)      rsiPts = 25;  // bullish reversal setup
+    else if (rsi > 50 && rsi <= 60)  rsiPts = 15;  // momentum building, slightly late
+    else if (rsi >= 25 && rsi < 30)  rsiPts = 12;  // oversold, may keep dropping
+    else if (rsi > 60 && rsi <= 70)  rsiPts = 5;   // getting extended
+    else if (rsi > 70)               flags.push("RSI_OVERBOUGHT");
+    else                             flags.push("RSI_DEEP_OVERSOLD"); // < 25
   }
-  const macd  = r["MACD.macd"];
-  const msig  = r["MACD.signal"];
-  if (macd !== null && msig !== null && macd > msig)  c++;   // MACD crossover
-  if (macd !== null && macd > 0)                       c++;   // above zero line
-  breakdown.C_Momentum = Math.min(c, 5);
-  score += breakdown.C_Momentum;
+  breakdown.RSI = rsiPts;
 
-  // ── Category D: Oscillators (0–3 pts) ────────────────────────────────────
-  let d = 0;
-  const sk = r["Stoch.K"];
-  const sd = r["Stoch.D"];
-  if (sk !== null && sd !== null && sk > sd && sk < 80) d++;    // bullish cross, not overbought
-  if (sk !== null && sk > 50)                           d++;    // above midline
-  if (r.CCI20 !== null && r.CCI20 > 0)                 d++;
-  breakdown.D_Oscillators = Math.min(d, 3);
-  score += breakdown.D_Oscillators;
+  // ── MACD — 0–20 pts ──────────────────────────────────────────────────────
+  // Line above signal = short-term bullish acceleration.
+  let macdPts = 0;
+  const macd = r["MACD.macd"];
+  const sig  = r["MACD.signal"];
+  if (macd != null && sig != null) {
+    if (macd > sig)                       macdPts = 20;            // bullish crossover state
+    else if ((sig - macd) / Math.max(Math.abs(sig), 1e-6) < 0.05) macdPts = 10; // converging, near cross
+    else                                  flags.push("MACD_BEARISH");
+  }
+  breakdown.MACD = macdPts;
 
-  // ── Category E: TradingView Rating (0–3 pts) ─────────────────────────────
-  let e = 0;
-  const recAll = r["Recommend.All"];
-  const recMA  = r["Recommend.MA"];
-  if (recAll !== null && recAll > 0)   e++;
-  if (recAll !== null && recAll > 0.1) e++;   // confirmed Buy (not just barely positive)
-  if (recMA  !== null && recMA  > 0)   e++;
-  breakdown.E_TVRating = Math.min(e, 3);
-  score += breakdown.E_TVRating;
+  // ── Stochastic (%K vs %D) — 0–20 pts ─────────────────────────────────────
+  // Bullish cross emerging out of oversold (<20) is ideal.
+  let stochPts = 0;
+  const k = r["Stoch.K"];
+  const d = r["Stoch.D"];
+  if (k != null && d != null) {
+    if (k > d && k < 20)       stochPts = 20;  // crossing up from oversold
+    else if (k > d && k < 50)  stochPts = 12;  // bullish cross, mid-range
+    else if (k > d)            stochPts = 6;    // bullish cross but elevated
+    else if (k >= 80)          flags.push("STOCH_OVERBOUGHT");
+  }
+  breakdown.Stochastic = stochPts;
 
-  // ── Weekly Cross-Confirmation Bonus (informational, not in score) ─────────
-  const weeklyAlign =
-    r["EMA20|1W"] && r["EMA50|1W"] && r["EMA200|1W"] &&
-    r.close > r["EMA20|1W"] &&
-    r["EMA20|1W"] > r["EMA50|1W"] &&
-    r["EMA50|1W"] > r["EMA200|1W"];
+  // ── Price vs EMA20 — 0–20 pts ────────────────────────────────────────────
+  // Entering near the short-term mean avoids chasing extended moves.
+  let emaPts = 0;
+  const close = r.close;
+  const ema20 = r.EMA20;
+  if (close != null && ema20 != null && ema20 !== 0) {
+    const dist = Math.abs(close - ema20) / ema20;
+    if (dist <= 0.02)      emaPts = 20;  // within ±2%
+    else if (dist <= 0.05) emaPts = 10;  // within ±5%
+    else if (close > ema20) flags.push("EXTENDED_ABOVE_EMA20");
+  }
+  breakdown.PriceVsEMA20 = emaPts;
 
-  // ── Label ─────────────────────────────────────────────────────────────────
-  const total = Math.min(score, 20);
+  // ── Bollinger Bands — 0–15 pts ───────────────────────────────────────────
+  // Price at/under the lower band = asymmetric bounce setup.
+  let bbPts = 0;
+  const bbLower = r["BB.lower"];
+  if (close != null && bbLower != null && bbLower !== 0) {
+    if (close <= bbLower)                       bbPts = 15;  // touch / cross lower band
+    else if ((close - bbLower) / bbLower <= 0.02) bbPts = 8; // just above lower band
+  }
+  breakdown.BollingerBands = bbPts;
+
+  // ── Total ─────────────────────────────────────────────────────────────────
+  const total =
+    breakdown.RSI +
+    breakdown.MACD +
+    breakdown.Stochastic +
+    breakdown.PriceVsEMA20 +
+    breakdown.BollingerBands;
+
   let label, labelCode;
-  if      (total >= 16) { label = "Strong Trend Beginning";   labelCode = "STRONG"; }
-  else if (total >= 11) { label = "Moderate Trend Signal";    labelCode = "MODERATE"; }
-  else if (total >= 6)  { label = "Neutral / Developing";     labelCode = "NEUTRAL"; }
-  else                  { label = "No Trend / Downtrend";     labelCode = "WEAK"; }
+  if      (total >= 80) { label = "Prime Entry";   labelCode = "PRIME"; }
+  else if (total >= 40) { label = "Neutral Entry"; labelCode = "NEUTRAL"; }
+  else                  { label = "Bad Entry";     labelCode = "BAD"; }
 
-  return { total, breakdown, label, labelCode, weeklyAlign };
+  return { total, breakdown, label, labelCode, flags };
 }
 ```
 
+---
 
+## 6. Score Reference Table
 
-##  Scoring Reference Table
+### Indicator Thresholds
 
-| Category | Max Pts | Key Logic |
-|---|---|---|
-| A – MA Stack | 5 | close > EMA20 > EMA50 > EMA200; price within 3% of EMA20 |
-| B – ADX Strength | 4 | ADX tiers (20/25/30) + `+DI > -DI` |
-| C – Momentum | 5 | RSI > 50 (+1), RSI 50–65 (+2), MACD cross (+1), MACD > 0 (+1) |
-| D – Oscillators | 3 | Stoch K > D & < 80 (+1), K > 50 (+1), CCI > 0 (+1) |
-| E – TV Rating | 3 | Recommend.All > 0 (+1), > 0.1 (+2), Recommend.MA > 0 (+1) |
-| **Total** | **20** | |
+| RSI (14) | Points |
+|---|---|
+| 30–50 (bullish reversal setup) | +25 |
+| 50–60 (momentum building) | +15 |
+| 25–30 (oversold, may keep dropping) | +12 |
+| 60–70 (getting extended) | +5 |
+| **Max** | **25** |
 
-| Score | Label | Action |
-|---|---|---|
-| 16–20 | Strong Trend Beginning | Act — full signal convergence |
-| 11–15 | Moderate Trend Signal | Watchlist / reduced position size |
-| 6–10 | Neutral / Developing | Wait for confirmation |
-| 0–5 | No Trend / Downtrend | Skip |
+| MACD | Points |
+|---|---|
+| MACD Line > Signal Line | +20 |
+| Converging (< 5% below signal, near crossover) | +10 |
+| **Max** | **20** |
+
+| Stochastic (%K vs %D) | Points |
+|---|---|
+| %K > %D and %K < 20 (crossing up from oversold) | +20 |
+| %K > %D and %K < 50 (bullish cross, mid-range) | +12 |
+| %K > %D (bullish cross, elevated) | +6 |
+| **Max** | **20** |
+
+| Price vs EMA20 | Points |
+|---|---|
+| Within ±2% of EMA20 | +20 |
+| Within ±5% of EMA20 | +10 |
+| **Max** | **20** |
+
+| Bollinger Bands | Points |
+|---|---|
+| Price touches or crosses Lower Band | +15 |
+| Price within 2% above Lower Band | +8 |
+| **Max** | **15** |
+
+### Signal Interpretation
+
+| Score | Label | labelCode | Meaning |
+|---|---|---|---|
+| 80–100 | Prime Entry | `PRIME` | Prime entry zone. Momentum is shifting bullish. |
+| 40–79 | Neutral Entry | `NEUTRAL` | Neutral entry. Wait for better confirmation. |
+| 0–39 | Bad Entry | `BAD` | Overextended / bad entry. Stock likely overbought and due for a pullback. |
 
 ---
 
-##  Null Handling
+## 7. Flags Reference
 
-All TV screener fields can return `null` for illiquid tickers or newly listed assets. The scoring function above guards every field access with a `!== null` check. Additionally, consider filtering the raw results before scoring:
+Flags are qualitative warnings appended to the result. They do **not** subtract points from the
+score — they exist separately so the UI can surface them alongside the numeric grade.
 
-```js
-const MIN_MARKET_CAP  = 500_000_000;   // $500M minimum
-const MIN_VOLUME      = 200_000;       // 200k shares/day
+| Flag | Trigger | Meaning |
+|---|---|---|
+| `RSI_OVERBOUGHT` | RSI > 70 | Momentum stretched; high pullback risk |
+| `RSI_DEEP_OVERSOLD` | RSI < 25 | Oversold but falling knife — can keep dropping |
+| `MACD_BEARISH` | MACD Line < Signal Line (not near cross) | No short-term bullish acceleration |
+| `STOCH_OVERBOUGHT` | %K ≥ 80 | Oscillator in overbought territory |
+| `EXTENDED_ABOVE_EMA20` | Price > 5% above EMA20 | Chasing an extended move |
 
-const filtered = rows.filter(r =>
-  r.market_cap_basic >= MIN_MARKET_CAP &&
-  r.volume           >= MIN_VOLUME     &&
-  r.close            !== null          &&
-  r.EMA200           !== null           // needs enough history
-);
-```
+---
 
+## 8. Null Handling Strategy
 
-##  Filter Operation Reference
-
-Useful `operation` values for the `filter` array:
-
-| Operation | Meaning |
-|---|---|
-| `greater` | field > right |
-| `less` | field < right |
-| `equal` | field == right |
-| `in_range` | field value in array |
-| `between` | right = [min, max] |
-| `crosses_above` | current > prev (crossover) |
+TV returns `null` for fields that are unavailable (e.g. illiquid or newly listed tickers). The
+scoring function skips null fields silently — they contribute 0 points to that indicator rather
+than breaking the calculation. A ticker with no technicals at all therefore scores 0 and lands in
+the `BAD` band; treat a 0 with an empty `breakdown` as "Insufficient Data" in the UI if you want
+to distinguish it from a genuinely poor entry.
 
 ---
 
