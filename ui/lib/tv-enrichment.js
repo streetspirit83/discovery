@@ -13,6 +13,7 @@ import { computeHealthScore }        from './tv-health-score.js';
 import { computeCycleScore }         from './tv-cycle-score.js';
 import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
 import { computeEntryScore }         from './tv-entry-score.js';
+import { computeEntryPrices }        from './tv-entry-prices.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -154,6 +155,10 @@ const TV_COLUMNS = [
   // Entry Score fields
   'BB.lower',                                  // 92
   'BB.upper',                                  // 93
+  // Entry Price fields
+  'Pivot.M.Classic.S1',                        // 94
+  'Pivot.M.Classic.R1',                        // 95
+  'ATR',                                       // 96
 ];
 
 const COL = {
@@ -254,6 +259,10 @@ recommendMA1M: 53,
   // Entry Score fields
   bbLower:               92,
   bbUpper:               93,
+  // Entry Price fields
+  pivotS1:               94,
+  pivotR1:               95,
+  atr:                   96,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -437,6 +446,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       // Entry Score fields
       bb_lower:   d[COL.bbLower]    ?? null,
       bb_upper:   d[COL.bbUpper]    ?? null,
+      pivot_s1:   d[COL.pivotS1]   ?? null,
+      pivot_r1:   d[COL.pivotR1]   ?? null,
+      atr:        d[COL.atr]       ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -472,6 +484,15 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     close:         updates.tv_data.close,
     EMA20:         updates.tv_data.ema20,
     'BB.lower':    updates.tv_data.bb_lower,
+  });
+
+  updates.tv_data.entry_prices = computeEntryPrices({
+    'BB.lower':             updates.tv_data.bb_lower,
+    'BB.upper':             updates.tv_data.bb_upper,
+    'Pivot.M.Classic.S1':   updates.tv_data.pivot_s1,
+    'Pivot.M.Classic.R1':   updates.tv_data.pivot_r1,
+    close:                  updates.tv_data.close,
+    ATR:                    updates.tv_data.atr,
   });
 
   updates.tv_data.health_score = computeHealthScore({
