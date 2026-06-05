@@ -395,6 +395,16 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .cycle-score--LOW   { background:rgba(230,126,34,.15);  color:#e67e22; }
 .cycle-score--FLOOR { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Trend Strength Score badge (0–100) */
+.trend-strength-score {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.trend-strength-score--POWER    { background:rgba(142,68,173,.15);  color:#8e44ad; }
+.trend-strength-score--MODERATE { background:rgba(52,152,219,.15);  color:#2980b9; }
+.trend-strength-score--WEAK     { background:rgba(231,76,60,.15);   color:var(--neg); }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }
