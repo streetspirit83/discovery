@@ -383,6 +383,18 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .health-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .health-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Price Cycle & Historical Position Score badge (0–100) */
+.cycle-score {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.cycle-score--ATH   { background:rgba(41,128,185,.15);  color:#2980b9; }
+.cycle-score--HIGH  { background:rgba(46,204,113,.15);  color:#27ae60; }
+.cycle-score--MID   { background:rgba(243,156,18,.15);  color:#d68910; }
+.cycle-score--LOW   { background:rgba(230,126,34,.15);  color:#e67e22; }
+.cycle-score--FLOOR { background:rgba(231,76,60,.15);   color:var(--neg); }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }
