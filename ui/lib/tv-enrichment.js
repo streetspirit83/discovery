@@ -12,6 +12,7 @@ import { computeTrendScore }         from './tv-trend-score.js';
 import { computeHealthScore }        from './tv-health-score.js';
 import { computeCycleScore }         from './tv-cycle-score.js';
 import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
+import { computeEntryScore }         from './tv-entry-score.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -150,6 +151,9 @@ const TV_COLUMNS = [
   'SMA200',                                    // 89
   'EMA10',                                     // 90
   'volume',                                    // 91
+  // Entry Score fields
+  'BB.lower',                                  // 92
+  'BB.upper',                                  // 93
 ];
 
 const COL = {
@@ -247,6 +251,9 @@ recommendMA1M: 53,
   sma200:                89,
   ema10:                 90,
   volume:                91,
+  // Entry Score fields
+  bbLower:               92,
+  bbUpper:               93,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -427,6 +434,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       sma200:     d[COL.sma200]     ?? null,
       ema10:      d[COL.ema10]      ?? null,
       volume:     d[COL.volume]     ?? null,
+      // Entry Score fields
+      bb_lower:   d[COL.bbLower]    ?? null,
+      bb_upper:   d[COL.bbUpper]    ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -451,6 +461,17 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     'EMA20|1W':      updates.tv_data.ema20_1w,
     'EMA50|1W':      updates.tv_data.ema50_1w,
     'EMA200|1W':     updates.tv_data.ema200_1w,
+  });
+
+  updates.tv_data.entry_score = computeEntryScore({
+    RSI:           updates.tv_data.rsi,
+    'MACD.macd':   updates.tv_data.macd,
+    'MACD.signal': updates.tv_data.macd_signal,
+    'Stoch.K':     updates.tv_data.stoch_k,
+    'Stoch.D':     updates.tv_data.stoch_d,
+    close:         updates.tv_data.close,
+    EMA20:         updates.tv_data.ema20,
+    'BB.lower':    updates.tv_data.bb_lower,
   });
 
   updates.tv_data.health_score = computeHealthScore({
