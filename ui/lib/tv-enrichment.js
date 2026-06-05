@@ -139,6 +139,9 @@ const TV_COLUMNS = [
   // Cycle score fields
   'High.6M',                                   // 82
   'Low.6M',                                    // 83
+  // Health score v2 fields
+  'ebitda_yoy_growth_ttm',                     // 84
+  'total_debt_to_ebitda_fy',                   // 85
 ];
 
 const COL = {
@@ -227,6 +230,8 @@ recommendMA1M: 53,
   pFcfTtm:               81,
   high6m:                82,
   low6m:                 83,
+  ebitdaYoyGrowthTtm:    84,
+  totalDebtToEbitdaFy:   85,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -398,6 +403,8 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       price_free_cash_flow_ttm:                  d[COL.pFcfTtm]             ?? null,
       high_6m:      d[COL.high6m] ?? null,
       low_6m:       d[COL.low6m]  ?? null,
+      ebitda_yoy_growth_ttm:   d[COL.ebitdaYoyGrowthTtm]  ?? null,
+      total_debt_to_ebitda_fy: d[COL.totalDebtToEbitdaFy] ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -425,25 +432,14 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
   });
 
   updates.tv_data.health_score = computeHealthScore({
-    return_on_equity:                          updates.tv_data.return_on_equity,
-    return_on_invested_capital:                updates.tv_data.return_on_invested_capital,
-    after_tax_margin:                          updates.tv_data.after_tax_margin,
-    operating_margin:                          updates.tv_data.operating_margin,
-    current_ratio:                             updates.tv_data.current_ratio,
-    quick_ratio:                               updates.tv_data.quick_ratio,
-    debt_to_equity:                            updates.tv_data.debt_to_equity,
-    total_revenue_yoy_growth_ttm:              updates.tv_data.total_revenue_yoy_growth_ttm,
-    total_revenue_yoy_growth_fy:               updates.tv_data.total_revenue_yoy_growth_fy,
-    earnings_per_share_diluted_yoy_growth_ttm: updates.tv_data.earnings_per_share_diluted_yoy_growth_ttm,
-    earnings_per_share_diluted_yoy_growth_fy:  updates.tv_data.earnings_per_share_diluted_yoy_growth_fy,
-    free_cash_flow_margin_ttm:                 updates.tv_data.free_cash_flow_margin_ttm,
-    free_cash_flow_margin_fy:                  updates.tv_data.free_cash_flow_margin_fy,
-    free_cash_flow_yoy_growth_ttm:             updates.tv_data.free_cash_flow_yoy_growth_ttm,
-    free_cash_flow_yoy_growth_fy:              updates.tv_data.free_cash_flow_yoy_growth_fy,
-    earnings_per_share_basic_ttm:              updates.tv_data.earnings_per_share_basic_ttm,
-    enterprise_value_ebitda_ttm:               updates.tv_data.enterprise_value_ebitda_ttm,
-    price_free_cash_flow_ttm:                  updates.tv_data.price_free_cash_flow_ttm,
-    gross_margin:                              updates.tv_data.gross_margin,
+    market_cap_basic:              updates.tv_data.market_cap,
+    ebitda:                        updates.tv_data.ebitda,
+    total_revenue_yoy_growth_ttm:  updates.tv_data.total_revenue_yoy_growth_ttm,
+    ebitda_yoy_growth_ttm:         updates.tv_data.ebitda_yoy_growth_ttm,
+    free_cash_flow_yoy_growth_ttm: updates.tv_data.free_cash_flow_yoy_growth_ttm,
+    operating_margin:              updates.tv_data.operating_margin,
+    debt_to_equity:                updates.tv_data.debt_to_equity,
+    total_debt_to_ebitda_fy:       updates.tv_data.total_debt_to_ebitda_fy,
   });
 
   updates.tv_data.cycle_score = computeCycleScore({

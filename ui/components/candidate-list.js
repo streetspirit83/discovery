@@ -348,7 +348,7 @@ export class CandidateList {
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–20: Profitabilität + Liquidität + Wachstum + Cashflow + Earnings');
+      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score', 'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
