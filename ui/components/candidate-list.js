@@ -1,5 +1,6 @@
 import { icons } from '../lib/icons.js';
 import { computeHealthScore } from '../lib/tv-health-score.js';
+import { computeEntryScore } from '../lib/tv-entry-score.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -126,9 +127,11 @@ function sortValue(c, col) {
     case 'tv_aroonup1m':  return tv?.aroon_up_1m ?? null;
     case 'tv_macdsig': return tv?.macd_signal ?? null;
     case 'tv_rsi':         return tv?.rsi ?? null;
-    case 'tv_trend_score':  return tv?.trend_score?.total  ?? null;
-    case 'tv_health_score': return tv?.health_score?.total ?? null;
-    case 'tv_cycle_score':  return tv?.cycle_score?.total  ?? null;
+    case 'tv_trend_score':          return tv?.trend_score?.total          ?? null;
+    case 'tv_entry_score':          return liveEntryScore(tv)?.total       ?? null;
+    case 'tv_health_score':         return tv?.health_score?.total         ?? null;
+    case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
+    case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
@@ -345,12 +348,13 @@ export class CandidateList {
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W – rollierend ~5 Handelstage zurück');
       cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück');
-      cols += this.thNum('tv_trend_score',  'Score',   'Composite Trend Score 0–20: MA Stack + ADX + Momentum + Oscillators + TV Rating');
+      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry');
       cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
       cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
-      cols += this.thNum('tv_cycle_score', 'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
+      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
+      cols += this.thNum('tv_trend_strength_score', 'Stärke', 'Trend Strength Score 0–100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) · 85+ = Structural Power-Trend');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
     } else {
@@ -412,12 +416,13 @@ export class CandidateList {
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
-          `<td class="num">${renderTrendScore(tv?.trend_score)}</td>` +
+          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
           `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
+          `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
           `<td><div class="link-cluster">
             ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
@@ -531,6 +536,37 @@ function renderCycleScore(cs) {
   const { s_lt, s_ath, s_52w, s_6m } = cs.components;
   const tip = `${cs.label} · LT:${s_lt} ATH:${s_ath} 52W:${s_52w} 6M:${s_6m}`;
   return `<span class="cycle-score cycle-score--${cs.labelCode}" title="${tip}">${cs.total}</span>`;
+}
+
+// Returns an entry score, re-computing from stored tv_data if not yet cached.
+function liveEntryScore(tv) {
+  if (!tv) return null;
+  if (tv.entry_score) return tv.entry_score;
+  // Derive on the fly from whatever fields are already stored (BB.lower may be absent → 0 pts there)
+  return computeEntryScore({
+    RSI:           tv.rsi,
+    'MACD.macd':   tv.macd,
+    'MACD.signal': tv.macd_signal,
+    'Stoch.K':     tv.stoch_k,
+    'Stoch.D':     tv.stoch_d,
+    close:         tv.close,
+    EMA20:         tv.ema20,
+    'BB.lower':    tv.bb_lower,
+  });
+}
+
+function renderEntryScore(es) {
+  if (!es) return '<span class="muted-dash">—</span>';
+  const flags = es.flags?.length ? ` · ⚠ ${es.flags.join(', ')}` : '';
+  const tip = `${es.label} (${Object.entries(es.breakdown).map(([k, v]) => `${k}:${v}`).join(' ')})${flags}`;
+  return `<span class="entry-score entry-score--${es.labelCode}" title="${tip}">${es.total}</span>`;
+}
+
+function renderTrendStrengthScore(ts) {
+  if (!ts) return '<span class="muted-dash">—</span>';
+  const flags = ts.flags?.length ? ` · ⚠ ${ts.flags.join(', ')}` : '';
+  const tip = `${ts.label} (${Object.entries(ts.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${flags}`;
+  return `<span class="trend-strength-score trend-strength-score--${ts.labelCode}" title="${tip}">${ts.total}</span>`;
 }
 
 // Returns a v2 health score, re-computing from stored tv_data if the cached value is v1 (0–20).

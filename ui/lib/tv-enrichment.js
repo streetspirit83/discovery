@@ -8,9 +8,11 @@
  * This is the correct per-ticker API — no filter needed, no client-side matching.
  */
 
-import { computeTrendScore }  from './tv-trend-score.js';
-import { computeHealthScore } from './tv-health-score.js';
-import { computeCycleScore }  from './tv-cycle-score.js';
+import { computeTrendScore }         from './tv-trend-score.js';
+import { computeHealthScore }        from './tv-health-score.js';
+import { computeCycleScore }         from './tv-cycle-score.js';
+import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
+import { computeEntryScore }         from './tv-entry-score.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -142,6 +144,16 @@ const TV_COLUMNS = [
   // Health score v2 fields
   'ebitda_yoy_growth_ttm',                     // 84
   'total_debt_to_ebitda_fy',                   // 85
+  // Trend Strength Score fields
+  'Aroon.Up',                                  // 86
+  'Aroon.Down',                                // 87
+  'SMA50',                                     // 88
+  'SMA200',                                    // 89
+  'EMA10',                                     // 90
+  'volume',                                    // 91
+  // Entry Score fields
+  'BB.lower',                                  // 92
+  'BB.upper',                                  // 93
 ];
 
 const COL = {
@@ -232,6 +244,16 @@ recommendMA1M: 53,
   low6m:                 83,
   ebitdaYoyGrowthTtm:    84,
   totalDebtToEbitdaFy:   85,
+  // Trend Strength Score fields
+  aroonUpD:              86,
+  aroonDownD:            87,
+  sma50:                 88,
+  sma200:                89,
+  ema10:                 90,
+  volume:                91,
+  // Entry Score fields
+  bbLower:               92,
+  bbUpper:               93,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -405,6 +427,16 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       low_6m:       d[COL.low6m]  ?? null,
       ebitda_yoy_growth_ttm:   d[COL.ebitdaYoyGrowthTtm]  ?? null,
       total_debt_to_ebitda_fy: d[COL.totalDebtToEbitdaFy] ?? null,
+      // Trend Strength Score fields
+      aroon_up:   d[COL.aroonUpD]   ?? null,
+      aroon_down: d[COL.aroonDownD] ?? null,
+      sma50:      d[COL.sma50]      ?? null,
+      sma200:     d[COL.sma200]     ?? null,
+      ema10:      d[COL.ema10]      ?? null,
+      volume:     d[COL.volume]     ?? null,
+      // Entry Score fields
+      bb_lower:   d[COL.bbLower]    ?? null,
+      bb_upper:   d[COL.bbUpper]    ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -431,6 +463,17 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     'EMA200|1W':     updates.tv_data.ema200_1w,
   });
 
+  updates.tv_data.entry_score = computeEntryScore({
+    RSI:           updates.tv_data.rsi,
+    'MACD.macd':   updates.tv_data.macd,
+    'MACD.signal': updates.tv_data.macd_signal,
+    'Stoch.K':     updates.tv_data.stoch_k,
+    'Stoch.D':     updates.tv_data.stoch_d,
+    close:         updates.tv_data.close,
+    EMA20:         updates.tv_data.ema20,
+    'BB.lower':    updates.tv_data.bb_lower,
+  });
+
   updates.tv_data.health_score = computeHealthScore({
     market_cap_basic:              updates.tv_data.market_cap,
     ebitda:                        updates.tv_data.ebitda,
@@ -440,6 +483,19 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
     operating_margin:              updates.tv_data.operating_margin,
     debt_to_equity:                updates.tv_data.debt_to_equity,
     total_debt_to_ebitda_fy:       updates.tv_data.total_debt_to_ebitda_fy,
+  });
+
+  updates.tv_data.trend_strength_score = computeTrendStrengthScore({
+    ADX:                     updates.tv_data.adx,
+    'Aroon.Up':              updates.tv_data.aroon_up,
+    'Aroon.Down':            updates.tv_data.aroon_down,
+    SMA50:                   updates.tv_data.sma50,
+    SMA200:                  updates.tv_data.sma200,
+    close:                   updates.tv_data.close,
+    EMA10:                   updates.tv_data.ema10,
+    EMA20:                   updates.tv_data.ema20,
+    volume:                  updates.tv_data.volume,
+    average_volume_10d_calc: updates.tv_data.avg_vol_10d,
   });
 
   updates.tv_data.cycle_score = computeCycleScore({
