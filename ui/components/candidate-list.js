@@ -1,6 +1,7 @@
 import { icons } from '../lib/icons.js';
 import { computeHealthScore } from '../lib/tv-health-score.js';
-import { computeEntryScore } from '../lib/tv-entry-score.js';
+import { computeEntryScore }  from '../lib/tv-entry-score.js';
+import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -140,9 +141,11 @@ function sortValue(c, col) {
     case 'tv_cci':    return tv?.cci20_1m ?? null;
     case 'tv_donchlo':return tv?.donch_ch20_lower_1m ?? null;
     case 'tv_donchhi':return tv?.donch_ch20_upper_1m ?? null;
-    case 'tv_pe':     return tv?.pe_ttm ?? null;
-    case 'tv_div':    return tv?.dividend_yield ?? null;
-    case 'tv_eps':    return tv?.basic_eps_net_income ?? null;
+    case 'tv_pe':          return tv?.pe_ttm ?? null;
+    case 'tv_div':         return tv?.dividend_yield ?? null;
+    case 'tv_eps':         return tv?.basic_eps_net_income ?? null;
+    case 'tv_long_entry':  return liveEntryPrices(tv)?.longEntry  ?? null;
+    case 'tv_short_entry': return liveEntryPrices(tv)?.shortEntry ?? null;
     case 'tv_earnings':    return tv?.earnings_next_date ?? null;
     case 'tv_ebitdagrowth':return tv?.ebitda_yoy_growth_fy ?? null;
     case 'tv_ebitda': return tv?.ebitda ?? null;
@@ -349,8 +352,8 @@ export class CandidateList {
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W – rollierend ~5 Handelstage zurück');
       cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück');
       cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry');
-      cols += this.thNum('tv_pe',          'KGV',     'Kurs-Gewinn-Verhältnis (TTM)');
-      cols += this.thNum('tv_eps',         'EPS',     'Gewinn je Aktie');
+      cols += this.thNum('tv_long_entry',  'Long',  'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)');
+      cols += this.thNum('tv_short_entry', 'Short', 'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
@@ -405,8 +408,9 @@ export class CandidateList {
 
       let dataCols;
       if (this.viewMode === 'standard') {
-        const r = tv?.recommend_all_1m;
+        const r   = tv?.recommend_all_1m;
         const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '—'}</span>`;
+        const ep  = liveEntryPrices(tv);
         dataCols =
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
           `<td><span class="sector-cell">${c.sector ?? '—'}</span></td>` +
@@ -417,8 +421,8 @@ export class CandidateList {
           `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
           `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
-          `<td class="num">${fmtNum(tv?.pe_ttm, 1)}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.basic_eps_net_income)}">${fmtNum(tv?.basic_eps_net_income, 2)}</span></td>` +
+          `<td class="num">${renderEntryPrice(ep, 'long')}</td>` +
+          `<td class="num">${renderEntryPrice(ep, 'short')}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
@@ -553,6 +557,36 @@ function liveEntryScore(tv) {
     EMA20:         tv.ema20,
     'BB.lower':    tv.bb_lower,
   });
+}
+
+// Returns an entry-prices result, re-computing from stored tv_data if not yet cached.
+function liveEntryPrices(tv) {
+  if (!tv) return null;
+  if (tv.entry_prices) return tv.entry_prices;
+  return computeEntryPrices({
+    'BB.lower':           tv.bb_lower,
+    'BB.upper':           tv.bb_upper,
+    'Pivot.M.Classic.S1': tv.pivot_s1,
+    'Pivot.M.Classic.R1': tv.pivot_r1,
+    close:                tv.close,
+    ATR:                  tv.atr,
+  });
+}
+
+function renderEntryPrice(ep, side) {
+  if (!ep) return '<span class="muted-dash">—</span>';
+  const price = side === 'long' ? ep.longEntry : ep.shortEntry;
+  if (price == null) return '<span class="muted-dash">—</span>';
+  const bd = ep.breakdown;
+  const tipLines = side === 'long'
+    ? [bd.meanRevLong != null  && `MR:${fmtNum(bd.meanRevLong)}`,
+       bd.pivotLong   != null  && `Pivot:${fmtNum(bd.pivotLong)}`,
+       bd.breakoutLong != null && `BO:${fmtNum(bd.breakoutLong)}`]
+    : [bd.meanRevShort  != null  && `MR:${fmtNum(bd.meanRevShort)}`,
+       bd.pivotShort    != null  && `Pivot:${fmtNum(bd.pivotShort)}`,
+       bd.breakoutShort != null  && `BO:${fmtNum(bd.breakoutShort)}`];
+  const tip = `${side === 'long' ? 'Long' : 'Short'} Entry · ${tipLines.filter(Boolean).join(' · ')} → Ø ${fmtNum(price)}`;
+  return `<span class="entry-price entry-price--${side}" title="${tip}">${fmtNum(price)}</span>`;
 }
 
 function renderEntryScore(es) {
