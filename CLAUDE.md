@@ -70,5 +70,8 @@ Optional CI caches (`cache: 'npm'`) fail when lock files are missing or in unexp
 ### CI workflow viewers show the YAML at run-trigger-time
 When a GitHub Actions run shows an outdated workflow definition, that's expected — the UI shows the YAML as it was when the run was triggered, not the current file. Verify the current branch has your changes and wait for a new run.
 
+### No paid API plans — ever
+Never propose or implement adapters that require a paid subscription or API key purchase. Only use free tiers (no credit card), public/unauthenticated endpoints, or official free developer APIs. If a data source requires payment, find an alternative primary source that exposes the same underlying data for free.
+
 ### Diagnose before you assume it's a bug
 Unexpected behaviour (e.g. an item "disappearing" after an action) is often intended behaviour with a missing UX affordance (a toast, a redirect, a drawer close). Check the intended flow first before writing fix code.
