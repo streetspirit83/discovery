@@ -1,26 +1,31 @@
-# Guide: Persisting GitHub Action scraper output via Netlify Blobs
+---
+name: netlify-blob-ingestion
+description: Persists scheduled GitHub Action / scraper output (e.g. a JSON file written into the ephemeral runner workspace) into Netlify Blobs via a Netlify Function ingest endpoint, and serves it back through a read endpoint. Use when setting up a "scrape -> persist -> serve" pipeline, or when a GitHub Action's output disappears after the job ends and needs a durable store.
+---
+
+# Netlify Blob Ingestion (scrape -> persist -> serve)
 
 This pattern lets a scheduled GitHub Action (e.g. a scraper that writes a JSON
 file into the ephemeral runner workspace) push its result to a durable store
 that survives past job end and can be read by a frontend or other services.
 
 It was first implemented for the AltIndex toplist scraper
-(`streetspirit83/Claude` → `streetspirit83/discovery`, see PR #20 in
+(`streetspirit83/Claude` -> `streetspirit83/discovery`, see PR #20 in
 `discovery` and the `scrape-toplist.yml` workflow in `Claude`). Use this as a
-template for any future "scrape → persist → serve" project.
+template for any future "scrape -> persist -> serve" project.
 
 ## Architecture (Option B: ingest via a Netlify Function endpoint)
 
 ```
 GitHub Action (scrapes, writes result.json to runner workspace)
-        │  curl POST + shared secret
-        ▼
+        |  curl POST + shared secret
+        v
 Netlify Function  POST /api/<name>-ingest   (writes to Netlify Blobs)
-        │
-        ▼
+        |
+        v
 Netlify Blobs store  (durable, accessible across deploys/functions)
-        │
-        ▼
+        |
+        v
 Netlify Function  GET /api/<name>           (reads back, served to frontend)
 ```
 
@@ -35,7 +40,7 @@ They can be the same repo if the Netlify site is built from the scraper repo.
 ### 1. Confirm the Netlify site and its function setup
 
 Before writing any code, verify (ask the user if unclear):
-- Netlify **site name** and **site ID** (`mcp__Netlify__netlify-project-services-reader` → `get-project`)
+- Netlify **site name** and **site ID** (`mcp__Netlify__netlify-project-services-reader` -> `get-project`)
 - the site's **production branch** (functions only go live once merged to that branch — PRs only get *deploy previews* on their own URL)
 - whether the site already has Netlify Functions (`netlify.toml`, `netlify/functions/` dir) and what bundler/runtime it uses (v2 functions use `export default async function handler(req)`, not the v1 `{ statusCode, body }` shape)
 - existing CORS header config in `netlify.toml` (`[[headers]]` blocks) — new headers must be added there too, not just in the function response
@@ -120,9 +125,9 @@ in CI.
 
 Generate one random secret value and set it in **two places** with the exact
 same value:
-- **Netlify**: Site settings → Environment variables → `<NAME>_INGEST_SECRET`
-  (or via `mcp__Netlify__netlify-project-services-updater` → manage env vars)
-- **GitHub**: scraper repo → Settings → Secrets and variables → Actions →
+- **Netlify**: Site settings -> Environment variables -> `<NAME>_INGEST_SECRET`
+  (or via `mcp__Netlify__netlify-project-services-updater` -> manage env vars)
+- **GitHub**: scraper repo -> Settings -> Secrets and variables -> Actions ->
   `<NAME>_INGEST_SECRET`
 
 ### 7. Merge to the production branch and verify
@@ -131,7 +136,7 @@ same value:
   Netlify only serves new functions from the production deploy; a PR/branch
   only gets a preview URL like `deploy-preview-N--<site>.netlify.app`).
 - Confirm the production deploy picked up the new commit
-  (`mcp__Netlify__netlify-deploy-services-reader` → list deploys, check the
+  (`mcp__Netlify__netlify-deploy-services-reader` -> list deploys, check the
   "Production" deploy's commit SHA matches).
 - Smoke-test both endpoints directly:
   ```bash
@@ -145,7 +150,7 @@ same value:
 
 ## Pitfalls to remember (all bit us on the first run)
 
-- **404 from the production URL right after merging a PR** → almost always
+- **404 from the production URL right after merging a PR** -> almost always
   means you're hitting `https://<site>.netlify.app/...` while the *production*
   deploy still points at the pre-merge commit. Check "Production: main@<sha>"
   in the Netlify deploy log against the merge commit SHA — a deploy preview
