@@ -1,7 +1,10 @@
 /**
  * Netlify Function: altindex-ingest
- * POST /api/altindex-ingest – receives the AltIndex toplist JSON from the
- * scrape-toplist GitHub Action and persists it to Netlify Blobs.
+ * POST /api/altindex-ingest – receives AltIndex toplist JSON payloads from the
+ * scrape-toplist GitHub Action and persists each to its own Netlify Blob key,
+ * derived from the payload's `source` URL (e.g.
+ * https://altindex.com/toplist/reddit-mentions -> "reddit-mentions.json",
+ * https://altindex.com/toplist -> "toplist.json").
  *
  * Requires header x-deploy-secret matching env ALTINDEX_INGEST_SECRET.
  */
@@ -9,7 +12,20 @@
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'altindex';
-const BLOB_KEY = 'toplist.json';
+const DEFAULT_BLOB_KEY = 'toplist';
+const SLUG_RE = /^[a-z0-9-]+$/;
+
+function blobKeyFromSource(source) {
+  if (typeof source !== 'string') return `${DEFAULT_BLOB_KEY}.json`;
+  let pathname;
+  try {
+    pathname = new URL(source).pathname;
+  } catch {
+    return `${DEFAULT_BLOB_KEY}.json`;
+  }
+  const slug = pathname.replace(/^\/toplist\/?/, '').replace(/\/$/, '') || DEFAULT_BLOB_KEY;
+  return SLUG_RE.test(slug) ? `${slug}.json` : `${DEFAULT_BLOB_KEY}.json`;
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -49,10 +65,11 @@ export default async function handler(req) {
     return respond(400, { ok: false, error: 'Invalid JSON body' });
   }
 
+  const blobKey = blobKeyFromSource(body && body.source);
   const store = getStore(STORE_NAME);
-  await store.setJSON(BLOB_KEY, body);
+  await store.setJSON(blobKey, body);
 
-  return respond(200, { ok: true });
+  return respond(200, { ok: true, key: blobKey });
 }
 
 export const config = {

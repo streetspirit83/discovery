@@ -1,13 +1,15 @@
 /**
  * Netlify Function: altindex-toplist
- * GET /api/altindex-toplist – returns the most recently ingested AltIndex
- * toplist JSON from Netlify Blobs.
+ * GET /api/altindex-toplist[?key=<slug>] – returns the most recently ingested
+ * AltIndex toplist JSON from Netlify Blobs. `key` selects the dataset (e.g.
+ * "reddit-mentions"); defaults to the main "toplist".
  */
 
 import { getStore } from '@netlify/blobs';
 
 const STORE_NAME = 'altindex';
-const BLOB_KEY = 'toplist.json';
+const DEFAULT_KEY = 'toplist';
+const SLUG_RE = /^[a-z0-9-]+$/;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,8 +30,11 @@ export default async function handler(req) {
     });
   }
 
+  const requestedKey = new URL(req.url).searchParams.get('key');
+  const slug = requestedKey && SLUG_RE.test(requestedKey) ? requestedKey : DEFAULT_KEY;
+
   const store = getStore(STORE_NAME);
-  const data = await store.get(BLOB_KEY, { type: 'json' });
+  const data = await store.get(`${slug}.json`, { type: 'json' });
 
   if (!data) {
     return new Response(JSON.stringify({ ok: false, error: 'Not found' }), {
