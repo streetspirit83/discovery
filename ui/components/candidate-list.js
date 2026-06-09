@@ -308,7 +308,8 @@ export class CandidateList {
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (state   && c.workspace_state !== state)               return false;
-      if (sector  && c.sector !== sector)                       return false;
+      if (sector === '__no_sector__' && c.sector)               return false;
+      if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
       if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
       return true;
     });
@@ -492,12 +493,14 @@ export class CandidateList {
     ba.innerHTML = `
       <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
       <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
+      <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
       <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
       <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
+    ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
     ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
     ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
