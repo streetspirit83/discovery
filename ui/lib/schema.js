@@ -7,7 +7,7 @@ export const SCHEMA_VERSION = 'discovery-1.0';
 
 export const WORKSPACE_STATES = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
 
-export const BLOB_TYPES = ['inbox', 'archive', 'export'];
+export const BLOB_TYPES = ['inbox', 'archive', 'export', 'watch'];
 
 export const SIGNAL_TYPES = [
   'insider_buy',
@@ -243,6 +243,13 @@ export const MOCK_ARCHIVE = {
 export const MOCK_EXPORT = {
   schema_version: SCHEMA_VERSION,
   blob_type: 'export',
+  updated_at: '2026-05-26T15:00:00Z',
+  candidates: [],
+};
+
+export const MOCK_WATCH = {
+  schema_version: SCHEMA_VERSION,
+  blob_type: 'watch',
   updated_at: '2026-05-26T15:00:00Z',
   candidates: [],
 };

@@ -11,6 +11,7 @@ const BLOB_NAMES = {
   inbox: 'discovery-inbox',
   archive: 'discovery-archive',
   export: 'discovery-export',
+  watch: 'discovery-watch',
 };
 
 function log(level, msg, data = {}) {
@@ -127,8 +128,8 @@ export default async function handler(req) {
     const exch = (candidate.exchange || 'UNKNOWN').toUpperCase();
     candidate.exchange = exch; // normalise before writing
 
-    // Check archive and export first – no resurrection
-    for (const bt of ['archive', 'export']) {
+    // Check archive, export, watch first – no resurrection
+    for (const bt of ['archive', 'export', 'watch']) {
       const doc = await readBlobDoc(store, bt);
       const found = doc.candidates.find(
         (c) => c.symbol.toUpperCase() === sym && c.exchange.toUpperCase() === exch,
@@ -169,14 +170,18 @@ export default async function handler(req) {
       return respond(400, { ok: false, error: 'Missing or empty candidates array' });
     }
 
-    const [archiveDoc, exportDoc, inbox] = await Promise.all([
+    const [archiveDoc, exportDoc, watchDoc, inbox] = await Promise.all([
       readBlobDoc(store, 'archive'),
       readBlobDoc(store, 'export'),
+      readBlobDoc(store, 'watch'),
       readBlobDoc(store, 'inbox'),
     ]);
 
     const archiveKeys = new Set(archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
-    const exportKeys  = new Set(exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
+    const exportKeys  = new Set([
+      ...exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+      ...watchDoc.candidates.map((c)  => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+    ]);
     const inboxMap    = new Map(inbox.candidates.map((c) => [`${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`, c]));
 
     const now = new Date().toISOString();

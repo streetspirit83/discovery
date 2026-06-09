@@ -10,7 +10,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260605d';
-import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
+import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 
@@ -30,6 +30,7 @@ const L = {
   inbox:    luc('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
   archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
+  bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
 };
 
 // ── UI state (persisted) ───────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ function saveUiState() {
 // ── App globals ────────────────────────────────────────────────────────────────
 let useMock = !isConfigured();
 let currentBlobType = uiState.bucket ?? 'inbox';
-let allBlobs = { inbox: null, archive: null, export: null };
+let allBlobs = { inbox: null, archive: null, export: null, watch: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
@@ -126,24 +127,13 @@ function renderSubbar() {
 
 function renderFilterbar() {
   const fb = document.getElementById('filterbar');
-  const states = [
-    { key: '', label: 'Alle' },
-    { key: 'new', label: 'Neu' },
-    { key: 'reviewed', label: 'Gesehen' },
-    { key: 'promoted', label: 'Promoted' },
-    { key: 'dismissed', label: 'Abgelehnt' },
-  ];
   const sectors = candidateList ? candidateList.getSectors() : [];
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
-    <div class="pill-group">
-      ${states.map(({ key, label }) =>
-        `<button class="pill${uiState.fState === key ? ' pill--active' : ''}" data-state="${key}">${label}</button>`
-      ).join('')}
-    </div>
     <select class="filter-select" id="filter-sector">
       <option value="">Alle Sektoren</option>
+      <option value="__no_sector__"${uiState.fSector === '__no_sector__' ? ' selected' : ''}>— Ohne Sektor</option>
       ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
     </select>
     <select class="filter-select" id="filter-cap">
@@ -153,16 +143,6 @@ function renderFilterbar() {
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
     </select>`;
-
-  fb.querySelectorAll('.pill[data-state]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      uiState.fState = btn.dataset.state;
-      saveUiState();
-      candidateList.setFilter('state', uiState.fState);
-      fb.querySelectorAll('.pill[data-state]').forEach((b) =>
-        b.classList.toggle('pill--active', b.dataset.state === uiState.fState));
-    });
-  });
 
   fb.querySelector('#filter-sector').addEventListener('change', (e) => {
     uiState.fSector = e.target.value;
@@ -207,8 +187,8 @@ function renderSelectedPill() {
 }
 
 function renderBotnav() {
-  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq };
-  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export' };
+  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark };
+  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
   document.getElementById('nav-home-icon').innerHTML   = L.home;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
@@ -234,6 +214,7 @@ function closeDetailSheet() {
 function renderBucketSheet() {
   const buckets = [
     { key: 'inbox',   label: 'Inbox',  icon: L.inbox },
+    { key: 'watch',   label: 'Watch',  icon: L.bookmark },
     { key: 'archive', label: 'Archiv', icon: L.archive },
     { key: 'export',  label: 'Export', icon: L.checkSq },
   ];
@@ -315,8 +296,8 @@ function closeRunSheet() {
 // ── Data loading ───────────────────────────────────────────────────────────────
 async function loadBlob(blobType) {
   if (useMock) {
-    const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT };
-    return structuredClone(map[blobType]);
+    const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT, watch: MOCK_WATCH };
+    return structuredClone(map[blobType] ?? { schema_version: 'discovery-1.0', blob_type: blobType, updated_at: new Date().toISOString(), candidates: [] });
   }
   try {
     return await storageClient.readBlob(blobType);
@@ -365,19 +346,19 @@ async function handleAction(action, candidate, extras = {}) {
     candidate.workspace_state = 'promoted';
     if (!useMock) {
       try {
-        await storageClient.moveCandidate(candidate.id, currentBlobType, 'export');
-        allBlobs.export = null;
+        await storageClient.moveCandidate(candidate.id, currentBlobType, 'watch');
+        allBlobs.watch = null;
       } catch (err) {
         toast(`Promote fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
     } else {
-      await mockInsert('export', candidate);
+      await mockInsert('watch', candidate);
     }
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
     candidateDetail.hide();
-    toast(`✓ ${candidate.symbol} → Export (Tab „Export")`, 'success');
+    toast(`✓ ${candidate.symbol} → Watch (Tab „Watch")`, 'success');
   }
 
   if (action === 'delete') {
@@ -509,6 +490,31 @@ async function handleBulkAction(action, ids) {
 
   if (action === 'promote') {
     for (const c of targets) await handleAction('promote', c);
+  }
+
+  if (action === 'export') {
+    if (currentBlobType === 'export') {
+      toast('Bereits im Export-Bucket', 'info', 2000);
+      return;
+    }
+    for (const c of targets) {
+      if (!useMock) {
+        try {
+          await storageClient.moveCandidate(c.id, currentBlobType, 'export');
+          allBlobs.export = null;
+        } catch (err) {
+          toast(`Export fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
+          continue;
+        }
+      } else {
+        await mockInsert('export', c);
+      }
+      blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
+    }
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`↗ ${targets.length} Ticker → Export`, 'success');
+    return;
   }
 
   if (action === 'enrich') {
@@ -662,8 +668,10 @@ async function init() {
   }
 
   // Apply saved filters directly (before setData so first render uses them)
+  // State filter removed — state pills were removed from filterbar
+  uiState.fState = '';
   candidateList.filters = {
-    state:   uiState.fState  ?? '',
+    state:   '',
     sector:  uiState.fSector ?? '',
     capSize: uiState.fCap    ?? '',
   };
@@ -707,7 +715,7 @@ async function init() {
     renderSettingsModal(async () => {
       useMock = !isConfigured();
       storageClient = isConfigured() ? loadStorageClient() : null;
-      allBlobs = { inbox: null, archive: null, export: null };
+      allBlobs = { inbox: null, archive: null, export: null, watch: null };
       updateMockBadge();
       await switchBlob(currentBlobType);
       toast('Einstellungen gespeichert', 'success');
