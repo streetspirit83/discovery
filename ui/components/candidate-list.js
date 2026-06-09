@@ -159,6 +159,7 @@ function sortValue(c, col) {
     case 'tv_vol30d': return tv?.average_volume_30d_calc ?? null;
     case 'tv_rating1m':return tv?.recommend_all_1m ?? null;
     case 'tv_mcap':   return tv?.market_cap ?? null;
+    case 'star':      return c.in_portfolio ? 1 : 0;
     default:          return '';
   }
 }
@@ -368,6 +369,7 @@ export class CandidateList {
       ).join('');
       cols += `<th class="num">Aktion</th>`;
     }
+    cols += this.thNum('star', '★', 'Im Portfolio (Benchmark-Marker)');
 
     this.thead.innerHTML = `<tr>${cols}</tr>`;
     this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
@@ -407,6 +409,8 @@ export class CandidateList {
         ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
       </div></td>`;
 
+      const starTd = `<td class="num"><button class="act-btn act-btn--star${c.in_portfolio ? ' is-active' : ''}" data-action="toggleStar" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button></td>`;
+
       let dataCols;
       if (this.viewMode === 'standard') {
         const r   = tv?.recommend_all_1m;
@@ -433,11 +437,12 @@ export class CandidateList {
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
             ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
           </div></td>` +
-          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>`;
+          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
+          starTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
-        ).join('') + actionTd;
+        ).join('') + actionTd + starTd;
       }
 
       const tr = document.createElement('tr');
@@ -469,9 +474,10 @@ export class CandidateList {
         this.syncSelectAll();
       });
 
-      // Promote / Dismiss
+      // Promote / Dismiss / Star
       tr.querySelector('[data-action="promote"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('promote', c); });
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
+      tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
 
       this.tbody.appendChild(tr);
     }
@@ -491,11 +497,11 @@ export class CandidateList {
     const ba = document.getElementById('bulk-actions');
     if (!ba) return;
     ba.innerHTML = `
+      <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
       <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
       <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
       <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
