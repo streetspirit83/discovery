@@ -852,6 +852,43 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .export-modal { width:min(640px,100%); }
 
 /* ════════════════════════════════════════════════════════════════
+   SCREENER STUDIO
+   ════════════════════════════════════════════════════════════════ */
+.screener-modal { width:min(760px,100%); }
+.scr-presetbar {
+  display:flex; gap:var(--s-2); align-items:center; margin-bottom:var(--s-4);
+  padding-bottom:var(--s-3); border-bottom:1px solid var(--border); flex-wrap:wrap;
+}
+.scr-presetbar #scr-preset { flex:1; min-width:160px; }
+.scr-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); margin-bottom:var(--s-3); }
+.scr-grid--3 { grid-template-columns:1fr 1fr 1fr; margin-top:var(--s-3); }
+.scr-field { display:flex; flex-direction:column; gap:4px; font-size:var(--fs-2); color:var(--muted); }
+.scr-field > span { font-weight:var(--fw-bold); }
+.scr-field input {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2) var(--s-3); border-radius:var(--r-1); font-size:var(--fs-3); font-family:inherit;
+}
+.scr-section-title { font-size:var(--fs-2); font-weight:var(--fw-bold); color:var(--muted); margin:var(--s-3) 0 var(--s-2); text-transform:uppercase; letter-spacing:0.04em; }
+.scr-filters { display:flex; flex-direction:column; gap:var(--s-2); margin-bottom:var(--s-2); }
+.scr-filter-row { display:grid; grid-template-columns:1.4fr 1.2fr 1fr 1fr auto; gap:var(--s-2); align-items:center; }
+.scr-filter-row input {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2); border-radius:var(--r-1); font-size:var(--fs-3); width:100%;
+}
+.scr-f-del { color:var(--neg); }
+.scr-results { margin-top:var(--s-3); }
+.scr-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-1); }
+.scr-table { width:100%; border-collapse:collapse; font-size:var(--fs-2); }
+.scr-table th, .scr-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--border); }
+.scr-table th { background:var(--surface-3); color:var(--muted); font-weight:var(--fw-bold); position:sticky; top:0; }
+.scr-table tr:last-child td { border-bottom:none; }
+.scr-table .scr-name { color:var(--muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:640px) {
+  .scr-grid, .scr-grid--3 { grid-template-columns:1fr 1fr; }
+  .scr-filter-row { grid-template-columns:1fr 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════
    RESPONSIVE
    ════════════════════════════════════════════════════════════════ */
 .col-name-data { display:none; }

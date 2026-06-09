@@ -6,6 +6,7 @@ import { CandidateList } from './components/candidate-list.js?v=20260605d';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
+import { renderScreenerModal } from './components/screener-modal.js?v=20260609a';
 import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
@@ -22,6 +23,7 @@ const L = {
   refresh:  luc('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
   zap:      luc('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
   upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+  scope:    luc('<circle cx="17" cy="3" r="2"/><path d="M2 22 13 11"/><path d="m10.3 10.3 10.7-7 2.7 2.7-7 10.7"/><path d="m5.3 15.3 3.4 3.4"/>'),
   sun:      luc('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
   moon:     luc('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
   download: luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
@@ -95,6 +97,7 @@ function toggleTheme() {
 function renderTopbar() {
   document.getElementById('btn-refresh').innerHTML  = L.refresh;
   document.getElementById('btn-run').innerHTML      = L.zap;
+  document.getElementById('btn-screener').innerHTML = L.scope;
   document.getElementById('btn-upload').innerHTML   = L.upload;
   document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
   document.getElementById('btn-export').innerHTML   = L.download;
@@ -697,6 +700,20 @@ async function init() {
 
   document.getElementById('btn-upload').addEventListener('pointerup', () => {
     renderUploadModal({ onImport: importCandidates });
+  });
+
+  document.getElementById('btn-screener').addEventListener('pointerup', () => {
+    if (useMock) {
+      toast('Screener braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
+      return;
+    }
+    renderScreenerModal({
+      storageClient,
+      backendUrl: localStorage.getItem('discovery_backend_url'),
+      secret: localStorage.getItem('discovery_secret'),
+      onImport: importCandidates,
+      toast,
+    });
   });
 
   document.getElementById('btn-theme').addEventListener('pointerup', toggleTheme);

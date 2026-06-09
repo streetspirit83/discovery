@@ -13,6 +13,16 @@ const BLOB_NAMES = {
   export: 'discovery-export',
 };
 
+// Server-side config blob (screener presets etc.) – synced across devices.
+const CONFIG_KEY = 'discovery-config';
+function emptyConfig() {
+  return {
+    schema_version: 'discovery-config-1.0',
+    updated_at: new Date().toISOString(),
+    presets: [],
+  };
+}
+
 function log(level, msg, data = {}) {
   process.stdout.write(
     JSON.stringify({ level, msg, ts: new Date().toISOString(), ...data }) + '\n',
@@ -92,6 +102,37 @@ export default async function handler(req) {
   }
 
   const store = getStore({ name: 'discovery-data', consistency: 'strong' });
+
+  // --- op: read_config ---
+  if (op === 'read_config') {
+    log('info', 'storage: read_config');
+    let doc;
+    try {
+      doc = await store.get(CONFIG_KEY, { type: 'json' });
+    } catch {
+      doc = null;
+    }
+    return respond(200, { ok: true, data: doc ?? emptyConfig() });
+  }
+
+  // --- op: write_config ---
+  if (op === 'write_config') {
+    const { config } = body;
+    if (!config || typeof config !== 'object') {
+      return respond(400, { ok: false, error: 'Missing config' });
+    }
+    if (!Array.isArray(config.presets)) {
+      return respond(400, { ok: false, error: 'config.presets must be an array' });
+    }
+    const doc = {
+      schema_version: 'discovery-config-1.0',
+      presets: config.presets,
+      updated_at: new Date().toISOString(),
+    };
+    await store.setJSON(CONFIG_KEY, doc);
+    log('info', 'storage: write_config', { presets: doc.presets.length });
+    return respond(200, { ok: true });
+  }
 
   // --- op: read ---
   if (op === 'read') {
