@@ -52,6 +52,17 @@ export class StorageClient {
   async deleteCandidate(blobType, candidateId) {
     return this.#post({ op: 'delete_candidate', blob_type: blobType, candidate_id: candidateId });
   }
+
+  /** Read the server-side config blob (screener presets, synced across devices). */
+  async readConfig() {
+    const result = await this.#post({ op: 'read_config' });
+    return result.data;
+  }
+
+  /** Overwrite the server-side config blob. `config` must contain a `presets` array. */
+  async writeConfig(config) {
+    return this.#post({ op: 'write_config', config });
+  }
 }
 
 export function loadStorageClient() {
