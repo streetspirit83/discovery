@@ -403,6 +403,21 @@ async function handleAction(action, candidate, extras = {}) {
     toast(`✗ ${candidate.symbol} → Archiv`, 'info');
   }
 
+  if (action === 'toggleStar') {
+    candidate.in_portfolio = !candidate.in_portfolio;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { in_portfolio: candidate.in_portfolio });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.in_portfolio = !candidate.in_portfolio; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    return;
+  }
+
   if (action === 'review') {
     candidate.workspace_state = 'reviewed';
     if (!useMock) {
