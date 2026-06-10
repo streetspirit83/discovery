@@ -8,7 +8,7 @@
 import { buildLinks } from './link-builder.js';
 
 const nowIso = () => new Date().toISOString();
-const uuid = () =>
+export const uuid = () =>
   (crypto.randomUUID
     ? crypto.randomUUID()
     : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
