@@ -426,6 +426,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .trend-strength-score--MODERATE { background:rgba(52,152,219,.15);  color:#2980b9; }
 .trend-strength-score--WEAK     { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Overall Score badge (0–100, composite over all standard-view metrics) */
+.overall-score {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.overall-score--STRONG { background:rgba(46,204,113,.15);  color:#27ae60; }
+.overall-score--GOOD   { background:rgba(52,152,219,.15);  color:#2980b9; }
+.overall-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
+.overall-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }

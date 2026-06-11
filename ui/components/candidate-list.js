@@ -2,6 +2,7 @@ import { icons } from '../lib/icons.js';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
+import { computeOverallScore } from '../lib/tv-overall-score.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -132,6 +133,7 @@ function sortValue(c, col) {
     case 'tv_rsi':         return tv?.rsi ?? null;
     case 'tv_trend_score':          return tv?.trend_score?.total          ?? null;
     case 'tv_entry_score':          return liveEntryScore(tv)?.total       ?? null;
+    case 'tv_overall_score':        return liveOverallScore(tv)?.total     ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -366,6 +368,7 @@ export class CandidateList {
       cols += this.thNum('tv_trend_strength_score', 'Stärke', 'Trend Strength Score 0–100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) · 85+ = Structural Power-Trend');
       cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0–100 aus allen Spalten: PerfW (15) + Perf1M (15) + Δ1T (5) + EBITDA% (15) + Trend (10) + Stärke (12) + Entry (10) + Health (10) + PCHS (8) · fehlende Werte werden renormalisiert');
     } else {
       cols += VIEWS[this.viewMode].map((d) =>
         `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
@@ -444,6 +447,7 @@ export class CandidateList {
             ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
           </div></td>` +
           `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
+          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           starTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
@@ -642,6 +646,28 @@ function renderHealthScore(hs) {
   const flags = hs.flags?.length ? ` · ⚠ ${hs.flags.join(', ')}` : '';
   const tip = `${hs.label} (${Object.entries(hs.breakdown).map(([k, v]) => `${k.split('_')[0]}:${v}`).join(' ')})${flags}`;
   return `<span class="health-score health-score--${hs.labelCode}" title="${tip}">${hs.total}</span>`;
+}
+
+// Composite score over all standard-view metrics, computed live from tv_data.
+function liveOverallScore(tv) {
+  if (!tv) return null;
+  return computeOverallScore({
+    perfW:         tv.perf_w,
+    perf1M:        tv.perf_1m,
+    change1D:      tv.change_1d,
+    ebitdaGrowth:  tv.ebitda_yoy_growth_fy ?? tv.ebitda_yoy_growth_ttm,
+    rating1M:      tv.recommend_all_1m,
+    trendStrength: tv.trend_strength_score?.total,
+    entry:         liveEntryScore(tv)?.total,
+    health:        liveHealthScore(tv)?.total,
+    cycle:         tv.cycle_score?.total,
+  });
+}
+
+function renderOverallScore(os) {
+  if (!os) return '<span class="muted-dash">—</span>';
+  const tip = `${os.label} (${Object.entries(os.breakdown).map(([k, v]) => `${k}:${v}`).join(' ')}) · Datenabdeckung ${os.coverage}/100`;
+  return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}</span>`;
 }
 
 function chipLink(href, logo, label, extraClass = '') {
