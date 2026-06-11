@@ -440,6 +440,27 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .overall-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .overall-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Workflow modal (Home icon) */
+.workflow-modal { max-width: 420px; }
+.workflow-steps { list-style: none; margin: 0; padding: 0; }
+.workflow-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  position: relative; padding: 0 0 18px 0;
+}
+.workflow-step:last-child { padding-bottom: 0; }
+.workflow-step:not(:last-child)::before {
+  content: ''; position: absolute; left: 13px; top: 28px; bottom: 0;
+  width: 2px; background: var(--accent-weak, rgba(52,152,219,.25));
+}
+.workflow-step__badge {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(52,152,219,.15); color: #2980b9;
+  font-weight: var(--fw-bold); font-size: var(--fs-3);
+}
+.workflow-step__title { font-weight: var(--fw-bold); margin-bottom: 2px; }
+.workflow-step__text  { color: var(--muted); font-size: var(--fs-2); line-height: 1.45; }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }
