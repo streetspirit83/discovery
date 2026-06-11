@@ -159,6 +159,10 @@ const TV_COLUMNS = [
   'Pivot.M.Classic.S1',                        // 94
   'Pivot.M.Classic.R1',                        // 95
   'ATR',                                       // 96
+  // Intraday price fields
+  'close|1',                                   // 97 — 1-Minuten Intraday-Kurs
+  'open',                                      // 98 — heutiger Open
+  'change_from_open',                          // 99 — Intraday-Performance seit Open
 ];
 
 const COL = {
@@ -263,6 +267,10 @@ recommendMA1M: 53,
   pivotS1:               94,
   pivotR1:               95,
   atr:                   96,
+  // Intraday price fields
+  close1m:               97,
+  openD:                 98,
+  changeFromOpen:        99,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -449,6 +457,10 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       pivot_s1:   d[COL.pivotS1]   ?? null,
       pivot_r1:   d[COL.pivotR1]   ?? null,
       atr:        d[COL.atr]       ?? null,
+      // Intraday price fields
+      close_1m:         d[COL.close1m]        ?? null,
+      open:             d[COL.openD]          ?? null,
+      change_from_open: d[COL.changeFromOpen] ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
