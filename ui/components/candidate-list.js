@@ -167,6 +167,7 @@ function sortValue(c, col) {
     case 'tv_rating1m':return tv?.recommend_all_1m ?? null;
     case 'tv_mcap':   return tv?.market_cap ?? null;
     case 'star':      return c.in_portfolio ? 1 : 0;
+    case 'broker':    return c.broker_armed ? 1 : 0;
     default:          return '';
   }
 }
@@ -382,6 +383,7 @@ export class CandidateList {
       cols += `<th class="num">Aktion</th>`;
     }
     cols += this.thNum('star', '★', 'Im Portfolio (Benchmark-Marker)');
+    cols += this.thNum('broker', '✓', 'Im Broker handelbar & Alert scharf');
 
     this.thead.innerHTML = `<tr>${cols}</tr>`;
     this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
@@ -423,6 +425,8 @@ export class CandidateList {
 
       const starTd = `<td class="num"><button class="act-btn act-btn--star${c.in_portfolio ? ' is-active' : ''}" data-action="toggleStar" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button></td>`;
 
+      const brokerTd = `<td class="num"><button class="act-btn act-btn--broker${c.broker_armed ? ' is-active' : ''}" data-action="toggleBroker" title="${c.broker_armed ? 'Broker-Marker entfernen' : 'Im Broker handelbar & Alert scharf'}">${icons.check}</button></td>`;
+
       let dataCols;
       if (this.viewMode === 'standard') {
         const r   = tv?.recommend_all_1m;
@@ -456,11 +460,11 @@ export class CandidateList {
           </div></td>` +
           `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          starTd;
+          starTd + brokerTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
-        ).join('') + actionTd + starTd;
+        ).join('') + actionTd + starTd + brokerTd;
       }
 
       const tr = document.createElement('tr');
@@ -496,6 +500,7 @@ export class CandidateList {
       tr.querySelector('[data-action="promote"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('promote', c); });
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
+      tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
 
       this.tbody.appendChild(tr);
     }

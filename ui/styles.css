@@ -352,6 +352,9 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .act-btn--star { color:var(--muted); }
 .act-btn--star:hover { background:rgba(234,179,8,0.12); color:#ca8a04; }
 .act-btn--star.is-active { color:#ca8a04; }
+.act-btn--broker { color:var(--muted); opacity:.45; }
+.act-btn--broker:hover { background:rgba(46,204,113,0.12); color:#27ae60; opacity:1; }
+.act-btn--broker.is-active { color:#27ae60; opacity:1; }
 .btn-icon--delete { color:var(--neg); }
 .btn-icon--delete:hover { background:var(--neg-weak); }
 .btn-icon svg { display:block; width:15px; height:15px; }

@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260611a';
+import { CandidateList } from './components/candidate-list.js?v=20260611b';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -10,7 +10,7 @@ import { renderScreenerModal } from './components/screener-modal.js?v=20260609a'
 import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260611a';
+import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260611b';
 import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
@@ -415,6 +415,21 @@ async function handleAction(action, candidate, extras = {}) {
       } catch (err) {
         toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
         candidate.in_portfolio = !candidate.in_portfolio; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    return;
+  }
+
+  if (action === 'toggleBroker') {
+    candidate.broker_armed = !candidate.broker_armed;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { broker_armed: candidate.broker_armed });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.broker_armed = !candidate.broker_armed; // revert
         return;
       }
     }
