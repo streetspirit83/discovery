@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260605d';
+import { CandidateList } from './components/candidate-list.js?v=20260611a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -10,7 +10,8 @@ import { renderScreenerModal } from './components/screener-modal.js?v=20260609a'
 import { renderExportModal } from './components/export-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260605d';
+import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260611a';
+import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
@@ -560,6 +561,26 @@ async function handleBulkAction(action, ids) {
 
     candidateList.renderRows();
     toast('✨ Bulk-Enrichment abgeschlossen', 'success');
+  }
+
+  if (action === 'copy-prompt') {
+    const prompt = buildResearchPrompt(targets);
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      // Clipboard API unavailable (e.g. file:// without permission) → textarea fallback
+      const ta = document.createElement('textarea');
+      ta.value = prompt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (!ok) { toast('Kopieren fehlgeschlagen – Clipboard nicht verfügbar', 'error'); return; }
+    }
+    toast(`📋 Research-Prompt für ${targets.length} Ticker kopiert – in AI-Suche einfügen`, 'success', 4000);
+    return;
   }
 
   if (action === 'tv-data') {

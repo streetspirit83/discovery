@@ -3,6 +3,7 @@ import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
+import { computeUpsidePotential } from '../lib/tv-upside.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -134,6 +135,8 @@ function sortValue(c, col) {
     case 'tv_trend_score':          return tv?.trend_score?.total          ?? null;
     case 'tv_entry_score':          return liveEntryScore(tv)?.total       ?? null;
     case 'tv_overall_score':        return liveOverallScore(tv)?.total     ?? null;
+    case 'tv_upside':   return computeUpsidePotential(tv)?.upside   ?? null;
+    case 'tv_downside': return computeUpsidePotential(tv)?.downside ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -362,6 +365,8 @@ export class CandidateList {
       cols += this.thNum('tv_long_entry',  'Long',  'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)');
       cols += this.thNum('tv_close',       'Kurs',  'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)');
       cols += this.thNum('tv_short_entry', 'Short', 'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)');
+      cols += this.thNum('tv_upside',   '▲1M', 'Upside-Potenzial ~1 Monat: Abstand zum nächsten Widerstand (Pivot R1, BB.upper, Donchian, High 1M/6M, 52W-Hoch), gedeckelt durch ATR×√21 · ⚠ = Earnings im Zeitfenster');
+      cols += this.thNum('tv_downside', '▼1M', 'Downside-Risiko ~1 Monat: Abstand zur nächsten Unterstützung (Pivot S1, BB.lower, Donchian, Low 1M/6M, 52W-Tief), gedeckelt durch ATR×√21');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
@@ -423,6 +428,7 @@ export class CandidateList {
         const r   = tv?.recommend_all_1m;
         const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '—'}</span>`;
         const ep  = liveEntryPrices(tv);
+        const up  = computeUpsidePotential(tv);
         dataCols =
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
           `<td><span class="sector-cell">${c.sector ?? '—'}</span></td>` +
@@ -437,6 +443,8 @@ export class CandidateList {
           `<td class="num">${renderEntryPrice(ep, 'long')}</td>` +
           `<td class="num">${fmtNum(tv?.close_1m ?? tv?.close, 2)}</td>` +
           `<td class="num">${renderEntryPrice(ep, 'short')}</td>` +
+          `<td class="num">${renderUpside(up, 'up')}</td>` +
+          `<td class="num">${renderUpside(up, 'down')}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
@@ -512,6 +520,7 @@ export class CandidateList {
       <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
       <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
+      <button class="bulk-btn bulk-btn--accent" id="bulk-copy-prompt">📋 Research-Prompt</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
       <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
@@ -519,6 +528,7 @@ export class CandidateList {
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
     ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
+    ba.querySelector('#bulk-copy-prompt').addEventListener('pointerup', () => this.onBulkAction?.('copy-prompt', [...this.selected]));
     ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
     ba.querySelector('#bulk-clear').addEventListener('pointerup',   () => this.clearSelection());
   }
@@ -668,6 +678,19 @@ function renderOverallScore(os) {
   if (!os) return '<span class="muted-dash">—</span>';
   const tip = `${os.label} (${Object.entries(os.breakdown).map(([k, v]) => `${k}:${v}`).join(' ')}) · Datenabdeckung ${os.coverage}/100`;
   return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}</span>`;
+}
+
+function renderUpside(up, side) {
+  const v = side === 'up' ? up?.upside : up?.downside;
+  if (v == null) return '<span class="muted-dash">—</span>';
+  const target = side === 'up' ? up.upTarget : up.downTarget;
+  const tipParts = [
+    target != null ? `Level: ${fmtNum(target)}` : 'kein Level (Range offen)',
+    up.volBudget != null ? `ATR-Budget: ±${fmtNum(up.volBudget, 1)}%` : null,
+    up.earningsSoon ? '⚠ Earnings innerhalb ~1 Monat' : null,
+  ].filter(Boolean);
+  const warn = up.earningsSoon ? ' ⚠' : '';
+  return `<span class="${posNegClass(v)}" title="${tipParts.join(' · ')}">${fmtPct(v)}${warn}</span>`;
 }
 
 function chipLink(href, logo, label, extraClass = '') {
