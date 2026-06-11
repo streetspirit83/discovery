@@ -112,7 +112,7 @@ function sortValue(c, col) {
     case 'state':     return STATE_ORDER.indexOf(c.workspace_state);
     case 'sources':   return c.sources.length;
     case 'tv_chg1d':  return tv?.change_1d ?? null;
-    case 'tv_close':  return tv?.close ?? null;
+    case 'tv_close':  return tv?.close_1m ?? tv?.close ?? null;
     case 'tv_chg1w':  return tv?.change_1w ?? null;
     case 'tv_chg1m':  return tv?.change_1m ?? null;
     case 'tv_perfw':  return tv?.perf_w ?? null;
@@ -358,7 +358,7 @@ export class CandidateList {
       cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück');
       cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry');
       cols += this.thNum('tv_long_entry',  'Long',  'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)');
-      cols += this.thNum('tv_close',       'Kurs',  'Aktueller Kurs (letzter Schlusskurs)');
+      cols += this.thNum('tv_close',       'Kurs',  'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)');
       cols += this.thNum('tv_short_entry', 'Short', 'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
@@ -432,7 +432,7 @@ export class CandidateList {
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
           `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
           `<td class="num">${renderEntryPrice(ep, 'long')}</td>` +
-          `<td class="num">${fmtNum(tv?.close, 2)}</td>` +
+          `<td class="num">${fmtNum(tv?.close_1m ?? tv?.close, 2)}</td>` +
           `<td class="num">${renderEntryPrice(ep, 'short')}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
