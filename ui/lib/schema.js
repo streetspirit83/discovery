@@ -157,6 +157,8 @@ export const MOCK_INBOX = {
         risks: ['Zinssensitivität US-Wohnimmobilienmarkt', 'Konkurrenz durch SolarEdge', 'Lagerabbau-Zyklus'],
         catalysts: ['IRA-Fördermittel 2026-2028', 'Europa-Expansion', 'Battery-Storage-Wachstum'],
         confidence: 'medium',
+        upside_20pct_probability: 35,
+        upside_reasoning: 'Cluster-Signal und IRA-Rückenwind sprechen für Erholung, aber Zinssensitivität begrenzt kurzfristiges Momentum.',
       },
       first_discovered_at: '2026-05-26T07:00:00Z',
       last_updated_at: '2026-05-27T10:00:00Z',
