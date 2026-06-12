@@ -2,13 +2,17 @@
  * Momentum-Check (5-Minuten-Feinprüfung, Schritte 1–3)
  *
  * Codifies the quick momentum screen:
- *   Schritt 1 (Vorfilter):     Score ≥70 · Trend-Rating ↑ · Stärke ≥70 · Entry ≥40
+ *   Schritt 1 (Vorfilter):     Score ≥60 · Trend-Rating ↑ · Stärke ≥60 · Entry ≥30
  *   Schritt 2 (Beschleunigung): PerfW & Perf1M > 0 · PerfW > Perf1M/4 ·
- *                               Perf3M > 0 · POT-Verhältnis ≥ 2:1 · Δ1T ≤ +5 %
+ *                               Perf3M > 0 · POT-Verhältnis ≥ 1.5:1 · Δ1T ≤ +5 %
  *   Schritt 3 (Bestätigung):    ADX > 25 · RSI 45–69 · MACD > Signal ·
- *                               Aroon↑ > Aroon↓ · V10d > V30d
+ *                               Aroon↑ > Aroon↓ · V10d ≥ 0.9×V30d
  *
- * Ampel: Anteil bestandener Checks ≥80 % → grün, ≥55 % → gelb, sonst rot.
+ * Kalibrierung: Momentum-Werte nahe am Hoch haben strukturell wenig Luft bis
+ * zum nächsten Widerstand (POT) und schlechte Reversal-Entry-Scores — diese
+ * Checks sind daher bewusst locker geschwellt, sonst gibt es nie Grün.
+ *
+ * Ampel: Anteil bestandener Checks ≥75 % → grün, ≥50 % → gelb, sonst rot.
  * K.O.s: Trend-Rating ↓ → rot · Earnings im 1M-Fenster → max. gelb.
  * Checks ohne Daten werden ausgelassen; unter 6 auswertbaren Checks → null.
  *
@@ -26,20 +30,20 @@ export function computeMomentumCheck(tv, { overallScore, entryScore } = {}) {
 
   // [label, pass|fail|null(no data)]
   const checks = [
-    ['Score≥70',       overallScore == null ? null : overallScore >= 70],
+    ['Score≥60',       overallScore == null ? null : overallScore >= 60],
     ['Trend↑',         tv.recommend_all_1m == null ? null : tv.recommend_all_1m > 0.1],
-    ['Stärke≥70',      tv.trend_strength_score?.total == null ? null : tv.trend_strength_score.total >= 70],
-    ['Entry≥40',       entryScore == null ? null : entryScore >= 40],
+    ['Stärke≥60',      tv.trend_strength_score?.total == null ? null : tv.trend_strength_score.total >= 60],
+    ['Entry≥30',       entryScore == null ? null : entryScore >= 30],
     ['PerfW&1M>0',     tv.perf_w == null || tv.perf_1m == null ? null : tv.perf_w > 0 && tv.perf_1m > 0],
     ['Beschleunigung', tv.perf_w == null || tv.perf_1m == null ? null : tv.perf_w > tv.perf_1m / 4],
     ['Perf3M>0',       perf3 == null ? null : perf3 > 0],
-    ['POT≥2:1',        up?.upside == null || up?.downside == null || up.downside === 0 ? null : up.upside / Math.abs(up.downside) >= 2],
+    ['POT≥1.5:1',      up?.upside == null || up?.downside == null || up.downside === 0 ? null : up.upside / Math.abs(up.downside) >= 1.5],
     ['Δ1T≤5%',         tv.change_1d == null ? null : tv.change_1d <= 5],
     ['ADX>25',         tv.adx == null ? null : tv.adx > 25],
     ['RSI 45–69',      tv.rsi == null ? null : tv.rsi >= 45 && tv.rsi < 70],
     ['MACD>Signal',    tv.macd == null || tv.macd_signal == null ? null : tv.macd > tv.macd_signal],
     ['Aroon↑>↓',       aroonUp == null || aroonDown == null ? null : aroonUp > aroonDown],
-    ['Volumen↑',       tv.avg_vol_10d == null || tv.average_volume_30d_calc == null ? null : tv.avg_vol_10d > tv.average_volume_30d_calc],
+    ['Volumen↑',       tv.avg_vol_10d == null || tv.average_volume_30d_calc == null ? null : tv.avg_vol_10d >= 0.9 * tv.average_volume_30d_calc],
   ];
 
   const evaluated = checks.filter(([, r]) => r !== null);
@@ -49,7 +53,7 @@ export function computeMomentumCheck(tv, { overallScore, entryScore } = {}) {
   const fails  = evaluated.filter(([, r]) => r === false).map(([l]) => l);
   const ratio  = passed / evaluated.length;
 
-  let verdict = ratio >= 0.8 ? 'green' : ratio >= 0.55 ? 'yellow' : 'red';
+  let verdict = ratio >= 0.75 ? 'green' : ratio >= 0.5 ? 'yellow' : 'red';
   let ko = null;
 
   if (tv.recommend_all_1m != null && tv.recommend_all_1m < -0.1) {
