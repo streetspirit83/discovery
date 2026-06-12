@@ -522,7 +522,7 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Check Ampel (Feinpr\u00fcfung Schritte 1\u20133): gr\u00fcn \u226575% der Checks bestanden \u00b7 gelb \u226550% \u00b7 rot darunter \u00b7 K.O.: Trend\u2193 oder Earnings \u00b7 Berechnung \u00fcber den Puls-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('momentum', 'Mom', 'Momentum-Check Ampel: Kern hart (Trend\u2191, PerfW&1M>0, ADX>25 \u2013 jeder Versto\u00df = rot) \u00b7 Neben-Checks nur Abz\u00fcge (\u22643 gr\u00fcn, \u22646 gelb) \u00b7 Earnings deckelt auf gelb \u00b7 Berechnung \u00fcber den Puls-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
@@ -921,8 +921,9 @@ function renderMomentumCheck(mc) {
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
   const tipParts = [
     `${mc.passed}/${mc.total} Checks bestanden`,
+    mc.core_fails?.length ? `Kern verletzt: ${mc.core_fails.join(', ')}` : 'Kern intakt',
     mc.ko ? `K.O.: ${mc.ko}` : null,
-    mc.fails.length ? `Fehlend: ${mc.fails.join(', ')}` : 'Alle Checks bestanden',
+    mc.fails.length ? `Abzüge: ${mc.fails.join(', ')}` : 'keine Abzüge',
     age ? `geprüft vor ${age}` : null,
   ].filter(Boolean);
   return `<span class="momcheck momcheck--${mc.verdict}" title="${tipParts.join(' · ')}">●</span>`;
