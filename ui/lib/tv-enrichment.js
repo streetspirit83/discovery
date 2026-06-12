@@ -53,6 +53,7 @@ const EXCHANGE_CURRENCY = {
   OMXSTO: 'SEK', OMXCO: 'DKK', OMXNO: 'NOK', OMXHEX: 'EUR',
   LSE: 'GBP', SIX: 'CHF',
 };
+export { EXCHANGE_CURRENCY };
 
 const TV_COLUMNS = [
   'description',               // 0
@@ -592,6 +593,25 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
+
+/**
+ * Fetches the current EUR/USD rate (USD per 1 EUR) via the TV forex scanner.
+ * Verified response shape: {"totalCount":1,"data":[{"s":"FX_IDC:EURUSD","d":[1.15588]}]}
+ * @returns {Promise<number|null>}
+ */
+export async function fetchFxRate({ backendUrl, secret }) {
+  try {
+    const bodyStr = await proxyPost(backendUrl, secret,
+      'https://scanner.tradingview.com/forex/scan',
+      { symbols: { tickers: ['FX_IDC:EURUSD'] }, columns: ['close'] },
+    );
+    const rate = JSON.parse(bodyStr)?.data?.[0]?.d?.[0];
+    return typeof rate === 'number' && rate > 0 ? rate : null;
+  } catch (err) {
+    console.warn('[TV] FX rate fetch failed:', err.message);
+    return null;
+  }
+}
 
 /**
  * @param {object[]} candidates

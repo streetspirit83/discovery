@@ -8,6 +8,7 @@ const KEYS = {
   claudeKey: 'discovery_claude_key',
   githubPat: 'discovery_github_pat',
   twelveDataKey: 'discovery_twelvedata_key',
+  fxEurUsd: 'discovery_fx_eurusd',
 };
 
 export function loadSettings() {
@@ -17,6 +18,7 @@ export function loadSettings() {
     claudeKey: localStorage.getItem(KEYS.claudeKey) ?? '',
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
     twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
+    fxEurUsd: localStorage.getItem(KEYS.fxEurUsd) ?? '',
   };
 }
 
@@ -84,6 +86,13 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-fx-eurusd">EUR/USD Kurs <small>(optional, manuell)</small></label>
+          <input type="text" inputmode="decimal" id="set-fx-eurusd" placeholder="z.B. 1.16"
+            value="${settings.fxEurUsd}" autocomplete="off">
+          <small>USD je 1 EUR – Fallback für die €/$-Umschaltung. Wird automatisch überschrieben, sobald der Live-Kurs von TradingView geladen werden kann.</small>
+        </div>
+
+        <div class="form-group">
           <label>
             <input type="checkbox" id="set-use-mock"> Mock-Daten verwenden (kein Backend nötig)
           </label>
@@ -106,6 +115,7 @@ export function renderSettingsModal(onSave) {
       claudeKey: overlay.querySelector('#set-claude-key').value.trim(),
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
       twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
+      fxEurUsd: overlay.querySelector('#set-fx-eurusd').value.trim(),
     };
     saveSettings(newSettings);
     overlay.remove();

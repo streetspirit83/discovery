@@ -4,6 +4,29 @@ import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
+
+// ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
+let displayCurrency = 'USD';
+let fxEurUsd = null; // USD per 1 EUR
+
+function nativeCurrency(c) {
+  return EXCHANGE_CURRENCY[c.exchange] ?? 'USD';
+}
+
+// Conversion factor native → display. Only USD↔EUR is convertible;
+// other currencies stay native (the Wä column shows which).
+function convFactor(c) {
+  const native = nativeCurrency(c);
+  if (native === displayCurrency || !fxEurUsd) return 1;
+  if (native === 'USD' && displayCurrency === 'EUR') return 1 / fxEurUsd;
+  if (native === 'EUR' && displayCurrency === 'USD') return fxEurUsd;
+  return 1;
+}
+
+function fmtPrice(c, v, dec = 2) {
+  return v == null ? '—' : fmtNum(v * convFactor(c), dec);
+}
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -149,6 +172,9 @@ function sortValue(c, col) {
     case 'tv_h3m':      return tv?.high_3m ?? null;
     case 'tv_l3m':      return tv?.low_3m ?? null;
     case 'tv_analysts': return tv?.recommendation_total ?? null;
+    case 'currency':    return nativeCurrency(c);
+    case 'my_entry':    return c.my_entry ?? null;
+    case 'my_target':   return c.my_target ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -203,25 +229,27 @@ const VIEWS = {
     { key:'tv_atrp',    label:'ATRP',   title:'Average True Range in Prozent',    num:true, fmt:c=>fmtNum(c.tv_data?.atrp,2) },
   ],
   price: [
-    { key:'tv_entry_score', label:'Entry', title:'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry', num:true, fmt:c=>renderEntryScore(liveEntryScore(c.tv_data)) },
-    { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long') },
-    { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtNum(c.tv_data?.close_1m ?? c.tv_data?.close,2) },
-    { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short') },
-    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema20) },
-    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema50) },
-    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtNum(c.tv_data?.ema200) },
-    { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.high_1m) },
-    { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_1m) },
-    { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_3m) },
-    { key:'tv_l3m',     label:'L3M',    title:'Tief 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.low_3m) },
-    { key:'tv_h52hi',   label:'52W↑',   title:'52-Wochen-Hoch',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_high) },
-    { key:'tv_h52lo',   label:'52W↓',   title:'52-Wochen-Tief',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_low) },
-    { key:'tv_hall',    label:'ATH',    title:'All-Time-High',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_all) },
-    { key:'tv_lall',    label:'ATL',    title:'All-Time-Low',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_all) },
-    { key:'tv_pivr2',   label:'PivR2',  title:'Pivot Monthly Classic R2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_r2) },
-    { key:'tv_pivs2',   label:'PivS2',  title:'Pivot Monthly Classic S2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_s2) },
-    { key:'tv_donchlo', label:'DC↓',    title:'Donchian Channel 20 Lower (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
-    { key:'tv_donchhi', label:'DC↑',    title:'Donchian Channel 20 Upper (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
+    { key:'currency',  label:'W\u00e4',  title:'W\u00e4hrung der B\u00f6rse (Preise werden nach USD/EUR umgerechnet, andere W\u00e4hrungen bleiben nativ)', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
+    { key:'my_entry',  label:'Mein Entry', title:'Eigener Entry-Preis (Freitext, wird gespeichert \u00b7 native W\u00e4hrung)', num:true, fmt:c=>`<input type="number" step="any" class="price-input" data-field="my_entry" value="${c.my_entry ?? ''}" placeholder="\u2014">` },
+    { key:'my_target', label:'Mein Ziel',  title:'Eigenes Kursziel (Freitext, wird gespeichert \u00b7 native W\u00e4hrung)',   num:true, fmt:c=>`<input type="number" step="any" class="price-input" data-field="my_target" value="${c.my_target ?? ''}" placeholder="\u2014">` },
+    { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
+    { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
+    { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
+    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema20) },
+    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema50) },
+    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema200) },
+    { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
+    { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
+    { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },
+    { key:'tv_l3m',     label:'L3M',    title:'Tief 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_3m) },
+    { key:'tv_h52hi',   label:'52W\u2191',   title:'52-Wochen-Hoch',             num:true, fmt:c=>fmtPrice(c, c.tv_data?.price_52_week_high) },
+    { key:'tv_h52lo',   label:'52W\u2193',   title:'52-Wochen-Tief',             num:true, fmt:c=>fmtPrice(c, c.tv_data?.price_52_week_low) },
+    { key:'tv_hall',    label:'ATH',    title:'All-Time-High',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_all) },
+    { key:'tv_lall',    label:'ATL',    title:'All-Time-Low',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_all) },
+    { key:'tv_pivr2',   label:'PivR2',  title:'Pivot Monthly Classic R2',         num:true, fmt:c=>fmtPrice(c, c.tv_data?.pivot_r2) },
+    { key:'tv_pivs2',   label:'PivS2',  title:'Pivot Monthly Classic S2',         num:true, fmt:c=>fmtPrice(c, c.tv_data?.pivot_s2) },
+    { key:'tv_donchlo', label:'DC\u2193',    title:'Donchian Channel 20 Lower (1M)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.donch_ch20_lower_1m) },
+    { key:'tv_donchhi', label:'DC\u2191',    title:'Donchian Channel 20 Upper (1M)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.donch_ch20_upper_1m) },
   ],
   metrics: [
     { key:'tv_rsi',     label:'RSI',    title:'Relative Strength Index',          num:true, fmt:c=>`<span class="${rsiClass(c.tv_data?.rsi)}">${fmtNum(c.tv_data?.rsi,1)}</span>` },
@@ -301,6 +329,20 @@ export class CandidateList {
     this.showSelectedOnly = value;
     this.renderRows();
   }
+
+  setDisplayCurrency(cur) {
+    displayCurrency = cur === 'EUR' ? 'EUR' : 'USD';
+    this.renderRows();
+  }
+
+  setFxRate(rate) {
+    if (typeof rate === 'number' && rate > 0) {
+      fxEurUsd = rate;
+      this.renderRows();
+    }
+  }
+
+  hasFxRate() { return fxEurUsd != null; }
 
   clearSelection() {
     this.selected.clear();
@@ -411,6 +453,7 @@ export class CandidateList {
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
       cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M \u2013 rollierend ~21 Handelstage zur\u00fcck');
+      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0\u2013100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) \u00b7 80+ = Prime Entry');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
@@ -560,6 +603,7 @@ export class CandidateList {
           `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
+          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
@@ -606,6 +650,16 @@ export class CandidateList {
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
+
+      // User price inputs (Mein Entry / Mein Ziel in the Preis view)
+      tr.querySelectorAll('.price-input').forEach((inp) => {
+        inp.addEventListener('pointerup', (e) => e.stopPropagation());
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+        inp.addEventListener('change', () => {
+          const value = inp.value === '' ? null : Number(inp.value);
+          this.onAction?.('setUserPrice', c, { field: inp.dataset.field, value: Number.isFinite(value) ? value : null });
+        });
+      });
 
       this.tbody.appendChild(tr);
     }
@@ -712,20 +766,21 @@ function liveEntryPrices(tv) {
   });
 }
 
-function renderEntryPrice(ep, side) {
+function renderEntryPrice(ep, side, factor = 1) {
   if (!ep) return '<span class="muted-dash">—</span>';
   const price = side === 'long' ? ep.longEntry : ep.shortEntry;
   if (price == null) return '<span class="muted-dash">—</span>';
   const bd = ep.breakdown;
+  const f = (v) => (v != null ? fmtNum(v * factor) : null);
   const tipLines = side === 'long'
-    ? [bd.meanRevLong != null  && `MR:${fmtNum(bd.meanRevLong)}`,
-       bd.pivotLong   != null  && `Pivot:${fmtNum(bd.pivotLong)}`,
-       bd.breakoutLong != null && `BO:${fmtNum(bd.breakoutLong)}`]
-    : [bd.meanRevShort  != null  && `MR:${fmtNum(bd.meanRevShort)}`,
-       bd.pivotShort    != null  && `Pivot:${fmtNum(bd.pivotShort)}`,
-       bd.breakoutShort != null  && `BO:${fmtNum(bd.breakoutShort)}`];
-  const tip = `${side === 'long' ? 'Long' : 'Short'} Entry · ${tipLines.filter(Boolean).join(' · ')} → Ø ${fmtNum(price)}`;
-  return `<span class="entry-price entry-price--${side}" title="${tip}">${fmtNum(price)}</span>`;
+    ? [bd.meanRevLong != null  && `MR:${f(bd.meanRevLong)}`,
+       bd.pivotLong   != null  && `Pivot:${f(bd.pivotLong)}`,
+       bd.breakoutLong != null && `BO:${f(bd.breakoutLong)}`]
+    : [bd.meanRevShort  != null  && `MR:${f(bd.meanRevShort)}`,
+       bd.pivotShort    != null  && `Pivot:${f(bd.pivotShort)}`,
+       bd.breakoutShort != null  && `BO:${f(bd.breakoutShort)}`];
+  const tip = `${side === 'long' ? 'Long' : 'Short'} Entry · ${tipLines.filter(Boolean).join(' · ')} → Ø ${f(price)}`;
+  return `<span class="entry-price entry-price--${side}" title="${tip}">${f(price)}</span>`;
 }
 
 function renderEntryScore(es) {

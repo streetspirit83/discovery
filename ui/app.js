@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260612c';
+import { CandidateList } from './components/candidate-list.js?v=20260612d';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260612c';
+import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260612d';
 import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
@@ -40,7 +40,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: false, fScore: '' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: false, fScore: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -72,6 +72,27 @@ function toast(msg, type = 'info', duration = 3000) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), duration);
+}
+
+// ── EUR/USD exchange rate ──────────────────────────────────────────────────────
+// Live rate (cached from the TV forex scanner) takes precedence over the
+// manual value from the settings modal.
+function resolveFxRate() {
+  const live = parseFloat(localStorage.getItem('discovery_fx_eurusd_live') ?? '');
+  if (Number.isFinite(live) && live > 0) return live;
+  const manual = parseFloat((localStorage.getItem('discovery_fx_eurusd') ?? '').replace(',', '.'));
+  return Number.isFinite(manual) && manual > 0 ? manual : null;
+}
+
+async function refreshFxRate() {
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  const rate = await fetchFxRate({ backendUrl, secret });
+  if (rate) {
+    localStorage.setItem('discovery_fx_eurusd_live', String(rate));
+    candidateList?.setFxRate(rate);
+  }
 }
 
 // ── Mode badge ─────────────────────────────────────────────────────────────────
@@ -122,8 +143,18 @@ function renderSubbar() {
   const vs = document.getElementById('view-switch');
   vs.innerHTML = tabs.map(({ key, label }) =>
     `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
-  ).join('');
-  vs.querySelectorAll('.seg-btn').forEach((btn) => {
+  ).join('') +
+    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
+  vs.querySelector('#currency-toggle').addEventListener('click', () => {
+    uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
+    saveUiState();
+    document.getElementById('currency-toggle').textContent = uiState.currency === 'EUR' ? '€ EUR' : '$ USD';
+    if (!candidateList.hasFxRate() && resolveFxRate() == null) {
+      toast('Kein EUR/USD-Kurs verfügbar – Kurs in Einstellungen eintragen oder TV Daten laden', 'error', 4500);
+    }
+    candidateList.setDisplayCurrency(uiState.currency);
+  });
+  vs.querySelectorAll('.seg-btn[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
       uiState.view = btn.dataset.view;
       saveUiState();
@@ -372,6 +403,25 @@ async function handleAction(action, candidate, extras = {}) {
 
   if (action === 'blobSwitch') {
     await switchBlob(candidate); // candidate = blobType string in this case
+    return;
+  }
+
+  if (action === 'setUserPrice') {
+    const { field, value } = extras;
+    if (!['my_entry', 'my_target'].includes(field)) return;
+    const prev = candidate[field];
+    candidate[field] = value;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { [field]: value });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate[field] = prev; // revert
+        candidateList.renderRows();
+        return;
+      }
+    }
+    // No re-render: the input already shows the value, and re-rendering would steal focus.
     return;
   }
 
@@ -760,6 +810,13 @@ async function init() {
     broker:  uiState.fBroker ?? false,
     score:   uiState.fScore  ?? '',
   };
+
+  // Currency display: saved preference + best available EUR/USD rate,
+  // then refresh the live rate from TV in the background.
+  const fx = resolveFxRate();
+  if (fx) candidateList.setFxRate(fx);
+  if (uiState.currency !== 'USD') candidateList.setDisplayCurrency(uiState.currency);
+  refreshFxRate();
 
   // Load initial data (also calls renderBotnav + renderFilterbar)
   await switchBlob(currentBlobType);

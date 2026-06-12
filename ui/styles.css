@@ -440,6 +440,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .overall-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .overall-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* User price inputs (Mein Entry / Mein Ziel) + currency tag */
+.price-input {
+  width: 72px; padding: 2px 4px; text-align: right;
+  font: inherit; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: transparent;
+  border: 1px solid var(--line, rgba(128,128,128,.35)); border-radius: var(--r-1);
+}
+.price-input:focus { outline: none; border-color: var(--accent); background: var(--accent-weak); }
+.currency-tag { font-size: var(--fs-1); color: var(--muted); letter-spacing: .03em; }
+.seg-btn--currency { margin-left: auto; font-variant-numeric: tabular-nums; }
+
 /* Column resizing (drag on header edge) */
 .candidate-table th { position: relative; }
 .col-resizer {
