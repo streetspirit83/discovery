@@ -558,10 +558,24 @@ export class CandidateList {
     catch { return {}; }
   }
 
-  saveColWidths(widths) {
+  saveColWidths(widths, sig) {
     const all = this.loadColWidths();
-    all[this.viewMode] = widths;
+    all[this.viewMode] = { sig, widths };
     try { localStorage.setItem(COL_WIDTH_KEY, JSON.stringify(all)); } catch {}
+  }
+
+  clearColWidths(ths) {
+    const all = this.loadColWidths();
+    delete all[this.viewMode];
+    try { localStorage.setItem(COL_WIDTH_KEY, JSON.stringify(all)); } catch {}
+    ths.forEach((th) => { th.style.width = ''; });
+    this.table.classList.remove('candidate-table--fixed');
+  }
+
+  // Stable identity of the current column set: widths saved for an older
+  // column layout must not be applied by index to a shifted layout.
+  colSignature(ths) {
+    return ths.map((th) => th.querySelector('.sort-btn')?.dataset.sort ?? th.textContent.trim()).join('|');
   }
 
   // Freeze every column at its current rendered width so adjusting one
@@ -579,25 +593,31 @@ export class CandidateList {
   initColumnResizers() {
     this.table = this.table ?? this.thead.closest('table');
     const ths = [...this.thead.querySelectorAll('th')];
+    const sig = this.colSignature(ths);
 
-    // Re-apply saved widths for this view
-    const saved = this.loadColWidths()[this.viewMode];
+    // Re-apply saved widths only when they belong to exactly this column set
+    const entry = this.loadColWidths()[this.viewMode];
+    const saved = entry?.sig === sig ? entry.widths : null;
     if (saved && Object.keys(saved).length === ths.length) {
       ths.forEach((th, i) => { if (saved[i]) th.style.width = `${saved[i]}px`; });
       this.table.classList.add('candidate-table--fixed');
     } else {
+      ths.forEach((th) => { th.style.width = ''; });
       this.table.classList.remove('candidate-table--fixed');
     }
 
     ths.forEach((th, i) => {
       const grip = document.createElement('span');
       grip.className = 'col-resizer';
+      grip.title = 'Ziehen: Spaltenbreite · Doppelklick: alle Breiten zurücksetzen';
       grip.addEventListener('click', (e) => e.stopPropagation());
+      grip.addEventListener('dblclick', (e) => { e.stopPropagation(); this.clearColWidths(ths); });
       grip.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        let widths = (this.loadColWidths()[this.viewMode] && this.table.classList.contains('candidate-table--fixed'))
-          ? { ...this.loadColWidths()[this.viewMode] }
+        const entryNow = this.loadColWidths()[this.viewMode];
+        let widths = (entryNow?.sig === sig && this.table.classList.contains('candidate-table--fixed'))
+          ? { ...entryNow.widths }
           : this.freezeColWidths(ths);
         const startX = e.clientX;
         const startW = th.offsetWidth;
@@ -610,7 +630,7 @@ export class CandidateList {
         const onUp = () => {
           grip.removeEventListener('pointermove', onMove);
           grip.removeEventListener('pointerup', onUp);
-          this.saveColWidths(widths);
+          this.saveColWidths(widths, sig);
         };
         grip.addEventListener('pointermove', onMove);
         grip.addEventListener('pointerup', onUp);
