@@ -187,39 +187,59 @@ function sortValue(c, col) {
 // ── Column definitions ───────────────────────────────────────────────────────
 
 const VIEWS = {
-  technicals: [
+  performance: [
+    { key:'tv_upside',  label:'▲POT1M', title:'Upside-Potenzial ~1 Monat: Drift + σ, gedeckelt am nächsten Widerstand · ⚠ = Earnings im Zeitfenster', num:true, fmt:c=>renderUpside(computeUpsidePotential(c.tv_data),'up') },
+    { key:'tv_downside',label:'▼POT1M', title:'Downside-Risiko ~1 Monat: σ − Drift, gedeckelt an der nächsten Unterstützung', num:true, fmt:c=>renderUpside(computeUpsidePotential(c.tv_data),'down') },
+    { key:'tv_chg1d',   label:'Δ1T',    title:'Veränderung heute (1 Tag)',        num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1d)}">${fmtPct(c.tv_data?.change_1d)}</span>` },
     { key:'tv_chg1w',   label:'Δ1W',    title:'Veränderung 1 Woche',              num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1w)}">${fmtPct(c.tv_data?.change_1w)}</span>` },
     { key:'tv_chg1m',   label:'Δ1M',    title:'Veränderung 1 Monat',              num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.change_1m)}">${fmtPct(c.tv_data?.change_1m)}</span>` },
+    { key:'tv_perfw',   label:'PerfW',  title:'Perf.W – rollierend ~5 Handelstage', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_w)}">${fmtPct(c.tv_data?.perf_w)}</span>` },
+    { key:'tv_perf1m',  label:'Perf1M', title:'Perf.1M – rollierend ~21 Handelstage', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_1m)}">${fmtPct(c.tv_data?.perf_1m)}</span>` },
+    { key:'tv_perf3m',  label:'Perf3M', title:'Performance 3 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_3m)}">${fmtPct(c.tv_data?.perf_3m)}</span>` },
+    { key:'tv_perf6m',  label:'Perf6M', title:'Performance 6 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_6m)}">${fmtPct(c.tv_data?.perf_6m)}</span>` },
+    { key:'tv_growth6m',label:'ØGr/M',  title:'Ø monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M)', num:true, fmt:c=>{const g=monthlyGrowthRate(c.tv_data?.perf_6m,6);return `<span class="${posNegClass(g)}">${fmtPct(g)}</span>`;} },
+    { key:'tv_perfall', label:'%ATH',   title:'Performance seit Beginn',          num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_all)}">${c.tv_data?.perf_all!=null?fmtNum(c.tv_data.perf_all,1)+'%':'—'}</span>` },
+    { key:'tv_volm',    label:'VolaM',  title:'Ø Tagesvolatilität über 1 Monat (%)', num:true, fmt:c=>fmtNum(c.tv_data?.volatility_m,2) },
+    { key:'tv_atrp',    label:'ATRP',   title:'Average True Range in Prozent',    num:true, fmt:c=>fmtNum(c.tv_data?.atrp,2) },
+  ],
+  price: [
+    { key:'tv_entry_score', label:'Entry', title:'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry', num:true, fmt:c=>renderEntryScore(liveEntryScore(c.tv_data)) },
+    { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long') },
+    { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtNum(c.tv_data?.close_1m ?? c.tv_data?.close,2) },
+    { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short') },
+    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema20) },
+    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema50) },
+    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtNum(c.tv_data?.ema200) },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_1m) },
+    { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_3m) },
+    { key:'tv_l3m',     label:'L3M',    title:'Tief 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.low_3m) },
     { key:'tv_h52hi',   label:'52W↑',   title:'52-Wochen-Hoch',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_high) },
     { key:'tv_h52lo',   label:'52W↓',   title:'52-Wochen-Tief',                   num:true, fmt:c=>fmtNum(c.tv_data?.price_52_week_low) },
     { key:'tv_hall',    label:'ATH',    title:'All-Time-High',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_all) },
     { key:'tv_lall',    label:'ATL',    title:'All-Time-Low',                     num:true, fmt:c=>fmtNum(c.tv_data?.low_all) },
-    { key:'tv_perfall', label:'%ATH',   title:'Performance seit Beginn',          num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_all)}">${c.tv_data?.perf_all!=null?fmtNum(c.tv_data.perf_all,1)+'%':'—'}</span>` },
-    { key:'tv_aroondn120',label:'Ar↓120',title:'Aroon Down 120',                  num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_120,1) },
-    { key:'tv_aroondn1m', label:'Ar↓1M', title:'Aroon Down 1 Monat',              num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_1m,1) },
-    { key:'tv_aroonup120',label:'Ar↑120',title:'Aroon Up 120',                    num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_120,1) },
-    { key:'tv_aroonup1m', label:'Ar↑1M', title:'Aroon Up 1 Monat',               num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_1m,1) },
-    { key:'tv_macdsig', label:'MACD·S', title:'MACD Signal',                      num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd_signal)}">${fmtNum(c.tv_data?.macd_signal,3)}</span>` },
-    { key:'tv_rsi',     label:'RSI',    title:'Relative Strength Index',          num:true, fmt:c=>`<span class="${rsiClass(c.tv_data?.rsi)}">${fmtNum(c.tv_data?.rsi,1)}</span>` },
-    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema20) },
-    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtNum(c.tv_data?.ema50) },
-    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtNum(c.tv_data?.ema200) },
-    { key:'tv_macd',    label:'MACD',   title:'MACD',                             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd)}">${fmtNum(c.tv_data?.macd,3)}</span>` },
-    { key:'tv_adx',     label:'ADX',    title:'Average Directional Index',        num:true, fmt:c=>fmtNum(c.tv_data?.adx,1) },
-    { key:'tv_cci',     label:'CCI',    title:'Commodity Channel Index 20 (1M)',  num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.cci20_1m)}">${fmtNum(c.tv_data?.cci20_1m,1)}</span>` },
-    { key:'tv_donchlo', label:'DC↓',    title:'Donchian Channel 20 Lower (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
-    { key:'tv_donchhi', label:'DC↑',    title:'Donchian Channel 20 Upper (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
-    { key:'tv_perf3m',  label:'Perf3M', title:'Performance 3 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_3m)}">${fmtPct(c.tv_data?.perf_3m)}</span>` },
-    { key:'tv_perf6m',  label:'Perf6M', title:'Performance 6 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_6m)}">${fmtPct(c.tv_data?.perf_6m)}</span>` },
-    { key:'tv_growth6m',label:'ØGr/M',  title:'Ø monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M)', num:true, fmt:c=>{const g=monthlyGrowthRate(c.tv_data?.perf_6m,6);return `<span class="${posNegClass(g)}">${fmtPct(g)}</span>`;} },
-    { key:'tv_volm',    label:'VolaM',  title:'Ø Tagesvolatilität über 1 Monat (%)', num:true, fmt:c=>fmtNum(c.tv_data?.volatility_m,2) },
-    { key:'tv_atrp',    label:'ATRP',   title:'Average True Range in Prozent',    num:true, fmt:c=>fmtNum(c.tv_data?.atrp,2) },
     { key:'tv_pivr2',   label:'PivR2',  title:'Pivot Monthly Classic R2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_r2) },
     { key:'tv_pivs2',   label:'PivS2',  title:'Pivot Monthly Classic S2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_s2) },
-    { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_3m) },
-    { key:'tv_l3m',     label:'L3M',    title:'Tief 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.low_3m) },
+    { key:'tv_donchlo', label:'DC↓',    title:'Donchian Channel 20 Lower (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
+    { key:'tv_donchhi', label:'DC↑',    title:'Donchian Channel 20 Upper (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
+  ],
+  metrics: [
+    { key:'tv_rsi',     label:'RSI',    title:'Relative Strength Index',          num:true, fmt:c=>`<span class="${rsiClass(c.tv_data?.rsi)}">${fmtNum(c.tv_data?.rsi,1)}</span>` },
+    { key:'tv_macd',    label:'MACD',   title:'MACD',                             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd)}">${fmtNum(c.tv_data?.macd,3)}</span>` },
+    { key:'tv_macdsig', label:'MACD·S', title:'MACD Signal',                      num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.macd_signal)}">${fmtNum(c.tv_data?.macd_signal,3)}</span>` },
+    { key:'tv_adx',     label:'ADX',    title:'Average Directional Index',        num:true, fmt:c=>fmtNum(c.tv_data?.adx,1) },
+    { key:'tv_cci',     label:'CCI',    title:'Commodity Channel Index 20 (1M)',  num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.cci20_1m)}">${fmtNum(c.tv_data?.cci20_1m,1)}</span>` },
+    { key:'tv_aroonup120',label:'Ar↑120',title:'Aroon Up 120',                    num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_120,1) },
+    { key:'tv_aroondn120',label:'Ar↓120',title:'Aroon Down 120',                  num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_120,1) },
+    { key:'tv_aroonup1m', label:'Ar↑1M', title:'Aroon Up 1 Monat',                num:true, fmt:c=>fmtNum(c.tv_data?.aroon_up_1m,1) },
+    { key:'tv_aroondn1m', label:'Ar↓1M', title:'Aroon Down 1 Monat',              num:true, fmt:c=>fmtNum(c.tv_data?.aroon_down_1m,1) },
+    { key:'tv_mom1m',   label:'Mom',    title:'Momentum 1 Monat',                 num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.mom_1m)}">${fmtNum(c.tv_data?.mom_1m,2)}</span>` },
+    { key:'tv_vol',     label:'Vola',   title:'Volatilität (Tag)',                num:true, fmt:c=>fmtNum(c.tv_data?.volatility,1) },
+    { key:'tv_beta',    label:'Beta',   title:'Beta (1 Jahr)',                    num:true, fmt:c=>fmtNum(c.tv_data?.beta,2) },
+    { key:'tv_beta3y',  label:'β3Y',    title:'Beta (3 Jahre)',                   num:true, fmt:c=>fmtNum(c.tv_data?.beta_3_year,2) },
+    { key:'tv_vol10d',  label:'V10d',   title:'Ø Volumen 10 Tage',                num:true, fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
+    { key:'tv_vol30d',  label:'V30d',   title:'Ø Volumen 30 Tage',                num:true, fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
+    { key:'tv_rating1m',label:'Rat1M',  title:'Empfehlung 1 Monat',               num:true, fmt:c=>`<span class="tv-rating-txt--${tvRatingClass(c.tv_data?.recommend_all_1m)}">${fmtNum(c.tv_data?.recommend_all_1m,2)}</span>` },
   ],
   fundamentals: [
     { key:'tv_pe',          label:'KGV',    title:'Kurs-Gewinn-Verhältnis (TTM)',  num:true,  fmt:c=>fmtNum(c.tv_data?.pe_ttm,1) },
@@ -230,13 +250,7 @@ const VIEWS = {
     { key:'tv_ebitda',      label:'EBITDA', title:'EBITDA',                        num:true,  fmt:c=>fmtMCap(c.tv_data?.ebitda) },
     { key:'tv_grossmargin', label:'GM%',    title:'Bruttomarge',                   num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_margin)}">${c.tv_data?.gross_margin!=null?fmtNum(c.tv_data.gross_margin,1)+'%':'—'}</span>` },
     { key:'tv_grossgrowth', label:'Gross%', title:'Bruttogewinn YoY Wachstum',    num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_profit_yoy_growth_fy)}">${c.tv_data?.gross_profit_yoy_growth_fy!=null?fmtNum(c.tv_data.gross_profit_yoy_growth_fy,1)+'%':'—'}</span>` },
-    { key:'tv_mom1m',       label:'Mom',    title:'Momentum 1 Monat',              num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.mom_1m)}">${fmtNum(c.tv_data?.mom_1m,2)}</span>` },
-    { key:'tv_vol',         label:'Vola',   title:'Volatilität',                   num:true,  fmt:c=>fmtNum(c.tv_data?.volatility,1) },
-    { key:'tv_beta',        label:'Beta',   title:'Beta (1 Jahr)',                 num:true,  fmt:c=>fmtNum(c.tv_data?.beta,2) },
-    { key:'tv_beta3y',      label:'β3Y',    title:'Beta (3 Jahre)',                num:true,  fmt:c=>fmtNum(c.tv_data?.beta_3_year,2) },
-    { key:'tv_vol10d',      label:'V10d',   title:'Ø Volumen 10 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
-    { key:'tv_vol30d',      label:'V30d',   title:'Ø Volumen 30 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
-    { key:'tv_rating1m',    label:'Rat1M',  title:'Empfehlung 1 Monat',           num:true,  fmt:c=>`<span class="tv-rating-txt--${tvRatingClass(c.tv_data?.recommend_all_1m)}">${fmtNum(c.tv_data?.recommend_all_1m,2)}</span>` },
+    { key:'tv_mcap',        label:'MCap',   title:'Marktkapitalisierung',          num:true,  fmt:c=>fmtMCap(c.tv_data?.market_cap) },
     { key:'tv_analysts',    label:'Analysten', title:'Anzahl Analysten mit Empfehlung', num:true, fmt:c=>fmtNum(c.tv_data?.recommendation_total,0) },
   ],
 };
@@ -250,7 +264,7 @@ export class CandidateList {
     this.onBulkAction      = onBulkAction;
     this.onSelectionChange = onSelectionChange;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: false, score: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -309,7 +323,8 @@ export class CandidateList {
   setViewMode(mode) {
     // Sort + filter stay consistent across view toggles: keep the active
     // sort so the same tickers stay in the same order in every view.
-    this.viewMode = mode;
+    // Guard against stale persisted modes (e.g. removed 'technicals' view).
+    this.viewMode = mode === 'standard' || VIEWS[mode] ? mode : 'standard';
     this.renderThead();
     this.renderRows();
   }
@@ -335,13 +350,23 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize } = this.filters;
+    const { state, sector, capSize, broker, score } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (state   && c.workspace_state !== state)               return false;
       if (sector === '__no_sector__' && c.sector)               return false;
       if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
       if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
+      if (broker && !c.broker_armed)                            return false;
+      if (score) {
+        const s = liveOverallScore(c.tv_data)?.total;
+        if (s == null) return false;
+        if (score === '80' && s < 80)             return false;
+        if (score === '70' && (s < 70 || s > 79)) return false;
+        if (score === '60' && (s < 60 || s > 69)) return false;
+        if (score === '40' && (s < 40 || s > 59)) return false;
+        if (score === '0'  && s >= 40)            return false;
+      }
       return true;
     });
   }
@@ -380,32 +405,28 @@ export class CandidateList {
       cols += this.th('sources', 'Quellen');
       cols += `<th>Links</th>`;
       cols += this.th('discovered', 'in');
-      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0–100 aus allen Spalten: PerfW (15) + Perf1M (15) + Δ1T (5) + EBITDA% (15) + Trend (10) + Stärke (12) + Entry (10) + Health (10) + PCHS (8) · fehlende Werte werden renormalisiert');
-      cols += `<th class="num">Aktion</th>`;
+      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
-      cols += this.thNum('tv_chg1d',       'Δ1T',     'Veränderung heute (1 Tag)');
-      cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W – rollierend ~5 Handelstage zurück');
-      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M – rollierend ~21 Handelstage zurück');
-      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0–100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) · 80+ = Prime Entry');
-      cols += this.thNum('tv_long_entry',  'Long',  'Long Entry Preis: Ø aus BB.lower + Pivot S1 + (close + 0.5×ATR)');
-      cols += this.thNum('tv_close',       'Kurs',  'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)');
-      cols += this.thNum('tv_short_entry', 'Short', 'Short Entry Preis: Ø aus BB.upper + Pivot R1 + (close − 0.5×ATR)');
-      cols += this.thNum('tv_upside',   '▲1M', 'Upside-Potenzial ~1 Monat: Abstand zum nächsten Widerstand (Pivot R1, BB.upper, Donchian, High 1M/6M, 52W-Hoch), gedeckelt durch ATR×√21 · ⚠ = Earnings im Zeitfenster');
-      cols += this.thNum('tv_downside', '▼1M', 'Downside-Risiko ~1 Monat: Abstand zur nächsten Unterstützung (Pivot S1, BB.lower, Donchian, Low 1M/6M, 52W-Tief), gedeckelt durch ATR×√21');
+      cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
+      cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
+      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M \u2013 rollierend ~21 Handelstage zur\u00fcck');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
-      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
-      cols += this.thNum('tv_trend_strength_score', 'Stärke', 'Trend Strength Score 0–100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) · 85+ = Structural Power-Trend');
+      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
+      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
+      cols += this.thNum('tv_trend_strength_score', 'St\u00e4rke', 'Trend Strength Score 0\u2013100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) \u00b7 85+ = Structural Power-Trend');
       cols += `<th>Letztes Signal</th>`;
+      cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
+      cols += `<th class="num">Aktion</th>`;
     } else {
       cols += VIEWS[this.viewMode].map((d) =>
         `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
           <button class="sort-btn" data-sort="${d.key}">${d.label} ${this.sortGlyph(d.key)}</button></th>`
       ).join('');
       cols += `<th class="num">Aktion</th>`;
+      cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
+      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
     }
-    cols += this.thNum('star', '★', 'Im Portfolio (Benchmark-Marker)');
-    cols += this.thNum('broker', '✓', 'Im Broker handelbar & Alert scharf');
 
     this.thead.innerHTML = `<tr>${cols}</tr>`;
     this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
@@ -521,9 +542,7 @@ export class CandidateList {
       let dataCols;
       if (this.viewMode === 'standard') {
         const r   = tv?.recommend_all_1m;
-        const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '—'}</span>`;
-        const ep  = liveEntryPrices(tv);
-        const up  = computeUpsidePotential(tv);
+        const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '\u2014'}</span>`;
         const linksTd = `<td><div class="link-cluster">
             ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
             ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
@@ -531,28 +550,22 @@ export class CandidateList {
           </div></td>`;
         dataCols =
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
-          `<td><span class="sector-cell">${c.sector ?? '—'}</span></td>` +
+          `<td><span class="sector-cell">${c.sector ?? '\u2014'}</span></td>` +
           `<td>${renderSourceBadges(c.sources)}</td>` +
           linksTd +
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
+          brokerTd +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          actionTd +
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
-          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
-          `<td class="num">${renderEntryPrice(ep, 'long')}</td>` +
-          `<td class="num">${fmtNum(tv?.close_1m ?? tv?.close, 2)}</td>` +
-          `<td class="num">${renderEntryPrice(ep, 'short')}</td>` +
-          `<td class="num">${renderUpside(up, 'up')}</td>` +
-          `<td class="num">${renderUpside(up, 'down')}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '—'}</span></td>` +
+          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
           `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
           `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
-          starTd + brokerTd;
+          starTd + actionTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`

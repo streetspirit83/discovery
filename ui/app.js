@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260612b';
+import { CandidateList } from './components/candidate-list.js?v=20260612c';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260612b';
+import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260612c';
 import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
@@ -40,9 +40,13 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '' };
-  try { return { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
-  catch { return { ...def }; }
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: false, fScore: '' };
+  let s;
+  try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
+  catch { s = { ...def }; }
+  // Migrate persisted view modes from the old 3-view layout
+  if (!['standard', 'performance', 'price', 'metrics', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  return s;
 })();
 function saveUiState() {
   try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch {}
@@ -110,7 +114,9 @@ function renderTopbar() {
 function renderSubbar() {
   const tabs = [
     { key: 'standard',     label: 'Standard' },
-    { key: 'technicals',   label: 'Technisch' },
+    { key: 'performance',  label: 'Performance' },
+    { key: 'price',        label: 'Preis' },
+    { key: 'metrics',      label: 'Metriken' },
     { key: 'fundamentals', label: 'Fundamental' },
   ];
   const vs = document.getElementById('view-switch');
@@ -136,6 +142,15 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
+    <button class="pill${uiState.fBroker ? ' pill--active' : ''}" id="pill-broker" title="Nur Kandidaten, die im Broker handelbar & scharf sind">✓ Broker</button>
+    <select class="filter-select" id="filter-score">
+      <option value="">Alle Scores</option>
+      <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
+      <option value="70"${uiState.fScore === '70' ? ' selected' : ''}>Score 70–79</option>
+      <option value="60"${uiState.fScore === '60' ? ' selected' : ''}>Score 60–69</option>
+      <option value="40"${uiState.fScore === '40' ? ' selected' : ''}>Score 40–59</option>
+      <option value="0"${uiState.fScore === '0' ? ' selected' : ''}>Score &lt; 40</option>
+    </select>
     <select class="filter-select" id="filter-sector">
       <option value="">Alle Sektoren</option>
       <option value="__no_sector__"${uiState.fSector === '__no_sector__' ? ' selected' : ''}>— Ohne Sektor</option>
@@ -148,6 +163,19 @@ function renderFilterbar() {
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
     </select>`;
+
+  fb.querySelector('#pill-broker').addEventListener('click', () => {
+    uiState.fBroker = !uiState.fBroker;
+    saveUiState();
+    document.getElementById('pill-broker').classList.toggle('pill--active', uiState.fBroker);
+    candidateList.setFilter('broker', uiState.fBroker);
+  });
+
+  fb.querySelector('#filter-score').addEventListener('change', (e) => {
+    uiState.fScore = e.target.value;
+    saveUiState();
+    candidateList.setFilter('score', uiState.fScore);
+  });
 
   fb.querySelector('#filter-sector').addEventListener('change', (e) => {
     uiState.fSector = e.target.value;
@@ -729,6 +757,8 @@ async function init() {
     state:   '',
     sector:  uiState.fSector ?? '',
     capSize: uiState.fCap    ?? '',
+    broker:  uiState.fBroker ?? false,
+    score:   uiState.fScore  ?? '',
   };
 
   // Load initial data (also calls renderBotnav + renderFilterbar)
