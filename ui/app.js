@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260612d';
+import { CandidateList } from './components/candidate-list.js?v=20260612e';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260612d';
+import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260612e';
 import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
@@ -35,6 +35,7 @@ const L = {
   archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
   bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
+  activity: luc('<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>', 16),
 };
 
 // ── UI state (persisted) ───────────────────────────────────────────────────────
@@ -95,6 +96,31 @@ async function refreshFxRate() {
   }
 }
 
+// ── Momentum-Check für ausgewählte Ticker ──────────────────────────────────────
+async function runMomentumCheckForSelection() {
+  if (!candidateList) return;
+  const ids = [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann Momentum-Check starten', 'info', 3500);
+    return;
+  }
+  const updates = candidateList.runMomentumCheck(ids);
+  const verdicts = updates.map((u) => u.updates.momentum_check?.verdict);
+  const g = verdicts.filter((v) => v === 'green').length;
+  const y = verdicts.filter((v) => v === 'yellow').length;
+  const r = verdicts.filter((v) => v === 'red').length;
+  const n = verdicts.filter((v) => v == null).length;
+  toast(`Momentum-Check: 🟢 ${g} · 🟡 ${y} · 🔴 ${r}${n ? ` · ${n}× zu wenig Daten` : ''}`, 'success', 5000);
+
+  if (!useMock) {
+    try {
+      await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+    } catch (err) {
+      toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+    }
+  }
+}
+
 // ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
@@ -144,7 +170,9 @@ function renderSubbar() {
   vs.innerHTML = tabs.map(({ key, label }) =>
     `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
   ).join('') +
+    `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
     `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
+  vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
   vs.querySelector('#currency-toggle').addEventListener('click', () => {
     uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
     saveUiState();

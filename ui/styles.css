@@ -449,7 +449,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .price-input:focus { outline: none; border-color: var(--accent); background: var(--accent-weak); }
 .currency-tag { font-size: var(--fs-1); color: var(--muted); letter-spacing: .03em; }
-.seg-btn--currency { margin-left: auto; font-variant-numeric: tabular-nums; }
+.seg-btn--momentum { margin-left: auto; display: inline-flex; align-items: center; }
+.seg-btn--momentum svg { display: block; }
+.seg-btn--currency { font-variant-numeric: tabular-nums; }
+
+/* Momentum-Check Ampel + Setup-Icon */
+.momcheck { font-size: 14px; line-height: 1; cursor: default; }
+.momcheck--green  { color: #27ae60; }
+.momcheck--yellow { color: #d68910; }
+.momcheck--red    { color: var(--neg); }
+.setup-icon { font-size: 13px; cursor: default; }
+.price-input.is-suggested { color: var(--muted); font-style: italic; }
 
 /* Column resizing (drag on header edge) */
 .candidate-table th { position: relative; }

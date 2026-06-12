@@ -5,6 +5,7 @@ import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
+import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -26,6 +27,56 @@ function convFactor(c) {
 
 function fmtPrice(c, v, dec = 2) {
   return v == null ? '—' : fmtNum(v * convFactor(c), dec);
+}
+
+// ── Price setup situation (Preis view) ──────────────────────────────────────
+function priceSituation(tv) {
+  if (!tv) return null;
+  const close = tv.close_1m ?? tv.close;
+  if (close == null) return null;
+
+  let earningsSoon = false;
+  if (tv.earnings_next_date) {
+    const ts = typeof tv.earnings_next_date === 'number'
+      ? tv.earnings_next_date * 1000 : new Date(tv.earnings_next_date).getTime();
+    const days = (ts - Date.now()) / 86400000;
+    earningsSoon = days >= 0 && days <= 31;
+  }
+
+  let icon, label;
+  const nearHigh = Math.max(tv.high_1m ?? 0, tv.high_3m ?? 0) || null;
+  if (tv.price_52_week_high != null && close > tv.price_52_week_high) {
+    icon = '🚀'; label = 'Blue-Sky: Kurs über 52W-Hoch – kein struktureller Widerstand';
+  } else if (nearHigh != null && close >= nearHigh * 0.98) {
+    icon = '🎯'; label = 'Breakout-Nähe: Kurs ≤2% unter dem 1M/3M-Hoch';
+  } else if (tv.ema20 != null && tv.ema50 != null && close < tv.ema20 && close >= tv.ema50) {
+    icon = '🔄'; label = 'Pullback im Trend: Kurs unter EMA20, über EMA50';
+  } else if (tv.ema50 != null && close < tv.ema50) {
+    icon = '📉'; label = 'Unter Trend: Kurs unter EMA50';
+  } else {
+    icon = '➖'; label = 'Range: kein klares Setup';
+  }
+  if (earningsSoon) { icon += '⚠'; label += ' · Earnings im 1M-Fenster'; }
+  return { icon, label };
+}
+
+// Initial suggestions for the editable entry/target fields:
+// Entry = berechneter Long-Entry (Fallback Kurs), Ziel = Entry × 1,2 (mind. 20 % Upside).
+function suggestedEntry(c) {
+  const tv = c.tv_data;
+  if (!tv) return null;
+  const v = liveEntryPrices(tv)?.longEntry ?? tv.close_1m ?? tv.close;
+  return v != null ? Math.round(v * 100) / 100 : null;
+}
+function suggestedTarget(c) {
+  const base = c.my_entry ?? suggestedEntry(c);
+  return base != null ? Math.round(base * 1.2 * 100) / 100 : null;
+}
+function priceInput(c, field) {
+  const own = c[field];
+  const sugg = field === 'my_entry' ? suggestedEntry(c) : suggestedTarget(c);
+  const val = own ?? sugg ?? '';
+  return `<input type="number" step="any" class="price-input${own == null ? ' is-suggested' : ''}" data-field="${field}" value="${val}" placeholder="—" title="${own == null ? 'Vorschlag (kursiv) – editierbar, wird beim Ändern gespeichert' : 'Eigener Wert'}">`;
 }
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -175,6 +226,8 @@ function sortValue(c, col) {
     case 'currency':    return nativeCurrency(c);
     case 'my_entry':    return c.my_entry ?? null;
     case 'my_target':   return c.my_target ?? null;
+    case 'setup':       return priceSituation(tv)?.icon ?? null;
+    case 'momentum':    return { green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -230,8 +283,9 @@ const VIEWS = {
   ],
   price: [
     { key:'currency',  label:'W\u00e4',  title:'W\u00e4hrung der B\u00f6rse (Preise werden nach USD/EUR umgerechnet, andere W\u00e4hrungen bleiben nativ)', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
-    { key:'my_entry',  label:'Mein Entry', title:'Eigener Entry-Preis (Freitext, wird gespeichert \u00b7 native W\u00e4hrung)', num:true, fmt:c=>`<input type="number" step="any" class="price-input" data-field="my_entry" value="${c.my_entry ?? ''}" placeholder="\u2014">` },
-    { key:'my_target', label:'Mein Ziel',  title:'Eigenes Kursziel (Freitext, wird gespeichert \u00b7 native W\u00e4hrung)',   num:true, fmt:c=>`<input type="number" step="any" class="price-input" data-field="my_target" value="${c.my_target ?? ''}" placeholder="\u2014">` },
+    { key:'setup',     label:'Setup', title:'Preis-Situation: \ud83d\ude80 Blue-Sky \u00b7 \ud83c\udfaf Breakout-N\u00e4he \u00b7 \ud83d\udd04 Pullback im Trend \u00b7 \ud83d\udcc9 unter Trend \u00b7 \u2796 Range \u00b7 \u26a0 Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'\u2014';} },
+    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: Long-Entry-Level, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_entry') },
+    { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
@@ -344,6 +398,23 @@ export class CandidateList {
 
   hasFxRate() { return fxEurUsd != null; }
 
+  // Momentum-Check für die angegebenen Kandidaten berechnen.
+  // Returns bulk-update list for persistence; null-results clear stale checks.
+  runMomentumCheck(ids) {
+    const updates = [];
+    for (const c of this.candidates) {
+      if (!ids.includes(c.id)) continue;
+      const tv = c.tv_data;
+      c.momentum_check = computeMomentumCheck(tv, {
+        overallScore: liveOverallScore(tv)?.total,
+        entryScore:   liveEntryScore(tv)?.total,
+      });
+      updates.push({ candidate_id: c.id, updates: { momentum_check: c.momentum_check } });
+    }
+    this.renderRows();
+    return updates;
+  }
+
   clearSelection() {
     this.selected.clear();
     this.showSelectedOnly = false;
@@ -449,6 +520,7 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
+      cols += this.thNum('momentum', 'Mom', 'Momentum-Check Ampel (Feinpr\u00fcfung Schritte 1\u20133): gr\u00fcn \u226580% der Checks bestanden \u00b7 gelb \u226555% \u00b7 rot darunter \u00b7 K.O.: Trend\u2193 oder Earnings \u00b7 Berechnung \u00fcber den Puls-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
@@ -599,6 +671,7 @@ export class CandidateList {
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           brokerTd +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
+          `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
           `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
@@ -837,6 +910,18 @@ function liveOverallScore(tv) {
     health:        liveHealthScore(tv)?.total,
     cycle:         tv.cycle_score?.total,
   });
+}
+
+function renderMomentumCheck(mc) {
+  if (!mc) return '<span class="muted-dash">—</span>';
+  const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
+  const tipParts = [
+    `${mc.passed}/${mc.total} Checks bestanden`,
+    mc.ko ? `K.O.: ${mc.ko}` : null,
+    mc.fails.length ? `Fehlend: ${mc.fails.join(', ')}` : 'Alle Checks bestanden',
+    age ? `geprüft vor ${age}` : null,
+  ].filter(Boolean);
+  return `<span class="momcheck momcheck--${mc.verdict}" title="${tipParts.join(' · ')}">●</span>`;
 }
 
 function renderOverallScore(os) {
