@@ -440,6 +440,16 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .overall-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .overall-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Column resizing (drag on header edge) */
+.candidate-table th { position: relative; }
+.col-resizer {
+  position: absolute; top: 0; right: -4px; width: 8px; height: 100%;
+  cursor: col-resize; z-index: 3; touch-action: none;
+}
+.col-resizer:hover, .col-resizer:active { background: rgba(52,152,219,.35); }
+.candidate-table--fixed { table-layout: fixed; }
+.candidate-table--fixed td { overflow: hidden; text-overflow: ellipsis; }
+
 /* Workflow modal (Home icon) */
 .workflow-modal { max-width: 420px; }
 .workflow-steps { list-style: none; margin: 0; padding: 0; }

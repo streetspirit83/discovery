@@ -15,6 +15,8 @@ const STATE_LABELS = {
 };
 const STATE_ORDER  = ['new', 'reviewed', 'promoted', 'dismissed', 'imported'];
 
+const COL_WIDTH_KEY = 'discovery.colwidths.v1';
+
 const ADAPTER_COLORS = {
   openinsider:            '#e67e22',
   'boerse-frankfurt':     '#3498db',
@@ -376,7 +378,9 @@ export class CandidateList {
       cols += this.th('name', 'Name', 'class="col-name-data"');
       cols += this.th('sector', 'Sektor');
       cols += this.th('sources', 'Quellen');
+      cols += `<th>Links</th>`;
       cols += this.th('discovered', 'in');
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0–100 aus allen Spalten: PerfW (15) + Perf1M (15) + Δ1T (5) + EBITDA% (15) + Trend (10) + Stärke (12) + Entry (10) + Health (10) + PCHS (8) · fehlende Werte werden renormalisiert');
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       'Δ1T',     'Veränderung heute (1 Tag)');
@@ -392,9 +396,7 @@ export class CandidateList {
       cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0–100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) · 75+ = Safe Allocation');
       cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0–100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
       cols += this.thNum('tv_trend_strength_score', 'Stärke', 'Trend Strength Score 0–100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) · 85+ = Structural Power-Trend');
-      cols += `<th>Links</th>`;
       cols += `<th>Letztes Signal</th>`;
-      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0–100 aus allen Spalten: PerfW (15) + Perf1M (15) + Δ1T (5) + EBITDA% (15) + Trend (10) + Stärke (12) + Entry (10) + Health (10) + PCHS (8) · fehlende Werte werden renormalisiert');
     } else {
       cols += VIEWS[this.viewMode].map((d) =>
         `<th class="${d.num ? 'num' : ''}" aria-sort="${this.ariaSort(d.key)}" title="${d.title}">
@@ -409,7 +411,76 @@ export class CandidateList {
     this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
       btn.addEventListener('click', (e) => { e.stopPropagation(); this.setSort(btn.dataset.sort); });
     });
+    this.initColumnResizers();
     this.bindSelectAll();
+  }
+
+  // ── Column resizing (drag on header edge, persisted per view) ──────────────
+
+  loadColWidths() {
+    try { return JSON.parse(localStorage.getItem(COL_WIDTH_KEY) ?? '{}'); }
+    catch { return {}; }
+  }
+
+  saveColWidths(widths) {
+    const all = this.loadColWidths();
+    all[this.viewMode] = widths;
+    try { localStorage.setItem(COL_WIDTH_KEY, JSON.stringify(all)); } catch {}
+  }
+
+  // Freeze every column at its current rendered width so adjusting one
+  // column doesn't reflow the others (requires table-layout: fixed).
+  freezeColWidths(ths) {
+    const widths = {};
+    ths.forEach((th, i) => {
+      widths[i] = th.offsetWidth;
+      th.style.width = `${th.offsetWidth}px`;
+    });
+    this.table.classList.add('candidate-table--fixed');
+    return widths;
+  }
+
+  initColumnResizers() {
+    this.table = this.table ?? this.thead.closest('table');
+    const ths = [...this.thead.querySelectorAll('th')];
+
+    // Re-apply saved widths for this view
+    const saved = this.loadColWidths()[this.viewMode];
+    if (saved && Object.keys(saved).length === ths.length) {
+      ths.forEach((th, i) => { if (saved[i]) th.style.width = `${saved[i]}px`; });
+      this.table.classList.add('candidate-table--fixed');
+    } else {
+      this.table.classList.remove('candidate-table--fixed');
+    }
+
+    ths.forEach((th, i) => {
+      const grip = document.createElement('span');
+      grip.className = 'col-resizer';
+      grip.addEventListener('click', (e) => e.stopPropagation());
+      grip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        let widths = (this.loadColWidths()[this.viewMode] && this.table.classList.contains('candidate-table--fixed'))
+          ? { ...this.loadColWidths()[this.viewMode] }
+          : this.freezeColWidths(ths);
+        const startX = e.clientX;
+        const startW = th.offsetWidth;
+        grip.setPointerCapture(e.pointerId);
+        const onMove = (ev) => {
+          const w = Math.max(36, startW + (ev.clientX - startX));
+          th.style.width = `${w}px`;
+          widths[i] = w;
+        };
+        const onUp = () => {
+          grip.removeEventListener('pointermove', onMove);
+          grip.removeEventListener('pointerup', onUp);
+          this.saveColWidths(widths);
+        };
+        grip.addEventListener('pointermove', onMove);
+        grip.addEventListener('pointerup', onUp);
+      });
+      th.appendChild(grip);
+    });
   }
 
   renderRows() {
@@ -453,11 +524,18 @@ export class CandidateList {
         const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '—'}</span>`;
         const ep  = liveEntryPrices(tv);
         const up  = computeUpsidePotential(tv);
+        const linksTd = `<td><div class="link-cluster">
+            ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
+            ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
+            ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
+          </div></td>`;
         dataCols =
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
           `<td><span class="sector-cell">${c.sector ?? '—'}</span></td>` +
           `<td>${renderSourceBadges(c.sources)}</td>` +
+          linksTd +
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
+          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           actionTd +
           `<td class="num">${trendCell}</td>` +
           `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
@@ -473,13 +551,7 @@ export class CandidateList {
           `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
           `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
           `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
-          `<td><div class="link-cluster">
-            ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
-            ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
-            ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
-          </div></td>` +
           `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
-          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           starTd + brokerTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
