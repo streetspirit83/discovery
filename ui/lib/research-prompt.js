@@ -63,8 +63,9 @@ Recherchiere pro Aktie (mit aktuellen Quellen, Stand ${date}):
 5. Markt-Sentiment (Social Media, Short Interest, ungewöhnliches Volumen)
 
 Erstelle danach:
-- Eine Vergleichstabelle der wichtigsten qualitativen und quantitativen Faktoren
-- Ein begründetes Ranking: Welcher Titel hat auf Sicht von ~1 Monat das beste Chance-Risiko-Verhältnis?
+- Ein **AI-Scoring je Aktie**: geschätzte Wahrscheinlichkeit (0–100 %), dass der Kurs in den nächsten ~21 Handelstagen mindestens **+20 %** steigt — mit 1–2 Sätzen Begründung (Katalysatoren vs. Risiken)
+- Eine Vergleichstabelle der wichtigsten qualitativen und quantitativen Faktoren inkl. dieser Upside-Wahrscheinlichkeit
+- Ein begründetes Ranking nach der +20%-Wahrscheinlichkeit: Welcher Titel hat auf Sicht von ~1 Monat das beste Chance-Risiko-Verhältnis?
 - Je Titel ein kurzes Fazit (2–3 Sätze) mit den wichtigsten Pro- und Contra-Punkten
 
 Quantitative Daten aus meinem Screening (Stand ${date}, bitte gegen aktuelle Marktdaten plausibilisieren):
