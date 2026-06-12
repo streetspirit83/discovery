@@ -230,7 +230,7 @@ function sortValue(c, col) {
     case 'my_entry':    return c.my_entry ?? null;
     case 'my_target':   return c.my_target ?? null;
     case 'setup':       return priceSituation(tv)?.icon ?? null;
-    case 'momentum':    return { green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null;
+    case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -520,7 +520,7 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Ampel \u00b7 Gr\u00fcn: \u00d8Gr/M>10% + PerfW>Perf1M/4 + ADX>25 + RSI 50\u201368 + Aroon\u2191\u226b\u2193 (Abstand >10) + V10d>V30d \u00b7 Gelb: \u00d8Gr/M>10% + Beschleunigung + ADX>25 + Aroon\u2191>\u2193 \u00b7 sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
@@ -916,17 +916,18 @@ function liveOverallScore(tv) {
 
 function renderMomentumCheck(mc) {
   if (!mc) return '<span class="muted-dash">—</span>';
-  // Tolerate results persisted by older check versions (fails/core_fails shape).
-  const gf = Array.isArray(mc.green_fails) ? mc.green_fails : (Array.isArray(mc.fails) ? mc.fails : []);
-  const yf = Array.isArray(mc.yellow_fails) ? mc.yellow_fails : [];
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
+  // Old persisted shapes (pre points model) have no total → plain dot.
+  if (mc.total == null) {
+    return `<span class="momcheck momcheck--${mc.verdict}" title="Altes Format – Puls-Button erneut drücken">●</span>`;
+  }
   const tipParts = [
-    gf.length === 0 ? 'Alle Grün-Kriterien erfüllt' : `Grün verfehlt: ${gf.join(', ')}`,
-    mc.verdict !== 'green' && yf.length ? `Gelb verfehlt: ${yf.join(', ')}` : null,
+    Object.entries(mc.breakdown ?? {}).map(([k, v]) => `${k}:${v}`).join(' '),
+    mc.coverage != null && mc.coverage < 100 ? `Datenabdeckung ${mc.coverage}/100` : null,
     mc.ko ? `K.O.: ${mc.ko}` : null,
     age ? `geprüft vor ${age}` : null,
   ].filter(Boolean);
-  return `<span class="momcheck momcheck--${mc.verdict}" title="${tipParts.join(' · ')}">●</span>`;
+  return `<span class="momcheck momcheck--badge momcheck--${mc.verdict}" title="${tipParts.join(' · ')}">${mc.total}</span>`;
 }
 
 function renderOverallScore(os) {

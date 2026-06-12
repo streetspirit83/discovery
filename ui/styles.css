@@ -458,6 +458,14 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .momcheck--green  { color: #27ae60; }
 .momcheck--yellow { color: #d68910; }
 .momcheck--red    { color: var(--neg); }
+.momcheck--badge {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.momcheck--badge.momcheck--green  { background:rgba(46,204,113,.15); }
+.momcheck--badge.momcheck--yellow { background:rgba(243,156,18,.15); }
+.momcheck--badge.momcheck--red    { background:rgba(231,76,60,.15); }
 .setup-icon { font-size: 13px; cursor: default; }
 .price-input.is-suggested { color: var(--muted); font-style: italic; }
 
