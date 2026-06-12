@@ -3,7 +3,7 @@ import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
-import { computeUpsidePotential } from '../lib/tv-upside.js';
+import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -137,6 +137,16 @@ function sortValue(c, col) {
     case 'tv_overall_score':        return liveOverallScore(tv)?.total     ?? null;
     case 'tv_upside':   return computeUpsidePotential(tv)?.upside   ?? null;
     case 'tv_downside': return computeUpsidePotential(tv)?.downside ?? null;
+    case 'tv_perf3m':   return tv?.perf_3m ?? null;
+    case 'tv_perf6m':   return tv?.perf_6m ?? null;
+    case 'tv_growth6m': return monthlyGrowthRate(tv?.perf_6m, 6);
+    case 'tv_volm':     return tv?.volatility_m ?? null;
+    case 'tv_atrp':     return tv?.atrp ?? null;
+    case 'tv_pivr2':    return tv?.pivot_r2 ?? null;
+    case 'tv_pivs2':    return tv?.pivot_s2 ?? null;
+    case 'tv_h3m':      return tv?.high_3m ?? null;
+    case 'tv_l3m':      return tv?.low_3m ?? null;
+    case 'tv_analysts': return tv?.recommendation_total ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -199,6 +209,15 @@ const VIEWS = {
     { key:'tv_cci',     label:'CCI',    title:'Commodity Channel Index 20 (1M)',  num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.cci20_1m)}">${fmtNum(c.tv_data?.cci20_1m,1)}</span>` },
     { key:'tv_donchlo', label:'DC↓',    title:'Donchian Channel 20 Lower (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_lower_1m) },
     { key:'tv_donchhi', label:'DC↑',    title:'Donchian Channel 20 Upper (1M)',   num:true, fmt:c=>fmtNum(c.tv_data?.donch_ch20_upper_1m) },
+    { key:'tv_perf3m',  label:'Perf3M', title:'Performance 3 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_3m)}">${fmtPct(c.tv_data?.perf_3m)}</span>` },
+    { key:'tv_perf6m',  label:'Perf6M', title:'Performance 6 Monate',             num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.perf_6m)}">${fmtPct(c.tv_data?.perf_6m)}</span>` },
+    { key:'tv_growth6m',label:'ØGr/M',  title:'Ø monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M)', num:true, fmt:c=>{const g=monthlyGrowthRate(c.tv_data?.perf_6m,6);return `<span class="${posNegClass(g)}">${fmtPct(g)}</span>`;} },
+    { key:'tv_volm',    label:'VolaM',  title:'Ø Tagesvolatilität über 1 Monat (%)', num:true, fmt:c=>fmtNum(c.tv_data?.volatility_m,2) },
+    { key:'tv_atrp',    label:'ATRP',   title:'Average True Range in Prozent',    num:true, fmt:c=>fmtNum(c.tv_data?.atrp,2) },
+    { key:'tv_pivr2',   label:'PivR2',  title:'Pivot Monthly Classic R2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_r2) },
+    { key:'tv_pivs2',   label:'PivS2',  title:'Pivot Monthly Classic S2',         num:true, fmt:c=>fmtNum(c.tv_data?.pivot_s2) },
+    { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.high_3m) },
+    { key:'tv_l3m',     label:'L3M',    title:'Tief 3 Monate',                    num:true, fmt:c=>fmtNum(c.tv_data?.low_3m) },
   ],
   fundamentals: [
     { key:'tv_pe',          label:'KGV',    title:'Kurs-Gewinn-Verhältnis (TTM)',  num:true,  fmt:c=>fmtNum(c.tv_data?.pe_ttm,1) },
@@ -216,6 +235,7 @@ const VIEWS = {
     { key:'tv_vol10d',      label:'V10d',   title:'Ø Volumen 10 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
     { key:'tv_vol30d',      label:'V30d',   title:'Ø Volumen 30 Tage',            num:true,  fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
     { key:'tv_rating1m',    label:'Rat1M',  title:'Empfehlung 1 Monat',           num:true,  fmt:c=>`<span class="tv-rating-txt--${tvRatingClass(c.tv_data?.recommend_all_1m)}">${fmtNum(c.tv_data?.recommend_all_1m,2)}</span>` },
+    { key:'tv_analysts',    label:'Analysten', title:'Anzahl Analysten mit Empfehlung', num:true, fmt:c=>fmtNum(c.tv_data?.recommendation_total,0) },
   ],
 };
 
@@ -691,7 +711,8 @@ function renderUpside(up, side) {
   const target = side === 'up' ? up.upTarget : up.downTarget;
   const tipParts = [
     target != null ? `Level: ${fmtNum(target)}` : 'kein Level (Range offen)',
-    up.volBudget != null ? `ATR-Budget: ±${fmtNum(up.volBudget, 1)}%` : null,
+    up.drift != null ? `Drift: ${fmtPct(up.drift)}/M` : null,
+    up.sigma != null ? `σ: ±${fmtNum(up.sigma, 1)}%` : null,
     up.earningsSoon ? '⚠ Earnings innerhalb ~1 Monat' : null,
   ].filter(Boolean);
   const warn = up.earningsSoon ? ' ⚠' : '';

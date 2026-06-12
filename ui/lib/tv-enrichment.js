@@ -163,6 +163,16 @@ const TV_COLUMNS = [
   'close|1',                                   // 97 — 1-Minuten Intraday-Kurs
   'open',                                      // 98 — heutiger Open
   'change_from_open',                          // 99 — Intraday-Performance seit Open
+  // Upside v2 fields
+  'Volatility.M',                              // 100 — Ø Tagesvolatilität über 1 Monat (%)
+  'ATRP',                                      // 101 — ATR in Prozent
+  'Perf.3M',                                   // 102
+  'Perf.6M',                                   // 103
+  'Pivot.M.Classic.R2',                        // 104
+  'Pivot.M.Classic.S2',                        // 105
+  'High.3M',                                   // 106
+  'Low.3M',                                    // 107
+  'recommendation_total',                      // 108 — Anzahl Analysten
 ];
 
 const COL = {
@@ -271,6 +281,16 @@ recommendMA1M: 53,
   close1m:               97,
   openD:                 98,
   changeFromOpen:        99,
+  // Upside v2 fields
+  volatilityM:           100,
+  atrp:                  101,
+  perf3M:                102,
+  perf6M:                103,
+  pivotR2:               104,
+  pivotS2:               105,
+  high3M:                106,
+  low3M:                 107,
+  recommendationTotal:   108,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -461,6 +481,16 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       close_1m:         d[COL.close1m]        ?? null,
       open:             d[COL.openD]          ?? null,
       change_from_open: d[COL.changeFromOpen] ?? null,
+      // Upside v2 fields
+      volatility_m:         d[COL.volatilityM]         ?? null,
+      atrp:                 d[COL.atrp]                ?? null,
+      perf_3m:              d[COL.perf3M]              ?? null,
+      perf_6m:              d[COL.perf6M]              ?? null,
+      pivot_r2:             d[COL.pivotR2]             ?? null,
+      pivot_s2:             d[COL.pivotS2]             ?? null,
+      high_3m:              d[COL.high3M]              ?? null,
+      low_3m:               d[COL.low3M]               ?? null,
+      recommendation_total: d[COL.recommendationTotal] ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };
