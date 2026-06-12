@@ -73,8 +73,6 @@ function renderTVData(c) {
 function renderEnrichment(enrichment) {
   if (!enrichment) return '';
   const confidenceColor = { high: '#2ecc71', medium: '#f39c12', low: '#e74c3c' }[enrichment.confidence] ?? '#999';
-  const upsideProb = enrichment.upside_20pct_probability;
-  const upsideColor = upsideProb == null ? '#999' : upsideProb >= 60 ? '#2ecc71' : upsideProb >= 30 ? '#f39c12' : '#e74c3c';
   return `
     <div class="enrichment-result">
       <div class="enrichment-meta">
@@ -82,11 +80,6 @@ function renderEnrichment(enrichment) {
         <span class="badge confidence" style="color:${confidenceColor}">
           ${enrichment.confidence} confidence
         </span>
-        ${upsideProb != null ? `
-        <span class="badge confidence" style="color:${upsideColor}" title="${enrichment.upside_reasoning ?? ''}">
-          ${upsideProb}% Chance auf +20% (1M)
-        </span>
-        ` : ''}
         <small>${formatDate(enrichment.enriched_at)}</small>
       </div>
       <div class="enrichment-tags">
@@ -98,7 +91,6 @@ function renderEnrichment(enrichment) {
       <div class="enrichment-thesis">
         <p><strong>These:</strong> ${enrichment.thesis_short ?? ''}</p>
         ${enrichment.thesis_long ? `<details><summary>Ausführliche These</summary><div class="thesis-long">${enrichment.thesis_long.replace(/\n/g, '<br>')}</div></details>` : ''}
-        ${upsideProb != null && enrichment.upside_reasoning ? `<p><strong>Upside-Einschätzung:</strong> ${enrichment.upside_reasoning}</p>` : ''}
       </div>
       ${enrichment.risks?.length ? `
         <div class="enrichment-section">

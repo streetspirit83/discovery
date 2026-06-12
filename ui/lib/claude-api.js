@@ -21,13 +21,10 @@ IMPORTANT: Respond ONLY with a valid JSON object matching this exact schema:
   "thesis_long": string (3-5 sentences, markdown allowed),
   "risks": string[] (2-4 items),
   "catalysts": string[] (2-4 items),
-  "confidence": "high" | "medium" | "low",
-  "upside_20pct_probability": number (0-100, integer),
-  "upside_reasoning": string (1 Satz, German or English)
+  "confidence": "high" | "medium" | "low"
 }
 
 Market cap buckets: large = >$10B, mid = $2B-$10B, small = $300M-$2B, micro = <$300M
-upside_20pct_probability: estimated probability in percent that the price rises by at least +20% within the next 1 month, based on the signals, momentum and thesis above. upside_reasoning gives a one-sentence justification for that estimate.
 Do not include any explanation outside the JSON. No markdown fences in your response.`;
 
 /**
