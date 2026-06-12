@@ -1,72 +1,67 @@
 /**
- * Momentum-Check (5-Minuten-Feinprüfung, Schritte 1–3)
+ * Momentum-Check Ampel (Nutzer-Definition)
  *
- * Zweistufiges Modell:
+ * GRÜN — alle Kriterien erfüllt:
+ *   · ØGr/M > 10 %        (geometrische Monatsrate aus Perf.6M)
+ *   · Score > 80           (Overall Score)
+ *   · PerfW > Perf1M / 4   (Beschleunigung)
+ *   · Δ1T ≤ +5 %
+ *   · ADX > 25             (aktiver Trend)
+ *   · RSI 50–68
+ *   · Aroon↑1M deutlich > Aroon↓1M (Abstand > 30 Punkte – frische Hochs)
+ *   · V10d > V30d
  *
- *   KERN (hart — jeder verletzte Kern-Check = rot):
- *     · Trend-Rating ↑ (Recommend.All|1M > 0.1)
- *     · PerfW & Perf1M > 0 (Momentum vorhanden)
- *     · ADX > 25 (aktiver Trend)
+ * GELB — alle Kriterien erfüllt:
+ *   · ØGr/M > 10 % · Score > 80 · PerfW > Perf1M/4 · Δ1T ≤ +2 % ·
+ *   · ADX > 25 · Aroon↑1M > Aroon↓1M
  *
- *   NEBEN (nur Abzüge — zählen erst in Summe):
- *     Score ≥60 · Stärke ≥60 · Entry ≥30 · Beschleunigung (PerfW > Perf1M/4) ·
- *     Perf3M > 0 · POT ≥ 1.5:1 · Δ1T ≤ +5 % · RSI 45–69 · MACD > Signal ·
- *     Aroon↑ > Aroon↓ · V10d ≥ 0.9×V30d
+ * Sonst ROT. Earnings im 1M-Fenster deckelt grün weiterhin auf gelb.
+ * Fehlende Werte gelten als nicht erfüllt; fehlen die Basisdaten
+ * (Perf.6M/Score/ADX), gibt es keine Ampel (null).
  *
- * Ampel (bei intaktem Kern): ≤3 Neben-Fails → grün · ≤6 → gelb · sonst rot.
- * K.O.: Earnings im 1M-Fenster deckelt grün auf gelb.
- * Checks ohne Daten werden ausgelassen; unter 2 auswertbaren Kern-Checks
- * oder unter 4 auswertbaren Neben-Checks → null (keine Schein-Ampel).
- *
- * Output: { verdict, passed, total, fails, core_fails, ko, checked_at } | null
+ * Output: { verdict, green_fails, yellow_fails, ko, checked_at } | null
  */
 
-import { computeUpsidePotential } from './tv-upside.js';
+import { computeUpsidePotential, monthlyGrowthRate } from './tv-upside.js';
 
-export function computeMomentumCheck(tv, { overallScore, entryScore } = {}) {
+export function computeMomentumCheck(tv, { overallScore } = {}) {
   if (!tv) return null;
-  const up = computeUpsidePotential(tv);
+  const growthM = monthlyGrowthRate(tv.perf_6m, 6);
+  if (growthM == null && overallScore == null && tv.adx == null) return null;
+
   const aroonUp   = tv.aroon_up_1m   ?? tv.aroon_up;
   const aroonDown = tv.aroon_down_1m ?? tv.aroon_down;
-  const perf3 = tv.perf_3m ?? tv.perf_6m;
+  const accel = tv.perf_w != null && tv.perf_1m != null && tv.perf_w > tv.perf_1m / 4;
 
-  // [label, pass|fail|null(no data)]
-  const core = [
-    ['Trend↑',     tv.recommend_all_1m == null ? null : tv.recommend_all_1m > 0.1],
-    ['PerfW&1M>0', tv.perf_w == null || tv.perf_1m == null ? null : tv.perf_w > 0 && tv.perf_1m > 0],
-    ['ADX>25',     tv.adx == null ? null : tv.adx > 25],
+  // [label, erfüllt] — fehlende Daten gelten als nicht erfüllt
+  const greenChecks = [
+    ['ØGr/M>10%',   growthM != null && growthM > 10],
+    ['Score>80',    overallScore != null && overallScore > 80],
+    ['PerfW>1M/4',  accel],
+    ['Δ1T≤5%',      tv.change_1d != null && tv.change_1d <= 5],
+    ['ADX>25',      tv.adx != null && tv.adx > 25],
+    ['RSI 50–68',   tv.rsi != null && tv.rsi >= 50 && tv.rsi <= 68],
+    ['Ar↑≫Ar↓',     aroonUp != null && aroonDown != null && aroonUp > aroonDown + 30],
+    ['V10d>V30d',   tv.avg_vol_10d != null && tv.average_volume_30d_calc != null && tv.avg_vol_10d > tv.average_volume_30d_calc],
   ];
-  const secondary = [
-    ['Score≥60',       overallScore == null ? null : overallScore >= 60],
-    ['Stärke≥60',      tv.trend_strength_score?.total == null ? null : tv.trend_strength_score.total >= 60],
-    ['Entry≥30',       entryScore == null ? null : entryScore >= 30],
-    ['Beschleunigung', tv.perf_w == null || tv.perf_1m == null ? null : tv.perf_w > tv.perf_1m / 4],
-    ['Perf3M>0',       perf3 == null ? null : perf3 > 0],
-    ['POT≥1.5:1',      up?.upside == null || up?.downside == null || up.downside === 0 ? null : up.upside / Math.abs(up.downside) >= 1.5],
-    ['Δ1T≤5%',         tv.change_1d == null ? null : tv.change_1d <= 5],
-    ['RSI 45–69',      tv.rsi == null ? null : tv.rsi >= 45 && tv.rsi < 70],
-    ['MACD>Signal',    tv.macd == null || tv.macd_signal == null ? null : tv.macd > tv.macd_signal],
-    ['Aroon↑>↓',       aroonUp == null || aroonDown == null ? null : aroonUp > aroonDown],
-    ['Volumen↑',       tv.avg_vol_10d == null || tv.average_volume_30d_calc == null ? null : tv.avg_vol_10d >= 0.9 * tv.average_volume_30d_calc],
+  const yellowChecks = [
+    ['ØGr/M>10%',   growthM != null && growthM > 10],
+    ['Score>80',    overallScore != null && overallScore > 80],
+    ['PerfW>1M/4',  accel],
+    ['Δ1T≤2%',      tv.change_1d != null && tv.change_1d <= 2],
+    ['ADX>25',      tv.adx != null && tv.adx > 25],
+    ['Ar↑>Ar↓',     aroonUp != null && aroonDown != null && aroonUp > aroonDown],
   ];
 
-  const coreEval = core.filter(([, r]) => r !== null);
-  const secEval  = secondary.filter(([, r]) => r !== null);
-  if (coreEval.length < 2 || secEval.length < 4) return null; // zu wenig Daten
+  const greenFails  = greenChecks.filter(([, ok]) => !ok).map(([l]) => l);
+  const yellowFails = yellowChecks.filter(([, ok]) => !ok).map(([l]) => l);
 
-  const coreFails = coreEval.filter(([, r]) => r === false).map(([l]) => l);
-  const secFails  = secEval.filter(([, r]) => r === false).map(([l]) => l);
-  const passed = coreEval.length + secEval.length - coreFails.length - secFails.length;
-  const total  = coreEval.length + secEval.length;
-
-  let verdict;
-  if (coreFails.length > 0) {
-    verdict = 'red';
-  } else {
-    verdict = secFails.length <= 3 ? 'green' : secFails.length <= 6 ? 'yellow' : 'red';
-  }
+  let verdict = greenFails.length === 0 ? 'green'
+              : yellowFails.length === 0 ? 'yellow'
+              : 'red';
 
   let ko = null;
+  const up = computeUpsidePotential(tv);
   if (up?.earningsSoon) {
     ko = 'Earnings im 1M-Fenster';
     if (verdict === 'green') verdict = 'yellow';
@@ -74,10 +69,8 @@ export function computeMomentumCheck(tv, { overallScore, entryScore } = {}) {
 
   return {
     verdict,
-    passed,
-    total,
-    fails: secFails,
-    core_fails: coreFails,
+    green_fails: greenFails,
+    yellow_fails: yellowFails,
     ko,
     checked_at: new Date().toISOString(),
   };

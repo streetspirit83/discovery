@@ -61,11 +61,12 @@ function priceSituation(tv) {
 }
 
 // Initial suggestions for the editable entry/target fields:
-// Entry = berechneter Long-Entry (Fallback Kurs), Ziel = Entry × 1,2 (mind. 20 % Upside).
+// Entry orientiert sich an der EMA20 (kurzfristige Mittellinie, Fallback Kurs),
+// Ziel = Entry × 1,2 (mind. 20 % Upside).
 function suggestedEntry(c) {
   const tv = c.tv_data;
   if (!tv) return null;
-  const v = liveEntryPrices(tv)?.longEntry ?? tv.close_1m ?? tv.close;
+  const v = tv.ema20 ?? tv.close_1m ?? tv.close;
   return v != null ? Math.round(v * 100) / 100 : null;
 }
 function suggestedTarget(c) {
@@ -286,7 +287,7 @@ const VIEWS = {
   price: [
     { key:'currency',  label:'W\u00e4',  title:'W\u00e4hrung der B\u00f6rse (Preise werden nach USD/EUR umgerechnet, andere W\u00e4hrungen bleiben nativ)', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
     { key:'setup',     label:'Setup', title:'Preis-Situation: \ud83d\ude80 Blue-Sky \u00b7 \ud83c\udfaf Breakout-N\u00e4he \u00b7 \ud83d\udd04 Pullback im Trend \u00b7 \ud83d\udcc9 unter Trend \u00b7 \u2796 Range \u00b7 \u26a0 Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'\u2014';} },
-    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: Long-Entry-Level, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_entry') },
+    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: EMA20, kursiv) \u2013 editierbar, wird gespeichert', num:true, fmt:c=>priceInput(c,'my_entry') },
     { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
@@ -409,7 +410,6 @@ export class CandidateList {
       const tv = c.tv_data;
       c.momentum_check = computeMomentumCheck(tv, {
         overallScore: liveOverallScore(tv)?.total,
-        entryScore:   liveEntryScore(tv)?.total,
       });
       updates.push({ candidate_id: c.id, updates: { momentum_check: c.momentum_check } });
     }
@@ -522,7 +522,7 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Check Ampel: Kern hart (Trend\u2191, PerfW&1M>0, ADX>25 \u2013 jeder Versto\u00df = rot) \u00b7 Neben-Checks nur Abz\u00fcge (\u22643 gr\u00fcn, \u22646 gelb) \u00b7 Earnings deckelt auf gelb \u00b7 Berechnung \u00fcber den Puls-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('momentum', 'Mom', 'Momentum-Ampel \u00b7 Gr\u00fcn: \u00d8Gr/M>10% + Score>80 + PerfW>Perf1M/4 + \u03941T\u22645% + ADX>25 + RSI 50\u201368 + Aroon\u2191\u226b\u2193 + V10d>V30d \u00b7 Gelb: \u00d8Gr/M>10% + Score>80 + Beschleunigung + \u03941T\u22642% + ADX>25 + Aroon\u2191>\u2193 \u00b7 sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
@@ -920,10 +920,9 @@ function renderMomentumCheck(mc) {
   if (!mc) return '<span class="muted-dash">—</span>';
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
   const tipParts = [
-    `${mc.passed}/${mc.total} Checks bestanden`,
-    mc.core_fails?.length ? `Kern verletzt: ${mc.core_fails.join(', ')}` : 'Kern intakt',
+    mc.green_fails?.length === 0 ? 'Alle Grün-Kriterien erfüllt' : `Grün verfehlt: ${mc.green_fails.join(', ')}`,
+    mc.verdict !== 'green' && mc.yellow_fails?.length ? `Gelb verfehlt: ${mc.yellow_fails.join(', ')}` : null,
     mc.ko ? `K.O.: ${mc.ko}` : null,
-    mc.fails.length ? `Abzüge: ${mc.fails.join(', ')}` : 'keine Abzüge',
     age ? `geprüft vor ${age}` : null,
   ].filter(Boolean);
   return `<span class="momcheck momcheck--${mc.verdict}" title="${tipParts.join(' · ')}">●</span>`;
