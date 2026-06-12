@@ -918,10 +918,13 @@ function liveOverallScore(tv) {
 
 function renderMomentumCheck(mc) {
   if (!mc) return '<span class="muted-dash">—</span>';
+  // Tolerate results persisted by older check versions (fails/core_fails shape).
+  const gf = Array.isArray(mc.green_fails) ? mc.green_fails : (Array.isArray(mc.fails) ? mc.fails : []);
+  const yf = Array.isArray(mc.yellow_fails) ? mc.yellow_fails : [];
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
   const tipParts = [
-    mc.green_fails?.length === 0 ? 'Alle Grün-Kriterien erfüllt' : `Grün verfehlt: ${mc.green_fails.join(', ')}`,
-    mc.verdict !== 'green' && mc.yellow_fails?.length ? `Gelb verfehlt: ${mc.yellow_fails.join(', ')}` : null,
+    gf.length === 0 ? 'Alle Grün-Kriterien erfüllt' : `Grün verfehlt: ${gf.join(', ')}`,
+    mc.verdict !== 'green' && yf.length ? `Gelb verfehlt: ${yf.join(', ')}` : null,
     mc.ko ? `K.O.: ${mc.ko}` : null,
     age ? `geprüft vor ${age}` : null,
   ].filter(Boolean);
