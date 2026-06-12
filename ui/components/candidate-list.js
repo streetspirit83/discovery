@@ -74,9 +74,11 @@ function suggestedTarget(c) {
 }
 function priceInput(c, field) {
   const own = c[field];
-  const sugg = field === 'my_entry' ? suggestedEntry(c) : suggestedTarget(c);
-  const val = own ?? sugg ?? '';
-  return `<input type="number" step="any" class="price-input${own == null ? ' is-suggested' : ''}" data-field="${field}" value="${val}" placeholder="—" title="${own == null ? 'Vorschlag (kursiv) – editierbar, wird beim Ändern gespeichert' : 'Eigener Wert'}">`;
+  const nativeVal = own ?? (field === 'my_entry' ? suggestedEntry(c) : suggestedTarget(c));
+  // Display in the selected currency; storage stays native (the change
+  // handler converts back via convFactor).
+  const val = nativeVal != null ? Math.round(nativeVal * convFactor(c) * 100) / 100 : '';
+  return `<input type="number" step="any" class="price-input${own == null ? ' is-suggested' : ''}" data-field="${field}" value="${val}" placeholder="—" title="${own == null ? 'Vorschlag (kursiv) – editierbar, wird beim Ändern gespeichert' : 'Eigener Wert'} · Anzeige in ${displayCurrency}, gespeichert in ${nativeCurrency(c)}">`;
 }
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -729,7 +731,9 @@ export class CandidateList {
         inp.addEventListener('pointerup', (e) => e.stopPropagation());
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
         inp.addEventListener('change', () => {
-          const value = inp.value === '' ? null : Number(inp.value);
+          // Input is shown in the display currency → convert back to native for storage.
+          let value = inp.value === '' ? null : Number(inp.value);
+          if (Number.isFinite(value)) value = Math.round((value / convFactor(c)) * 100) / 100;
           this.onAction?.('setUserPrice', c, { field: inp.dataset.field, value: Number.isFinite(value) ? value : null });
         });
       });
