@@ -2,16 +2,16 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260612o';
+import { CandidateList } from './components/candidate-list.js?v=20260612p';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
-import { renderScreenerModal } from './components/screener-modal.js?v=20260609a';
+import { renderScreenerModal } from './components/screener-modal.js?v=20260609b';
 import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260612o';
+import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260612p';
 import { buildResearchPrompt } from './lib/research-prompt.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
