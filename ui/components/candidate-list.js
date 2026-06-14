@@ -472,6 +472,7 @@ export class CandidateList {
       if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
       if (broker === 'broker' && !c.broker_armed)               return false;
       if (broker === 'star'   && !c.in_portfolio)               return false;
+      if (broker === 'none'   && c.broker_armed)                return false;
       if (score) {
         const s = liveOverallScore(c.tv_data)?.total;
         if (s == null) return false;
