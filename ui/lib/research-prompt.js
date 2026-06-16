@@ -39,8 +39,6 @@ function candidateLine(c) {
     `KGV (TTM): ${num(tv?.pe_ttm, 1)}`,
     `RSI: ${num(tv?.rsi, 0)}`,
     `TV-Rating 1M: ${num(tv?.recommend_all_1m)}`,
-    `Upside 1M: ${pct(up?.upside)}`,
-    `Downside 1M: ${pct(up?.downside)}`,
     up?.earningsSoon ? 'Achtung: Earnings innerhalb des nächsten Monats' : null,
   ].filter(Boolean);
 
@@ -72,5 +70,5 @@ Quantitative Daten aus meinem Screening (Stand ${date}, bitte gegen aktuelle Mar
 
 ${candidates.map(candidateLine).join('\n')}
 
-Hinweis: "Upside/Downside 1M" sind volatilitäts- und widerstandsbasierte Range-Schätzungen aus meinem Screening, keine Kursziele. Antworte auf Deutsch.`;
+Antworte auf Deutsch.`;
 }
