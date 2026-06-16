@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markets Performance – Discovery</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    body { font-family: var(--font-ui); background: var(--bg); color: var(--text); margin: 0; }
+    .mkt-container { max-width: 980px; margin: 0 auto; padding: 1rem; }
+    .mkt-header { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .mkt-title { font-size: 1.05rem; font-weight: 600; margin: 0; flex: 1; }
+    .mkt-tabs { display: flex; gap: .2rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .mkt-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: .5rem 1rem; cursor: pointer; color: var(--muted); font-size: .9rem; font-family: var(--font-ui); transition: color var(--t-fast); }
+    .mkt-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+    .mkt-tab:hover:not(.active) { color: var(--text); }
+    .perf-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .perf-table thead th { padding: .4rem .55rem; text-align: right; cursor: pointer; white-space: nowrap; color: var(--muted); font-size: .74rem; font-weight: 500; user-select: none; background: var(--surface); position: sticky; top: 0; z-index: 2; }
+    .perf-table thead th:first-child { text-align: left; }
+    .perf-table thead th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+    .perf-table thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+    .perf-table td { padding: .38rem .55rem; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .perf-table td:first-child { text-align: left; font-weight: 500; }
+    .perf-table tbody tr:hover td { background: var(--surface-2); cursor: pointer; }
+    .perf-table tbody tr.selected td { background: var(--accent-weak); }
+    /* Heat colours */
+    .h3  { background: #14532d28; color: #15803d; }
+    .h2  { background: #16a34a1e; color: #16a34a; }
+    .h1  { background: #22c55e14; color: #16a34a; }
+    .n1  { background: #fca5a514; color: #dc2626; }
+    .n2  { background: #ef44441e; color: #dc2626; }
+    .n3  { background: #7f1d1d28; color: #b91c1c; }
+    .h0  { color: var(--muted); }
+    [data-theme="dark"] .h3  { background: #14532d55; color: #4ade80; }
+    [data-theme="dark"] .h2  { background: #16a34a3a; color: #4ade80; }
+    [data-theme="dark"] .h1  { background: #22c55e1e; color: #86efac; }
+    [data-theme="dark"] .n1  { background: #fca5a51e; color: #f87171; }
+    [data-theme="dark"] .n2  { background: #ef44443a; color: #f87171; }
+    [data-theme="dark"] .n3  { background: #7f1d1d55; color: #fca5a5; }
+    .n-badge { font-size: .7rem; color: var(--muted); background: var(--surface-2); border-radius: 4px; padding: 1px 5px; }
+    .arrow-cell { color: var(--muted); font-size: .8rem; }
+    .mkt-progress { font-size: .82rem; color: var(--muted); margin-bottom: 1rem; }
+    .mkt-sector-bar { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; font-size: .85rem; }
+    .drill-panel { margin-top: .75rem; padding: .85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .drill-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .65rem; }
+    .drill-title { font-size: .9rem; font-weight: 600; flex: 1; margin: 0; }
+    .drill-close { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0 .2rem; line-height: 1; }
+    .drill-close:hover { color: var(--text); }
+    .setup-box { max-width: 380px; margin: 2.5rem auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .setup-box h2 { margin: 0 0 .5rem; font-size: 1rem; }
+    .setup-box p { font-size: .82rem; color: var(--muted); margin: 0 0 1rem; }
+    .setup-field { margin-bottom: .75rem; }
+    .setup-field label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .2rem; font-weight: 500; }
+    .setup-field input { width: 100%; padding: .42rem .6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); box-sizing: border-box; font-size: .84rem; font-family: var(--font-ui); }
+    .setup-field input:focus { outline: none; border-color: var(--accent); }
+    .toast { position: fixed; bottom: 1.2rem; right: 1.2rem; background: var(--surface); border: 1px solid var(--border); padding: .55rem 1rem; border-radius: var(--radius); font-size: .84rem; box-shadow: 0 3px 12px rgba(0,0,0,.15); z-index: 9999; animation: toastIn .18s ease; max-width: 320px; }
+    @keyframes toastIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .btn-sm { padding: .28rem .65rem; font-size: .78rem; }
+    .empty-hint { color: var(--muted); font-size: .85rem; margin-top: 2rem; text-align: center; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
