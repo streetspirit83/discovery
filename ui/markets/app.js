@@ -160,6 +160,39 @@ async function loadData() {
   renderContent();
 }
 
+// ─── Setup form (first-run + editable settings) ─────────────────────────────────
+function setupBoxHtml() {
+  return `
+    <div class="setup-box">
+      <h2>Backend konfigurieren</h2>
+      <p>Gleiche Werte wie im Discovery-Setup (⚙ in der Haupt-App):</p>
+      <ul style="font-size:.82rem; color:var(--muted); margin:0 0 1rem; padding-left:1.1rem">
+        <li><strong>Backend URL</strong> – die URL deiner Netlify-Site (z.&nbsp;B. <code>https://dein-projekt.netlify.app</code>), in der <code>netlify-backend/</code> deployed ist.</li>
+        <li><strong>Shared Secret</strong> – der gleiche Wert wie die Umgebungsvariable <code>DISCOVERY_SECRET</code> auf Netlify.</li>
+      </ul>
+      <div class="setup-field"><label>Backend URL</label><input id="su-url" type="url" placeholder="https://yoursite.netlify.app" value="${backendUrl ?? ''}" autocomplete="off"></div>
+      <div class="setup-field"><label>Shared Secret</label><input id="su-sec" type="password" value="${secret ?? ''}" autocomplete="off"></div>
+      <div style="display:flex; gap:.5rem">
+        <button class="btn btn-primary btn-sm" id="su-save">Speichern &amp; Laden</button>
+        ${backendUrl && secret ? '<button class="btn btn-secondary btn-sm" id="su-cancel">Abbrechen</button>' : ''}
+      </div>
+    </div>`;
+}
+
+function wireSetupBox() {
+  document.getElementById('su-save').addEventListener('click', () => {
+    const u = document.getElementById('su-url').value.trim();
+    const s = document.getElementById('su-sec').value.trim();
+    if (!u || !s) { showToast('URL und Secret erforderlich', 'error'); return; }
+    localStorage.setItem('discovery_backend_url', u);
+    localStorage.setItem('discovery_secret', s);
+    backendUrl = u; secret = s;
+    render();
+    loadData();
+  });
+  document.getElementById('su-cancel')?.addEventListener('click', render);
+}
+
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
@@ -171,24 +204,9 @@ function render() {
           <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none">← Discovery</a>
           <h1 class="mkt-title">Markets Performance</h1>
         </div>
-        <div class="setup-box">
-          <h2>Backend konfigurieren</h2>
-          <p>Gleiche Einstellungen wie in der Discovery-App. Nach Konfiguration dort einfach neu laden.</p>
-          <div class="setup-field"><label>Backend URL</label><input id="su-url" type="url" placeholder="https://yoursite.netlify.app" autocomplete="off"></div>
-          <div class="setup-field"><label>Shared Secret</label><input id="su-sec" type="password" autocomplete="off"></div>
-          <button class="btn btn-primary btn-sm" id="su-save">Speichern &amp; Laden</button>
-        </div>
+        ${setupBoxHtml()}
       </div>`;
-    document.getElementById('su-save').addEventListener('click', () => {
-      const u = document.getElementById('su-url').value.trim();
-      const s = document.getElementById('su-sec').value.trim();
-      if (!u || !s) { showToast('URL und Secret erforderlich', 'error'); return; }
-      localStorage.setItem('discovery_backend_url', u);
-      localStorage.setItem('discovery_secret', s);
-      backendUrl = u; secret = s;
-      render();
-      loadData();
-    });
+    wireSetupBox();
     return;
   }
 
@@ -209,10 +227,16 @@ function render() {
 
   document.getElementById('btn-refresh').addEventListener('click', loadData);
   document.getElementById('btn-settings').addEventListener('click', () => {
-    backendUrl = null; secret = null;
-    localStorage.removeItem('discovery_backend_url');
-    localStorage.removeItem('discovery_secret');
-    render();
+    const app2 = document.getElementById('app');
+    app2.innerHTML = `
+      <div class="mkt-container">
+        <div class="mkt-header">
+          <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none">← Discovery</a>
+          <h1 class="mkt-title">Markets Performance</h1>
+        </div>
+        ${setupBoxHtml()}
+      </div>`;
+    wireSetupBox();
   });
   document.getElementById('tab-countries').addEventListener('click', () => { tab = 'countries'; sortKey = 'pm'; sortDir = 'desc'; drill = null; renderContent(); });
   document.getElementById('tab-sectors').addEventListener('click', () => { tab = 'sectors'; sortKey = 'pm'; sortDir = 'desc'; drill = null; renderContent(); });
