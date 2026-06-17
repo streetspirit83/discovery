@@ -84,6 +84,34 @@ export function searchResultToParts(result) {
   return { symbol: base, exchange: normalizeExchange(result.exchange || ''), yahoo_symbol: base };
 }
 
+// German/regional venues whose foreign ADR copies are NOT in the TV scanner.
+const GERMAN_MICS = new Set([
+  'XETR', 'XFRA', 'XMUN', 'XSTU', 'XDUS', 'XBER', 'XHAM', 'XHAN', 'XGAT', 'GETTEX', 'TGAT',
+]);
+
+/**
+ * Resolve a security's primary/home listing from its ISIN via Twelve Data.
+ * TD's symbol_search by ISIN returns every listing with the home market
+ * first (e.g. US9108734057 → NYSE:UMC, then the German UMCB copies). We pick
+ * the first TV-resolvable, non-German listing so the TV scanner has data.
+ *
+ * @returns {Promise<{symbol,exchange,yahoo_symbol}|null>}
+ */
+export async function resolvePrimaryByIsin(isin) {
+  if (!isin || !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(isin).toUpperCase())) return null;
+  let hits;
+  try {
+    hits = await searchSymbols(String(isin).toUpperCase());
+  } catch {
+    return null;
+  }
+  const primary = hits.find((h) => {
+    const mic = (h.mic || '').toUpperCase();
+    return MIC_MAP[mic] && !GERMAN_MICS.has(mic);
+  });
+  return primary ? searchResultToParts(primary) : null;
+}
+
 /** Build a full Discovery candidate from a search hit. */
 export function searchResultToCandidate(result) {
   const parts = searchResultToParts(result);

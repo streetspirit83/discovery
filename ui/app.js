@@ -13,6 +13,9 @@ import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260614b';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
+import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
+import { buildLinks } from './lib/link-builder.js';
+import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
@@ -752,9 +755,45 @@ async function handleBulkAction(action, ids) {
   }
 }
 
+// Foreign ADRs/stocks that only have German regional listings (e.g. UMCB on
+// Frankfurt/Gettex) are not in the TV scanner. Resolve them to their primary
+// listing via the ISIN (UMCB → NYSE:UMC) so TV data can be fetched, and store
+// the primary. Only foreign ISINs on a German venue are touched.
+const GERMAN_VENUE_CODES = new Set([
+  'XETR', 'FWB', 'XFRA', 'FRA', 'F', 'MUN', 'XMUN', 'STU', 'XSTU', 'SWB',
+  'DUS', 'XDUS', 'BER', 'XBER', 'GETTEX', 'TRADEGATE', 'GAT', 'HAM', 'HAN', 'UNKNOWN',
+]);
+
+async function resolveForeignPrimaries(candidates) {
+  for (const c of candidates) {
+    if (!c.isin) continue;
+    const home = String(c.isin).slice(0, 2).toUpperCase();
+    const code = String(c.exchange ?? '').toUpperCase();
+    const germanOrUnknown = GERMAN_VENUE_CODES.has(code) || normalizeExchange(c.exchange) === 'XETR' || !c.exchange;
+    if (home === 'DE' || !germanOrUnknown) continue; // only foreign-on-German venues
+    try {
+      const p = await resolvePrimaryByIsin(c.isin);
+      if (p && p.exchange && (p.symbol !== c.symbol || p.exchange !== c.exchange)) {
+        c.sources?.push?.({
+          adapter: 'system', source_url: '', discovered_at: new Date().toISOString(),
+          signal_type: 'note', raw_signal: {},
+          info_snippet: `Primärlisting via ISIN aufgelöst: ${c.exchange}:${c.symbol} → ${p.exchange}:${p.symbol}`,
+        });
+        c.symbol = p.symbol;
+        c.exchange = p.exchange;
+        c.yahoo_symbol = p.yahoo_symbol;
+        c.links = buildLinks({ symbol: p.symbol, exchange: p.exchange, yahooSymbol: p.yahoo_symbol });
+      }
+    } catch { /* best-effort – keep original listing */ }
+  }
+  return candidates;
+}
+
 /** Import candidates into inbox (mock = in-memory dedup, real = backend). */
 async function importCandidates(candidates) {
   let added = 0, merged = 0, skipped = 0, errors = 0;
+
+  await resolveForeignPrimaries(candidates);
 
   if (useMock) {
     const inbox = await ensureBlob('inbox');

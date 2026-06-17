@@ -5,7 +5,7 @@
  */
 
 import { parseImport } from '../lib/import-parser.js';
-import { searchSymbols, searchResultToCandidate } from '../lib/symbol-search.js';
+import { searchSymbols, searchResultToCandidate } from '../lib/symbol-search.js?v=20260614c';
 
 /**
  * @param {object} opts
