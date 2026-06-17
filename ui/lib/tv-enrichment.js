@@ -617,6 +617,67 @@ export async function fetchFxRate({ backendUrl, secret }) {
 }
 
 /**
+ * German regional venue (original exchange code) → TV prefix, all in the
+ * "germany" market. Used as a fallback when the Xetra-normalised lookup
+ * returns no data (value listed only on a regional exchange). Verified
+ * against the TV scanner: FWB, SWB, MUN, DUS, GETTEX, TRADEGATE.
+ */
+const GERMAN_REGIONAL_TV = {
+  FWB: 'FWB', XFRA: 'FWB', FRA: 'FWB', F: 'FWB',
+  STU: 'SWB', XSTU: 'SWB', SWB: 'SWB',
+  MUN: 'MUN', XMUN: 'MUN',
+  DUS: 'DUS', XDUS: 'DUS',
+  GETTEX: 'GETTEX', GAT: 'TRADEGATE', TRADEGATE: 'TRADEGATE',
+  HAM: 'HAM', XHAM: 'HAM', HAN: 'HAN', XHAN: 'HAN',
+};
+
+/**
+ * Fetches one market group and writes hits into `results`.
+ * @returns {Promise<object[]>} candidates that returned no data
+ */
+async function fetchMarketGroup(market, entries, { backendUrl, secret }, onProgress, results, label) {
+  const tvTickers   = entries.map((e) => e.tvTicker);
+  const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
+  onProgress?.(`📊 ${label} – ${market}: ${tvTickers.join(', ')}…`);
+
+  const requestBody = { markets: [market], symbols: { tickers: tvTickers }, columns: TV_COLUMNS };
+
+  let bodyStr;
+  try {
+    bodyStr = await proxyPost(backendUrl, secret, `https://scanner.tradingview.com/${market}/scan`, requestBody);
+  } catch (err) {
+    console.warn(`[TV] ${market} failed:`, err.message);
+    onProgress?.(`⚠️ ${market}: ${err.message}`);
+    return entries.map((e) => e.candidate);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    console.warn(`[TV] ${market}: JSON parse error on body:`, bodyStr?.slice(0, 300));
+    onProgress?.(`⚠️ ${market}: JSON parse fehlgeschlagen`);
+    return entries.map((e) => e.candidate);
+  }
+
+  const rows = parsed?.data ?? [];
+  console.log(`[TV] ${market} (${label}): totalCount=${parsed?.totalCount}, rows=${rows.length}`);
+  onProgress?.(`✅ ${market}: ${rows.length} Treffer für ${tvTickers.length} Ticker`);
+
+  for (const row of rows) {
+    const candidate = tvTickerMap.get(row.s);
+    if (candidate) results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+    else console.warn('[TV] No candidate for ticker:', row.s);
+  }
+
+  const missing = entries.filter((e) => !rows.find((r) => r.s === e.tvTicker));
+  if (missing.length) {
+    console.warn('[TV] No TV data for:', missing.map((e) => e.tvTicker));
+  }
+  return missing.map((e) => e.candidate);
+}
+
+/**
  * @param {object[]} candidates
  * @param {{ backendUrl: string, secret: string, onProgress?: (msg: string) => void }} opts
  * @returns {Promise<Map<string, object>>}  candidateId → updates
@@ -631,7 +692,8 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
 
   for (const c of candidates) {
     // Normalise legacy/regional codes (e.g. FWB, XSTU) so already-stored
-    // candidates resolve without re-import.
+    // candidates resolve without re-import. Original c.exchange is kept for
+    // the regional fallback below.
     const ex = normalizeExchange(c.exchange);
     const market = EXCHANGE_TO_MARKET[ex];
     const prefix = TV_PREFIX_MAP[ex];
@@ -653,77 +715,28 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
   }
 
   const results = new Map();
+  const stillMissing = [];
   let marketIdx = 0;
 
   for (const [market, entries] of groups) {
     marketIdx++;
-    const tvTickers = entries.map((e) => e.tvTicker);
-    onProgress?.(`📊 ${marketIdx}/${groups.size} – ${market}: ${tvTickers.join(', ')}…`);
+    const missing = await fetchMarketGroup(
+      market, entries, { backendUrl, secret }, onProgress, results, `${marketIdx}/${groups.size}`,
+    );
+    stillMissing.push(...missing);
+  }
 
-    // Build lookup: tvTicker → candidate
-    const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
-
-    const requestBody = {
-      markets: [market],
-      symbols: { tickers: tvTickers },
-      columns: TV_COLUMNS,
-    };
-
-    let bodyStr;
-    try {
-      bodyStr = await proxyPost(backendUrl, secret,
-        `https://scanner.tradingview.com/${market}/scan`,
-        requestBody,
-      );
-    } catch (err) {
-      console.warn(`[TV] ${market} failed:`, err.message);
-      onProgress?.(`⚠️ ${market}: ${err.message}`);
-      continue;
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(bodyStr);
-    } catch (parseErr) {
-      console.warn(`[TV] ${market}: JSON parse error on body:`, bodyStr?.slice(0, 300));
-      onProgress?.(`⚠️ ${market}: JSON parse fehlgeschlagen`);
-      continue;
-    }
-
-    console.group(`[TV] ${market} response`);
-    console.log('[TV] totalCount:', parsed?.totalCount);
-    console.log('[TV] data rows:', parsed?.data?.length ?? 0);
-    // Per-column dump for the first row so we can verify which fields return data
-    const firstRow = parsed?.data?.[0];
-    if (firstRow?.d) {
-      console.group(`[TV] columns for ${firstRow.s}`);
-      TV_COLUMNS.forEach((name, i) => {
-        const v = firstRow.d[i];
-        console.log(`  ${name}: ${v === null ? 'null' : v === undefined ? 'undefined' : JSON.stringify(v)}`);
-      });
-      console.groupEnd();
-    }
-    console.groupEnd();
-
-    const rows = parsed?.data ?? [];
-    onProgress?.(`✅ ${market}: ${rows.length} Treffer für ${tvTickers.length} Ticker`);
-
-    let matched = 0;
-    for (const row of rows) {
-      const candidate = tvTickerMap.get(row.s);
-      if (candidate) {
-        results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
-        matched++;
-      } else {
-        console.warn('[TV] No candidate for ticker:', row.s);
-      }
-    }
-
-    if (matched < tvTickers.length) {
-      const missing = tvTickers.filter((t) => !rows.find((r) => r.s === t));
-      console.warn('[TV] No TV data for:', missing);
-      onProgress?.(`⚠️ ${market}: ${missing.length} Ticker ohne Daten: ${missing.join(', ')}`);
-    }
+  // Fallback: values that returned no data on (Xetra-normalised) lookup but
+  // are listed on a German regional venue → retry with the correct TV prefix.
+  const fbEntries = [];
+  for (const c of stillMissing) {
+    if (results.has(c.id)) continue;
+    const prefix = GERMAN_REGIONAL_TV[String(c.exchange ?? '').toUpperCase()];
+    if (prefix) fbEntries.push({ candidate: c, tvTicker: `${prefix}:${c.symbol}` });
+  }
+  if (fbEntries.length) {
+    onProgress?.(`↩︎ Fallback Regionalbörse: ${fbEntries.length} Ticker…`);
+    await fetchMarketGroup('germany', fbEntries, { backendUrl, secret }, onProgress, results, 'Fallback');
   }
 
   if (results.size === 0) {

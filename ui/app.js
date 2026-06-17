@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260614a';
+import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260614b';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
