@@ -12,7 +12,8 @@
 
 import { buildLinks } from './link-builder.js';
 import { uuid } from './import-parser.js';
-import { MARKET_BY_SLUG, TV_PREFIX_TO_EXCHANGE } from './tv-fields.js';
+import { MARKET_BY_SLUG } from './tv-fields.js';
+import { normalizeExchange } from './exchange-map.js';
 
 // ─── Proxy POST (same pattern as tv-enrichment.js) ──────────────────────────────
 async function proxyPost(backendUrl, secret, url, requestBody) {
@@ -94,7 +95,9 @@ function parseTicker(s) {
   if (colon === -1) return null;
   const tvExch = s.slice(0, colon);
   const symbol = s.slice(colon + 1);
-  const exchange = TV_PREFIX_TO_EXCHANGE[tvExch] ?? null;
+  // Regional/alias venue prefixes (TRADEGATE, GETTEX, FWB, STU, ...) collapse onto
+  // the canonical exchange (e.g. XETR) instead of being dropped as unrecognised.
+  const exchange = normalizeExchange(tvExch) || null;
   return exchange ? { symbol, exchange, tvExch } : null;
 }
 

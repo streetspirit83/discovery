@@ -1,10 +1,13 @@
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
-import { MARKETS, TV_PREFIX_TO_EXCHANGE } from '../lib/tv-fields.js';
+import { MARKETS } from '../lib/tv-fields.js';
 import { loadStorageClient } from '../lib/storage-client.js';
+import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
-const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic'];
-// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap
+// `country` (appended last so existing fixed indices below don't shift) lets us
+// drop foreign cross-listings (e.g. Intel trading on Xetra) from a country filter.
+const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'country'];
+// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap  d[8]=country
 
 const PERF_COLS = [
   { key: 'pw', label: '1W', idx: 2 },
@@ -15,15 +18,13 @@ const PERF_COLS = [
 ];
 const KEY_TO_IDX = Object.fromEntries(PERF_COLS.map((c) => [c.key, c.idx]));
 
-// Build a map of TV exchange prefix → market slug for per-row market attribution
-const PREFIX_TO_SLUG = (() => {
+// Map a canonical exchange code (post normalizeExchange) → market slug, for
+// attributing an import row to the right market regardless of which regional
+// venue alias (Tradegate, Gettex, FWB, ...) TradingView reported it under.
+const EXCHANGE_TO_SLUG = (() => {
   const map = {};
   for (const m of MARKETS) {
-    for (const exch of m.exchanges) {
-      for (const [prefix, code] of Object.entries(TV_PREFIX_TO_EXCHANGE)) {
-        if (code === exch) map[prefix] = m.slug;
-      }
-    }
+    for (const exch of m.exchanges) map[exch] = m.slug;
   }
   return map;
 })();
@@ -135,6 +136,40 @@ function sectorAgg(sector, filterSlug) {
   return { rows, ...mkAgg(rows) };
 }
 
+// ─── Row cleanup ───────────────────────────────────────────────────────────────
+/**
+ * Collapse rows that are the same company on different regional venue
+ * aliases (XETR/TRADEGATE/GETTEX/FWB/STU/... all normalise to one exchange)
+ * down to a single row per (exchange, symbol).
+ */
+function dedupeRows(rows) {
+  const seen = new Map();
+  for (const row of rows) {
+    const colon = row.s.indexOf(':');
+    if (colon === -1) continue;
+    const exch = normalizeExchange(row.s.slice(0, colon));
+    const symbol = row.s.slice(colon + 1);
+    const key = `${exch}:${symbol}`;
+    if (!seen.has(key)) seen.set(key, row);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * Drop rows whose `country` column positively mismatches the market's
+ * expected domicile (e.g. Intel showing up in a Germany scan because it's
+ * cross-listed on Xetra). Rows with missing/unrecognised country data are
+ * kept rather than dropped, since the field hasn't been verified live.
+ */
+function filterByCountry(rows, expectedCountry) {
+  if (!expectedCountry) return rows;
+  return rows.filter((row) => {
+    const c = row.d[8];
+    if (!c) return true;
+    return String(c).toLowerCase() === expectedCountry.toLowerCase();
+  });
+}
+
 // ─── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
   if (!backendUrl || !secret) return;
@@ -148,7 +183,7 @@ async function loadData() {
         market: m.slug, filter: [], columns: COLUMNS,
         sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
       }, auth);
-      marketData[m.slug] = { label: m.label, rows };
+      marketData[m.slug] = { label: m.label, rows: dedupeRows(filterByCountry(rows, m.country)) };
     } catch {
       marketData[m.slug] = { label: m.label, rows: [] };
     }
@@ -543,7 +578,8 @@ async function doImport(client, rows) {
   const byMarket = {};
   for (const row of rows) {
     const prefix = row.s.split(':')[0];
-    const slug = PREFIX_TO_SLUG[prefix] ?? drill.marketSlug ?? 'america';
+    const exch = normalizeExchange(prefix);
+    const slug = EXCHANGE_TO_SLUG[exch] ?? drill.marketSlug ?? 'america';
     (byMarket[slug] ??= []).push(row);
   }
 
