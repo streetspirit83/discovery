@@ -6,13 +6,14 @@ import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
+import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
 let fxEurUsd = null; // USD per 1 EUR
 
 function nativeCurrency(c) {
-  return EXCHANGE_CURRENCY[c.exchange] ?? 'USD';
+  return EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? 'USD';
 }
 
 // Conversion factor native → display. Only USD↔EUR is convertible;

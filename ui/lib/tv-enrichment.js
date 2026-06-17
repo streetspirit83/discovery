@@ -14,6 +14,7 @@ import { computeCycleScore }         from './tv-cycle-score.js';
 import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
 import { computeEntryScore }         from './tv-entry-score.js';
 import { computeEntryPrices }        from './tv-entry-prices.js';
+import { normalizeExchange }         from './exchange-map.js';
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -24,10 +25,11 @@ const EXCHANGE_TO_MARKET = {
   EURONEXT: 'france',
   MIL:      'italy',
   BME:      'spain',
+  VIE:      'austria',
   OMXSTO:   'sweden',
   SIX:      'switzerland',
-  OMXCO:    'denmark',
-  OMXNO:    'norway',
+  OMXCOP:   'denmark',
+  OSL:      'norway',
   OMXHEX:   'finland',
 };
 
@@ -40,17 +42,18 @@ const TV_PREFIX_MAP = {
   EURONEXT: 'EURONEXT',
   MIL:      'MIL',
   BME:      'BME',
+  VIE:      'VIE',
   OMXSTO:   'OMXSTO',
   SIX:      'SIX',
-  OMXCO:    'OMXCO',
-  OMXNO:    'OMXNO',
+  OMXCOP:   'OMXCOP',
+  OSL:      'OSL',
   OMXHEX:   'OMXHEX',
 };
 
 const EXCHANGE_CURRENCY = {
   NASDAQ: 'USD', NYSE: 'USD', AMEX: 'USD',
-  XETR: 'EUR', EURONEXT: 'EUR', MIL: 'EUR', BME: 'EUR',
-  OMXSTO: 'SEK', OMXCO: 'DKK', OMXNO: 'NOK', OMXHEX: 'EUR',
+  XETR: 'EUR', EURONEXT: 'EUR', MIL: 'EUR', BME: 'EUR', VIE: 'EUR',
+  OMXSTO: 'SEK', OMXCOP: 'DKK', OSL: 'NOK', OMXHEX: 'EUR',
   LSE: 'GBP', SIX: 'CHF',
 };
 export { EXCHANGE_CURRENCY };
@@ -627,8 +630,11 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
   const noMarket = [];
 
   for (const c of candidates) {
-    const market = EXCHANGE_TO_MARKET[c.exchange];
-    const prefix = TV_PREFIX_MAP[c.exchange];
+    // Normalise legacy/regional codes (e.g. FWB, XSTU) so already-stored
+    // candidates resolve without re-import.
+    const ex = normalizeExchange(c.exchange);
+    const market = EXCHANGE_TO_MARKET[ex];
+    const prefix = TV_PREFIX_MAP[ex];
     if (!market || !prefix) {
       console.warn('[TV] Unknown exchange:', c.exchange, 'for', c.symbol);
       noMarket.push(`${c.symbol}(${c.exchange ?? '?'})`);

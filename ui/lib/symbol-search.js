@@ -6,17 +6,21 @@
  */
 
 import { normalizeCandidate } from './import-parser.js';
+import { normalizeExchange } from './exchange-map.js';
 
 // Twelve Data MIC code → { internal exchange, Yahoo suffix }.
 // MIC is more reliable than the free-text exchange field.
+// German regional venues all normalise to Xetra (XETR) – same instrument,
+// best data on TV – with the .DE (Xetra) Yahoo suffix.
 const MIC_MAP = {
   // US
   XNGS: { ex: 'NASDAQ', ys: '' }, XNMS: { ex: 'NASDAQ', ys: '' }, XNCM: { ex: 'NASDAQ', ys: '' },
   XNAS: { ex: 'NASDAQ', ys: '' },
   XNYS: { ex: 'NYSE', ys: '' }, ARCX: { ex: 'NYSE', ys: '' },
   XASE: { ex: 'AMEX', ys: '' }, BATS: { ex: 'AMEX', ys: '' },
-  // Germany
-  XETR: { ex: 'XETR', ys: '.DE' }, XFRA: { ex: 'FWB', ys: '.F' }, XMUN: { ex: 'MUN', ys: '.MU' },
+  // Germany → Xetra
+  XETR: { ex: 'XETR', ys: '.DE' }, XFRA: { ex: 'XETR', ys: '.DE' }, XMUN: { ex: 'XETR', ys: '.DE' },
+  XSTU: { ex: 'XETR', ys: '.DE' }, XBER: { ex: 'XETR', ys: '.DE' }, XDUS: { ex: 'XETR', ys: '.DE' },
   // Europe
   XLON: { ex: 'LSE', ys: '.L' },
   XPAR: { ex: 'EURONEXT', ys: '.PA' }, XAMS: { ex: 'EURONEXT', ys: '.AS' },
@@ -26,7 +30,7 @@ const MIC_MAP = {
   XSWX: { ex: 'SIX', ys: '.SW' }, XVTX: { ex: 'SIX', ys: '.SW' },
   XWBO: { ex: 'VIE', ys: '.VI' },
   XSTO: { ex: 'OMXSTO', ys: '.ST' }, XCSE: { ex: 'OMXCOP', ys: '.CO' },
-  XHEL: { ex: 'OMXHEX', ys: '.HE' }, XOSL: { ex: 'OSE', ys: '.OL' },
+  XHEL: { ex: 'OMXHEX', ys: '.HE' }, XOSL: { ex: 'OSL', ys: '.OL' },
 };
 
 function regionOf(country = '') {
@@ -76,8 +80,8 @@ export function searchResultToParts(result) {
   if (m) {
     return { symbol: base, exchange: m.ex, yahoo_symbol: base + m.ys };
   }
-  // Fallback: trust TD exchange string, no Yahoo suffix (works for US tickers)
-  return { symbol: base, exchange: (result.exchange || '').toUpperCase(), yahoo_symbol: base };
+  // Fallback: normalise the free-text TD exchange string (e.g. STU → XETR)
+  return { symbol: base, exchange: normalizeExchange(result.exchange || ''), yahoo_symbol: base };
 }
 
 /** Build a full Discovery candidate from a search hit. */
