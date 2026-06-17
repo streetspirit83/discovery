@@ -37,6 +37,8 @@ let tab = 'countries';
 let sortKey = 'pm', sortDir = 'desc';
 let sectorFilter = '';  // '' = all markets, else a market slug
 let drill = null;       // { title, rows, marketSlug } or null
+let drillSort = { key: 'pm', dir: 'desc' };  // independent sort for the drill table
+let drillSelected = new Set();               // set of row.s currently checked for import
 let loading = false, loadDone = 0;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -293,6 +295,7 @@ function renderCountries(el) {
     const ca = countryAggs.find((c) => c.slug === slug);
     if (!ca) return;
     drill = { type: 'country', slug, title: ca.label, rows: ca.rows, marketSlug: slug };
+    openDrillState();
     el.querySelectorAll('tbody tr').forEach((r) => r.classList.toggle('selected', r.dataset.slug === slug));
     renderDrill();
   });
@@ -353,6 +356,7 @@ function renderSectors(el) {
       : 'Alle Märkte';
     const a = sectorAgg(sector, sectorFilter);
     drill = { type: 'sector', sector, title: `${sector} — ${mktLabel}`, rows: a.rows, marketSlug: sectorFilter || null };
+    openDrillState();
     el.querySelectorAll('tbody tr').forEach((r) => r.classList.toggle('selected', r.dataset.sector === sector));
     renderDrill();
   });
@@ -373,22 +377,65 @@ function wireSort(el) {
 }
 
 // ─── Drill-down panel ──────────────────────────────────────────────────────────
+// Columns shown in the drill table; all are sortable. idx maps to the row.d index
+// (or null for symbol, which lives on row.s rather than row.d).
+const DRILL_COLS = [
+  { key: 'sym',  label: 'Symbol', idx: null, align: 'left' },
+  { key: 'name', label: 'Name',   idx: 0,    align: 'left' },
+  { key: 'pw',   label: '1W',     idx: 2 },
+  { key: 'pm',   label: '1M',     idx: 3 },
+  { key: 'pq',   label: '3M',     idx: 4 },
+  { key: 'ph',   label: '6M',     idx: 5 },
+  { key: 'py',   label: '1J',     idx: 6 },
+  { key: 'mcap', label: 'MCap',   idx: 7 },
+];
+
+const symOf = (row) => (row.s.includes(':') ? row.s.split(':')[1] : row.s);
+
+/** Reset per-drill state when a new row is opened: clear selection, seed sort. */
+function openDrillState() {
+  drillSelected = new Set();
+  // Seed the drill sort from whichever perf column the outer table is sorted by.
+  drillSort = { key: KEY_TO_IDX[sortKey] ? sortKey : 'pm', dir: 'desc' };
+}
+
+/** Sort drill.rows by the current drillSort. Nulls always sort last. */
+function drillSortedRows() {
+  const { key, dir } = drillSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  const rows = [...drill.rows];
+  if (key === 'sym' || key === 'name') {
+    rows.sort((a, b) => {
+      const av = key === 'sym' ? symOf(a) : (a.d[0] ?? '');
+      const bv = key === 'sym' ? symOf(b) : (b.d[0] ?? '');
+      return mul * String(av).localeCompare(String(bv), 'de');
+    });
+  } else {
+    const idx = DRILL_COLS.find((c) => c.key === key)?.idx ?? 3;
+    rows.sort((a, b) => {
+      const av = a.d[idx], bv = b.d[idx];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return mul * (av - bv);
+    });
+  }
+  return rows;
+}
+
 function renderDrill() {
   const slot = document.getElementById('drill-slot');
   if (!slot || !drill) return;
 
-  const idx = KEY_TO_IDX[sortKey];
-  const top20 = [...drill.rows]
-    .filter((r) => r.d[idx] != null)
-    .sort((a, b) => sortDir === 'desc' ? b.d[idx] - a.d[idx] : a.d[idx] - b.d[idx])
-    .slice(0, 20);
+  const rows = drillSortedRows();
 
-  const stockRows = top20.map((row, i) => {
+  const stockRows = rows.map((row) => {
     const d = row.d;
-    const sym = row.s.includes(':') ? row.s.split(':')[1] : row.s;
+    const sym = symOf(row);
     const name = d[0] ?? sym;
-    return `<tr>
-      <td style="color:var(--muted); width:1.6rem; font-size:.75rem">${i + 1}</td>
+    const checked = drillSelected.has(row.s) ? 'checked' : '';
+    return `<tr data-s="${row.s}">
+      <td style="text-align:center; width:1.8rem"><input type="checkbox" class="drill-check" data-s="${row.s}" ${checked}></td>
       <td><strong>${sym}</strong></td>
       <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; font-size:.8rem; color:var(--muted)">${name}</td>
       ${hc(d[2])}${hc(d[3])}${hc(d[4])}${hc(d[5])}${hc(d[6])}
@@ -396,44 +443,99 @@ function renderDrill() {
     </tr>`;
   }).join('');
 
+  const headCells = DRILL_COLS.map((c) => {
+    const cls = drillSort.key === c.key ? (drillSort.dir === 'desc' ? 'sort-desc' : 'sort-asc') : '';
+    const style = c.align === 'left' ? ' style="text-align:left"' : '';
+    return `<th class="${cls}" data-dsort="${c.key}"${style}>${c.label}</th>`;
+  }).join('');
+
   const client = loadStorageClient();
   const importBtn = client
-    ? `<button class="btn btn-primary btn-sm" id="drill-import">Import (${top20.length})</button>`
+    ? `<button class="btn btn-primary btn-sm" id="drill-import" disabled>Import (0)</button>`
     : `<span style="font-size:.75rem; color:var(--muted)">Kein Backend</span>`;
 
   slot.innerHTML = `
     <div class="drill-panel">
       <div class="drill-header">
         <h2 class="drill-title">${drill.title}</h2>
-        <div style="display:flex; gap:.4rem; align-items:center">
+        <span class="drill-count">${rows.length} Unternehmen · <span id="drill-sel-count">0</span> ausgewählt</span>
+        <div style="display:flex; gap:.4rem; align-items:center; margin-left:auto">
           ${importBtn}
           <button class="drill-close" id="drill-close">✕</button>
         </div>
       </div>
-      <table class="perf-table">
-        <thead><tr>
-          <th></th>
-          <th style="text-align:left">Symbol</th>
-          <th style="text-align:left">Name</th>
-          ${PERF_COLS.map((c) => `<th>${c.label}</th>`).join('')}
-          <th>MCap</th>
-        </tr></thead>
-        <tbody>${stockRows || '<tr><td colspan="9" style="text-align:center; color:var(--muted); padding:1rem">Keine Daten</td></tr>'}</tbody>
-      </table>
+      <div class="drill-scroll">
+        <table class="perf-table">
+          <thead><tr>
+            <th style="width:1.8rem; text-align:center"><input type="checkbox" id="drill-check-all" title="Alle auswählen"></th>
+            ${headCells}
+          </tr></thead>
+          <tbody>${stockRows || '<tr><td colspan="9" style="text-align:center; color:var(--muted); padding:1rem">Keine Daten</td></tr>'}</tbody>
+        </table>
+      </div>
     </div>`;
+
+  // Column sorting (independent of the outer aggregate table)
+  slot.querySelectorAll('th[data-dsort]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.dsort;
+      if (drillSort.key === key) drillSort.dir = drillSort.dir === 'desc' ? 'asc' : 'desc';
+      else drillSort = { key, dir: key === 'sym' || key === 'name' ? 'asc' : 'desc' };
+      renderDrill();
+    });
+  });
+
+  // Row checkboxes
+  slot.querySelector('tbody')?.addEventListener('change', (e) => {
+    const cb = e.target.closest('.drill-check');
+    if (!cb) return;
+    if (cb.checked) drillSelected.add(cb.dataset.s);
+    else drillSelected.delete(cb.dataset.s);
+    syncDrillSelectionUI(slot, rows.length);
+  });
+
+  // Select-all checkbox
+  const checkAll = slot.querySelector('#drill-check-all');
+  checkAll?.addEventListener('change', () => {
+    if (checkAll.checked) rows.forEach((r) => drillSelected.add(r.s));
+    else rows.forEach((r) => drillSelected.delete(r.s));
+    slot.querySelectorAll('.drill-check').forEach((cb) => { cb.checked = checkAll.checked; });
+    syncDrillSelectionUI(slot, rows.length);
+  });
 
   document.getElementById('drill-close').addEventListener('click', () => {
     drill = null;
+    drillSelected = new Set();
     slot.innerHTML = '';
     document.querySelectorAll('tbody tr.selected').forEach((r) => r.classList.remove('selected'));
   });
 
   if (client) {
-    document.getElementById('drill-import')?.addEventListener('click', () => doImport(client, top20));
+    document.getElementById('drill-import')?.addEventListener('click', () => {
+      const selected = rows.filter((r) => drillSelected.has(r.s));
+      doImport(client, selected);
+    });
+  }
+
+  syncDrillSelectionUI(slot, rows.length);
+}
+
+/** Update the selected-count badge, import button label/disabled, and check-all state. */
+function syncDrillSelectionUI(slot, total) {
+  const n = drillSelected.size;
+  const cnt = slot.querySelector('#drill-sel-count');
+  if (cnt) cnt.textContent = String(n);
+  const btn = slot.querySelector('#drill-import');
+  if (btn) { btn.textContent = `Import (${n})`; btn.disabled = n === 0; }
+  const checkAll = slot.querySelector('#drill-check-all');
+  if (checkAll) {
+    checkAll.checked = n > 0 && n === total;
+    checkAll.indeterminate = n > 0 && n < total;
   }
 }
 
 async function doImport(client, rows) {
+  if (!rows.length) return;
   const btn = document.getElementById('drill-import');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ …'; }
 
@@ -466,7 +568,13 @@ async function doImport(client, rows) {
     }
   }
 
-  if (btn) { btn.disabled = false; btn.textContent = `Import (${rows.length})`; }
+  // Clear selection and reflect it in the UI (uncheck rows, reset count/button)
+  drillSelected = new Set();
+  const slot = document.getElementById('drill-slot');
+  if (slot) {
+    slot.querySelectorAll('.drill-check').forEach((cb) => { cb.checked = false; });
+    syncDrillSelectionUI(slot, drill?.rows.length ?? 0);
+  }
   showToast(
     `✓ ${added} neu, ${merged} gemergt${skipped ? `, ${skipped} übersprungen` : ''}${errors ? `, ${errors} Fehler` : ''}`,
     errors ? 'error' : 'success'
