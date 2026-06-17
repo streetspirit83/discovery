@@ -88,12 +88,10 @@ export const OPERATORS = [
 // `slug` is the scanner endpoint segment; `yahooSuffix` builds the yahoo_symbol;
 // `exchanges` lists the TV exchange prefixes we accept from that market's results.
 
-// `country` is the expected value of the scanner's `country` column for a
-// genuine domicile match (used by the Markets dashboard to drop foreign
-// cross-listings, e.g. Intel trading on Xetra, from a "Germany" filter).
-// Unverified against a live scanner response — kept defensive: rows with a
-// missing/unexpected country value are never dropped, only ones that
-// positively mismatch.
+// `country` is the expected domicile name for a market, kept here for any
+// future country-filter attempt – NOT currently sent to the scanner.
+// (A prior attempt to add this as a `country` scanner column caused
+// TradingView to return zero rows for some markets; reverted.)
 export const MARKETS = [
   { slug: 'america',     label: 'USA',         yahooSuffix: '',    exchanges: ['NASDAQ', 'NYSE', 'AMEX'],     country: 'United States' },
   { slug: 'germany',     label: 'Germany',     yahooSuffix: '.DE', exchanges: ['XETR'],                       country: 'Germany' },

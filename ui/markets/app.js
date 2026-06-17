@@ -4,10 +4,8 @@ import { loadStorageClient } from '../lib/storage-client.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
-// `country` (appended last so existing fixed indices below don't shift) lets us
-// drop foreign cross-listings (e.g. Intel trading on Xetra) from a country filter.
-const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'country'];
-// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap  d[8]=country
+const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic'];
+// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap
 
 const PERF_COLS = [
   { key: 'pw', label: '1W', idx: 2 },
@@ -155,21 +153,6 @@ function dedupeRows(rows) {
   return [...seen.values()];
 }
 
-/**
- * Drop rows whose `country` column positively mismatches the market's
- * expected domicile (e.g. Intel showing up in a Germany scan because it's
- * cross-listed on Xetra). Rows with missing/unrecognised country data are
- * kept rather than dropped, since the field hasn't been verified live.
- */
-function filterByCountry(rows, expectedCountry) {
-  if (!expectedCountry) return rows;
-  return rows.filter((row) => {
-    const c = row.d[8];
-    if (!c) return true;
-    return String(c).toLowerCase() === expectedCountry.toLowerCase();
-  });
-}
-
 // ─── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
   if (!backendUrl || !secret) return;
@@ -183,7 +166,7 @@ async function loadData() {
         market: m.slug, filter: [], columns: COLUMNS,
         sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
       }, auth);
-      marketData[m.slug] = { label: m.label, rows: dedupeRows(filterByCountry(rows, m.country)) };
+      marketData[m.slug] = { label: m.label, rows: dedupeRows(rows) };
     } catch {
       marketData[m.slug] = { label: m.label, rows: [] };
     }
