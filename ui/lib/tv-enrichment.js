@@ -632,6 +632,17 @@ const GERMAN_REGIONAL_TV = {
 };
 
 /**
+ * Euronext is one TV prefix (EURONEXT) spanning several national scanner
+ * markets. A symbols.tickers lookup is scoped to the market in the URL, so
+ * the primary `france` lookup only resolves Paris listings. Amsterdam,
+ * Brussels and Lisbon listings must be retried against their own markets.
+ * Order roughly follows listing volume; the first market that returns data
+ * wins. (`france` is the primary lookup and is intentionally omitted here.)
+ */
+const EURONEXT_FALLBACK_MARKETS = ['netherlands', 'belgium', 'portugal'];
+
+
+/**
  * Fetches one market group and writes hits into `results`.
  * @returns {Promise<object[]>} candidates that returned no data
  */
@@ -737,6 +748,19 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
   if (fbEntries.length) {
     onProgress?.(`↩︎ Fallback Regionalbörse: ${fbEntries.length} Ticker…`);
     await fetchMarketGroup('germany', fbEntries, { backendUrl, secret }, onProgress, results, 'Fallback');
+  }
+
+  // Fallback: Euronext listings missing after the primary `france` lookup are
+  // likely Amsterdam/Brussels/Lisbon — retry against those markets in turn.
+  let euronextMissing = stillMissing.filter(
+    (c) => !results.has(c.id) && normalizeExchange(c.exchange) === 'EURONEXT',
+  );
+  for (const mkt of EURONEXT_FALLBACK_MARKETS) {
+    if (!euronextMissing.length) break;
+    const fb = euronextMissing.map((c) => ({ candidate: c, tvTicker: `EURONEXT:${c.symbol}` }));
+    onProgress?.(`↩︎ Euronext-Fallback ${mkt}: ${fb.length} Ticker…`);
+    await fetchMarketGroup(mkt, fb, { backendUrl, secret }, onProgress, results, `Euronext/${mkt}`);
+    euronextMissing = euronextMissing.filter((c) => !results.has(c.id));
   }
 
   if (results.size === 0) {
