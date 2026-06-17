@@ -6,13 +6,13 @@ import { CandidateList } from './components/candidate-list.js?v=20260614a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
-import { renderScreenerModal } from './components/screener-modal.js?v=20260609a';
+import { renderScreenerModal } from './components/screener-modal.js?v=20260609b';
 import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260614a';
-import { buildResearchPrompt } from './lib/research-prompt.js';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
@@ -41,7 +41,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: false, fScore: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -201,7 +201,12 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
-    <button class="pill${uiState.fBroker ? ' pill--active' : ''}" id="pill-broker" title="Nur Kandidaten, die im Broker handelbar & scharf sind">✓ Broker</button>
+    <select class="filter-select" id="filter-broker" title="Filter nach Broker- oder Portfolio-Markierung">
+      <option value="">Alle Markierungen</option>
+      <option value="broker"${uiState.fBroker === 'broker' ? ' selected' : ''}>✓ Broker</option>
+      <option value="star"${uiState.fBroker === 'star' ? ' selected' : ''}>★ Portfolio</option>
+      <option value="none"${uiState.fBroker === 'none' ? ' selected' : ''}>— Ohne Broker</option>
+    </select>
     <select class="filter-select" id="filter-score">
       <option value="">Alle Scores</option>
       <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
@@ -223,10 +228,9 @@ function renderFilterbar() {
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
     </select>`;
 
-  fb.querySelector('#pill-broker').addEventListener('click', () => {
-    uiState.fBroker = !uiState.fBroker;
+  fb.querySelector('#filter-broker').addEventListener('change', (e) => {
+    uiState.fBroker = e.target.value;
     saveUiState();
-    document.getElementById('pill-broker').classList.toggle('pill--active', uiState.fBroker);
     candidateList.setFilter('broker', uiState.fBroker);
   });
 
@@ -835,7 +839,7 @@ async function init() {
     state:   '',
     sector:  uiState.fSector ?? '',
     capSize: uiState.fCap    ?? '',
-    broker:  uiState.fBroker ?? false,
+    broker:  uiState.fBroker ?? '',
     score:   uiState.fScore  ?? '',
   };
 

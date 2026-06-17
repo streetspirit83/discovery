@@ -350,7 +350,7 @@ export class CandidateList {
     this.onBulkAction      = onBulkAction;
     this.onSelectionChange = onSelectionChange;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: false, score: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -471,7 +471,9 @@ export class CandidateList {
       if (sector === '__no_sector__' && c.sector)               return false;
       if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
       if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
-      if (broker && !c.broker_armed)                            return false;
+      if (broker === 'broker' && !c.broker_armed)               return false;
+      if (broker === 'star'   && !c.in_portfolio)               return false;
+      if (broker === 'none'   && c.broker_armed)                return false;
       if (score) {
         const s = liveOverallScore(c.tv_data)?.total;
         if (s == null) return false;

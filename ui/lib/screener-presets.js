@@ -62,6 +62,20 @@ export const DEFAULT_PRESETS = [
     sort: { sortBy: 'Recommend.All', sortOrder: 'desc' }, count: 40,
     signal_type: 'custom_screen', built_in: true,
   },
+  {
+    id: 'builtin-near-cycle-high-us', label: 'Near Cycle High US', market: 'america', sector: null,
+    // Proxy for a high PCHS (cycle-high) score: strong multi-timeframe performance,
+    // since field-vs-field filters (e.g. close vs. price_52_week_high) aren't supported here.
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'volume', operation: 'greater', right: 300000 },
+      { left: 'Perf.Y', operation: 'greater', right: 20 },
+      { left: 'Perf.6M', operation: 'greater', right: 10 },
+      { left: 'Perf.3M', operation: 'egreater', right: 0 },
+    ],
+    sort: { sortBy: 'Perf.Y', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
 ];
 
 function readLocal() {
@@ -77,8 +91,17 @@ function writeLocal(presets) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(presets)); } catch {}
 }
 
+/** Append any DEFAULT_PRESETS entries not yet present (by id). Returns [list, changed]. */
+function mergeBuiltins(presets) {
+  const existingIds = new Set(presets.map((p) => p.id));
+  const missing = DEFAULT_PRESETS.filter((p) => !existingIds.has(p.id));
+  if (missing.length === 0) return [presets, false];
+  return [[...presets, ...structuredClone(missing)], true];
+}
+
 /**
- * Load presets. Seeds DEFAULT_PRESETS on first use (when the store is empty).
+ * Load presets. Seeds DEFAULT_PRESETS on first use (when the store is empty),
+ * and merges in any newly-added built-ins for existing stores.
  * @param {object|null} storageClient
  * @returns {Promise<object[]>}
  */
@@ -89,7 +112,13 @@ export async function loadPresets(storageClient) {
       config = await storageClient.readConfig();
     } catch (err) {
       // Backend unreachable → fall back to local copy so the UI still works.
-      return readLocal() ?? structuredClone(DEFAULT_PRESETS);
+      const local = readLocal();
+      if (local && local.length) {
+        const [merged, changed] = mergeBuiltins(local);
+        if (changed) writeLocal(merged);
+        return merged;
+      }
+      return structuredClone(DEFAULT_PRESETS);
     }
     const presets = Array.isArray(config?.presets) ? config.presets : [];
     if (presets.length === 0) {
@@ -97,12 +126,20 @@ export async function loadPresets(storageClient) {
       try { await storageClient.writeConfig({ presets: seeded }); } catch {}
       return seeded;
     }
-    return presets;
+    const [merged, changed] = mergeBuiltins(presets);
+    if (changed) {
+      try { await storageClient.writeConfig({ presets: merged }); } catch {}
+    }
+    return merged;
   }
 
   // No backend → localStorage fallback.
   const local = readLocal();
-  if (local && local.length) return local;
+  if (local && local.length) {
+    const [merged, changed] = mergeBuiltins(local);
+    if (changed) writeLocal(merged);
+    return merged;
+  }
   const seeded = structuredClone(DEFAULT_PRESETS);
   writeLocal(seeded);
   return seeded;

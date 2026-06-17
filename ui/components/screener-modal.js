@@ -5,7 +5,7 @@
 
 import { FIELDS, OPERATORS, MARKETS, SECTORS, fieldLabel } from '../lib/tv-fields.js';
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
-import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js';
+import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260614a';
 import { uuid } from '../lib/import-parser.js';
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
