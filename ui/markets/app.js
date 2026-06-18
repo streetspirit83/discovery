@@ -136,18 +136,21 @@ function sectorAgg(sector, filterSlug) {
 
 // ─── Row cleanup ───────────────────────────────────────────────────────────────
 /**
- * Collapse rows that are the same company on different regional venue
- * aliases (XETR/TRADEGATE/GETTEX/FWB/STU/... all normalise to one exchange)
- * down to a single row per (exchange, symbol).
+ * Collapse rows that are the same company on different regional venues
+ * (XETR/TRADEGATE/GETTEX/FWB/STU/... – confirmed via debug probe to carry
+ * identical `description`/market_cap_basic for the same stock) down to one
+ * row. Dedupe by description rather than (exchange, symbol): some venues
+ * (e.g. Lang & Schwarz / LS, LSX) report the same company under a different,
+ * WKN-style numeric symbol, so symbol-based keys miss those duplicates.
  */
 function dedupeRows(rows) {
   const seen = new Map();
   for (const row of rows) {
     const colon = row.s.indexOf(':');
-    if (colon === -1) continue;
-    const exch = normalizeExchange(row.s.slice(0, colon));
-    const symbol = row.s.slice(colon + 1);
-    const key = `${exch}:${symbol}`;
+    const name = (row.d?.[0] ?? '').trim().toLowerCase();
+    const exch = colon === -1 ? row.s : normalizeExchange(row.s.slice(0, colon));
+    const symbol = colon === -1 ? '' : row.s.slice(colon + 1);
+    const key = name || `${exch}:${symbol}`;
     if (!seen.has(key)) seen.set(key, row);
   }
   return [...seen.values()];
@@ -162,8 +165,15 @@ async function loadData() {
   const auth = { backendUrl, secret };
   await Promise.allSettled(MARKETS.map(async (m) => {
     try {
+      // Confirmed via debug probe: TradingView's per-market scan includes every
+      // stock *tradable* on that market's venues, including foreign cross-listings
+      // (e.g. Nvidia/Apple on Xetra) – which, duplicated across ~10 regional venue
+      // aliases each, can fill the whole count cutoff before real domestic
+      // companies appear. Filtering by `country` server-side (not client-side
+      // after the fact) fixes this at the source.
+      const filter = m.country ? [{ left: 'country', operation: 'equal', right: m.country }] : [];
       const { rows } = await runScreen({
-        market: m.slug, filter: [], columns: COLUMNS,
+        market: m.slug, filter, columns: COLUMNS,
         sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
       }, auth);
       marketData[m.slug] = { label: m.label, rows: dedupeRows(rows) };
