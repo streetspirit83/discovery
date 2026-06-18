@@ -4,12 +4,8 @@ import { loadStorageClient } from '../lib/storage-client.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
-// `is_symbol_primary_listing` (confirmed real TV field, appended last so fixed
-// indices below don't shift) flags whether a row is the company's actual
-// primary listing – used to drop foreign cross-listings (Intel on Xetra) and
-// duplicate regional German venues (Tradegate/Gettex/.. of the same stock).
-const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'is_symbol_primary_listing'];
-// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap  d[8]=isPrimary
+const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic'];
+// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap
 
 const PERF_COLS = [
   { key: 'pw', label: '1W', idx: 2 },
@@ -140,17 +136,6 @@ function sectorAgg(sector, filterSlug) {
 
 // ─── Row cleanup ───────────────────────────────────────────────────────────────
 /**
- * Drop rows that are explicitly NOT the company's primary listing – this
- * removes foreign cross-listings (e.g. Intel trading on Xetra) and most
- * regional-venue duplicates (Tradegate/Gettex/... of the same German stock)
- * in one step. Rows with missing/unknown data (null/undefined) are kept
- * rather than dropped, since we only act on a positive "false".
- */
-function filterPrimaryListing(rows) {
-  return rows.filter((row) => row.d[8] !== false);
-}
-
-/**
  * Collapse rows that are the same company on different regional venue
  * aliases (XETR/TRADEGATE/GETTEX/FWB/STU/... all normalise to one exchange)
  * down to a single row per (exchange, symbol).
@@ -181,7 +166,7 @@ async function loadData() {
         market: m.slug, filter: [], columns: COLUMNS,
         sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
       }, auth);
-      marketData[m.slug] = { label: m.label, rows: dedupeRows(filterPrimaryListing(rows)) };
+      marketData[m.slug] = { label: m.label, rows: dedupeRows(rows) };
     } catch {
       marketData[m.slug] = { label: m.label, rows: [] };
     }
@@ -626,8 +611,71 @@ function showToast(msg, type = 'info') {
   setTimeout(() => el.remove(), 4500);
 }
 
+// ─── Debug: dump raw scanner rows so we can inspect real field values ───────────
+// Open  markets/?debug=germany  (or any market slug) to fetch that market with
+// diagnostic columns and render the raw rows as copyable JSON. This is how we
+// find out what TradingView actually returns for country / exchange / primary
+// flags – instead of guessing field formats and breaking the live tables.
+const DEBUG_COLUMNS = [
+  'description', 'sector', 'country', 'exchange',
+  'is_primary', 'is_symbol_primary_listing', 'type', 'currency', 'market_cap_basic',
+];
+
+async function runDebug(slug) {
+  const app = document.getElementById('app');
+  const market = MARKETS.find((m) => m.slug === slug) || { slug, label: slug };
+
+  if (!backendUrl || !secret) {
+    app.innerHTML = `<div class="mkt-container"><p class="empty-hint">Erst Backend konfigurieren (öffne die Markets-Seite ohne <code>?debug=</code>), dann erneut versuchen.</p></div>`;
+    return;
+  }
+
+  app.innerHTML = `<div class="mkt-container"><h1 class="mkt-title">Debug: ${market.label} (${slug})</h1><p class="empty-hint">⏳ Lade Rohdaten …</p></div>`;
+
+  let payload;
+  try {
+    const { totalCount, rows } = await runScreen({
+      market: slug, filter: [], columns: DEBUG_COLUMNS,
+      sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 40,
+    }, { backendUrl, secret });
+    payload = {
+      market: slug,
+      totalCount,
+      columns: DEBUG_COLUMNS,
+      rows: rows.map((r) => {
+        const obj = { s: r.s };
+        DEBUG_COLUMNS.forEach((c, i) => { obj[c] = r.d[i] ?? null; });
+        return obj;
+      }),
+    };
+  } catch (err) {
+    payload = { market: slug, error: String(err?.message ?? err) };
+  }
+
+  const json = JSON.stringify(payload, null, 2);
+  app.innerHTML = `
+    <div class="mkt-container">
+      <div class="mkt-header">
+        <a href="index.html" class="btn btn-secondary btn-sm" style="text-decoration:none">← Markets</a>
+        <h1 class="mkt-title">Debug: ${market.label} (${slug})</h1>
+        <button class="btn btn-primary btn-sm" id="dbg-copy">Kopieren</button>
+      </div>
+      <p style="font-size:.84rem; color:var(--muted)">Top 40 nach Market Cap. Bitte diesen JSON kopieren und mir schicken.</p>
+      <pre id="dbg-json" style="white-space:pre-wrap; word-break:break-all; font-size:.72rem; background:var(--panel,#f4f4f4); padding:1rem; border-radius:6px; max-height:75vh; overflow:auto">${json.replace(/</g, '&lt;')}</pre>
+    </div>`;
+  document.getElementById('dbg-copy')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(json); showToast('JSON kopiert', 'success'); }
+    catch { showToast('Kopieren fehlgeschlagen – manuell markieren', 'error'); }
+  });
+}
+
 // ─── Init ──────────────────────────────────────────────────────────────────────
 applyTheme();
 readSettings();
-render();
-if (backendUrl && secret) loadData();
+const debugSlug = new URLSearchParams(location.search).get('debug');
+if (debugSlug) {
+  runDebug(debugSlug);
+} else {
+  render();
+  if (backendUrl && secret) loadData();
+}
