@@ -621,7 +621,7 @@ const DEBUG_COLUMNS = [
   'is_primary', 'is_symbol_primary_listing', 'type', 'currency', 'market_cap_basic',
 ];
 
-async function runDebug(slug) {
+async function runDebug(slug, params) {
   const app = document.getElementById('app');
   const market = MARKETS.find((m) => m.slug === slug) || { slug, label: slug };
 
@@ -630,16 +630,24 @@ async function runDebug(slug) {
     return;
   }
 
+  // Optional server-side test filter via ?filterField=country&filterValue=Germany,
+  // so we can directly probe whether a candidate filter approach even returns rows
+  // before wiring it into the live dashboard.
+  const filterField = params.get('filterField');
+  const filterValue = params.get('filterValue');
+  const extraFilter = filterField && filterValue ? [{ left: filterField, operation: 'equal', right: filterValue }] : [];
+
   app.innerHTML = `<div class="mkt-container"><h1 class="mkt-title">Debug: ${market.label} (${slug})</h1><p class="empty-hint">⏳ Lade Rohdaten …</p></div>`;
 
   let payload;
   try {
     const { totalCount, rows } = await runScreen({
-      market: slug, filter: [], columns: DEBUG_COLUMNS,
+      market: slug, filter: extraFilter, columns: DEBUG_COLUMNS,
       sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 40,
     }, { backendUrl, secret });
     payload = {
       market: slug,
+      filter: extraFilter,
       totalCount,
       columns: DEBUG_COLUMNS,
       rows: rows.map((r) => {
@@ -649,7 +657,7 @@ async function runDebug(slug) {
       }),
     };
   } catch (err) {
-    payload = { market: slug, error: String(err?.message ?? err) };
+    payload = { market: slug, filter: extraFilter, error: String(err?.message ?? err) };
   }
 
   const json = JSON.stringify(payload, null, 2);
@@ -660,7 +668,7 @@ async function runDebug(slug) {
         <h1 class="mkt-title">Debug: ${market.label} (${slug})</h1>
         <button class="btn btn-primary btn-sm" id="dbg-copy">Kopieren</button>
       </div>
-      <p style="font-size:.84rem; color:var(--muted)">Top 40 nach Market Cap. Bitte diesen JSON kopieren und mir schicken.</p>
+      <p style="font-size:.84rem; color:var(--muted)">Top 40 nach Market Cap. Mit <code>&filterField=country&filterValue=Germany</code> kann zusätzlich ein Test-Filter serverseitig angehängt werden. Bitte diesen JSON kopieren und mir schicken.</p>
       <pre id="dbg-json" style="white-space:pre-wrap; word-break:break-all; font-size:.72rem; background:var(--panel,#f4f4f4); padding:1rem; border-radius:6px; max-height:75vh; overflow:auto">${json.replace(/</g, '&lt;')}</pre>
     </div>`;
   document.getElementById('dbg-copy')?.addEventListener('click', async () => {
@@ -672,9 +680,10 @@ async function runDebug(slug) {
 // ─── Init ──────────────────────────────────────────────────────────────────────
 applyTheme();
 readSettings();
-const debugSlug = new URLSearchParams(location.search).get('debug');
+const urlParams = new URLSearchParams(location.search);
+const debugSlug = urlParams.get('debug');
 if (debugSlug) {
-  runDebug(debugSlug);
+  runDebug(debugSlug, urlParams);
 } else {
   render();
   if (backendUrl && secret) loadData();
