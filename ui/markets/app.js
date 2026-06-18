@@ -4,8 +4,12 @@ import { loadStorageClient } from '../lib/storage-client.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
-const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic'];
-// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap
+// `is_symbol_primary_listing` (confirmed real TV field, appended last so fixed
+// indices below don't shift) flags whether a row is the company's actual
+// primary listing – used to drop foreign cross-listings (Intel on Xetra) and
+// duplicate regional German venues (Tradegate/Gettex/.. of the same stock).
+const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'is_symbol_primary_listing'];
+// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap  d[8]=isPrimary
 
 const PERF_COLS = [
   { key: 'pw', label: '1W', idx: 2 },
@@ -136,6 +140,17 @@ function sectorAgg(sector, filterSlug) {
 
 // ─── Row cleanup ───────────────────────────────────────────────────────────────
 /**
+ * Drop rows that are explicitly NOT the company's primary listing – this
+ * removes foreign cross-listings (e.g. Intel trading on Xetra) and most
+ * regional-venue duplicates (Tradegate/Gettex/... of the same German stock)
+ * in one step. Rows with missing/unknown data (null/undefined) are kept
+ * rather than dropped, since we only act on a positive "false".
+ */
+function filterPrimaryListing(rows) {
+  return rows.filter((row) => row.d[8] !== false);
+}
+
+/**
  * Collapse rows that are the same company on different regional venue
  * aliases (XETR/TRADEGATE/GETTEX/FWB/STU/... all normalise to one exchange)
  * down to a single row per (exchange, symbol).
@@ -166,7 +181,7 @@ async function loadData() {
         market: m.slug, filter: [], columns: COLUMNS,
         sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
       }, auth);
-      marketData[m.slug] = { label: m.label, rows: dedupeRows(rows) };
+      marketData[m.slug] = { label: m.label, rows: dedupeRows(filterPrimaryListing(rows)) };
     } catch {
       marketData[m.slug] = { label: m.label, rows: [] };
     }
