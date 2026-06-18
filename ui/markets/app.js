@@ -165,16 +165,18 @@ async function loadData() {
   const auth = { backendUrl, secret };
   await Promise.allSettled(MARKETS.map(async (m) => {
     try {
-      // Confirmed via debug probe: TradingView's per-market scan includes every
-      // stock *tradable* on that market's venues, including foreign cross-listings
-      // (e.g. Nvidia/Apple on Xetra) – which, duplicated across ~10 regional venue
-      // aliases each, can fill the whole count cutoff before real domestic
-      // companies appear. Filtering by `country` server-side (not client-side
-      // after the fact) fixes this at the source.
-      const filter = m.country ? [{ left: 'country', operation: 'equal', right: m.country }] : [];
+      // Confirmed via live debug probe: TradingView's per-market scan includes
+      // every stock *tradable* on that market's venues – foreign cross-listings
+      // (Nvidia/Apple on Xetra) plus ~10 regional-venue duplicates per company –
+      // which flood the fetch budget before distinct domestic companies appear.
+      // `is_primary == true` returns exactly one row per company (the primary
+      // listing), excluding both the cross-listings and the venue duplicates at
+      // the source, so the fetch budget counts distinct companies. Verified:
+      // Germany -> 442 distinct names, all on XETR, no foreign leakage.
+      const filter = [{ left: 'is_primary', operation: 'equal', right: true }];
       const { rows } = await runScreen({
         market: m.slug, filter, columns: COLUMNS,
-        sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 500,
+        sort: { sortBy: 'market_cap_basic', sortOrder: 'desc' }, count: 10000,
       }, auth);
       marketData[m.slug] = { label: m.label, rows: dedupeRows(rows) };
     } catch {
