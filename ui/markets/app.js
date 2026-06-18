@@ -629,7 +629,7 @@ function showToast(msg, type = 'info') {
 // find out what TradingView actually returns for country / exchange / primary
 // flags – instead of guessing field formats and breaking the live tables.
 const DEBUG_COLUMNS = [
-  'description', 'sector', 'country', 'exchange',
+  'description', 'sector', 'industry', 'submarket', 'country', 'exchange',
   'is_primary', 'is_symbol_primary_listing', 'type', 'currency', 'market_cap_basic',
 ];
 
