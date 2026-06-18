@@ -4,8 +4,8 @@ import { loadStorageClient } from '../lib/storage-client.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
-const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic'];
-// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap
+const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
+// d[0]=name  d[1]=sector  d[2]=1W  d[3]=1M  d[4]=3M  d[5]=6M  d[6]=1Y  d[7]=mcap  d[8]=industry
 
 const PERF_COLS = [
   { key: 'pw', label: '1W', idx: 2 },
@@ -35,7 +35,11 @@ let sectorMap = {};     // sectorName → { marketSlug → [{s,d}] }
 let tab = 'countries';
 let sortKey = 'pm', sortDir = 'desc';
 let sectorFilter = '';  // '' = all markets, else a market slug
-let drill = null;       // { title, rows, marketSlug } or null
+// Nested drill navigator. null when closed, else:
+// { rootType:'country'|'sector', rootKey, baseTitle, baseRows, marketSlug,
+//   hierarchy:[dim,...], path:[{dim,value},...] }. We aggregate baseRows by
+// hierarchy[path.length] until the path reaches the leaf, then list tickers.
+let drill = null;
 let drillSort = { key: 'pm', dir: 'desc' };  // independent sort for the drill table
 let drillSelected = new Set();               // set of row.s currently checked for import
 let loading = false, loadDone = 0;
@@ -298,7 +302,7 @@ function renderContent() {
 
 function renderCountries(el) {
   const rows = sorted(countryAggs, sortKey, sortDir).map((r) => {
-    const sel = drill?.type === 'country' && drill.slug === r.slug;
+    const sel = drill?.rootType === 'country' && drill.rootKey === r.slug;
     return `<tr class="${sel ? 'selected' : ''}" data-slug="${r.slug}">
       <td>${r.label}</td>${hc(r.pw)}${hc(r.pm)}${hc(r.pq)}${hc(r.ph)}${hc(r.py)}
       <td class="n-badge-cell"><span class="n-badge">${r.n}</span></td>
@@ -324,13 +328,16 @@ function renderCountries(el) {
     const slug = tr.dataset.slug;
     const ca = countryAggs.find((c) => c.slug === slug);
     if (!ca) return;
-    drill = { type: 'country', slug, title: ca.label, rows: ca.rows, marketSlug: slug };
+    drill = {
+      rootType: 'country', rootKey: slug, baseTitle: ca.label, baseRows: ca.rows,
+      marketSlug: slug, hierarchy: ['sector', 'industry'], path: [],
+    };
     openDrillState();
     el.querySelectorAll('tbody tr').forEach((r) => r.classList.toggle('selected', r.dataset.slug === slug));
     renderDrill();
   });
 
-  if (drill?.type === 'country') renderDrill();
+  if (drill?.rootType === 'country') renderDrill();
 }
 
 function renderSectors(el) {
@@ -340,7 +347,7 @@ function renderSectors(el) {
     return { sector: sec, ...a };
   }).filter((r) => r.n > 0);
   const sRows = sorted(aggs, sortKey, sortDir).map((r) => {
-    const sel = drill?.type === 'sector' && drill.sector === r.sector;
+    const sel = drill?.rootType === 'sector' && drill.rootKey === r.sector;
     return `<tr class="${sel ? 'selected' : ''}" data-sector="${r.sector}">
       <td>${r.sector}</td>${hc(r.pw)}${hc(r.pm)}${hc(r.pq)}${hc(r.ph)}${hc(r.py)}
       <td class="n-badge-cell"><span class="n-badge">${r.n}</span></td>
@@ -385,13 +392,16 @@ function renderSectors(el) {
       ? MARKETS.find((m) => m.slug === sectorFilter)?.label ?? sectorFilter
       : 'Alle Märkte';
     const a = sectorAgg(sector, sectorFilter);
-    drill = { type: 'sector', sector, title: `${sector} — ${mktLabel}`, rows: a.rows, marketSlug: sectorFilter || null };
+    drill = {
+      rootType: 'sector', rootKey: sector, baseTitle: `${sector} — ${mktLabel}`,
+      baseRows: a.rows, marketSlug: sectorFilter || null, hierarchy: ['industry'], path: [],
+    };
     openDrillState();
     el.querySelectorAll('tbody tr').forEach((r) => r.classList.toggle('selected', r.dataset.sector === sector));
     renderDrill();
   });
 
-  if (drill?.type === 'sector') renderDrill();
+  if (drill?.rootType === 'sector') renderDrill();
 }
 
 function wireSort(el) {
@@ -422,27 +432,163 @@ const DRILL_COLS = [
 
 const symOf = (row) => (row.s.includes(':') ? row.s.split(':')[1] : row.s);
 
-/** Reset per-drill state when a new row is opened: clear selection, seed sort. */
+// Aggregate dimensions and where each value lives in row.d.
+const DIMS = {
+  sector:   { idx: 1, label: 'Sektor' },
+  industry: { idx: 8, label: 'Industrie' },
+};
+// Perf keys valid for sorting an aggregate (group) table.
+const AGG_SORT_KEYS = new Set(PERF_COLS.map((c) => c.key));
+
+/** Reset per-drill state when a new root row is opened: clear selection, seed sort. */
 function openDrillState() {
   drillSelected = new Set();
   // Seed the drill sort from whichever perf column the outer table is sorted by.
   drillSort = { key: KEY_TO_IDX[sortKey] ? sortKey : 'pm', dir: 'desc' };
 }
 
-/** Sort drill.rows by the current drillSort. Nulls always sort last. */
-function drillSortedRows() {
+/** baseRows narrowed by every {dim,value} filter currently on the drill path. */
+function drillFiltered() {
+  let rows = drill.baseRows;
+  for (const p of drill.path) {
+    const idx = DIMS[p.dim].idx;
+    rows = rows.filter((r) => ((r.d[idx] ?? '') || '—') === p.value);
+  }
+  return rows;
+}
+
+/** Group rows by an aggregate dimension, computing weighted perf per group. */
+function groupAgg(rows, dimIdx) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = (row.d[dimIdx] ?? '') || '—';
+    let g = groups.get(key);
+    if (!g) { g = []; groups.set(key, g); }
+    g.push(row);
+  }
+  return [...groups.entries()].map(([value, grp]) => ({ value, rows: grp, ...mkAgg(grp) }));
+}
+
+/** Clickable breadcrumb trail (root › dim › dim …). */
+function drillHeaderHtml(countText, controlsHtml) {
+  const crumbStyle = 'background:none; border:none; padding:0; cursor:pointer; color:var(--accent,#2563eb); font-weight:600; font-size:.95rem';
+  const crumbs = [`<button class="mkt-crumb" data-depth="0" style="${crumbStyle}">${drill.baseTitle}</button>`];
+  drill.path.forEach((p, i) => {
+    crumbs.push(`<span style="color:var(--muted)"> › </span>`);
+    crumbs.push(`<button class="mkt-crumb" data-depth="${i + 1}" style="${crumbStyle}">${p.value}</button>`);
+  });
+  return `
+    <div class="drill-header">
+      <div class="drill-title" style="display:flex; flex-wrap:wrap; align-items:center; gap:.15rem">${crumbs.join('')}</div>
+      <span class="drill-count">${countText}</span>
+      <div style="display:flex; gap:.4rem; align-items:center; margin-left:auto">
+        ${controlsHtml}
+        <button class="drill-close" id="drill-close">✕</button>
+      </div>
+    </div>`;
+}
+
+/** Wire breadcrumb + close, shared by both drill views. */
+function wireDrillCommon(slot) {
+  slot.querySelectorAll('.mkt-crumb').forEach((b) => b.addEventListener('click', () => {
+    drill.path = drill.path.slice(0, Number(b.dataset.depth));
+    drillSelected = new Set();
+    renderDrill();
+  }));
+  slot.querySelector('#drill-close')?.addEventListener('click', closeDrill);
+}
+
+function closeDrill() {
+  drill = null;
+  drillSelected = new Set();
+  const slot = document.getElementById('drill-slot');
+  if (slot) slot.innerHTML = '';
+  document.querySelectorAll('.perf-table tbody tr.selected').forEach((r) => r.classList.remove('selected'));
+}
+
+/** Route to the aggregate (group) view or the leaf (ticker) view by path depth. */
+function renderDrill() {
+  const slot = document.getElementById('drill-slot');
+  if (!slot || !drill) return;
+  const filtered = drillFiltered();
+  const depth = drill.path.length;
+  if (depth < drill.hierarchy.length) renderDrillGroups(slot, filtered, drill.hierarchy[depth]);
+  else renderDrillTickers(slot, filtered);
+}
+
+function renderDrillGroups(slot, rows, dim) {
+  const dimDef = DIMS[dim];
+  const aggs = groupAgg(rows, dimDef.idx);
+  const key = AGG_SORT_KEYS.has(drillSort.key) ? drillSort.key : 'pm';
+  const sortedAggs = sorted(aggs, key, drillSort.dir);
+
+  const client = loadStorageClient();
+  const importAll = client
+    ? `<button class="btn btn-secondary btn-sm" id="drill-import-all">Import alle (${rows.length})</button>`
+    : '';
+
+  const bodyRows = sortedAggs.map((a) => `
+    <tr data-group="${encodeURIComponent(a.value)}">
+      <td style="text-align:left">${a.value}</td>
+      ${hc(a.pw)}${hc(a.pm)}${hc(a.pq)}${hc(a.ph)}${hc(a.py)}
+      <td class="n-badge-cell"><span class="n-badge">${a.n}</span></td>
+      <td class="arrow-cell">→</td>
+    </tr>`).join('');
+
+  const head = PERF_COLS.map((c) => {
+    const cls = key === c.key ? (drillSort.dir === 'desc' ? 'sort-desc' : 'sort-asc') : '';
+    return `<th class="${cls}" data-dsort="${c.key}">${c.label}</th>`;
+  }).join('');
+
+  slot.innerHTML = `
+    <div class="drill-panel">
+      ${drillHeaderHtml(`${aggs.length} ${dimDef.label} · ${rows.length} Unternehmen`, importAll)}
+      <div class="drill-scroll">
+        <table class="perf-table">
+          <thead><tr>
+            <th style="text-align:left">${dimDef.label}</th>
+            ${head}
+            <th>n</th><th></th>
+          </tr></thead>
+          <tbody>${bodyRows || '<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:1rem">Keine Daten</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  wireDrillCommon(slot);
+
+  slot.querySelectorAll('th[data-dsort]').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.dsort;
+    if (drillSort.key === k) drillSort.dir = drillSort.dir === 'desc' ? 'asc' : 'desc';
+    else drillSort = { key: k, dir: 'desc' };
+    renderDrill();
+  }));
+
+  slot.querySelector('tbody')?.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-group]');
+    if (!tr) return;
+    drill.path = [...drill.path, { dim, value: decodeURIComponent(tr.dataset.group) }];
+    drillSelected = new Set();
+    renderDrill();
+  });
+
+  if (client) slot.querySelector('#drill-import-all')?.addEventListener('click', () => doImport(client, rows));
+}
+
+/** Sort leaf ticker rows by the current drillSort. Nulls always sort last. */
+function drillSortedRows(rows) {
   const { key, dir } = drillSort;
   const mul = dir === 'asc' ? 1 : -1;
-  const rows = [...drill.rows];
+  const out = [...rows];
   if (key === 'sym' || key === 'name') {
-    rows.sort((a, b) => {
+    out.sort((a, b) => {
       const av = key === 'sym' ? symOf(a) : (a.d[0] ?? '');
       const bv = key === 'sym' ? symOf(b) : (b.d[0] ?? '');
       return mul * String(av).localeCompare(String(bv), 'de');
     });
   } else {
     const idx = DRILL_COLS.find((c) => c.key === key)?.idx ?? 3;
-    rows.sort((a, b) => {
+    out.sort((a, b) => {
       const av = a.d[idx], bv = b.d[idx];
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
@@ -450,14 +596,11 @@ function drillSortedRows() {
       return mul * (av - bv);
     });
   }
-  return rows;
+  return out;
 }
 
-function renderDrill() {
-  const slot = document.getElementById('drill-slot');
-  if (!slot || !drill) return;
-
-  const rows = drillSortedRows();
+function renderDrillTickers(slot, baseRows) {
+  const rows = drillSortedRows(baseRows);
 
   const stockRows = rows.map((row) => {
     const d = row.d;
@@ -486,14 +629,7 @@ function renderDrill() {
 
   slot.innerHTML = `
     <div class="drill-panel">
-      <div class="drill-header">
-        <h2 class="drill-title">${drill.title}</h2>
-        <span class="drill-count">${rows.length} Unternehmen · <span id="drill-sel-count">0</span> ausgewählt</span>
-        <div style="display:flex; gap:.4rem; align-items:center; margin-left:auto">
-          ${importBtn}
-          <button class="drill-close" id="drill-close">✕</button>
-        </div>
-      </div>
+      ${drillHeaderHtml(`${rows.length} Unternehmen · <span id="drill-sel-count">0</span> ausgewählt`, importBtn)}
       <div class="drill-scroll">
         <table class="perf-table">
           <thead><tr>
@@ -505,17 +641,15 @@ function renderDrill() {
       </div>
     </div>`;
 
-  // Column sorting (independent of the outer aggregate table)
-  slot.querySelectorAll('th[data-dsort]').forEach((th) => {
-    th.addEventListener('click', () => {
-      const key = th.dataset.dsort;
-      if (drillSort.key === key) drillSort.dir = drillSort.dir === 'desc' ? 'asc' : 'desc';
-      else drillSort = { key, dir: key === 'sym' || key === 'name' ? 'asc' : 'desc' };
-      renderDrill();
-    });
-  });
+  wireDrillCommon(slot);
 
-  // Row checkboxes
+  slot.querySelectorAll('th[data-dsort]').forEach((th) => th.addEventListener('click', () => {
+    const key = th.dataset.dsort;
+    if (drillSort.key === key) drillSort.dir = drillSort.dir === 'desc' ? 'asc' : 'desc';
+    else drillSort = { key, dir: key === 'sym' || key === 'name' ? 'asc' : 'desc' };
+    renderDrill();
+  }));
+
   slot.querySelector('tbody')?.addEventListener('change', (e) => {
     const cb = e.target.closest('.drill-check');
     if (!cb) return;
@@ -524,7 +658,6 @@ function renderDrill() {
     syncDrillSelectionUI(slot, rows.length);
   });
 
-  // Select-all checkbox
   const checkAll = slot.querySelector('#drill-check-all');
   checkAll?.addEventListener('change', () => {
     if (checkAll.checked) rows.forEach((r) => drillSelected.add(r.s));
@@ -533,19 +666,9 @@ function renderDrill() {
     syncDrillSelectionUI(slot, rows.length);
   });
 
-  document.getElementById('drill-close').addEventListener('click', () => {
-    drill = null;
-    drillSelected = new Set();
-    slot.innerHTML = '';
-    document.querySelectorAll('tbody tr.selected').forEach((r) => r.classList.remove('selected'));
+  if (client) slot.querySelector('#drill-import')?.addEventListener('click', () => {
+    doImport(client, rows.filter((r) => drillSelected.has(r.s)));
   });
-
-  if (client) {
-    document.getElementById('drill-import')?.addEventListener('click', () => {
-      const selected = rows.filter((r) => drillSelected.has(r.s));
-      doImport(client, selected);
-    });
-  }
 
   syncDrillSelectionUI(slot, rows.length);
 }
@@ -566,8 +689,12 @@ function syncDrillSelectionUI(slot, total) {
 
 async function doImport(client, rows) {
   if (!rows.length) return;
-  const btn = document.getElementById('drill-import');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ …'; }
+  document.querySelectorAll('#drill-import, #drill-import-all').forEach((b) => {
+    b.disabled = true; b.textContent = '⏳ …';
+  });
+
+  // Title for the source record = the current breadcrumb (root › sector › industry).
+  const presetLabel = [drill.baseTitle, ...drill.path.map((p) => p.value)].join(' › ');
 
   // Group rows by their market slug so rowsToCandidates gets the correct yahooSuffix
   const byMarket = {};
@@ -585,7 +712,7 @@ async function doImport(client, rows) {
       market: slug,
       columns: COLUMNS,
       presetId: null,
-      presetLabel: drill.title,
+      presetLabel,
       filter: [],
       sourceUrl,
     });
@@ -599,13 +726,9 @@ async function doImport(client, rows) {
     }
   }
 
-  // Clear selection and reflect it in the UI (uncheck rows, reset count/button)
+  // Clear selection and re-render the current drill view (resets checkboxes/buttons).
   drillSelected = new Set();
-  const slot = document.getElementById('drill-slot');
-  if (slot) {
-    slot.querySelectorAll('.drill-check').forEach((cb) => { cb.checked = false; });
-    syncDrillSelectionUI(slot, drill?.rows.length ?? 0);
-  }
+  renderDrill();
   showToast(
     `✓ ${added} neu, ${merged} gemergt${skipped ? `, ${skipped} übersprungen` : ''}${errors ? `, ${errors} Fehler` : ''}`,
     errors ? 'error' : 'success'
