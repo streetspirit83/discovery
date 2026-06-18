@@ -642,10 +642,13 @@ async function runDebug(slug, params) {
 
   // Optional server-side test filter via ?filterField=country&filterValue=Germany,
   // so we can directly probe whether a candidate filter approach even returns rows
-  // before wiring it into the live dashboard.
+  // before wiring it into the live dashboard. "true"/"false" are coerced to real
+  // booleans since boolean scanner columns (is_primary, ...) likely reject the
+  // bare query-string value "true".
   const filterField = params.get('filterField');
-  const filterValue = params.get('filterValue');
-  const extraFilter = filterField && filterValue ? [{ left: filterField, operation: 'equal', right: filterValue }] : [];
+  const rawFilterValue = params.get('filterValue');
+  const filterValue = rawFilterValue === 'true' ? true : rawFilterValue === 'false' ? false : rawFilterValue;
+  const extraFilter = filterField && rawFilterValue != null ? [{ left: filterField, operation: 'equal', right: filterValue }] : [];
 
   app.innerHTML = `<div class="mkt-container"><h1 class="mkt-title">Debug: ${market.label} (${slug})</h1><p class="empty-hint">⏳ Lade Rohdaten …</p></div>`;
 
