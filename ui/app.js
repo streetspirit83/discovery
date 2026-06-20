@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260614a';
+import { CandidateList } from './components/candidate-list.js?v=20260614d';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -39,6 +39,7 @@ const L = {
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
   bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
   activity: luc('<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>', 16),
+  bag:      luc('<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>', 16),
 };
 
 // ── UI state (persisted) ───────────────────────────────────────────────────────
@@ -124,6 +125,39 @@ async function runMomentumCheckForSelection() {
   }
 }
 
+// ── Trade Republic check für ausgewählte Ticker ─────────────────────────────────
+async function runTrCheckForSelection() {
+  if (!candidateList) return;
+  const ids = [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann TR-Check starten', 'info', 3500);
+    return;
+  }
+  if (useMock) { toast('TR-Check nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return; }
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+  toast(`🛒 Prüfe Trade-Republic-Handelbarkeit für ${ids.length} Ticker…`, 'info', 12000);
+  let updates;
+  try {
+    updates = await candidateList.runTrCheck(ids, { backendUrl, secret });
+  } catch (err) {
+    toast(`TR-Check fehlgeschlagen: ${err.message}`, 'error');
+    return;
+  }
+  const yes = updates.filter((u) => u.updates.tr_check?.tradable === true).length;
+  const no  = updates.filter((u) => u.updates.tr_check?.tradable === false).length;
+  const unk = updates.length - yes - no;
+  toast(`TR-Check: ✓ ${yes} handelbar · ✗ ${no} nicht · ${unk ? `? ${unk} unklar` : ''}`.trim(), 'success', 6000);
+
+  try {
+    await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+  }
+}
+
 // ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
@@ -174,8 +208,10 @@ function renderSubbar() {
     `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
   ).join('') +
     `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
+    `<button class="seg-btn seg-btn--trcheck" id="btn-tr-check" title="Trade-Republic-Handelbarkeit (via Lang & Schwarz) für ausgewählte Ticker prüfen → Spalte „TR"">${L.bag}</button>` +
     `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
   vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
+  vs.querySelector('#btn-tr-check').addEventListener('click', () => runTrCheckForSelection());
   vs.querySelector('#currency-toggle').addEventListener('click', () => {
     uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
     saveUiState();

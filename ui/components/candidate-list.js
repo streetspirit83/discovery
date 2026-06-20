@@ -6,6 +6,7 @@ import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
+import { checkTradeRepublic } from '../lib/tr-check.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -232,6 +233,7 @@ function sortValue(c, col) {
     case 'my_target':   return c.my_target ?? null;
     case 'setup':       return priceSituation(tv)?.icon ?? null;
     case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
+    case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -416,6 +418,19 @@ export class CandidateList {
     return updates;
   }
 
+  // Trade Republic / Lang & Schwarz tradability check for the given candidates.
+  // Async (network via proxy); returns a bulk-update list for persistence.
+  async runTrCheck(ids, opts) {
+    const updates = [];
+    for (const c of this.candidates) {
+      if (!ids.includes(c.id)) continue;
+      c.tr_check = await checkTradeRepublic(c, opts);
+      updates.push({ candidate_id: c.id, updates: { tr_check: c.tr_check } });
+    }
+    this.renderRows();
+    return updates;
+  }
+
   clearSelection() {
     this.selected.clear();
     this.showSelectedOnly = false;
@@ -522,6 +537,7 @@ export class CandidateList {
       cols += `<th>Links</th>`;
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
+      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
       cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
@@ -544,6 +560,7 @@ export class CandidateList {
       cols += `<th class="num">Aktion</th>`;
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
+      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
     }
 
     this.thead.innerHTML = `<tr>${cols}</tr>`;
@@ -677,6 +694,8 @@ export class CandidateList {
 
       const brokerTd = `<td class="num"><button class="act-btn act-btn--broker${c.broker_armed ? ' is-active' : ''}" data-action="toggleBroker" title="${c.broker_armed ? 'Broker-Marker entfernen' : 'Im Broker handelbar & Alert scharf'}">${icons.check}</button></td>`;
 
+      const trCheckTd = `<td class="num">${renderTrCheck(c)}</td>`;
+
       let dataCols;
       if (this.viewMode === 'standard') {
         const r   = tv?.recommend_all_1m;
@@ -693,6 +712,7 @@ export class CandidateList {
           linksTd +
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           brokerTd +
+          trCheckTd +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
           `<td class="num">${trendCell}</td>` +
@@ -709,7 +729,7 @@ export class CandidateList {
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>
           `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
-        ).join('') + actionTd + starTd + brokerTd;
+        ).join('') + actionTd + starTd + brokerTd + trCheckTd;
       }
 
       const tr = document.createElement('tr');
@@ -935,6 +955,23 @@ function liveOverallScore(tv) {
     health:        liveHealthScore(tv)?.total,
     cycle:         tv.cycle_score?.total,
   });
+}
+
+function renderTrCheck(c) {
+  const t = c.tr_check;
+  const q = encodeURIComponent(c.isin || c.symbol || '');
+  const trUrl = `https://app.traderepublic.com/browse/search?q=${q}`;
+  const open = (href, cls, glyph, title) =>
+    `<a href="${href}" target="_blank" rel="noopener" class="tr-check tr-check--${cls}" title="${title}">${glyph}</a>`;
+  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – klicken zum manuellen Check (Lang & Schwarz / Trade Republic)');
+  if (t.tradable) {
+    return open(t.ls_link || trUrl, 'yes', '✓',
+      `Auf Lang & Schwarz gelistet${t.ls_name ? ': ' + t.ls_name : ''} – sehr wahrscheinlich auf Trade Republic handelbar. Klick öffnet die LS-Seite.`);
+  }
+  if (t.tradable === false) {
+    return open(trUrl, 'no', '✗', 'Nicht auf Lang & Schwarz gefunden – nicht über Trade Republic handelbar. Klick öffnet die TR-Suche zum Gegencheck.');
+  }
+  return open(trUrl, 'unknown', '?', 'Check fehlgeschlagen – klicken zum manuellen Check');
 }
 
 function renderMomentumCheck(mc) {

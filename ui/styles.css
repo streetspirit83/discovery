@@ -467,6 +467,16 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .momcheck--badge.momcheck--yellow { background:rgba(243,156,18,.15); }
 .momcheck--badge.momcheck--red    { background:rgba(231,76,60,.15); }
 .setup-icon { font-size: 13px; cursor: default; }
+/* Trade Republic / LS tradability check */
+.tr-check {
+  display:inline-block; min-width:20px; text-align:center;
+  font-weight:var(--fw-bold); font-size:var(--fs-2); text-decoration:none;
+  border-radius:var(--r-1); padding:0 4px;
+}
+.tr-check--yes     { color:#27ae60; background:rgba(46,204,113,.15); }
+.tr-check--no      { color:var(--neg); background:rgba(231,76,60,.15); }
+.tr-check--unknown { color:var(--muted); }
+.tr-check:hover    { text-decoration:none; opacity:.8; }
 .price-input.is-suggested { color: var(--muted); font-style: italic; }
 
 /* Column resizing (drag on header edge) */
