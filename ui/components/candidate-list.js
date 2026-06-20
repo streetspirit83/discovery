@@ -767,6 +767,14 @@ export class CandidateList {
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
 
+      // TR link: copy the ISIN to the clipboard on tap so it can be pasted
+      // straight into the Trade Republic app search (links can't reliably
+      // open the native app from a browser).
+      tr.querySelector('a.tr-check')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (c.isin && navigator.clipboard) navigator.clipboard.writeText(c.isin).catch(() => {});
+      });
+
       // User price inputs (Mein Entry / Mein Ziel in the Preis view)
       tr.querySelectorAll('.price-input').forEach((inp) => {
         inp.addEventListener('pointerup', (e) => e.stopPropagation());
@@ -963,15 +971,12 @@ function renderTrCheck(c) {
   const t = c.tr_check;
   const q = encodeURIComponent(c.isin || c.symbol || '');
   const trUrl = `https://app.traderepublic.com/browse/search?q=${q}`;
-  // TR instrument deep link – opens the stock directly in the mobile app
-  // (universal link) or TR web. Easy to adjust if TR changes the route.
-  const trProfile = c.isin ? `https://app.traderepublic.com/profile/${encodeURIComponent(c.isin)}` : trUrl;
   const open = (href, cls, glyph, title) =>
     `<a href="${href}" target="_blank" rel="noopener" class="tr-check tr-check--${cls}" title="${title}">${glyph}</a>`;
   if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – „TR-Check" in der Bulk-Leiste ausführen');
   if (t.tradable) {
-    return open(trProfile, 'yes', '↗',
-      `In Trade Republic öffnen${t.ls_name ? ' – ' + t.ls_name : ''} (Handy: direkt in der TR-App). Auf Lang & Schwarz gelistet = handelbar.`);
+    return open(trUrl, 'yes', '↗',
+      `Handelbar${t.ls_name ? ' – ' + t.ls_name : ''}. Tippen: ISIN wird kopiert und Trade Republic geöffnet – in der TR-Suche einfügen (${c.isin || '—'}).`);
   }
   if (t.tradable === false) {
     return open(trUrl, 'no', '✗', 'Nicht auf Lang & Schwarz gefunden – nicht über Trade Republic handelbar. Klick öffnet die TR-Suche zum Gegencheck.');
