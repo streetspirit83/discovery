@@ -963,12 +963,15 @@ function renderTrCheck(c) {
   const t = c.tr_check;
   const q = encodeURIComponent(c.isin || c.symbol || '');
   const trUrl = `https://app.traderepublic.com/browse/search?q=${q}`;
+  // TR instrument deep link – opens the stock directly in the mobile app
+  // (universal link) or TR web. Easy to adjust if TR changes the route.
+  const trProfile = c.isin ? `https://app.traderepublic.com/profile/${encodeURIComponent(c.isin)}` : trUrl;
   const open = (href, cls, glyph, title) =>
     `<a href="${href}" target="_blank" rel="noopener" class="tr-check tr-check--${cls}" title="${title}">${glyph}</a>`;
-  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – „TR-Check" in der Bulk-Leiste ausführen (vorher „TV Daten" für die ISIN)');
+  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – „TR-Check" in der Bulk-Leiste ausführen');
   if (t.tradable) {
-    return open(t.ls_link || trUrl, 'yes', '✓',
-      `Auf Lang & Schwarz gelistet${t.ls_name ? ': ' + t.ls_name : ''} – sehr wahrscheinlich auf Trade Republic handelbar. Klick öffnet die LS-Seite.`);
+    return open(trProfile, 'yes', '↗',
+      `In Trade Republic öffnen${t.ls_name ? ' – ' + t.ls_name : ''} (Handy: direkt in der TR-App). Auf Lang & Schwarz gelistet = handelbar.`);
   }
   if (t.tradable === false) {
     return open(trUrl, 'no', '✗', 'Nicht auf Lang & Schwarz gefunden – nicht über Trade Republic handelbar. Klick öffnet die TR-Suche zum Gegencheck.');
