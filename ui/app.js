@@ -797,18 +797,10 @@ async function importCandidates(candidates) {
 
   if (useMock) {
     const inbox = await ensureBlob('inbox');
+    // Inbox is a raw capture: always add, never merge on import.
     for (const cand of candidates) {
-      const existing = inbox.candidates.find(
-        (c) => c.symbol === cand.symbol && c.exchange === cand.exchange,
-      );
-      if (existing) {
-        existing.sources.push(...cand.sources);
-        existing.last_updated_at = new Date().toISOString();
-        merged++;
-      } else {
-        inbox.candidates.push(cand);
-        added++;
-      }
+      inbox.candidates.push(cand);
+      added++;
     }
   } else {
     for (const cand of candidates) {

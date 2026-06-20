@@ -169,35 +169,9 @@ export default async function handler(req) {
     const exch = (candidate.exchange || 'UNKNOWN').toUpperCase();
     candidate.exchange = exch; // normalise before writing
 
-    // Check archive, export, watch first – no resurrection
-    for (const bt of ['archive', 'export', 'watch']) {
-      const doc = await readBlobDoc(store, bt);
-      const found = doc.candidates.find(
-        (c) => c.symbol.toUpperCase() === sym && c.exchange.toUpperCase() === exch,
-      );
-      if (found) {
-        log('info', 'storage: append_candidate skipped (in archive/export)', { sym, exch, bt });
-        return respond(200, { ok: true, action: 'skipped', id: found.id });
-      }
-    }
-
-    // Check inbox for merge
+    // Inbox is a raw capture: always add, never merge or skip on import.
+    // Dedup/merge happens only when a candidate is moved to archive/watch/export.
     const inbox = await readBlobDoc(store, 'inbox');
-    const existing = inbox.candidates.find(
-      (c) => c.symbol.toUpperCase() === sym && c.exchange.toUpperCase() === exch,
-    );
-
-    if (existing) {
-      // Merge sources
-      const newSources = candidate.sources ?? [];
-      existing.sources.push(...newSources);
-      existing.last_updated_at = new Date().toISOString();
-      await writeBlobDoc(store, 'inbox', inbox);
-      log('info', 'storage: append_candidate merged', { sym, exch, id: existing.id });
-      return respond(200, { ok: true, action: 'merged', id: existing.id });
-    }
-
-    // New candidate
     inbox.candidates.push(candidate);
     await writeBlobDoc(store, 'inbox', inbox);
     log('info', 'storage: append_candidate added', { sym, exch, id: candidate.id });
@@ -211,6 +185,10 @@ export default async function handler(req) {
       return respond(400, { ok: false, error: 'Missing or empty candidates array' });
     }
 
+    // Bulk path is used by the scheduled adapters (run daily). It keeps
+    // dedup + tombstone-skip so repeated daily runs don't pile up duplicates
+    // or resurrect dismissed values. The manual UI import uses the singular
+    // append_candidate op, which always adds.
     const [archiveDoc, exportDoc, watchDoc, inbox] = await Promise.all([
       readBlobDoc(store, 'archive'),
       readBlobDoc(store, 'export'),
