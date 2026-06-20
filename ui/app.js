@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260616b';
+import { CandidateList } from './components/candidate-list.js?v=20260616c';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -136,6 +136,26 @@ async function runTrCheckForSelection(idsArg) {
   const backendUrl = localStorage.getItem('discovery_backend_url');
   const secret     = localStorage.getItem('discovery_secret');
   if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+  // LS matching needs an ISIN. Backfill missing ISINs via the TV scanner first
+  // so a single TR-Check works without a separate "TV Daten" run.
+  const blob = allBlobs[currentBlobType];
+  const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+  const missing = (blob?.candidates ?? []).filter((c) => ids.includes(c.id) && !isISIN(c.isin));
+  if (missing.length) {
+    toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 10000);
+    try {
+      const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+      const tvUpdates = [];
+      for (const [cid, upd] of enr) {
+        const c = missing.find((x) => x.id === cid);
+        if (c) { Object.assign(c, upd); tvUpdates.push({ candidate_id: cid, updates: upd }); }
+      }
+      if (tvUpdates.length) await storageClient.bulkUpdateCandidates(currentBlobType, tvUpdates).catch(() => {});
+    } catch (err) {
+      console.warn('[TR] ISIN backfill failed:', err.message);
+    }
+  }
 
   toast(`🛒 Prüfe Trade-Republic-Handelbarkeit für ${ids.length} Ticker…`, 'info', 12000);
   let updates;
