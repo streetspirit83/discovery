@@ -25,6 +25,7 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/query1\.finance\.yahoo\.com\//,
   /^https:\/\/query2\.finance\.yahoo\.com\//,
   /^https:\/\/scanner\.tradingview\.com\//,
+  /^https:\/\/www\.ls-tc\.de\//,
 ];
 
 function isAllowed(url) {

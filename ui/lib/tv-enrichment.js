@@ -177,6 +177,7 @@ const TV_COLUMNS = [
   'High.3M',                                   // 106
   'Low.3M',                                    // 107
   'recommendation_total',                      // 108 — Anzahl Analysten
+  'isin',                                      // 109 — ISIN (für TR/LS-Abgleich)
 ];
 
 const COL = {
@@ -295,6 +296,7 @@ recommendMA1M: 53,
   high3M:                106,
   low3M:                 107,
   recommendationTotal:   108,
+  isin:                  109,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -382,6 +384,8 @@ function buildUpdates(d, candidate) {
   const updates = {
     asset_type: 'Stock',
     scan_date:  new Date().toISOString().split('T')[0],
+    // Backfill ISIN from TV so the Trade Republic / LS check can match reliably.
+    isin: d[COL.isin] || candidate.isin || null,
     tv_data: {
       rating:        d[COL.rating]       ?? null,
       pe_ttm:        d[COL.pe]           ?? null,

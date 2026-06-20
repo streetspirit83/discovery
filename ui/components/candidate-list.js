@@ -6,7 +6,7 @@ import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
-import { checkTradeRepublic } from '../lib/tr-check.js';
+import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -965,7 +965,7 @@ function renderTrCheck(c) {
   const trUrl = `https://app.traderepublic.com/browse/search?q=${q}`;
   const open = (href, cls, glyph, title) =>
     `<a href="${href}" target="_blank" rel="noopener" class="tr-check tr-check--${cls}" title="${title}">${glyph}</a>`;
-  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – klicken zum manuellen Check (Lang & Schwarz / Trade Republic)');
+  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – „TR-Check" in der Bulk-Leiste ausführen (vorher „TV Daten" für die ISIN)');
   if (t.tradable) {
     return open(t.ls_link || trUrl, 'yes', '✓',
       `Auf Lang & Schwarz gelistet${t.ls_name ? ': ' + t.ls_name : ''} – sehr wahrscheinlich auf Trade Republic handelbar. Klick öffnet die LS-Seite.`);
@@ -973,7 +973,10 @@ function renderTrCheck(c) {
   if (t.tradable === false) {
     return open(trUrl, 'no', '✗', 'Nicht auf Lang & Schwarz gefunden – nicht über Trade Republic handelbar. Klick öffnet die TR-Suche zum Gegencheck.');
   }
-  return open(trUrl, 'unknown', '?', 'Check fehlgeschlagen – klicken zum manuellen Check');
+  if (t.no_isin) {
+    return open(trUrl, 'unknown', '?', 'Keine ISIN vorhanden – TR-Check braucht ISIN. Erst „TV Daten" laden (füllt die ISIN), dann TR-Check.');
+  }
+  return open(trUrl, 'unknown', '?', 'Check fehlgeschlagen (LS nicht erreichbar) – später erneut versuchen');
 }
 
 function renderMomentumCheck(mc) {

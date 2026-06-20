@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260614e';
+import { CandidateList } from './components/candidate-list.js?v=20260616b';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderWorkflowModal } from './components/workflow-modal.js';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260614b';
+import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260616b';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';

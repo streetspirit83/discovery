@@ -16,10 +16,13 @@
 
 export async function checkTradeRepublic(candidate, { backendUrl, secret }) {
   const isin = String(candidate.isin ?? '').trim().toUpperCase();
-  const q = isin || String(candidate.symbol ?? '').trim();
-  if (!q) return null;
+  // LS symbol search is unreliable (returns bonds / wrong companies), so the
+  // check requires an ISIN. Run "TV Daten" first to backfill ISINs.
+  if (!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(isin)) {
+    return { tradable: null, no_isin: true, checked_at: new Date().toISOString() };
+  }
 
-  const lsUrl = `https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q=${encodeURIComponent(q)}&localeId=2`;
+  const lsUrl = `https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q=${encodeURIComponent(isin)}&localeId=2`;
   const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
 
   let wrapper;
@@ -42,11 +45,8 @@ export async function checkTradeRepublic(candidate, { backendUrl, secret }) {
   try { arr = JSON.parse(wrapper.body); } catch { arr = null; }
   if (!Array.isArray(arr)) return { tradable: null, checked_at: new Date().toISOString() };
 
-  // With an ISIN, require an exact match (avoids fuzzy name hits); otherwise
-  // accept the first stock entry.
-  let hit = null;
-  if (isin) hit = arr.find((x) => String(x.isin ?? '').toUpperCase() === isin);
-  if (!hit && !isin) hit = arr.find((x) => x.categorySymbol === 'STK') ?? arr[0] ?? null;
+  // Require an exact ISIN match (avoids fuzzy name / bond hits).
+  const hit = arr.find((x) => String(x.isin ?? '').toUpperCase() === isin) ?? null;
 
   return {
     tradable: !!hit,
