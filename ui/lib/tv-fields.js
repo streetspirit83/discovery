@@ -88,21 +88,26 @@ export const OPERATORS = [
 // `slug` is the scanner endpoint segment; `yahooSuffix` builds the yahoo_symbol;
 // `exchanges` lists the TV exchange prefixes we accept from that market's results.
 
+// `country` is the exact domicile name TradingView's scanner uses for its
+// `country` field (e.g. `country: 'Germany'`), kept as reference metadata. The
+// markets dashboard no longer filters on it: it filters by `is_primary == true`
+// instead, which excludes foreign cross-listings AND collapses regional-venue
+// duplicates to one row per company in a single, exchange-grounded step.
 export const MARKETS = [
-  { slug: 'america',     label: 'USA',         yahooSuffix: '',    exchanges: ['NASDAQ', 'NYSE', 'AMEX'] },
-  { slug: 'germany',     label: 'Germany',     yahooSuffix: '.DE', exchanges: ['XETR'] },
-  { slug: 'uk',          label: 'UK',          yahooSuffix: '.L',  exchanges: ['LSE'] },
-  { slug: 'france',      label: 'France',      yahooSuffix: '.PA', exchanges: ['EURONEXT'] },
-  { slug: 'netherlands', label: 'Netherlands', yahooSuffix: '.AS', exchanges: ['EURONEXT'] },
-  { slug: 'italy',       label: 'Italy',       yahooSuffix: '.MI', exchanges: ['MIL'] },
-  { slug: 'spain',       label: 'Spain',       yahooSuffix: '.MC', exchanges: ['BME'] },
-  { slug: 'sweden',      label: 'Sweden',      yahooSuffix: '.ST', exchanges: ['OMXSTO'] },
-  { slug: 'switzerland', label: 'Switzerland', yahooSuffix: '.SW', exchanges: ['SIX'] },
-  { slug: 'denmark',     label: 'Denmark',     yahooSuffix: '.CO', exchanges: ['OMXCO'] },
-  { slug: 'norway',      label: 'Norway',      yahooSuffix: '.OL', exchanges: ['OMXNO'] },
-  { slug: 'finland',     label: 'Finland',     yahooSuffix: '.HE', exchanges: ['OMXHEX'] },
-  { slug: 'canada',      label: 'Canada',      yahooSuffix: '.TO', exchanges: ['TSX', 'TSXV'] },
-  { slug: 'australia',   label: 'Australia',   yahooSuffix: '.AX', exchanges: ['ASX'] },
+  { slug: 'america',     label: 'USA',         yahooSuffix: '',    exchanges: ['NASDAQ', 'NYSE', 'AMEX'],     country: 'United States' },
+  { slug: 'germany',     label: 'Germany',     yahooSuffix: '.DE', exchanges: ['XETR'],                       country: 'Germany' },
+  { slug: 'uk',          label: 'UK',          yahooSuffix: '.L',  exchanges: ['LSE'],                        country: 'United Kingdom' },
+  { slug: 'france',      label: 'France',      yahooSuffix: '.PA', exchanges: ['EURONEXT'],                   country: 'France' },
+  { slug: 'netherlands', label: 'Netherlands', yahooSuffix: '.AS', exchanges: ['EURONEXT'],                   country: 'Netherlands' },
+  { slug: 'italy',       label: 'Italy',       yahooSuffix: '.MI', exchanges: ['MIL'],                        country: 'Italy' },
+  { slug: 'spain',       label: 'Spain',       yahooSuffix: '.MC', exchanges: ['BME'],                        country: 'Spain' },
+  { slug: 'sweden',      label: 'Sweden',      yahooSuffix: '.ST', exchanges: ['OMXSTO'],                     country: 'Sweden' },
+  { slug: 'switzerland', label: 'Switzerland', yahooSuffix: '.SW', exchanges: ['SIX'],                        country: 'Switzerland' },
+  { slug: 'denmark',     label: 'Denmark',     yahooSuffix: '.CO', exchanges: ['OMXCO'],                      country: 'Denmark' },
+  { slug: 'norway',      label: 'Norway',      yahooSuffix: '.OL', exchanges: ['OMXNO'],                      country: 'Norway' },
+  { slug: 'finland',     label: 'Finland',     yahooSuffix: '.HE', exchanges: ['OMXHEX'],                     country: 'Finland' },
+  { slug: 'canada',      label: 'Canada',      yahooSuffix: '.TO', exchanges: ['TSX', 'TSXV'],                country: 'Canada' },
+  { slug: 'australia',   label: 'Australia',   yahooSuffix: '.AX', exchanges: ['ASX'],                        country: 'Australia' },
 ];
 
 // TradingView exchange prefix (left of the colon in "NASDAQ:AAPL") → our code.
