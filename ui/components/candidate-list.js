@@ -798,6 +798,7 @@ export class CandidateList {
     if (!ba) return;
     ba.innerHTML = `
       <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
+      <button class="bulk-btn bulk-btn--accent" id="bulk-tr-check">🛒 TR-Check</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
       <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
@@ -810,6 +811,7 @@ export class CandidateList {
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
     ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
+    ba.querySelector('#bulk-tr-check').addEventListener('pointerup', () => this.onBulkAction?.('tr-check', [...this.selected]));
     ba.querySelector('#bulk-copy-prompt').addEventListener('pointerup', () => this.onBulkAction?.('copy-prompt', [...this.selected]));
     ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
     ba.querySelector('#bulk-clear').addEventListener('pointerup',   () => this.clearSelection());
