@@ -767,13 +767,20 @@ export class CandidateList {
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
 
-      // TR link: copy the ISIN to the clipboard on tap so it can be pasted
-      // straight into the Trade Republic app search (links can't reliably
-      // open the native app from a browser).
-      tr.querySelector('a.tr-check')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (c.isin && navigator.clipboard) navigator.clipboard.writeText(c.isin).catch(() => {});
-      });
+      // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
+      // it can be pasted into the Trade Republic app search.
+      const trCell = tr.querySelector('.tr-check');
+      if (trCell) {
+        const copyIsin = (e) => {
+          e.stopPropagation();
+          const val = trCell.dataset.copy;
+          if (!val) return;
+          if (navigator.clipboard) navigator.clipboard.writeText(val).catch(() => {});
+          this.onAction?.('isinCopied', c, { value: val });
+        };
+        trCell.addEventListener('click', copyIsin);
+        trCell.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') copyIsin(e); });
+      }
 
       // User price inputs (Mein Entry / Mein Ziel in the Preis view)
       tr.querySelectorAll('.price-input').forEach((inp) => {
@@ -969,22 +976,17 @@ function liveOverallScore(tv) {
 
 function renderTrCheck(c) {
   const t = c.tr_check;
-  const q = encodeURIComponent(c.isin || c.symbol || '');
-  const trUrl = `https://app.traderepublic.com/browse/search?q=${q}`;
-  const open = (href, cls, glyph, title) =>
-    `<a href="${href}" target="_blank" rel="noopener" class="tr-check tr-check--${cls}" title="${title}">${glyph}</a>`;
-  if (!t) return open(trUrl, 'unknown', '?', 'Trade Republic noch nicht geprüft – „TR-Check" in der Bulk-Leiste ausführen');
-  if (t.tradable) {
-    return open(trUrl, 'yes', '↗',
-      `Handelbar${t.ls_name ? ' – ' + t.ls_name : ''}. Tippen: ISIN wird kopiert und Trade Republic geöffnet – in der TR-Suche einfügen (${c.isin || '—'}).`);
-  }
-  if (t.tradable === false) {
-    return open(trUrl, 'no', '✗', 'Nicht auf Lang & Schwarz gefunden – nicht über Trade Republic handelbar. Klick öffnet die TR-Suche zum Gegencheck.');
-  }
-  if (t.no_isin) {
-    return open(trUrl, 'unknown', '?', 'Keine ISIN vorhanden – TR-Check braucht ISIN. Erst „TV Daten" laden (füllt die ISIN), dann TR-Check.');
-  }
-  return open(trUrl, 'unknown', '?', 'Check fehlgeschlagen (LS nicht erreichbar) – später erneut versuchen');
+  const copyVal = c.isin || c.symbol || '';
+  // Click copies the ISIN (fallback symbol) to the clipboard – paste into the
+  // Trade Republic app search. Works in every state (green/red/grey).
+  const btn = (cls, glyph, title) =>
+    `<span class="tr-check tr-check--${cls}" role="button" tabindex="0" data-copy="${copyVal}" title="${title}">${glyph}</span>`;
+  const copyHint = copyVal ? `Klick: ISIN kopieren (${copyVal})` : 'Keine ISIN/Symbol zum Kopieren';
+  if (!t) return btn('unknown', '?', `Ungeprüft – „TR-Check" in der Bulk-Leiste ausführen · ${copyHint}`);
+  if (t.tradable) return btn('yes', '✓', `Handelbar${t.ls_name ? ' – ' + t.ls_name : ''} · ${copyHint}`);
+  if (t.tradable === false) return btn('no', '✗', `Nicht über Trade Republic handelbar · ${copyHint}`);
+  if (t.no_isin) return btn('unknown', '?', `Keine ISIN – erst „TV Daten" laden · ${copyHint}`);
+  return btn('unknown', '?', `Check fehlgeschlagen · ${copyHint}`);
 }
 
 function renderMomentumCheck(mc) {

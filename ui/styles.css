@@ -476,6 +476,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .tr-check--yes     { color:#27ae60; background:rgba(46,204,113,.15); }
 .tr-check--no      { color:var(--neg); background:rgba(231,76,60,.15); }
 .tr-check--unknown { color:var(--muted); }
+.tr-check         { cursor:pointer; }
 .tr-check:hover    { text-decoration:none; opacity:.8; }
 .price-input.is-suggested { color: var(--muted); font-style: italic; }
 
