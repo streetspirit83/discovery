@@ -53,16 +53,6 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-strong-buy-us', label: 'TV Strong Buy US', market: 'america', sector: null,
-    filter: [
-      { left: 'close', operation: 'greater', right: 5 },
-      { left: 'volume', operation: 'greater', right: 300000 },
-      { left: 'Recommend.All', operation: 'egreater', right: 0.5 },
-    ],
-    sort: { sortBy: 'Recommend.All', sortOrder: 'desc' }, count: 40,
-    signal_type: 'custom_screen', built_in: true,
-  },
-  {
     id: 'builtin-near-cycle-high-us', label: 'Near Cycle High US', market: 'america', sector: null,
     // Proxy for a high PCHS (cycle-high) score: strong multi-timeframe performance,
     // since field-vs-field filters (e.g. close vs. price_52_week_high) aren't supported here.
@@ -76,7 +66,115 @@ export const DEFAULT_PRESETS = [
     sort: { sortBy: 'Perf.Y', sortOrder: 'desc' }, count: 40,
     signal_type: 'custom_screen', built_in: true,
   },
+
+  // ── Newer built-ins ─────────────────────────────────────────────────────────
+  {
+    id: 'builtin-52w-high-breakout-us', label: '52W-Hoch Breakout US', market: 'america', sector: null,
+    // Uses synthetic %-fields: close within 3% of the 52w high, on a volume surge.
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'volume', operation: 'greater', right: 500000 },
+      { left: 'pct_below_52w_high', operation: 'eless', right: 3 },
+      { left: 'vol_vs_avg30d_pct', operation: 'greater', right: 150 },
+    ],
+    sort: { sortBy: 'Perf.1M', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-oversold-bounce-us', label: 'Oversold Bounce US', market: 'america', sector: null,
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'RSI', operation: 'less', right: 35 },
+      { left: 'Perf.1M', operation: 'less', right: -15 },
+      { left: 'vol_vs_avg30d_pct', operation: 'greater', right: 100 },
+    ],
+    sort: { sortBy: 'RSI', sortOrder: 'asc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-trend-stack-us', label: 'Trend-Stack Bull US', market: 'america', sector: null,
+    // Trend-alignment proxy (numeric builder can't do a literal SMA50×SMA200 cross):
+    // price above its EMA20 AND SMA200, with a real trend (ADX).
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'pct_above_ema20', operation: 'greater', right: 0 },
+      { left: 'pct_above_sma200', operation: 'greater', right: 0 },
+      { left: 'ADX', operation: 'greater', right: 20 },
+    ],
+    sort: { sortBy: 'Perf.3M', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-pullback-ema20-us', label: 'Pullback EMA20 US', market: 'america', sector: null,
+    // Uptrend buy-the-dip: hugging EMA20 (±3%) while still above SMA200 and rising.
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'pct_above_ema20', operation: 'in_range', right: [-3, 3] },
+      { left: 'pct_above_sma200', operation: 'greater', right: 0 },
+      { left: 'Perf.3M', operation: 'greater', right: 10 },
+    ],
+    sort: { sortBy: 'Perf.3M', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-quality-compounder-us', label: 'Quality Compounder US', market: 'america', sector: null,
+    filter: [
+      { left: 'market_cap_basic', operation: 'greater', right: 1000000000 },
+      { left: 'return_on_equity', operation: 'greater', right: 15 },
+      { left: 'total_revenue_yoy_growth_ttm', operation: 'greater', right: 10 },
+      { left: 'debt_to_equity', operation: 'less', right: 1 },
+    ],
+    sort: { sortBy: 'return_on_equity', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-dividend-value-us', label: 'Dividend Value US', market: 'america', sector: null,
+    filter: [
+      { left: 'dividend_yield_recent', operation: 'greater', right: 3 },
+      { left: 'price_earnings_ttm', operation: 'in_range', right: [0, 20] },
+      { left: 'market_cap_basic', operation: 'greater', right: 1000000000 },
+    ],
+    sort: { sortBy: 'dividend_yield_recent', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-smallcap-momentum-us', label: 'Small-Cap Momentum US', market: 'america', sector: null,
+    filter: [
+      { left: 'market_cap_basic', operation: 'in_range', right: [100000000, 2000000000] },
+      { left: 'Perf.3M', operation: 'greater', right: 20 },
+      { left: 'relative_volume_10d_calc', operation: 'greater', right: 2 },
+      { left: 'close', operation: 'greater', right: 2 },
+    ],
+    sort: { sortBy: 'Perf.3M', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-low-vola-climber-us', label: 'Low-Vola Steady Climber US', market: 'america', sector: null,
+    // Trending but calm: positive 6M perf with low daily volatility and modest ADX.
+    filter: [
+      { left: 'close', operation: 'greater', right: 5 },
+      { left: 'Perf.6M', operation: 'greater', right: 10 },
+      { left: 'ADX', operation: 'less', right: 25 },
+      { left: 'Volatility.D', operation: 'less', right: 3 },
+    ],
+    sort: { sortBy: 'Perf.6M', sortOrder: 'desc' }, count: 40,
+    signal_type: 'custom_screen', built_in: true,
+  },
+  {
+    id: 'builtin-momentum-breakout-eu', label: 'Momentum Breakout EU', market: 'germany', sector: null,
+    filter: [
+      { left: 'volume', operation: 'greater', right: 20000 },
+      { left: 'RSI', operation: 'greater', right: 55 },
+      { left: 'Perf.1M', operation: 'greater', right: 8 },
+    ],
+    sort: { sortBy: 'Perf.1M', sortOrder: 'desc' }, count: 30,
+    signal_type: 'custom_screen', built_in: true,
+  },
 ];
+
+// Built-in presets that were shipped previously but have since been retired. They
+// are actively pruned from existing stores on load so they don't linger.
+const REMOVED_BUILTIN_IDS = new Set(['builtin-strong-buy-us']);
 
 function readLocal() {
   try {
@@ -91,12 +189,20 @@ function writeLocal(presets) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(presets)); } catch {}
 }
 
-/** Append any DEFAULT_PRESETS entries not yet present (by id). Returns [list, changed]. */
-function mergeBuiltins(presets) {
-  const existingIds = new Set(presets.map((p) => p.id));
+/**
+ * Reconcile a stored preset list against the shipped built-ins: prune retired
+ * built-ins, then append any newly-added ones (by id). Returns [list, changed].
+ */
+function reconcileBuiltins(presets) {
+  let changed = false;
+  let list = presets.filter((p) => {
+    if (p.built_in && REMOVED_BUILTIN_IDS.has(p.id)) { changed = true; return false; }
+    return true;
+  });
+  const existingIds = new Set(list.map((p) => p.id));
   const missing = DEFAULT_PRESETS.filter((p) => !existingIds.has(p.id));
-  if (missing.length === 0) return [presets, false];
-  return [[...presets, ...structuredClone(missing)], true];
+  if (missing.length) { list = [...list, ...structuredClone(missing)]; changed = true; }
+  return [list, changed];
 }
 
 /**
@@ -114,7 +220,7 @@ export async function loadPresets(storageClient) {
       // Backend unreachable → fall back to local copy so the UI still works.
       const local = readLocal();
       if (local && local.length) {
-        const [merged, changed] = mergeBuiltins(local);
+        const [merged, changed] = reconcileBuiltins(local);
         if (changed) writeLocal(merged);
         return merged;
       }
@@ -126,7 +232,7 @@ export async function loadPresets(storageClient) {
       try { await storageClient.writeConfig({ presets: seeded }); } catch {}
       return seeded;
     }
-    const [merged, changed] = mergeBuiltins(presets);
+    const [merged, changed] = reconcileBuiltins(presets);
     if (changed) {
       try { await storageClient.writeConfig({ presets: merged }); } catch {}
     }
@@ -136,7 +242,7 @@ export async function loadPresets(storageClient) {
   // No backend → localStorage fallback.
   const local = readLocal();
   if (local && local.length) {
-    const [merged, changed] = mergeBuiltins(local);
+    const [merged, changed] = reconcileBuiltins(local);
     if (changed) writeLocal(merged);
     return merged;
   }

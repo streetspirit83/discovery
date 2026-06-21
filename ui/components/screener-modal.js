@@ -3,9 +3,12 @@
  * with named presets that sync across devices (server-side discovery-config blob).
  */
 
-import { FIELDS, OPERATORS, MARKETS, SECTORS, fieldLabel } from '../lib/tv-fields.js';
+import {
+  FIELDS, OPERATORS, MARKETS, SECTORS, FIELD_BY_VALUE,
+  fieldLabel, isSynthetic, syntheticDeps, computeSynthetic, matchesOp,
+} from '../lib/tv-fields.js?v=20260621a';
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
-import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260614a';
+import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260621a';
 import { uuid } from '../lib/import-parser.js';
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
@@ -195,18 +198,25 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
       const div = document.createElement('div');
       div.className = 'scr-filter-row';
       const two = opArity(row.op) === 2;
+      const isPct = FIELD_BY_VALUE.get(row.field)?.type === 'percent';
+      const ph1 = isPct ? '%' : 'Wert';
+      const ph2 = isPct ? '% bis' : 'bis';
+      const pctTitle = isPct ? ' title="Relativwert in % – wird clientseitig berechnet"' : '';
       div.innerHTML = `
         <select class="filter-select scr-f-field" data-i="${i}">${fieldSelectHTML(row.field)}</select>
         <select class="filter-select scr-f-op" data-i="${i}">${opSelectHTML(row.op)}</select>
-        <input type="number" step="any" class="scr-f-v1" data-i="${i}" value="${row.v1}" placeholder="Wert">
-        <input type="number" step="any" class="scr-f-v2" data-i="${i}" value="${row.v2}" placeholder="bis" style="display:${two ? 'block' : 'none'}">
+        <input type="number" step="any" class="scr-f-v1" data-i="${i}" value="${row.v1}" placeholder="${ph1}"${pctTitle}>
+        <input type="number" step="any" class="scr-f-v2" data-i="${i}" value="${row.v2}" placeholder="${ph2}" style="display:${two ? 'block' : 'none'}"${pctTitle}>
         <button class="btn-icon scr-f-del" data-i="${i}" title="Entfernen">✕</button>
       `;
       wrap.appendChild(div);
     });
 
     wrap.querySelectorAll('.scr-f-field').forEach((el) =>
-      el.addEventListener('change', (e) => { state.filter[+e.target.dataset.i].field = e.target.value; }));
+      el.addEventListener('change', (e) => {
+        state.filter[+e.target.dataset.i].field = e.target.value;
+        renderFilters(); // refresh percent-hint placeholders
+      }));
     wrap.querySelectorAll('.scr-f-op').forEach((el) =>
       el.addEventListener('change', (e) => {
         const i = +e.target.dataset.i;
@@ -226,43 +236,108 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
   }
 
   // ── Build the scanner request from state ───────────────────────────────────
+  // Native filters go to the scanner verbatim. Synthetic (percent) filters can't
+  // be expressed server-side, so we collect their dependency columns and apply the
+  // comparison client-side after the response comes back (see postProcessRows).
   function buildRequest() {
     const filter = [];
+    const syntheticFilters = [];
+    const cols = ['description', 'close', 'sector']; // description→name, close+sector always handy
+    const addCol = (c) => { if (c && !cols.includes(c)) cols.push(c); };
+
     for (const r of state.filter) {
       if (!r.field || r.v1 === '' || r.v1 == null) continue;
       const arity = opArity(r.op);
+      if (isSynthetic(r.field)) {
+        if (arity === 2 && (r.v2 === '' || r.v2 == null)) continue;
+        syntheticDeps(r.field).forEach(addCol);
+        syntheticFilters.push({ field: r.field, op: r.op, v1: r.v1, v2: r.v2 });
+        continue;
+      }
       const right = arity === 2 ? [Number(r.v1), Number(r.v2)] : Number(r.v1);
       if (arity === 2 && (Number.isNaN(right[0]) || Number.isNaN(right[1]))) continue;
       if (arity === 1 && Number.isNaN(right)) continue;
       filter.push({ left: r.field, operation: r.op, right });
+      addCol(r.field);
     }
     if (state.sector) filter.push({ left: 'sector', operation: 'equal', right: state.sector });
 
-    // Columns: description first (for name), then close + sector + all referenced fields.
-    const cols = ['description', 'close', 'sector'];
-    for (const r of state.filter) if (r.field && !cols.includes(r.field)) cols.push(r.field);
-    if (!cols.includes(state.sortBy)) cols.push(state.sortBy);
+    // Sorting on a synthetic field must also happen client-side; the scanner sorts
+    // by a safe native default so the over-fetched pool is still sensibly ordered.
+    let clientSort = null;
+    let tvSort;
+    if (isSynthetic(state.sortBy)) {
+      syntheticDeps(state.sortBy).forEach(addCol);
+      clientSort = { field: state.sortBy, order: state.sortOrder };
+      tvSort = { sortBy: 'volume', sortOrder: 'desc' };
+    } else {
+      addCol(state.sortBy);
+      tvSort = { sortBy: state.sortBy, sortOrder: state.sortOrder };
+    }
+
+    const displayCount = Math.max(1, Math.min(200, Number(state.count) || 50));
+    // Client-side post-filtering/sorting happens AFTER the scanner's count cap, so
+    // over-fetch to avoid coming up short, then trim back to displayCount.
+    const postProcess = syntheticFilters.length > 0 || clientSort != null;
+    const fetchCount = postProcess ? 200 : displayCount;
 
     return {
       market: state.market,
       filter,
       columns: cols,
-      sort: { sortBy: state.sortBy, sortOrder: state.sortOrder },
-      count: Math.max(1, Math.min(200, Number(state.count) || 50)),
+      sort: tvSort,
+      count: fetchCount,
+      syntheticFilters,
+      clientSort,
+      displayCount,
     };
+  }
+
+  // Apply synthetic percent filters + synthetic sort to raw scanner rows, then trim.
+  function postProcessRows(rows, req) {
+    const idx = {};
+    req.columns.forEach((c, i) => { idx[c] = i; });
+    const getter = (d) => (col) => { const i = idx[col]; return i == null ? null : (d[i] ?? null); };
+
+    let out = rows;
+    if (req.syntheticFilters.length) {
+      out = out.filter((row) => {
+        const g = getter(row.d ?? []);
+        return req.syntheticFilters.every((f) => matchesOp(computeSynthetic(f.field, g), f.op, f.v1, f.v2));
+      });
+    }
+    if (req.clientSort) {
+      const { field, order } = req.clientSort;
+      const dir = order === 'asc' ? 1 : -1;
+      out = [...out].sort((a, b) => {
+        const va = computeSynthetic(field, getter(a.d ?? []));
+        const vb = computeSynthetic(field, getter(b.d ?? []));
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return (va - vb) * dir;
+      });
+    }
+    return out.slice(0, req.displayCount);
   }
 
   // ── Preview ────────────────────────────────────────────────────────────────
   function renderResults(rows, columns) {
     if (!rows.length) { resultsEl.innerHTML = '<p class="hint">Keine Treffer.</p>'; return; }
-    // Show symbol + name + the filtered/sorted fields.
+    const idx = {};
+    columns.forEach((c, i) => { idx[c] = i; });
+    // Show symbol + name + the filtered/sorted fields (synthetic fields are computed).
     const showCols = [...new Set([state.sortBy, ...state.filter.map((r) => r.field).filter(Boolean)])].slice(0, 5);
     const head = `<th>Symbol</th><th>Name</th>` + showCols.map((c) => `<th>${fieldLabel(c)}</th>`).join('');
     const body = rows.slice(0, 100).map((row) => {
       const d = row.d ?? [];
       const sym = row.s ?? '';
-      const name = d[columns.indexOf('description')] ?? '';
-      const cells = showCols.map((c) => `<td>${fmt(d[columns.indexOf(c)])}</td>`).join('');
+      const name = d[idx['description']] ?? '';
+      const get = (col) => { const i = idx[col]; return i == null ? null : (d[i] ?? null); };
+      const cells = showCols.map((c) => {
+        const v = isSynthetic(c) ? computeSynthetic(c, get) : get(c);
+        return `<td>${fmt(v)}</td>`;
+      }).join('');
       return `<tr><td><strong>${sym}</strong></td><td class="scr-name">${name}</td>${cells}</tr>`;
     }).join('');
     resultsEl.innerHTML = `<div class="scr-table-wrap"><table class="scr-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
@@ -276,12 +351,16 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
     resultsEl.innerHTML = '';
     try {
       const { totalCount, rows } = await runScreen(req, { backendUrl, secret });
-      lastRows = rows;
+      const finalRows = postProcessRows(rows, req);
+      lastRows = finalRows;
       lastColumns = req.columns;
       lastEffectiveFilter = req.filter;
-      renderResults(rows, req.columns);
-      setStatus(`✅ ${rows.length} Treffer${totalCount > rows.length ? ` (von ${totalCount})` : ''}`, 'success');
-      importBtn.disabled = rows.length === 0;
+      renderResults(finalRows, req.columns);
+      const postNote = (req.syntheticFilters.length || req.clientSort)
+        ? ` · ${rows.length} vor %-Filter`
+        : (totalCount > finalRows.length ? ` (von ${totalCount})` : '');
+      setStatus(`✅ ${finalRows.length} Treffer${postNote}`, 'success');
+      importBtn.disabled = finalRows.length === 0;
     } catch (err) {
       setStatus(`Fehler: ${err.message}`, 'warning');
     }
@@ -324,12 +403,20 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
   });
 
   function currentPresetDoc(id, label, built_in = false) {
-    const req = buildRequest();
-    // Store user filter rows (without the injected sector filter) for clean re-editing.
-    const filter = req.filter.filter((f) => f.left !== 'sector');
+    // Serialize the user's filter rows directly (native AND synthetic %), excluding
+    // the injected sector filter, so percent-based screens round-trip on save/edit.
+    const filter = state.filter
+      .filter((r) => r.field && r.v1 !== '' && r.v1 != null)
+      .map((r) => {
+        const arity = opArity(r.op);
+        const right = arity === 2 ? [Number(r.v1), Number(r.v2)] : Number(r.v1);
+        return { left: r.field, operation: r.op, right };
+      });
     return {
       id, label, market: state.market, sector: state.sector || null,
-      filter, sort: req.sort, count: req.count,
+      filter,
+      sort: { sortBy: state.sortBy, sortOrder: state.sortOrder },
+      count: Math.max(1, Math.min(200, Number(state.count) || 50)),
       signal_type: 'custom_screen', built_in,
     };
   }

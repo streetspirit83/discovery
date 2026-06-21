@@ -11,7 +11,7 @@
 // 'number'   → numeric input(s); supports all comparison operators
 // 'category' → value picked from `options`; supports equal/nequal/in_range only
 
-export const FIELDS = [
+const NATIVE_FIELDS = [
   // Price
   { value: 'close',                     label: 'Price (close)',          group: 'Price',          type: 'number' },
   { value: 'change',                    label: 'Change % (today)',       group: 'Price',          type: 'number' },
@@ -52,6 +52,12 @@ export const FIELDS = [
   { value: 'Perf.6M',                   label: 'Performance (6M)',       group: 'Performance',    type: 'number' },
   { value: 'Perf.Y',                    label: 'Performance (1Y)',       group: 'Performance',    type: 'number' },
 
+  // Volatility (TradingView columns that are already expressed as %)
+  { value: 'Volatility.D',              label: 'Volatility (1D) %',      group: 'Volatility',     type: 'number' },
+  { value: 'Volatility.W',              label: 'Volatility (1W) %',      group: 'Volatility',     type: 'number' },
+  { value: 'Volatility.M',              label: 'Volatility (1M) %',      group: 'Volatility',     type: 'number' },
+  { value: 'gap',                       label: 'Gap % (today)',          group: 'Volatility',     type: 'number' },
+
   // Valuation
   { value: 'market_cap_basic',          label: 'Market cap',             group: 'Valuation',      type: 'number' },
   { value: 'price_earnings_ttm',        label: 'P/E (TTM)',              group: 'Valuation',      type: 'number' },
@@ -67,6 +73,44 @@ export const FIELDS = [
   { value: 'return_on_equity',          label: 'Return on equity %',     group: 'Growth',         type: 'number' },
   { value: 'debt_to_equity',            label: 'Debt / equity',          group: 'Growth',         type: 'number' },
 ];
+
+// ─── Synthetic (computed) percent fields ────────────────────────────────────────
+// TradingView's scanner only accepts a literal number per field – it cannot filter
+// one field relative to another (e.g. "close within 3% of the 52-week high", or
+// "volume ≥ 150% of its 30-day average"). These pseudo-fields express exactly that:
+// they are NEVER sent to the scanner. Instead the screener fetches their `deps`
+// columns and computes the percentage per row, then applies the comparison
+// client-side. `compute(get)` receives a `get(column)` accessor for the row's raw
+// values and returns a number (the %) or null when inputs are missing.
+export const SYNTHETIC_FIELDS = [
+  {
+    value: 'pct_below_52w_high', label: '% below 52w high', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'price_52_week_high'],
+    compute: (g) => { const c = g('close'), h = g('price_52_week_high'); return (c == null || h == null || h === 0) ? null : (h - c) / h * 100; },
+  },
+  {
+    value: 'pct_above_52w_low', label: '% above 52w low', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'price_52_week_low'],
+    compute: (g) => { const c = g('close'), l = g('price_52_week_low'); return (c == null || l == null || l === 0) ? null : (c - l) / l * 100; },
+  },
+  {
+    value: 'vol_vs_avg30d_pct', label: 'Volume vs avg30d %', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['volume', 'average_volume_30d_calc'],
+    compute: (g) => { const v = g('volume'), a = g('average_volume_30d_calc'); return (v == null || a == null || a === 0) ? null : v / a * 100; },
+  },
+  {
+    value: 'pct_above_ema20', label: '% vs EMA20', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'EMA20'],
+    compute: (g) => { const c = g('close'), e = g('EMA20'); return (c == null || e == null || e === 0) ? null : (c - e) / e * 100; },
+  },
+  {
+    value: 'pct_above_sma200', label: '% vs SMA200', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'SMA200'],
+    compute: (g) => { const c = g('close'), s = g('SMA200'); return (c == null || s == null || s === 0) ? null : (c - s) / s * 100; },
+  },
+];
+
+export const FIELDS = [...NATIVE_FIELDS, ...SYNTHETIC_FIELDS];
 
 // ─── Operators ──────────────────────────────────────────────────────────────
 // `arity` 2 means it needs a low + high value (in_range / not_in_range).
@@ -144,8 +188,46 @@ export const SECTORS = [
 // ─── Lookups ────────────────────────────────────────────────────────────────
 export const FIELD_BY_VALUE  = new Map(FIELDS.map((f) => [f.value, f]));
 export const MARKET_BY_SLUG   = new Map(MARKETS.map((m) => [m.slug, m]));
+export const SYNTHETIC_BY_VALUE = new Map(SYNTHETIC_FIELDS.map((f) => [f.value, f]));
 
 /** Human label for a field id, falling back to the raw id. */
 export function fieldLabel(value) {
   return FIELD_BY_VALUE.get(value)?.label ?? value;
+}
+
+/** True when `value` is a computed percent field (never sent to the scanner). */
+export function isSynthetic(value) {
+  return SYNTHETIC_BY_VALUE.has(value);
+}
+
+/** Raw scanner columns a synthetic field needs in order to be computed. */
+export function syntheticDeps(value) {
+  return SYNTHETIC_BY_VALUE.get(value)?.deps ?? [];
+}
+
+/** Compute a synthetic field's % value for a row, given a get(column) accessor. */
+export function computeSynthetic(value, get) {
+  const f = SYNTHETIC_BY_VALUE.get(value);
+  return f ? f.compute(get) : null;
+}
+
+/**
+ * Client-side numeric comparison mirroring the scanner operators, for post-filtering
+ * synthetic fields. Unsupported operators (crosses_*) never exclude a row.
+ */
+export function matchesOp(val, op, v1, v2) {
+  if (val == null || Number.isNaN(val)) return false;
+  const a = Number(v1);
+  const b = Number(v2);
+  switch (op) {
+    case 'greater':      return val > a;
+    case 'egreater':     return val >= a;
+    case 'less':         return val < a;
+    case 'eless':        return val <= a;
+    case 'equal':        return val === a;
+    case 'nequal':       return val !== a;
+    case 'in_range':     return val >= Math.min(a, b) && val <= Math.max(a, b);
+    case 'not_in_range': return !(val >= Math.min(a, b) && val <= Math.max(a, b));
+    default:             return true;
+  }
 }
