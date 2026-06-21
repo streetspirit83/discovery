@@ -746,6 +746,7 @@ export class CandidateList {
       // Row click → open detail
       tr.addEventListener('pointerup', (e) => {
         if (['INPUT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
+        if (e.target.closest('.tr-check')) return; // ISIN-copy cell handles its own click
         this.onSelect?.(c);
       });
       tr.addEventListener('keydown', (e) => {
@@ -778,6 +779,7 @@ export class CandidateList {
           if (navigator.clipboard) navigator.clipboard.writeText(val).catch(() => {});
           this.onAction?.('isinCopied', c, { value: val });
         };
+        trCell.addEventListener('pointerup', (e) => e.stopPropagation());
         trCell.addEventListener('click', copyIsin);
         trCell.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') copyIsin(e); });
       }
