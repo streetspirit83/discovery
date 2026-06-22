@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260616g';
+import { CandidateList } from './components/candidate-list.js?v=20260621b';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -169,6 +169,58 @@ async function runTrCheckForSelection(idsArg) {
   const no  = updates.filter((u) => u.updates.tr_check?.tradable === false).length;
   const unk = updates.length - yes - no;
   toast(`TR-Check: ✓ ${yes} handelbar · ✗ ${no} nicht · ${unk ? `? ${unk} unklar` : ''}`.trim(), 'success', 6000);
+
+  try {
+    await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+  }
+}
+
+// ── Lang & Schwarz Echtzeitkurs für ausgewählte Ticker ──────────────────────────
+async function runLsQuoteForSelection(idsArg) {
+  if (!candidateList) return;
+  const ids = idsArg ?? [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann LS-Kurs starten', 'info', 3500);
+    return;
+  }
+  if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return; }
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+  // LS resolves via the cached ls_id (from a prior TR-Check) or, failing that, the
+  // ISIN. Backfill missing ISINs via TV so the lookup can succeed in one click.
+  const blob = allBlobs[currentBlobType];
+  const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+  const missing = (blob?.candidates ?? []).filter(
+    (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
+  );
+  if (missing.length) {
+    toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 10000);
+    try {
+      const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+      const tvUpdates = [];
+      for (const [cid, upd] of enr) {
+        const c = missing.find((x) => x.id === cid);
+        if (c) { Object.assign(c, upd); tvUpdates.push({ candidate_id: cid, updates: upd }); }
+      }
+      if (tvUpdates.length) await storageClient.bulkUpdateCandidates(currentBlobType, tvUpdates).catch(() => {});
+    } catch (err) { console.warn('[LS] ISIN backfill failed:', err.message); }
+  }
+
+  toast(`📈 Lade LS-Echtzeitkurse für ${ids.length} Ticker…`, 'info', 12000);
+  let updates;
+  try {
+    updates = await candidateList.runLsQuote(ids, { backendUrl, secret });
+  } catch (err) {
+    toast(`LS-Kurs fehlgeschlagen: ${err.message}`, 'error');
+    return;
+  }
+  const ok   = updates.filter((u) => u.updates.ls_quote?.price != null).length;
+  const fail = updates.length - ok;
+  toast(`LS-Kurs: 📈 ${ok} geladen${fail ? ` · ${fail} ohne Kurs` : ''} · Spalte „LS“ in der Preis-Ansicht`, 'success', 6000);
 
   try {
     await storageClient.bulkUpdateCandidates(currentBlobType, updates);
@@ -772,6 +824,11 @@ async function handleBulkAction(action, ids) {
 
   if (action === 'tr-check') {
     await runTrCheckForSelection(ids);
+    return;
+  }
+
+  if (action === 'ls-quote') {
+    await runLsQuoteForSelection(ids);
     return;
   }
 

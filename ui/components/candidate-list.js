@@ -7,6 +7,7 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260621b';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -29,6 +30,13 @@ function convFactor(c) {
 
 function fmtPrice(c, v, dec = 2) {
   return v == null ? '—' : fmtNum(v * convFactor(c), dec);
+}
+
+// LS quotes are always in EUR (the Trade-Republic venue), independent of the
+// stock's home exchange. Convert to the active display currency (EUR→USD only).
+function convFromEur() {
+  if (displayCurrency === 'EUR' || !fxEurUsd) return 1;
+  return fxEurUsd;
 }
 
 // ── Price setup situation (Preis view) ──────────────────────────────────────
@@ -234,6 +242,7 @@ function sortValue(c, col) {
     case 'setup':       return priceSituation(tv)?.icon ?? null;
     case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
     case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
+    case 'ls_price':    return c.ls_quote?.price ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -294,6 +303,7 @@ const VIEWS = {
     { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
+    { key:'ls_price',       label:'LS',    title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) + Δ% vs. Vortag · „LS-Kurs“-Button in der Bulk-Leiste · nutzt ISIN bzw. die ls_id aus dem TR-Check', num:true, fmt:c=>renderLsQuote(c) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
     { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema20) },
     { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema50) },
@@ -426,6 +436,19 @@ export class CandidateList {
       if (!ids.includes(c.id)) continue;
       c.tr_check = await checkTradeRepublic(c, opts);
       updates.push({ candidate_id: c.id, updates: { tr_check: c.tr_check } });
+    }
+    this.renderRows();
+    return updates;
+  }
+
+  // Lang & Schwarz intraday quote (EUR, the Trade-Republic venue) for the given
+  // candidates. Async (network via proxy); returns a bulk-update list.
+  async runLsQuote(ids, opts) {
+    const updates = [];
+    for (const c of this.candidates) {
+      if (!ids.includes(c.id)) continue;
+      c.ls_quote = await fetchLsQuote(c, opts);
+      updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
     }
     this.renderRows();
     return updates;
@@ -816,6 +839,7 @@ export class CandidateList {
     ba.innerHTML = `
       <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-tr-check">🛒 TR-Check</button>
+      <button class="bulk-btn bulk-btn--accent" id="bulk-ls-quote">📈 LS-Kurs</button>
       <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
       <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
       <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
@@ -829,6 +853,7 @@ export class CandidateList {
     ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
     ba.querySelector('#bulk-tr-check').addEventListener('pointerup', () => this.onBulkAction?.('tr-check', [...this.selected]));
+    ba.querySelector('#bulk-ls-quote').addEventListener('pointerup', () => this.onBulkAction?.('ls-quote', [...this.selected]));
     ba.querySelector('#bulk-copy-prompt').addEventListener('pointerup', () => this.onBulkAction?.('copy-prompt', [...this.selected]));
     ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
     ba.querySelector('#bulk-clear').addEventListener('pointerup',   () => this.clearSelection());
@@ -989,6 +1014,19 @@ function renderTrCheck(c) {
   if (t.tradable === false) return btn('no', '✗', `Nicht über Trade Republic handelbar · ${copyHint}`);
   if (t.no_isin) return btn('unknown', '?', `Keine ISIN – erst „TV Daten" laden · ${copyHint}`);
   return btn('unknown', '?', `Check fehlgeschlagen · ${copyHint}`);
+}
+
+function renderLsQuote(c) {
+  const q = c.ls_quote;
+  if (!q)         return '<span class="muted-dash" title="Ungeprüft – „LS-Kurs“ in der Bulk-Leiste ausführen">—</span>';
+  if (q.no_isin)  return '<span class="muted-dash" title="Keine ISIN – erst „TV Daten“ laden">—</span>';
+  if (q.price == null) return `<span class="muted-dash" title="${q.error ?? 'Kein LS-Kurs'}">—</span>`;
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const px  = fmtNum(q.price * convFromEur(), 2);
+  const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
+  const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
+  const chg = q.change_pct != null ? ` <span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>` : '';
+  return `<span title="${tip}">${sym}${px}${chg}</span>`;
 }
 
 function renderMomentumCheck(mc) {
