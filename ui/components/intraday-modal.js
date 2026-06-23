@@ -50,6 +50,14 @@ const DEFAULT_INDICATORS = [
   { label: 'VIX',    value: null, change: null },
 ];
 
+// Hard-wired TradingView symbol pages per indicator (tap opens in a new tab).
+const INDICATOR_LINKS = {
+  DAX:    'https://www.tradingview.com/symbols/XETR-DAX/?utm_source=androidapp&utm_medium=share',
+  NASDAQ: 'https://www.tradingview.com/symbols/TVC-NDQ/?utm_source=androidapp&utm_medium=share',
+  NIKKEI: 'https://www.tradingview.com/symbols/TVC-NI225/?utm_source=androidapp&utm_medium=share',
+  VIX:    'https://www.tradingview.com/symbols/CBOE-VIX/?utm_source=androidapp&utm_medium=share',
+};
+
 /**
  * @param {object} opts
  * @param {object[]} opts.candidates           live candidate refs of the current bucket
@@ -67,10 +75,13 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
   let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
 
   function indicatorChip(i) {
-    return `<div class="id-ind" title="${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} – Quelle TradingView">
-      <span class="id-ind__label">${i.label}</span>
-      <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
-    </div>`;
+    const href = INDICATOR_LINKS[i.label];
+    const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} – auf TradingView öffnen`;
+    const inner = `<span class="id-ind__label">${i.label}</span>
+      <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>`;
+    return href
+      ? `<a class="id-ind id-ind--link" href="${href}" target="_blank" rel="noopener" title="${tip}">${inner}</a>`
+      : `<div class="id-ind" title="${tip}">${inner}</div>`;
   }
 
   const overlay = document.createElement('div');

@@ -192,7 +192,7 @@ export class CandidateDetail {
         <div class="detail-title">
           <h2>${c.symbol} <span class="exchange-tag">${c.exchange}</span></h2>
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
-          ${c.isin ? `<small class="isin">ISIN: ${c.isin}</small>` : ''}
+          ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} 📋</small>` : ''}
         </div>
         <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
       </div>
@@ -264,6 +264,17 @@ export class CandidateDetail {
     `;
 
     this.el.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
+
+    const isinEl = this.el.querySelector('#detail-isin');
+    if (isinEl) {
+      const copyIsin = () => {
+        if (!c.isin) return;
+        navigator.clipboard?.writeText(c.isin).catch(() => {});
+        this.onAction?.('isinCopied', c, { value: c.isin });
+      };
+      isinEl.addEventListener('pointerup', copyIsin);
+      isinEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyIsin(); } });
+    }
 
     this.el.querySelector('#detail-promote')?.addEventListener('pointerup', () => {
       this.onAction?.('promote', c);

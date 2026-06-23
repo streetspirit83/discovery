@@ -3,12 +3,12 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260622c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622c';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622e';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -238,8 +238,10 @@ let reopenIntradayOnDetailClose = false;
 
 function openIntradayModal() {
   const blob = allBlobs[currentBlobType];
+  // Mirror the main list's active filters (sector/cap/broker/score/selection).
+  const candidates = candidateList ? candidateList.getFiltered() : (blob?.candidates ?? []);
   renderIntradayModal({
-    candidates: blob?.candidates ?? [],
+    candidates,
     toast,
     // One-time prep before a refresh sweep: gate on backend, backfill any
     // missing ISINs (needed for the LS lookup) in a single TV call.
