@@ -1,0 +1,296 @@
+/**
+ * Intra-Day Modal – opens on the (repurposed) Home nav slot.
+ *
+ * Scaffold: a focused intraday dashboard over the current bucket's candidates.
+ *   • header  – live market indicators (DAX / NASDAQ / NIKKEI / VIX) — FETCH TBD,
+ *               rendered from an injected `indicators` array (placeholders for now)
+ *   • toolbar – refresh button (re-fetches Lang & Schwarz quotes for the rows)
+ *   • table   – Symbol | Last | DayChg% | ATRP | Trigger
+ *               · all columns sortable, optional "★ only" filter
+ *               · ATRP cell shows a bar = |DayChg| / ATRP (green up, red down)
+ *               · Trigger "+" opens a stub editor (price markers + stop-loss)
+ *
+ * Operates on live candidate refs, so a refresh that mutates `ls_quote` shows up
+ * on re-render without re-wiring.
+ */
+
+// ── tiny local formatters ─────────────────────────────────────────────────────
+function fmtNum(v, dec = 2) {
+  return v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(dec);
+}
+function fmtPct(v, dec = 2) {
+  return v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(dec)}%`;
+}
+function posNeg(v) {
+  return v == null ? '' : v >= 0 ? 'pos' : 'neg';
+}
+
+// ── per-row accessors (LS quote first, TV as fallback) ────────────────────────
+function lastPrice(c) {
+  return c.ls_quote?.price ?? c.tv_data?.close_1m ?? c.tv_data?.close ?? null;
+}
+function dayChg(c) {
+  return c.ls_quote?.change_pct ?? c.tv_data?.change_1d ?? null;
+}
+function atrpOf(c) {
+  return c.tv_data?.atrp ?? null;
+}
+
+const SORTERS = {
+  symbol: (c) => c.symbol?.toLowerCase() ?? '',
+  last:   (c) => lastPrice(c),
+  daychg: (c) => dayChg(c),
+  atrp:   (c) => atrpOf(c),
+};
+
+const DEFAULT_INDICATORS = [
+  { label: 'DAX',    value: null, change: null },
+  { label: 'NASDAQ', value: null, change: null },
+  { label: 'NIKKEI', value: null, change: null },
+  { label: 'VIX',    value: null, change: null },
+];
+
+/**
+ * @param {object} opts
+ * @param {object[]} opts.candidates           live candidate refs of the current bucket
+ * @param {(ids:string[])=>Promise<void>} opts.onRefresh   re-fetch LS quotes for ids
+ * @param {(id:string,trigger:object)=>Promise<void>} [opts.onSaveTrigger]
+ * @param {(msg:string,type?:string)=>void} opts.toast
+ * @param {{label:string,value:number|null,change:number|null}[]} [opts.indicators]
+ */
+export function renderIntradayModal({ candidates, onRefresh, onSaveTrigger, toast, indicators }) {
+  if (document.getElementById('intraday-modal-overlay')) return;
+
+  const state = { sortCol: 'daychg', sortDir: 'desc', starOnly: false };
+  const inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'intraday-modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal intraday-modal" role="dialog" aria-modal="true" aria-label="Intra-Day">
+      <div class="modal-header">
+        <h2>📈 Intra-Day</h2>
+        <button class="modal-close" id="id-close" aria-label="Schließen">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="id-indicators" id="id-indicators">
+          ${inds.map((i) => `
+            <div class="id-ind" title="Marktindikator – Fetch noch zu klären">
+              <span class="id-ind__label">${i.label}</span>
+              <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
+            </div>`).join('')}
+        </div>
+
+        <div class="id-toolbar">
+          <button class="id-refresh" id="id-refresh" title="Lang & Schwarz Kurse neu laden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          </button>
+          <button class="id-star-filter" id="id-star-filter" title="Nur mit ★ markierte (Portfolio) anzeigen">★ nur markierte</button>
+          <span class="id-hint" id="id-count"></span>
+        </div>
+
+        <div class="id-table-wrap">
+          <table class="id-table">
+            <thead>
+              <tr>
+                <th data-sort="symbol"><button class="id-sort">Symbol</button></th>
+                <th class="num" data-sort="last"><button class="id-sort">Last</button></th>
+                <th class="num" data-sort="daychg"><button class="id-sort">DayChg%</button></th>
+                <th data-sort="atrp"><button class="id-sort">ATRP</button></th>
+                <th class="num">Trigger</th>
+              </tr>
+            </thead>
+            <tbody id="id-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const $ = (sel) => overlay.querySelector(sel);
+  const tbody = $('#id-tbody');
+
+  function visibleRows() {
+    let rows = candidates.slice();
+    if (state.starOnly) rows = rows.filter((c) => c.in_portfolio);
+    const get = SORTERS[state.sortCol] ?? SORTERS.symbol;
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const va = get(a), vb = get(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'string') return va.localeCompare(vb) * dir;
+      return (va - vb) * dir;
+    });
+    return rows;
+  }
+
+  function atrpCell(c) {
+    const a = atrpOf(c);
+    const chg = dayChg(c);
+    if (a == null) return '<span class="muted-dash">—</span>';
+    // Bar = how big today's move is vs. the typical ATR move (clamped to 100%).
+    const ratio = (chg != null && a > 0) ? Math.min(Math.abs(chg) / a, 1) : 0;
+    const cls = chg == null ? '' : chg >= 0 ? 'id-bar--pos' : 'id-bar--neg';
+    return `<div class="id-atrp">
+      <div class="id-bar"><div class="id-bar__fill ${cls}" style="width:${(ratio * 100).toFixed(0)}%"></div></div>
+      <span class="id-atrp__val">${fmtNum(a, 1)}%</span>
+    </div>`;
+  }
+
+  function triggerCell(c) {
+    const t = c.intraday_trigger;
+    const set = t && (t.markers || t.stop_loss);
+    return `<button class="id-trigger${set ? ' is-set' : ''}" data-id="${c.id}" title="${set ? 'Trigger gesetzt – bearbeiten' : 'Trigger hinzufügen'}">${set ? '✓' : '+'}</button>`;
+  }
+
+  function renderTable() {
+    const rows = visibleRows();
+    $('#id-count').textContent = `${rows.length} Werte`;
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="id-empty">Keine Werte${state.starOnly ? ' mit ★-Markierung' : ''}.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map((c) => {
+      const chg = dayChg(c);
+      const star = c.in_portfolio ? '<span class="id-star">★</span>' : '';
+      return `<tr>
+        <td><span class="id-sym">${star}${c.symbol}</span> <span class="id-exch">${c.exchange ?? ''}</span></td>
+        <td class="num">${fmtNum(lastPrice(c))}</td>
+        <td class="num ${posNeg(chg)}">${fmtPct(chg)}</td>
+        <td>${atrpCell(c)}</td>
+        <td class="num">${triggerCell(c)}</td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.id-trigger').forEach((btn) =>
+      btn.addEventListener('pointerup', () => openTriggerEditor(btn.dataset.id)));
+  }
+
+  function syncSortHeaders() {
+    overlay.querySelectorAll('th[data-sort]').forEach((th) => {
+      const active = th.dataset.sort === state.sortCol;
+      th.classList.toggle('id-sorted', active);
+      const btn = th.querySelector('.id-sort');
+      const base = btn.textContent.replace(/[ ▲▼]+$/, '');
+      btn.textContent = active ? `${base} ${state.sortDir === 'asc' ? '▲' : '▼'}` : base;
+    });
+  }
+
+  // ── Trigger editor (stub) ────────────────────────────────────────────────────
+  function stopLossOptions(c) {
+    const L = lastPrice(c);
+    const a = atrpOf(c);
+    const tv = c.tv_data ?? {};
+    const opts = [];
+    if (L != null) {
+      if (a != null) {
+        opts.push({ v: `atr1`, label: `−1×ATR  (${fmtNum(L * (1 - a / 100))})` });
+        opts.push({ v: `atr2`, label: `−2×ATR  (${fmtNum(L * (1 - 2 * a / 100))})` });
+      }
+      [5, 8, 10].forEach((p) => opts.push({ v: `pct${p}`, label: `−${p}%  (${fmtNum(L * (1 - p / 100))})` }));
+    }
+    if (tv.ema20 != null)    opts.push({ v: 'ema20',   label: `EMA20  (${fmtNum(tv.ema20)})` });
+    if (tv.pivot_s2 != null) opts.push({ v: 'pivots2', label: `Pivot S2  (${fmtNum(tv.pivot_s2)})` });
+    return opts;
+  }
+
+  function openTriggerEditor(id) {
+    const c = candidates.find((x) => x.id === id);
+    if (!c) return;
+    const existing = c.intraday_trigger ?? {};
+    const opts = stopLossOptions(c);
+
+    const sub = document.createElement('div');
+    sub.className = 'modal-overlay id-sub-overlay';
+    sub.innerHTML = `
+      <div class="modal id-trigger-modal" role="dialog" aria-modal="true" aria-label="Trigger">
+        <div class="modal-header">
+          <h2>Trigger · ${c.symbol}</h2>
+          <button class="modal-close" id="idt-close" aria-label="Schließen">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="idt-markers">Preismarker (Freitext)</label>
+            <textarea id="idt-markers" rows="3" placeholder="z. B. Einstieg 7,50 · Ziel 9,20 · Beobachten ab 8,00">${existing.markers ?? ''}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="idt-stop">Stop-Loss-Marke (berechnet)</label>
+            <select id="idt-stop">
+              <option value="">— keine —</option>
+              ${opts.map((o) => `<option value="${o.v}"${existing.stop_loss === o.v ? ' selected' : ''}>${o.label}</option>`).join('')}
+            </select>
+            <small>Marken aus Last-Kurs, ATRP und TV-Leveln berechnet.</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="idt-cancel">Abbrechen</button>
+          <button class="btn btn-primary" id="idt-save">Speichern</button>
+        </div>
+      </div>`;
+    document.body.appendChild(sub);
+
+    const closeSub = () => sub.remove();
+    sub.querySelector('#idt-close').addEventListener('pointerup', closeSub);
+    sub.querySelector('#idt-cancel').addEventListener('pointerup', closeSub);
+    sub.addEventListener('pointerup', (e) => { if (e.target === sub) closeSub(); });
+    sub.querySelector('#idt-save').addEventListener('pointerup', async () => {
+      const trigger = {
+        markers: sub.querySelector('#idt-markers').value.trim(),
+        stop_loss: sub.querySelector('#idt-stop').value,
+        saved_at: new Date().toISOString(),
+      };
+      c.intraday_trigger = trigger;
+      renderTable();
+      closeSub();
+      try { await onSaveTrigger?.(c.id, trigger); }
+      catch (err) { toast?.(`Trigger nicht gespeichert: ${err.message}`, 'error'); }
+    });
+  }
+
+  // ── Wiring ───────────────────────────────────────────────────────────────────
+  overlay.querySelectorAll('th[data-sort]').forEach((th) =>
+    th.querySelector('.id-sort').addEventListener('pointerup', () => {
+      const col = th.dataset.sort;
+      if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortCol = col; state.sortDir = col === 'symbol' ? 'asc' : 'desc'; }
+      syncSortHeaders();
+      renderTable();
+    }));
+
+  $('#id-star-filter').addEventListener('pointerup', () => {
+    state.starOnly = !state.starOnly;
+    $('#id-star-filter').classList.toggle('is-active', state.starOnly);
+    renderTable();
+  });
+
+  $('#id-refresh').addEventListener('pointerup', async () => {
+    const btn = $('#id-refresh');
+    if (btn.classList.contains('is-loading')) return;
+    btn.classList.add('is-loading');
+    try {
+      const ids = visibleRows().map((c) => c.id);
+      await onRefresh?.(ids);
+      renderTable();
+    } catch (err) {
+      toast?.(`Aktualisieren fehlgeschlagen: ${err.message}`, 'error');
+    } finally {
+      btn.classList.remove('is-loading');
+    }
+  });
+
+  const close = () => overlay.remove();
+  $('#id-close').addEventListener('pointerup', close);
+  overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape' && !document.querySelector('.id-sub-overlay')) {
+      close(); document.removeEventListener('keydown', esc);
+    }
+  });
+
+  syncSortHeaders();
+  renderTable();
+}
