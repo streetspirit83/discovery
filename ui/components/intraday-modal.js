@@ -55,15 +55,23 @@ const DEFAULT_INDICATORS = [
  * @param {object[]} opts.candidates           live candidate refs of the current bucket
  * @param {(ids:string[])=>Promise<{ok:boolean}|void>} [opts.onRefreshPrepare]  one-time gate/backfill before a sweep
  * @param {(c:object)=>Promise<object|null>} [opts.onRefreshTicker]  fetch ONE ticker's LS quote (mutates c)
+ * @param {()=>Promise<{label:string,value:number|null,change:number|null}[]|null>} [opts.onFetchIndicators]  DAX/NASDAQ/NIKKEI/VIX
  * @param {(id:string,trigger:object)=>Promise<void>} [opts.onSaveTrigger]
  * @param {(msg:string,type?:string)=>void} opts.toast
  * @param {{label:string,value:number|null,change:number|null}[]} [opts.indicators]
  */
-export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTicker, onSaveTrigger, toast, indicators }) {
+export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTicker, onFetchIndicators, onSaveTrigger, toast, indicators }) {
   if (document.getElementById('intraday-modal-overlay')) return;
 
   const state = { sortCol: 'daychg', sortDir: 'desc', starOnly: false };
-  const inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
+  let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
+
+  function indicatorChip(i) {
+    return `<div class="id-ind" title="${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} – Quelle TradingView">
+      <span class="id-ind__label">${i.label}</span>
+      <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
+    </div>`;
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -76,11 +84,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
       </div>
       <div class="modal-body">
         <div class="id-indicators" id="id-indicators">
-          ${inds.map((i) => `
-            <div class="id-ind" title="Marktindikator – Fetch noch zu klären">
-              <span class="id-ind__label">${i.label}</span>
-              <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
-            </div>`).join('')}
+          ${inds.map(indicatorChip).join('')}
         </div>
 
         <div class="id-toolbar">
@@ -112,6 +116,17 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
 
   const $ = (sel) => overlay.querySelector(sel);
   const tbody = $('#id-tbody');
+
+  function renderIndicators() {
+    $('#id-indicators').innerHTML = inds.map(indicatorChip).join('');
+  }
+  async function refreshIndicators() {
+    if (!onFetchIndicators) return;
+    try {
+      const r = await onFetchIndicators();
+      if (Array.isArray(r) && r.length) { inds = r; renderIndicators(); }
+    } catch { /* leave previous/placeholder values */ }
+  }
 
   function visibleRows() {
     let rows = candidates.slice();
@@ -303,6 +318,8 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
     try {
       const prep = await onRefreshPrepare?.(rows.map((c) => c.id));
       if (prep && prep.ok === false) return;
+      // Indices + VIX refresh alongside the LS sweep.
+      const indicatorsP = refreshIndicators();
       // Sweep ticker by ticker: pulse the row being fetched, then animate its
       // figures the moment its quote lands. Sequential = a visible left-to-right wave.
       let ok = 0;
@@ -315,6 +332,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
         if (q?.price != null) ok++;
         if (tr) { tr.classList.remove('id-row--updating'); updateRowCells(tr, c, prevLast); }
       }
+      await indicatorsP;
       toast?.(`LS aktualisiert: ${ok}/${rows.length}`, ok ? 'success' : 'info', 4000);
     } catch (err) {
       toast?.(`Aktualisieren fehlgeschlagen: ${err.message}`, 'error');
@@ -334,4 +352,5 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
 
   syncSortHeaders();
   renderTable();
+  refreshIndicators(); // populate indices + VIX on open (best-effort)
 }

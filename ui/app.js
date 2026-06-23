@@ -8,10 +8,10 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622a';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622b';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260616b';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260621b';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -1107,6 +1107,13 @@ async function init() {
           storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
         }
         return candidate.ls_quote;
+      },
+      // Indices + VIX (DAX / NASDAQ / NIKKEI / VIX) via the TV scanner.
+      onFetchIndicators: async () => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchMarketIndicators({ backendUrl, secret });
       },
       // Persist a row's trigger (price markers + stop-loss) when configured.
       onSaveTrigger: async (id, trigger) => {
