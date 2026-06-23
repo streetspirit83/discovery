@@ -231,6 +231,75 @@ async function runLsQuoteForSelection(idsArg) {
   }
 }
 
+// ── Intra-Day modal (Home nav slot) ─────────────────────────────────────────────
+// When the detail sheet is opened from here, closing it should bring this modal
+// back (see closeDetailSheet).
+let reopenIntradayOnDetailClose = false;
+
+function openIntradayModal() {
+  const blob = allBlobs[currentBlobType];
+  renderIntradayModal({
+    candidates: blob?.candidates ?? [],
+    toast,
+    // One-time prep before a refresh sweep: gate on backend, backfill any
+    // missing ISINs (needed for the LS lookup) in a single TV call.
+    onRefreshPrepare: async (ids) => {
+      if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return { ok: false }; }
+      const backendUrl = localStorage.getItem('discovery_backend_url');
+      const secret     = localStorage.getItem('discovery_secret');
+      if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return { ok: false }; }
+      const b = allBlobs[currentBlobType];
+      const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+      const missing = (b?.candidates ?? []).filter(
+        (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
+      );
+      if (missing.length) {
+        toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 8000);
+        try {
+          const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+          const ups = [];
+          for (const [cid, upd] of enr) {
+            const c = missing.find((x) => x.id === cid);
+            if (c) { Object.assign(c, upd); ups.push({ candidate_id: cid, updates: upd }); }
+          }
+          if (ups.length) await storageClient.bulkUpdateCandidates(currentBlobType, ups).catch(() => {});
+        } catch (err) { console.warn('[Intraday] ISIN backfill failed:', err.message); }
+      }
+      return { ok: true };
+    },
+    // Fetch ONE ticker's LS quote (mutates the candidate, persists best-effort).
+    // The modal awaits these one at a time and animates each row as it lands.
+    onRefreshTicker: async (candidate) => {
+      const backendUrl = localStorage.getItem('discovery_backend_url');
+      const secret     = localStorage.getItem('discovery_secret');
+      if (!backendUrl || !secret) return null;
+      candidate.ls_quote = await fetchLsQuote(candidate, { backendUrl, secret });
+      if (storageClient) {
+        storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
+      }
+      return candidate.ls_quote;
+    },
+    // Indices + VIX (DAX / NASDAQ / NIKKEI / VIX) via the TV scanner.
+    onFetchIndicators: async () => {
+      const backendUrl = localStorage.getItem('discovery_backend_url');
+      const secret     = localStorage.getItem('discovery_secret');
+      if (useMock || !backendUrl || !secret) return null;
+      return fetchMarketIndicators({ backendUrl, secret });
+    },
+    // Persist a row's trigger (price markers + stop-loss) when configured.
+    onSaveTrigger: async (id, trigger) => {
+      if (useMock || !storageClient) return;
+      await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
+    },
+    // Tap a symbol → open the candidate detail sheet; remember to reopen on close.
+    onOpenDetail: (candidate) => {
+      reopenIntradayOnDetailClose = true;
+      candidateDetail?.show(candidate);
+      openDetailSheet();
+    },
+  });
+}
+
 // ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
@@ -415,6 +484,59 @@ function closeDetailSheet() {
   detailSheetOpen = false;
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
+  if (reopenIntradayOnDetailClose) {
+    reopenIntradayOnDetailClose = false;
+    openIntradayModal(); // came from Intra-Day → bring it back
+  }
+}
+
+// Mobile-friendly swipe-to-dismiss for a right-edge sheet: drag right to close.
+// Only acts on clearly-horizontal gestures so vertical scrolling still works.
+function initSheetSwipe(el, onDismiss) {
+  let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horizontal = false;
+  const THRESHOLD = 70;
+
+  el.addEventListener('touchstart', (e) => {
+    if (!el.classList.contains('is-open') || e.touches.length !== 1) return;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    dx = 0; dragging = true; decided = false; horizontal = false;
+    el.style.transition = 'none';
+  }, { passive: true });
+
+  el.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decided = true;
+      horizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!horizontal) return;          // vertical scroll → leave alone
+    if (dx < 0) dx = 0;               // only drag toward the closing edge (right)
+    el.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.transition = '';
+    if (horizontal && dx > THRESHOLD) {
+      el.style.transform = 'translateX(100%)'; // finish sliding out, then close
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        onDismiss();             // flips state + removes is-open (class also = 100%)
+        el.style.transform = ''; // clear inline; class keeps it off-screen
+      };
+      el.addEventListener('transitionend', (ev) => { if (ev.propertyName === 'transform') finish(); }, { once: true });
+      setTimeout(finish, 350);   // fallback if transitionend doesn't fire
+    } else {
+      el.style.transform = '';   // snap back to open position
+    }
+  };
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
 }
 
 function renderBucketSheet() {
@@ -979,6 +1101,7 @@ async function init() {
     onAction: handleAction,
     onClose: closeDetailSheet,
   });
+  initSheetSwipe(document.getElementById('detail-sheet'), () => candidateDetail.hide());
 
   // Apply saved view mode before first data load
   if (uiState.view !== 'standard') {
@@ -1066,66 +1189,7 @@ async function init() {
   // ── Botnav ───────────────────────────────────────────────────────────────────
   document.getElementById('nav-home').addEventListener('pointerup', () => {
     document.getElementById('content').scrollTo({ top: 0, behavior: 'smooth' });
-    const blob = allBlobs[currentBlobType];
-    renderIntradayModal({
-      candidates: blob?.candidates ?? [],
-      toast,
-      // One-time prep before a refresh sweep: gate on backend, backfill any
-      // missing ISINs (needed for the LS lookup) in a single TV call.
-      onRefreshPrepare: async (ids) => {
-        if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return { ok: false }; }
-        const backendUrl = localStorage.getItem('discovery_backend_url');
-        const secret     = localStorage.getItem('discovery_secret');
-        if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return { ok: false }; }
-        const b = allBlobs[currentBlobType];
-        const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
-        const missing = (b?.candidates ?? []).filter(
-          (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
-        );
-        if (missing.length) {
-          toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 8000);
-          try {
-            const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
-            const ups = [];
-            for (const [cid, upd] of enr) {
-              const c = missing.find((x) => x.id === cid);
-              if (c) { Object.assign(c, upd); ups.push({ candidate_id: cid, updates: upd }); }
-            }
-            if (ups.length) await storageClient.bulkUpdateCandidates(currentBlobType, ups).catch(() => {});
-          } catch (err) { console.warn('[Intraday] ISIN backfill failed:', err.message); }
-        }
-        return { ok: true };
-      },
-      // Fetch ONE ticker's LS quote (mutates the candidate, persists best-effort).
-      // The modal awaits these one at a time and animates each row as it lands.
-      onRefreshTicker: async (candidate) => {
-        const backendUrl = localStorage.getItem('discovery_backend_url');
-        const secret     = localStorage.getItem('discovery_secret');
-        if (!backendUrl || !secret) return null;
-        candidate.ls_quote = await fetchLsQuote(candidate, { backendUrl, secret });
-        if (storageClient) {
-          storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
-        }
-        return candidate.ls_quote;
-      },
-      // Indices + VIX (DAX / NASDAQ / NIKKEI / VIX) via the TV scanner.
-      onFetchIndicators: async () => {
-        const backendUrl = localStorage.getItem('discovery_backend_url');
-        const secret     = localStorage.getItem('discovery_secret');
-        if (useMock || !backendUrl || !secret) return null;
-        return fetchMarketIndicators({ backendUrl, secret });
-      },
-      // Persist a row's trigger (price markers + stop-loss) when configured.
-      onSaveTrigger: async (id, trigger) => {
-        if (useMock || !storageClient) return;
-        await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
-      },
-      // Tap a symbol → open the candidate detail sheet.
-      onOpenDetail: (candidate) => {
-        candidateDetail?.show(candidate);
-        openDetailSheet();
-      },
-    });
+    openIntradayModal();
   });
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
