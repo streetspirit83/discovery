@@ -60,7 +60,7 @@ const DEFAULT_INDICATORS = [
  * @param {(msg:string,type?:string)=>void} opts.toast
  * @param {{label:string,value:number|null,change:number|null}[]} [opts.indicators]
  */
-export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTicker, onFetchIndicators, onSaveTrigger, toast, indicators }) {
+export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTicker, onFetchIndicators, onSaveTrigger, onOpenDetail, toast, indicators }) {
   if (document.getElementById('intraday-modal-overlay')) return;
 
   const state = { sortCol: 'daychg', sortDir: 'desc', starOnly: false };
@@ -174,7 +174,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
       const chg = dayChg(c);
       const star = c.in_portfolio ? '<span class="id-star">★</span>' : '';
       return `<tr data-row-id="${c.id}">
-        <td><span class="id-sym">${star}${c.symbol}</span> <span class="id-exch">${c.exchange ?? ''}</span></td>
+        <td><span class="id-sym id-sym--link" role="button" tabindex="0" data-id="${c.id}" title="Detail öffnen">${star}${c.symbol}</span> <span class="id-exch">${c.exchange ?? ''}</span></td>
         <td class="num id-cell-last">${fmtNum(lastPrice(c))}</td>
         <td class="num id-cell-chg ${posNeg(chg)}">${fmtPct(chg)}</td>
         <td class="id-cell-atrp">${atrpCell(c)}</td>
@@ -184,6 +184,17 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
 
     tbody.querySelectorAll('.id-trigger').forEach((btn) =>
       btn.addEventListener('pointerup', () => openTriggerEditor(btn.dataset.id)));
+
+    tbody.querySelectorAll('.id-sym--link').forEach((el) => {
+      const open = () => {
+        const c = candidates.find((x) => x.id === el.dataset.id);
+        if (!c) return;
+        close();                 // close the Intra-Day overlay first (avoids stacking)
+        onOpenDetail?.(c);
+      };
+      el.addEventListener('pointerup', open);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
   }
 
   // Briefly flash a cell green/red, restarting the animation if already running.

@@ -988,6 +988,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .id-table tr:last-child td { border-bottom:none; }
 .id-sort { background:none; border:none; color:inherit; font:inherit; font-weight:var(--fw-bold); cursor:pointer; padding:0; }
 .id-sym { font-weight:var(--fw-bold); }
+.id-sym--link { cursor:pointer; }
+.id-sym--link:hover { color:var(--accent); text-decoration:underline; }
 .id-star { color:var(--warn); margin-right:2px; }
 .id-exch { color:var(--muted); font-size:var(--fs-1); }
 .id-empty { text-align:center; color:var(--muted); padding:20px; }

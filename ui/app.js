@@ -2,13 +2,13 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260621b';
+import { CandidateList } from './components/candidate-list.js?v=20260622c';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622b';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622c';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -1119,6 +1119,11 @@ async function init() {
       onSaveTrigger: async (id, trigger) => {
         if (useMock || !storageClient) return;
         await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
+      },
+      // Tap a symbol → open the candidate detail sheet.
+      onOpenDetail: (candidate) => {
+        candidateDetail?.show(candidate);
+        openDetailSheet();
       },
     });
   });
