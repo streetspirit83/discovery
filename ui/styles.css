@@ -1002,6 +1002,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   width:24px; height:24px; border-radius:var(--r-1); cursor:pointer; font-size:var(--fs-3); line-height:1;
 }
 .id-trigger.is-set { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+/* Ticker-by-ticker refresh animation */
+.id-row--updating { animation:id-pulse 1s ease-in-out infinite; }
+@keyframes id-pulse { 0%,100% { background:transparent; } 50% { background:var(--accent-weak); } }
+.id-cell-last, .id-cell-chg { transition:color 0.25s ease; border-radius:var(--r-1); }
+.id-flash--up   { animation:id-flash-up   0.9s ease-out; }
+.id-flash--down { animation:id-flash-down 0.9s ease-out; }
+@keyframes id-flash-up   { 0% { background:var(--pos-weak); } 100% { background:transparent; } }
+@keyframes id-flash-down { 0% { background:var(--neg-weak); } 100% { background:transparent; } }
+@media (prefers-reduced-motion:reduce) {
+  .id-row--updating, .id-flash--up, .id-flash--down, .id-refresh.is-loading svg { animation:none; }
+}
 .id-trigger-modal { width:min(420px,100%); }
 .id-trigger-modal textarea, .id-trigger-modal select {
   width:100%; background:var(--surface-3); border:1px solid var(--border); color:var(--text);

@@ -8,10 +8,11 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260621b';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622a';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate } from './lib/tv-enrichment.js?v=20260616b';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260621b';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
@@ -1069,8 +1070,44 @@ async function init() {
     renderIntradayModal({
       candidates: blob?.candidates ?? [],
       toast,
-      // Refresh = re-fetch Lang & Schwarz quotes for the shown rows.
-      onRefresh: async (ids) => { await runLsQuoteForSelection(ids); },
+      // One-time prep before a refresh sweep: gate on backend, backfill any
+      // missing ISINs (needed for the LS lookup) in a single TV call.
+      onRefreshPrepare: async (ids) => {
+        if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return { ok: false }; }
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return { ok: false }; }
+        const b = allBlobs[currentBlobType];
+        const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+        const missing = (b?.candidates ?? []).filter(
+          (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
+        );
+        if (missing.length) {
+          toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 8000);
+          try {
+            const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+            const ups = [];
+            for (const [cid, upd] of enr) {
+              const c = missing.find((x) => x.id === cid);
+              if (c) { Object.assign(c, upd); ups.push({ candidate_id: cid, updates: upd }); }
+            }
+            if (ups.length) await storageClient.bulkUpdateCandidates(currentBlobType, ups).catch(() => {});
+          } catch (err) { console.warn('[Intraday] ISIN backfill failed:', err.message); }
+        }
+        return { ok: true };
+      },
+      // Fetch ONE ticker's LS quote (mutates the candidate, persists best-effort).
+      // The modal awaits these one at a time and animates each row as it lands.
+      onRefreshTicker: async (candidate) => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (!backendUrl || !secret) return null;
+        candidate.ls_quote = await fetchLsQuote(candidate, { backendUrl, secret });
+        if (storageClient) {
+          storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
+        }
+        return candidate.ls_quote;
+      },
       // Persist a row's trigger (price markers + stop-loss) when configured.
       onSaveTrigger: async (id, trigger) => {
         if (useMock || !storageClient) return;

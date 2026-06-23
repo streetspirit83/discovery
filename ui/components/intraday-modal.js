@@ -53,12 +53,13 @@ const DEFAULT_INDICATORS = [
 /**
  * @param {object} opts
  * @param {object[]} opts.candidates           live candidate refs of the current bucket
- * @param {(ids:string[])=>Promise<void>} opts.onRefresh   re-fetch LS quotes for ids
+ * @param {(ids:string[])=>Promise<{ok:boolean}|void>} [opts.onRefreshPrepare]  one-time gate/backfill before a sweep
+ * @param {(c:object)=>Promise<object|null>} [opts.onRefreshTicker]  fetch ONE ticker's LS quote (mutates c)
  * @param {(id:string,trigger:object)=>Promise<void>} [opts.onSaveTrigger]
  * @param {(msg:string,type?:string)=>void} opts.toast
  * @param {{label:string,value:number|null,change:number|null}[]} [opts.indicators]
  */
-export function renderIntradayModal({ candidates, onRefresh, onSaveTrigger, toast, indicators }) {
+export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTicker, onSaveTrigger, toast, indicators }) {
   if (document.getElementById('intraday-modal-overlay')) return;
 
   const state = { sortCol: 'daychg', sortDir: 'desc', starOnly: false };
@@ -157,17 +158,43 @@ export function renderIntradayModal({ candidates, onRefresh, onSaveTrigger, toas
     tbody.innerHTML = rows.map((c) => {
       const chg = dayChg(c);
       const star = c.in_portfolio ? '<span class="id-star">★</span>' : '';
-      return `<tr>
+      return `<tr data-row-id="${c.id}">
         <td><span class="id-sym">${star}${c.symbol}</span> <span class="id-exch">${c.exchange ?? ''}</span></td>
-        <td class="num">${fmtNum(lastPrice(c))}</td>
-        <td class="num ${posNeg(chg)}">${fmtPct(chg)}</td>
-        <td>${atrpCell(c)}</td>
+        <td class="num id-cell-last">${fmtNum(lastPrice(c))}</td>
+        <td class="num id-cell-chg ${posNeg(chg)}">${fmtPct(chg)}</td>
+        <td class="id-cell-atrp">${atrpCell(c)}</td>
         <td class="num">${triggerCell(c)}</td>
       </tr>`;
     }).join('');
 
     tbody.querySelectorAll('.id-trigger').forEach((btn) =>
       btn.addEventListener('pointerup', () => openTriggerEditor(btn.dataset.id)));
+  }
+
+  // Briefly flash a cell green/red, restarting the animation if already running.
+  function flash(el, dir) {
+    if (!el) return;
+    el.classList.remove('id-flash--up', 'id-flash--down');
+    void el.offsetWidth; // force reflow so the animation re-triggers
+    el.classList.add(`id-flash--${dir}`);
+    el.addEventListener('animationend', () => el.classList.remove(`id-flash--${dir}`), { once: true });
+  }
+
+  // Update one row's figures in place (no full re-render) and animate the change.
+  function updateRowCells(tr, c, prevLast) {
+    const newLast = lastPrice(c);
+    const chg = dayChg(c);
+    const lastCell = tr.querySelector('.id-cell-last');
+    const chgCell  = tr.querySelector('.id-cell-chg');
+    const atrpEl   = tr.querySelector('.id-cell-atrp');
+    if (lastCell) lastCell.textContent = fmtNum(newLast);
+    if (chgCell)  { chgCell.textContent = fmtPct(chg); chgCell.className = `num id-cell-chg ${posNeg(chg)}`; }
+    if (atrpEl)   atrpEl.innerHTML = atrpCell(c);
+
+    let dir = null;
+    if (prevLast != null && newLast != null && newLast !== prevLast) dir = newLast > prevLast ? 'up' : 'down';
+    else if (prevLast == null && newLast != null) dir = 'up'; // first value lands
+    if (dir) { flash(lastCell, dir); flash(chgCell, dir); }
   }
 
   function syncSortHeaders() {
@@ -270,11 +297,25 @@ export function renderIntradayModal({ candidates, onRefresh, onSaveTrigger, toas
   $('#id-refresh').addEventListener('pointerup', async () => {
     const btn = $('#id-refresh');
     if (btn.classList.contains('is-loading')) return;
+    const rows = visibleRows();
+    if (rows.length === 0) return;
     btn.classList.add('is-loading');
     try {
-      const ids = visibleRows().map((c) => c.id);
-      await onRefresh?.(ids);
-      renderTable();
+      const prep = await onRefreshPrepare?.(rows.map((c) => c.id));
+      if (prep && prep.ok === false) return;
+      // Sweep ticker by ticker: pulse the row being fetched, then animate its
+      // figures the moment its quote lands. Sequential = a visible left-to-right wave.
+      let ok = 0;
+      for (const c of rows) {
+        const tr = tbody.querySelector(`tr[data-row-id="${c.id}"]`);
+        if (tr) tr.classList.add('id-row--updating');
+        const prevLast = lastPrice(c);
+        let q = null;
+        try { q = await onRefreshTicker?.(c); } catch { /* keep sweeping */ }
+        if (q?.price != null) ok++;
+        if (tr) { tr.classList.remove('id-row--updating'); updateRowCells(tr, c, prevLast); }
+      }
+      toast?.(`LS aktualisiert: ${ok}/${rows.length}`, ok ? 'success' : 'info', 4000);
     } catch (err) {
       toast?.(`Aktualisieren fehlgeschlagen: ${err.message}`, 'error');
     } finally {
