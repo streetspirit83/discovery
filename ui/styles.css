@@ -452,6 +452,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .seg-btn--momentum { margin-left: auto; display: inline-flex; align-items: center; }
 .seg-btn--momentum svg { display: block; }
 .seg-btn--currency { font-variant-numeric: tabular-nums; }
+.seg-btn--portfolio { font-size: 14px; line-height: 1; }
+.seg-btn--portfolio.seg-btn--active { background: var(--accent); border-color: var(--accent); color: #ffd34d; }
 
 /* Momentum-Check Ampel + Setup-Icon */
 .momcheck { font-size: 14px; line-height: 1; cursor: default; }

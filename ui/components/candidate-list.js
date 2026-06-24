@@ -1040,6 +1040,17 @@ function lsChgCell(c) {
   return `<span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>`;
 }
 
+// Merkliste cost basis ("Einstand") — the manual entry price from the merkliste
+// portfolio (stored in EUR). Blank when the ticker isn't in the portfolio.
+function renderMkEntry(c) {
+  if (c.mk_entry == null) {
+    return '<span class="muted-dash" title="Nicht im Merkliste-Portfolio / kein Einstand gepflegt">—</span>';
+  }
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const px  = fmtNum(c.mk_entry * convFromEur(), 2);
+  return `<span title="Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
+}
+
 function renderMomentumCheck(mc) {
   if (!mc) return '<span class="muted-dash">—</span>';
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
