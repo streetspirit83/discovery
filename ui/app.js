@@ -2,17 +2,17 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260622c';
+import { CandidateList } from './components/candidate-list.js?v=20260622f';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622e';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622f';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
-import { fetchLsQuote } from './lib/ls-intraday.js?v=20260621b';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260622f';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';

@@ -22,6 +22,17 @@
 
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
+// Evenly downsample an intraday [ts, price][] to ~n prices (first + last kept),
+// small enough to store per candidate yet enough to draw a recognisable shape.
+function downsample(points, n) {
+  const prices = points.map((p) => (Array.isArray(p) ? p[1] : null)).filter((v) => v != null);
+  if (prices.length <= n) return prices;
+  const step = (prices.length - 1) / (n - 1);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(prices[Math.round(i * step)]);
+  return out;
+}
+
 async function proxyGet(url, { backendUrl, secret }) {
   const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
   const res = await fetch(proxyUrl, {
@@ -90,10 +101,19 @@ export async function fetchLsQuote(candidate, { backendUrl, secret }) {
     ? (price - prevClose) / prevClose * 100
     : null;
 
+  // Keep the day's shape (downsampled) + range for the sparkline column.
+  const allPrices = points.map((p) => (Array.isArray(p) ? p[1] : null)).filter((v) => v != null);
+  const series = downsample(points, 40);
+  const dayLow  = allPrices.length ? Math.min(...allPrices) : null;
+  const dayHigh = allPrices.length ? Math.max(...allPrices) : null;
+
   return {
     price,
     prev_close: prevClose,
     change_pct: changePct,
+    series,
+    day_low: dayLow,
+    day_high: dayHigh,
     ts,
     instrument_id: instrumentId,
     checked_at: now,

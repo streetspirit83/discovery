@@ -7,7 +7,7 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260621b';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260622f';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────

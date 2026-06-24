@@ -114,6 +114,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
                 <th class="num" data-sort="last"><button class="id-sort">Last</button></th>
                 <th class="num" data-sort="daychg"><button class="id-sort">DayChg%</button></th>
                 <th data-sort="atrp"><button class="id-sort">ATRP</button></th>
+                <th>Verlauf</th>
                 <th class="num">Trigger</th>
               </tr>
             </thead>
@@ -168,6 +169,31 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
     </div>`;
   }
 
+  // Inline SVG day-trajectory sparkline: green/red by day direction, with a faint
+  // dashed reference line at the previous close (above = up day, below = down day).
+  function sparklineSVG(series, prevClose, chg) {
+    const W = 84, H = 24, P = 2;
+    let lo = Math.min(...series), hi = Math.max(...series);
+    const hasRef = prevClose != null;
+    if (hasRef) { lo = Math.min(lo, prevClose); hi = Math.max(hi, prevClose); }
+    const span = (hi - lo) || 1;
+    const x = (i) => P + (i / (series.length - 1)) * (W - 2 * P);
+    const y = (v) => P + (1 - (v - lo) / span) * (H - 2 * P);
+    const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const cls = chg == null ? '' : chg >= 0 ? 'id-spark--pos' : 'id-spark--neg';
+    const ref = hasRef ? `<line x1="${P}" y1="${y(prevClose).toFixed(1)}" x2="${W - P}" y2="${y(prevClose).toFixed(1)}" class="id-spark__ref"/>` : '';
+    return `<svg class="id-spark ${cls}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${ref}<polyline points="${pts}" fill="none" class="id-spark__line"/></svg>`;
+  }
+
+  function sparkCell(c) {
+    const q = c.ls_quote;
+    const s = q?.series;
+    if (!Array.isArray(s) || s.length < 2) return '<span class="muted-dash">—</span>';
+    const lo = q.day_low, hi = q.day_high;
+    const tip = (lo != null && hi != null) ? `Tagesspanne ${fmtNum(lo, 2)}–${fmtNum(hi, 2)}` : 'Tagesverlauf (LS)';
+    return `<span title="${tip}">${sparklineSVG(s, q.prev_close, q.change_pct)}</span>`;
+  }
+
   function triggerCell(c) {
     const t = c.intraday_trigger;
     const set = t && (t.markers || t.stop_loss);
@@ -178,7 +204,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
     const rows = visibleRows();
     $('#id-count').textContent = `${rows.length} Werte`;
     if (rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="id-empty">Keine Werte${state.starOnly ? ' mit ★-Markierung' : ''}.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="id-empty">Keine Werte${state.starOnly ? ' mit ★-Markierung' : ''}.</td></tr>`;
       return;
     }
     tbody.innerHTML = rows.map((c) => {
@@ -189,6 +215,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
         <td class="num id-cell-last">${fmtNum(lastPrice(c))}</td>
         <td class="num id-cell-chg ${posNeg(chg)}">${fmtPct(chg)}</td>
         <td class="id-cell-atrp">${atrpCell(c)}</td>
+        <td class="id-cell-spark">${sparkCell(c)}</td>
         <td class="num">${triggerCell(c)}</td>
       </tr>`;
     }).join('');
@@ -224,9 +251,11 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
     const lastCell = tr.querySelector('.id-cell-last');
     const chgCell  = tr.querySelector('.id-cell-chg');
     const atrpEl   = tr.querySelector('.id-cell-atrp');
+    const sparkEl  = tr.querySelector('.id-cell-spark');
     if (lastCell) lastCell.textContent = fmtNum(newLast);
     if (chgCell)  { chgCell.textContent = fmtPct(chg); chgCell.className = `num id-cell-chg ${posNeg(chg)}`; }
     if (atrpEl)   atrpEl.innerHTML = atrpCell(c);
+    if (sparkEl)  sparkEl.innerHTML = sparkCell(c);
 
     let dir = null;
     if (prevLast != null && newLast != null && newLast !== prevLast) dir = newLast > prevLast ? 'up' : 'down';
