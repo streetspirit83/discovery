@@ -58,6 +58,14 @@ const INDICATOR_LINKS = {
   VIX:    'https://www.tradingview.com/symbols/CBOE-VIX/?utm_source=androidapp&utm_medium=share',
 };
 
+// Sparkline geometry (viewBox units), shared by the renderer and the hover probe.
+const SPARK = { W: 84, H: 24, P: 2 };
+function sparkBounds(series, prevClose) {
+  let lo = Math.min(...series), hi = Math.max(...series);
+  if (prevClose != null) { lo = Math.min(lo, prevClose); hi = Math.max(hi, prevClose); }
+  return { lo, hi, span: (hi - lo) || 1 };
+}
+
 /**
  * @param {object} opts
  * @param {object[]} opts.candidates           live candidate refs of the current bucket
@@ -172,17 +180,22 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
   // Inline SVG day-trajectory sparkline: green/red by day direction, with a faint
   // dashed reference line at the previous close (above = up day, below = down day).
   function sparklineSVG(series, prevClose, chg) {
-    const W = 84, H = 24, P = 2;
-    let lo = Math.min(...series), hi = Math.max(...series);
-    const hasRef = prevClose != null;
-    if (hasRef) { lo = Math.min(lo, prevClose); hi = Math.max(hi, prevClose); }
-    const span = (hi - lo) || 1;
+    const { W, H, P } = SPARK;
+    const { lo, span } = sparkBounds(series, prevClose);
     const x = (i) => P + (i / (series.length - 1)) * (W - 2 * P);
     const y = (v) => P + (1 - (v - lo) / span) * (H - 2 * P);
     const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const cls = chg == null ? '' : chg >= 0 ? 'id-spark--pos' : 'id-spark--neg';
-    const ref = hasRef ? `<line x1="${P}" y1="${y(prevClose).toFixed(1)}" x2="${W - P}" y2="${y(prevClose).toFixed(1)}" class="id-spark__ref"/>` : '';
-    return `<svg class="id-spark ${cls}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${ref}<polyline points="${pts}" fill="none" class="id-spark__line"/></svg>`;
+    const ref = prevClose != null
+      ? `<line x1="${P}" y1="${y(prevClose).toFixed(1)}" x2="${W - P}" y2="${y(prevClose).toFixed(1)}" class="id-spark__ref"/>`
+      : '';
+    return `<svg class="id-spark ${cls}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"`
+      + ` data-series="${series.map((v) => Number(v).toFixed(4)).join(',')}"${prevClose != null ? ` data-prev="${prevClose}"` : ''}>`
+      + `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent"/>`
+      + ref
+      + `<polyline points="${pts}" fill="none" class="id-spark__line"/>`
+      + `<circle class="id-spark__dot" r="2.2" style="display:none"/>`
+      + `</svg>`;
   }
 
   function sparkCell(c) {
@@ -392,7 +405,40 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
     }
   });
 
-  const close = () => overlay.remove();
+  // ── Sparkline hover tooltip (price at the hovered point) ─────────────────────
+  const sparkTip = document.createElement('div');
+  sparkTip.className = 'id-spark-tip';
+  document.body.appendChild(sparkTip);
+  let sparkDot = null;
+  function hideSparkTip() {
+    sparkTip.style.display = 'none';
+    if (sparkDot) { sparkDot.style.display = 'none'; sparkDot = null; }
+  }
+  function onSparkMove(e) {
+    const svg = e.target.closest?.('.id-spark');
+    if (!svg || !svg.dataset.series) { hideSparkTip(); return; }
+    const series = svg.dataset.series.split(',').map(Number);
+    if (series.length < 2) { hideSparkTip(); return; }
+    const prev = svg.dataset.prev ? Number(svg.dataset.prev) : null;
+    const rect = svg.getBoundingClientRect();
+    let idx = Math.round(((e.clientX - rect.left) / rect.width) * (series.length - 1));
+    idx = Math.max(0, Math.min(series.length - 1, idx));
+    const price = series[idx];
+    const { lo, span } = sparkBounds(series, prev);
+    const cx = SPARK.P + (idx / (series.length - 1)) * (SPARK.W - 2 * SPARK.P);
+    const cy = SPARK.P + (1 - (price - lo) / span) * (SPARK.H - 2 * SPARK.P);
+    const dot = svg.querySelector('.id-spark__dot');
+    if (sparkDot && sparkDot !== dot) sparkDot.style.display = 'none';
+    if (dot) { dot.setAttribute('cx', cx.toFixed(1)); dot.setAttribute('cy', cy.toFixed(1)); dot.style.display = ''; sparkDot = dot; }
+    sparkTip.textContent = `€${price.toFixed(2)}`;
+    sparkTip.style.left = `${e.clientX}px`;
+    sparkTip.style.top = `${rect.top - 6}px`;
+    sparkTip.style.display = 'block';
+  }
+  tbody.addEventListener('pointermove', onSparkMove);
+  tbody.addEventListener('pointerleave', hideSparkTip);
+
+  const close = () => { hideSparkTip(); sparkTip.remove(); overlay.remove(); };
   $('#id-close').addEventListener('pointerup', close);
   overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', function esc(e) {

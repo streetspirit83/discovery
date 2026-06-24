@@ -8,7 +8,7 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622f';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260622g';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
