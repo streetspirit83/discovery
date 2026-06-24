@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260622f';
+import { CandidateList } from './components/candidate-list.js?v=20260624c';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -20,7 +20,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
-import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260624a';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260624b';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -66,7 +66,7 @@ let allBlobs = { inbox: null, archive: null, export: null, watch: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
-let merklisteMaps = null; // { byIsin, bySymEx } of entry_price_manual from merkliste "main"
+let merklisteMaps = null; // { bySym } of entry_price_manual from merkliste "main"
 
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
@@ -304,6 +304,29 @@ function openIntradayModal() {
   });
 }
 
+// ── Merkliste portfolio import (Einstand column) ────────────────────────────────
+// Pull entry_price_manual from the merkliste "main" blob and attach it to the
+// matching candidates as `mk_entry` (matched by symbol). Held in memory only
+// (merkliste stays the source of truth); re-fetched on load and manual refresh.
+async function loadMerklisteEntries(force = false) {
+  if (useMock) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  if (force || !merklisteMaps) {
+    try {
+      merklisteMaps = await fetchMerklisteEntries({ backendUrl, secret });
+    } catch (err) {
+      console.warn('[merkliste] entry import failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!merklisteMaps || !blob?.candidates || !candidateList) return;
+  applyMerklisteEntries(blob.candidates, merklisteMaps);
+  candidateList.renderRows(); // mutate-in-place re-render; keeps selection intact
+}
+
 // ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
@@ -350,12 +373,13 @@ function renderSubbar() {
     { key: 'fundamentals', label: 'Fundamental' },
   ];
   const vs = document.getElementById('view-switch');
-  vs.innerHTML = tabs.map(({ key, label }) =>
-    `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
-  ).join('') +
+  vs.innerHTML =
+    `<button class="seg-btn seg-btn--portfolio${uiState.fBroker === 'star' ? ' seg-btn--active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>` +
+    tabs.map(({ key, label }) =>
+      `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
+    ).join('') +
     `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
-    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>` +
-    `<button class="seg-btn seg-btn--portfolio${uiState.fBroker === 'star' ? ' seg-btn--active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>`;
+    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
   vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
   vs.querySelector('#portfolio-toggle').addEventListener('click', () => {
     const on = uiState.fBroker !== 'star';
