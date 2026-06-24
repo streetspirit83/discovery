@@ -243,6 +243,7 @@ function sortValue(c, col) {
     case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
     case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
     case 'ls_price':    return c.ls_quote?.price ?? null;
+    case 'mk_entry':    return c.mk_entry ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -561,6 +562,8 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) + \u0394% vs. Vortag \u00b7 \u201eLS-Kurs\u201c-Button in der Bulk-Leiste \u00b7 Portfolio-Ticker werden beim Laden automatisch aktualisiert');
+      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 leer wenn nicht im Portfolio gepflegt');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
       cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
@@ -736,6 +739,8 @@ export class CandidateList {
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           brokerTd +
           trCheckTd +
+          `<td class="num">${renderLsQuote(c)}</td>` +
+          `<td class="num">${renderMkEntry(c)}</td>` +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
           `<td class="num">${trendCell}</td>` +
@@ -1027,6 +1032,17 @@ function renderLsQuote(c) {
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
   const chg = q.change_pct != null ? ` <span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>` : '';
   return `<span title="${tip}">${sym}${px}${chg}</span>`;
+}
+
+// Merkliste cost basis ("Einstand") — the manual entry price from the merkliste
+// portfolio (stored in EUR). Blank when the ticker isn't in the portfolio.
+function renderMkEntry(c) {
+  if (c.mk_entry == null) {
+    return '<span class="muted-dash" title="Nicht im Merkliste-Portfolio / kein Einstand gepflegt">—</span>';
+  }
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const px  = fmtNum(c.mk_entry * convFromEur(), 2);
+  return `<span title="Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
 }
 
 function renderMomentumCheck(mc) {

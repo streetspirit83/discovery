@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260621b';
+import { CandidateList } from './components/candidate-list.js?v=20260624a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -19,6 +19,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260624a';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -64,6 +65,7 @@ let allBlobs = { inbox: null, archive: null, export: null, watch: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
+let merklisteMaps = null; // { byIsin, bySymEx } of entry_price_manual from merkliste "main"
 
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
@@ -230,6 +232,29 @@ async function runLsQuoteForSelection(idsArg) {
   }
 }
 
+// ── Merkliste portfolio import (Einstand column) ────────────────────────────────
+// Pull entry_price_manual from the merkliste "main" blob and attach it to the
+// matching candidates as `mk_entry`. Held in memory only (merkliste stays the
+// source of truth); re-fetched on load and on manual refresh.
+async function loadMerklisteEntries(force = false) {
+  if (useMock) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  if (force || !merklisteMaps) {
+    try {
+      merklisteMaps = await fetchMerklisteEntries({ backendUrl, secret });
+    } catch (err) {
+      console.warn('[merkliste] entry import failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!merklisteMaps || !blob?.candidates || !candidateList) return;
+  applyMerklisteEntries(blob.candidates, merklisteMaps);
+  candidateList.renderRows(); // mutate-in-place re-render; keeps selection intact
+}
+
 // ── Mode badge ─────────────────────────────────────────────────────────────────
 function updateMockBadge() {
   const badge = document.getElementById('mode-badge');
@@ -280,8 +305,19 @@ function renderSubbar() {
     `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
   ).join('') +
     `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
-    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
+    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>` +
+    `<button class="seg-btn seg-btn--portfolio${uiState.fBroker === 'star' ? ' seg-btn--active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>`;
   vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
+  vs.querySelector('#portfolio-toggle').addEventListener('click', () => {
+    const on = uiState.fBroker !== 'star';
+    uiState.fBroker = on ? 'star' : '';
+    saveUiState();
+    candidateList.setFilter('broker', uiState.fBroker);
+    const btn = document.getElementById('portfolio-toggle');
+    btn.classList.toggle('seg-btn--active', on);
+    btn.setAttribute('aria-pressed', String(on));
+    renderFilterbar(); // keep the Markierungen dropdown in sync
+  });
   vs.querySelector('#currency-toggle').addEventListener('click', () => {
     uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
     saveUiState();
@@ -341,6 +377,12 @@ function renderFilterbar() {
     uiState.fBroker = e.target.value;
     saveUiState();
     candidateList.setFilter('broker', uiState.fBroker);
+    const pt = document.getElementById('portfolio-toggle'); // keep sub-nav ★ in sync
+    if (pt) {
+      const on = uiState.fBroker === 'star';
+      pt.classList.toggle('seg-btn--active', on);
+      pt.setAttribute('aria-pressed', String(on));
+    }
   });
 
   fb.querySelector('#filter-score').addEventListener('change', (e) => {
@@ -524,6 +566,8 @@ async function switchBlob(blobType) {
   uiState.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
+  // Carry merkliste entry prices onto this bucket's candidates before first render.
+  if (merklisteMaps) applyMerklisteEntries(allBlobs[blobType].candidates, merklisteMaps);
   candidateList.setData(allBlobs[blobType].candidates);
   renderBotnav();
   renderFilterbar();
@@ -1007,6 +1051,15 @@ async function init() {
 
   updateMockBadge();
 
+  // Hard refresh (page load): pull merkliste "Einstand" prices, then auto-refresh
+  // live LS quotes for ★ portfolio tickers only (bounded credit cost).
+  loadMerklisteEntries(true).then(() => {
+    if (useMock) return;
+    const portfolioIds = (allBlobs[currentBlobType]?.candidates ?? [])
+      .filter((c) => c.in_portfolio).map((c) => c.id);
+    if (portfolioIds.length) runLsQuoteForSelection(portfolioIds);
+  });
+
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
   document.getElementById('scrim').addEventListener('pointerup', () => {
     if (detailSheetOpen) { candidateDetail.hide(); return; }
@@ -1024,6 +1077,7 @@ async function init() {
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
     allBlobs[currentBlobType] = null;
     await switchBlob(currentBlobType);
+    await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
     toast('Aktualisiert', 'info', 1500);
   });
 
