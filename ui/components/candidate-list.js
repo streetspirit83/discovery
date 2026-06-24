@@ -7,7 +7,7 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260621b';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260622f';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -243,7 +243,7 @@ function sortValue(c, col) {
     case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
     case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
     case 'ls_price':    return c.ls_quote?.price ?? null;
-    case 'mk_entry':    return c.mk_entry ?? null;
+    case 'ls_chg':      return c.ls_quote?.change_pct ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -304,7 +304,6 @@ const VIEWS = {
     { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
-    { key:'ls_price',       label:'LS',    title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) + Δ% vs. Vortag · „LS-Kurs“-Button in der Bulk-Leiste · nutzt ISIN bzw. die ls_id aus dem TR-Check', num:true, fmt:c=>renderLsQuote(c) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
     { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema20) },
     { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema50) },
@@ -562,8 +561,8 @@ export class CandidateList {
       cols += this.th('discovered', 'in');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
-      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) + \u0394% vs. Vortag \u00b7 \u201eLS-Kurs\u201c-Button in der Bulk-Leiste \u00b7 Portfolio-Ticker werden beim Laden automatisch aktualisiert');
-      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 leer wenn nicht im Portfolio gepflegt');
+      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
       cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
@@ -739,8 +738,8 @@ export class CandidateList {
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
           brokerTd +
           trCheckTd +
-          `<td class="num">${renderLsQuote(c)}</td>` +
-          `<td class="num">${renderMkEntry(c)}</td>` +
+          `<td class="num">${lsPriceCell(c)}</td>` +
+          `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
           `<td class="num">${trendCell}</td>` +
@@ -1021,17 +1020,24 @@ function renderTrCheck(c) {
   return btn('unknown', '?', `Check fehlgeschlagen · ${copyHint}`);
 }
 
-function renderLsQuote(c) {
+// LS price cell (Standard view). EUR venue price, converted to the active
+// display currency; carries the informative state tooltip.
+function lsPriceCell(c) {
   const q = c.ls_quote;
   if (!q)         return '<span class="muted-dash" title="Ungeprüft – „LS-Kurs“ in der Bulk-Leiste ausführen">—</span>';
   if (q.no_isin)  return '<span class="muted-dash" title="Keine ISIN – erst „TV Daten“ laden">—</span>';
   if (q.price == null) return `<span class="muted-dash" title="${q.error ?? 'Kein LS-Kurs'}">—</span>`;
   const sym = displayCurrency === 'USD' ? '$' : '€';
-  const px  = fmtNum(q.price * convFromEur(), 2);
   const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
-  const chg = q.change_pct != null ? ` <span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>` : '';
-  return `<span title="${tip}">${sym}${px}${chg}</span>`;
+  return `<span title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
+}
+
+// LS change-vs-previous-close cell (Standard view).
+function lsChgCell(c) {
+  const q = c.ls_quote;
+  if (!q || q.change_pct == null) return '<span class="muted-dash">—</span>';
+  return `<span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>`;
 }
 
 // Merkliste cost basis ("Einstand") — the manual entry price from the merkliste

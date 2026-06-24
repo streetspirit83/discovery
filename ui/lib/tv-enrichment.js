@@ -621,6 +621,37 @@ export async function fetchFxRate({ backendUrl, secret }) {
 }
 
 /**
+ * Market indicators for the Intra-Day header. Verified TV tickers:
+ *   XETR:DAX · NASDAQ:IXIC (Composite) · TVC:NI225 · TVC:VIX
+ * @returns {Promise<{label:string,value:number|null,change:number|null}[]>}
+ */
+const MARKET_INDICATORS = [
+  { label: 'DAX',    ticker: 'XETR:DAX' },
+  { label: 'NASDAQ', ticker: 'NASDAQ:IXIC' },
+  { label: 'NIKKEI', ticker: 'TVC:NI225' },
+  { label: 'VIX',    ticker: 'TVC:VIX' },
+];
+
+export async function fetchMarketIndicators({ backendUrl, secret }) {
+  const fallback = MARKET_INDICATORS.map(({ label }) => ({ label, value: null, change: null }));
+  try {
+    const bodyStr = await proxyPost(backendUrl, secret,
+      'https://scanner.tradingview.com/global/scan',
+      { symbols: { tickers: MARKET_INDICATORS.map((i) => i.ticker), query: { types: [] } }, columns: ['close', 'change'] },
+    );
+    const rows = JSON.parse(bodyStr)?.data ?? [];
+    const byTicker = new Map(rows.map((r) => [r.s, r.d]));
+    return MARKET_INDICATORS.map(({ label, ticker }) => {
+      const d = byTicker.get(ticker);
+      return { label, value: d?.[0] ?? null, change: d?.[1] ?? null };
+    });
+  } catch (err) {
+    console.warn('[TV] market indicators fetch failed:', err.message);
+    return fallback;
+  }
+}
+
+/**
  * German regional venue (original exchange code) → TV prefix, all in the
  * "germany" market. Used as a fallback when the Xetra-normalised lookup
  * returns no data (value listed only on a regional exchange). Verified
