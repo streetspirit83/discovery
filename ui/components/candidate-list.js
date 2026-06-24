@@ -245,6 +245,9 @@ function sortValue(c, col) {
     case 'ls_price':    return c.ls_quote?.price ?? null;
     case 'ls_chg':      return c.ls_quote?.change_pct ?? null;
     case 'mk_entry':    return c.mk_entry ?? null;
+    case 'mk_pl':       return plData(c)?.pct ?? null;
+    case 'range52':     return rangePos(c.tv_data) ?? null;
+    case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -555,27 +558,33 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
+      // \u2500\u2500 Decision block (most important first) \u2500\u2500
       cols += this.th('name', 'Name', 'class="col-name-data"');
-      cols += this.th('sector', 'Sektor');
-      cols += this.th('sources', 'Quellen');
-      cols += `<th>Links</th>`;
-      cols += this.th('discovered', 'in');
-      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
-      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
-      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio');
+      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand');
+      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
-      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio gepflegt');
+      cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
+      cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
+      // \u2500\u2500 Indicators \u2500\u2500
+      cols += this.thNum('tv_trend_strength_score', 'St\u00e4rke', 'Trend Strength Score 0\u2013100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) \u00b7 85+ = Structural Power-Trend');
+      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
+      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
+      cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar');
+      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0\u2013100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) \u00b7 80+ = Prime Entry');
       cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
       cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
       cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
       cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M \u2013 rollierend ~21 Handelstage zur\u00fcck');
-      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0\u2013100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) \u00b7 80+ = Prime Entry');
       cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
-      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
-      cols += this.thNum('tv_trend_strength_score', 'St\u00e4rke', 'Trend Strength Score 0\u2013100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) \u00b7 85+ = Structural Power-Trend');
+      // \u2500\u2500 Context \u2500\u2500
+      cols += this.th('sector', 'Sektor');
+      cols += this.th('sources', 'Quellen');
+      cols += `<th>Links</th>`;
+      cols += this.th('discovered', 'in');
+      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite');
+      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += `<th>Letztes Signal</th>`;
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += `<th class="num">Aktion</th>`;
@@ -733,27 +742,33 @@ export class CandidateList {
             ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
           </div></td>`;
         dataCols =
+          // \u2500\u2500 Decision block \u2500\u2500
           `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
+          `<td class="num">${renderMkEntry(c)}</td>` +
+          `<td class="num">${renderPL(c)}</td>` +
+          `<td class="num">${lsPriceCell(c)}</td>` +
+          `<td class="num">${lsChgCell(c)}</td>` +
+          `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num">${renderSignal(c)}</td>` +
+          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
+          // \u2500\u2500 Indicators \u2500\u2500
+          `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
+          `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
+          `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
+          `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
+          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
+          `<td class="num">${trendCell}</td>` +
+          heatPctTd(tv?.change_1d) +
+          heatPctTd(tv?.perf_w) +
+          heatPctTd(tv?.perf_1m) +
+          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
+          // \u2500\u2500 Context \u2500\u2500
           `<td><span class="sector-cell">${c.sector ?? '\u2014'}</span></td>` +
           `<td>${renderSourceBadges(c.sources)}</td>` +
           linksTd +
           `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
-          brokerTd +
           trCheckTd +
-          `<td class="num">${lsPriceCell(c)}</td>` +
-          `<td class="num">${lsChgCell(c)}</td>` +
-          `<td class="num">${renderMkEntry(c)}</td>` +
-          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
-          `<td class="num">${trendCell}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
-          `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
-          `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
-          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
-          `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
-          `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
-          `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
+          brokerTd +
           `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
           starTd + actionTd;
       } else {
@@ -1054,6 +1069,74 @@ function renderMkEntry(c) {
   return `<span title="Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
 }
 
+// ── Decision-view derived values + visuals ───────────────────────────────────
+
+// P/L of a portfolio ticker: live LS price (EUR) vs. merkliste Einstand (EUR).
+// pct needs entry+LS; absEur additionally needs entry_shares.
+function plData(c) {
+  const entry = c.mk_entry;
+  const ls    = c.ls_quote?.price;
+  if (entry == null || entry === 0 || ls == null) return null;
+  const pct    = (ls - entry) / entry * 100;
+  const absEur = c.mk_shares != null ? (ls - entry) * c.mk_shares : null;
+  return { pct, absEur };
+}
+
+function renderPL(c) {
+  const d = plData(c);
+  if (!d) return '<span class="muted-dash" title="Braucht Einstand (Merkliste) + LS-Kurs">—</span>';
+  const cls = posNegClass(d.pct);
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const absTxt = d.absEur != null
+    ? ` <span class="pl__abs">${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 0)}${sym}</span>`
+    : '';
+  const tip = `P/L ${fmtPct(d.pct)}`
+    + (d.absEur != null ? ` · ${fmtNum(d.absEur * convFromEur(), 2)}${sym}` : '')
+    + ` · Einstand ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
+    + (c.mk_shares != null ? ` · ${c.mk_shares} St.` : ' · keine Stückzahl');
+  return `<span class="pl ${cls}" title="${tip}">${fmtPct(d.pct)}${absTxt}</span>`;
+}
+
+// Position of the current price within its 52-week range (0..1). Native currency
+// throughout (price + 52W hi/lo are all TV native), so no FX conversion needed.
+function rangePos(tv) {
+  const close = tv?.close_1m ?? tv?.close;
+  const hi = tv?.price_52_week_high, lo = tv?.price_52_week_low;
+  if (close == null || hi == null || lo == null || hi <= lo) return null;
+  return Math.min(1, Math.max(0, (close - lo) / (hi - lo)));
+}
+
+function render52wRange(tv) {
+  const pos = rangePos(tv);
+  if (pos == null) return '<span class="muted-dash">—</span>';
+  const close = tv.close_1m ?? tv.close;
+  const pct = Math.round(pos * 100);
+  const tip = `52W-Spanne: ${fmtNum(tv.price_52_week_low, 2)} … ${fmtNum(tv.price_52_week_high, 2)} · Kurs ${fmtNum(close, 2)} (${pct}% der Spanne)`;
+  return `<span class="range52" title="${tip}"><span class="range52__track"><span class="range52__dot" style="left:${pct}%"></span></span></span>`;
+}
+
+// Consolidated direction chip: momentum traffic-light + 1M trend arrow.
+function renderSignal(c) {
+  const v = c.momentum_check?.verdict ?? null;
+  const r = c.tv_data?.recommend_all_1m ?? null;
+  if (v == null && r == null) return '<span class="muted-dash">—</span>';
+  const dot   = `<span class="signal__dot signal__dot--${v ?? 'none'}"></span>`;
+  const arrow = r != null ? `<span class="tv-rating-txt--${tvRatingClass(r)}">${tvRatingGlyph(r)}</span>` : '';
+  const tip = `Momentum: ${v ?? 'n/a'} · Trend (1M): ${r != null ? fmtNum(r, 2) : 'n/a'}`;
+  return `<span class="signal" title="${tip}">${dot}${arrow}</span>`;
+}
+
+// % cell with a magnitude-scaled red/green background tint (heat-strip effect).
+function heatStyle(v) {
+  if (v == null) return '';
+  const a = Math.min(Math.abs(v) / 8, 1) * 0.30; // cap tint at ±8%
+  const rgb = v > 0 ? '34,197,94' : v < 0 ? '239,68,68' : '0,0,0';
+  return ` style="background:rgba(${rgb},${a.toFixed(3)})"`;
+}
+function heatPctTd(v) {
+  return `<td class="num"${heatStyle(v)}><span class="${posNegClass(v)}">${fmtPct(v)}</span></td>`;
+}
+
 function renderMomentumCheck(mc) {
   if (!mc) return '<span class="muted-dash">—</span>';
   const age = mc.checked_at ? timeAgo(mc.checked_at) : '';
@@ -1073,7 +1156,9 @@ function renderMomentumCheck(mc) {
 function renderOverallScore(os) {
   if (!os) return '<span class="muted-dash">—</span>';
   const tip = `${os.label} (${Object.entries(os.breakdown).map(([k, v]) => `${k}:${v}`).join(' ')}) · Datenabdeckung ${os.coverage}/100`;
-  return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}</span>`;
+  const w = Math.max(0, Math.min(100, os.total));
+  return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}` +
+    `<span class="score-gauge"><span class="score-gauge__fill" style="width:${w}%"></span></span></span>`;
 }
 
 function renderUpside(up, side) {

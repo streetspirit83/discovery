@@ -40,30 +40,33 @@ export async function fetchMerklisteEntries({ backendUrl, secret }) {
   for (const t of tickers) {
     const entry = t?.user?.entry_price_manual;
     if (entry == null) continue;
+    const shares = t?.user?.entry_shares ?? null;
     const s = t?.stamm ?? {};
     for (const alias of [s.symbol, s.yahoo_symbol, s.twelvedata_symbol]) {
       const key = up(alias);
-      if (key) bySym.set(key, entry);
+      if (key) bySym.set(key, { entry, shares });
     }
   }
   return { bySym };
 }
 
 /**
- * Attach `mk_entry` (EUR, or null) to each candidate by symbol match.
+ * Attach `mk_entry` (EUR) and `mk_shares` (count, or null) to each candidate by
+ * symbol match. Sets null when the ticker isn't in the portfolio.
  * @returns {number} count of candidates that matched a portfolio entry
  */
 export function applyMerklisteEntries(candidates, maps) {
   if (!maps?.bySym || !Array.isArray(candidates)) return 0;
   let matched = 0;
   for (const c of candidates) {
-    let entry = null;
+    let hit = null;
     for (const alias of [c.symbol, c.yahoo_symbol]) {
       const key = up(alias);
-      if (key && maps.bySym.has(key)) { entry = maps.bySym.get(key); break; }
+      if (key && maps.bySym.has(key)) { hit = maps.bySym.get(key); break; }
     }
-    c.mk_entry = entry;
-    if (entry != null) matched++;
+    c.mk_entry  = hit ? hit.entry : null;
+    c.mk_shares = hit ? hit.shares : null;
+    if (hit) matched++;
   }
   return matched;
 }

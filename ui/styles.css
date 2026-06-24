@@ -469,6 +469,31 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .momcheck--badge.momcheck--yellow { background:rgba(243,156,18,.15); }
 .momcheck--badge.momcheck--red    { background:rgba(231,76,60,.15); }
 .setup-icon { font-size: 13px; cursor: default; }
+
+/* ── Decision-view visuals (Score gauge · 52W range · Signal · P/L) ─────────── */
+/* Score gauge: thin bar under the score number, filled by the score's own color */
+.score-gauge { display:block; height:3px; margin-top:1px; border-radius:2px;
+  background:rgba(128,128,128,.25); overflow:hidden; }
+.score-gauge__fill { display:block; height:100%; background:currentColor; border-radius:2px; }
+
+/* 52W-range: track with a dot marking where the price sits low → high */
+.range52 { display:inline-block; vertical-align:middle; }
+.range52__track { position:relative; display:inline-block; width:42px; height:5px;
+  border-radius:3px; background:var(--surface-3); vertical-align:middle; }
+.range52__dot { position:absolute; top:50%; width:7px; height:7px; border-radius:50%;
+  background:var(--text); border:1px solid var(--surface); transform:translate(-50%,-50%); }
+
+/* Signal chip: momentum traffic-light dot + trend arrow */
+.signal { display:inline-flex; align-items:center; gap:4px; justify-content:flex-end; }
+.signal__dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.signal__dot--green  { background:#27ae60; }
+.signal__dot--yellow { background:#d68910; }
+.signal__dot--red    { background:var(--neg); }
+.signal__dot--none   { background:var(--surface-3); border:1px solid var(--border); }
+
+/* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
+.pl { font-variant-numeric:tabular-nums; }
+.pl__abs { font-size:var(--fs-1); opacity:.75; margin-left:3px; }
 /* Trade Republic / LS tradability check */
 .tr-check {
   display:inline-block; min-width:20px; text-align:center;

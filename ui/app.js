@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260624c';
+import { CandidateList } from './components/candidate-list.js?v=20260625a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -20,7 +20,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
-import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260624b';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625a';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
