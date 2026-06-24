@@ -9,18 +9,19 @@
  * Browser → merkliste-app.netlify.app has no CORS, so the read goes through the
  * Discovery scrape-proxy (the merkliste blob URL is on the proxy allowlist).
  *
- * Match key: ISIN first (most reliable), then SYMBOL:EXCHANGE as a fallback.
+ * Match key: SYMBOL only. Merkliste tickers carry no ISIN, and the exchange
+ * strings differ between the two apps, so symbol+exchange is unreliable. We
+ * index each merkliste entry under its symbol plus its yahoo/twelvedata symbol
+ * aliases, then look up Discovery candidates by symbol (and yahoo_symbol).
  */
 
 const MERKLISTE_BLOB_URL = 'https://merkliste-app.netlify.app/.netlify/functions/blob';
-const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
 const up = (v) => String(v ?? '').trim().toUpperCase();
 
 /**
- * Fetch the merkliste blob through the proxy and build lookup maps of
- * entry_price_manual keyed by ISIN and by SYMBOL:EXCHANGE.
- * @returns {{ byIsin: Map<string,number>, bySymEx: Map<string,number> } | null}
+ * Fetch the merkliste blob through the proxy and build a symbol → entry map.
+ * @returns {{ bySym: Map<string,number> } | null}
  */
 export async function fetchMerklisteEntries({ backendUrl, secret }) {
   const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
@@ -35,33 +36,32 @@ export async function fetchMerklisteEntries({ backendUrl, secret }) {
   let data; try { data = JSON.parse(wrapper.body); } catch { return null; }
   const tickers = Array.isArray(data?.tickers) ? data.tickers : [];
 
-  const byIsin = new Map();
-  const bySymEx = new Map();
+  const bySym = new Map();
   for (const t of tickers) {
     const entry = t?.user?.entry_price_manual;
     if (entry == null) continue;
-    const isin = up(t?.stamm?.isin);
-    const sym  = up(t?.stamm?.symbol);
-    const exch = up(t?.stamm?.exchange);
-    if (ISIN_RE.test(isin)) byIsin.set(isin, entry);
-    if (sym) bySymEx.set(`${sym}:${exch}`, entry);
+    const s = t?.stamm ?? {};
+    for (const alias of [s.symbol, s.yahoo_symbol, s.twelvedata_symbol]) {
+      const key = up(alias);
+      if (key) bySym.set(key, entry);
+    }
   }
-  return { byIsin, bySymEx };
+  return { bySym };
 }
 
 /**
- * Attach `mk_entry` (EUR, or null) to each candidate from the merkliste maps.
+ * Attach `mk_entry` (EUR, or null) to each candidate by symbol match.
  * @returns {number} count of candidates that matched a portfolio entry
  */
 export function applyMerklisteEntries(candidates, maps) {
-  if (!maps || !Array.isArray(candidates)) return 0;
+  if (!maps?.bySym || !Array.isArray(candidates)) return 0;
   let matched = 0;
   for (const c of candidates) {
-    const isin = up(c.isin);
-    const key  = `${up(c.symbol)}:${up(c.exchange)}`;
     let entry = null;
-    if (ISIN_RE.test(isin) && maps.byIsin.has(isin)) entry = maps.byIsin.get(isin);
-    else if (maps.bySymEx.has(key))                  entry = maps.bySymEx.get(key);
+    for (const alias of [c.symbol, c.yahoo_symbol]) {
+      const key = up(alias);
+      if (key && maps.bySym.has(key)) { entry = maps.bySym.get(key); break; }
+    }
     c.mk_entry = entry;
     if (entry != null) matched++;
   }
