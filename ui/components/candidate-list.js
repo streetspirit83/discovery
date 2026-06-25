@@ -248,10 +248,10 @@ function sortValue(c, col) {
     case 'mk_entry':    return c.mk_entry ?? null;
     case 'mk_pl':       return plData(c)?.pct ?? null;
     case 'range52':     return rangePos(c.tv_data) ?? null;
-    case 'atrp': {       // sort by current spread: today's move relative to one ATR
+    case 'atrp': {       // sort by current spread, signed → green (up) to red (down)
       const a = c.tv_data?.atrp;
       const ch = c.ls_quote?.change_pct ?? c.tv_data?.change_1d;
-      return (a > 0 && ch != null) ? Math.abs(ch) / a : null;
+      return (a > 0 && ch != null) ? ch / a : null;
     }
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;

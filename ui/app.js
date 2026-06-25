@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625f';
+import { CandidateList } from './components/candidate-list.js?v=20260625g';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -422,44 +422,26 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
-    <select class="filter-select" id="filter-broker" title="Filter nach Broker- oder Portfolio-Markierung">
-      <option value="">Alle Markierungen</option>
-      <option value="broker"${uiState.fBroker === 'broker' ? ' selected' : ''}>✓ Broker</option>
-      <option value="star"${uiState.fBroker === 'star' ? ' selected' : ''}>★ Portfolio</option>
-      <option value="none"${uiState.fBroker === 'none' ? ' selected' : ''}>— Ohne Broker</option>
-    </select>
-    <select class="filter-select" id="filter-score">
-      <option value="">Alle Scores</option>
+    <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
+      <option value="">Score</option>
       <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
       <option value="70"${uiState.fScore === '70' ? ' selected' : ''}>Score 70–79</option>
       <option value="60"${uiState.fScore === '60' ? ' selected' : ''}>Score 60–69</option>
       <option value="40"${uiState.fScore === '40' ? ' selected' : ''}>Score 40–59</option>
       <option value="0"${uiState.fScore === '0' ? ' selected' : ''}>Score &lt; 40</option>
     </select>
-    <select class="filter-select" id="filter-sector">
-      <option value="">Alle Sektoren</option>
+    <select class="filter-select" id="filter-sector" title="Filter nach Sektor">
+      <option value="">Sectors</option>
       <option value="__no_sector__"${uiState.fSector === '__no_sector__' ? ' selected' : ''}>— Ohne Sektor</option>
       ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
     </select>
-    <select class="filter-select" id="filter-cap">
-      <option value="">Alle Größen</option>
+    <select class="filter-select" id="filter-cap" title="Filter nach Marktkapitalisierung">
+      <option value="">Size</option>
       <option value="micro"${uiState.fCap === 'micro' ? ' selected' : ''}>Micro</option>
       <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
     </select>`;
-
-  fb.querySelector('#filter-broker').addEventListener('change', (e) => {
-    uiState.fBroker = e.target.value;
-    saveUiState();
-    candidateList.setFilter('broker', uiState.fBroker);
-    const pt = document.getElementById('portfolio-toggle'); // keep sub-nav ★ in sync
-    if (pt) {
-      const on = uiState.fBroker === 'star';
-      pt.classList.toggle('seg-btn--active', on);
-      pt.setAttribute('aria-pressed', String(on));
-    }
-  });
 
   fb.querySelector('#filter-score').addEventListener('change', (e) => {
     uiState.fScore = e.target.value;

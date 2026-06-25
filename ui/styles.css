@@ -147,6 +147,7 @@ svg { display:block; }
   height:32px; padding:0 var(--s-2); background:var(--surface-3);
   border:1px solid var(--border); color:var(--text); border-radius:var(--r-pill);
   font-size:var(--fs-2); font-family:var(--font-ui);
+  max-width:104px; text-overflow:ellipsis;
 }
 .filter-select--active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .pill--reset {
