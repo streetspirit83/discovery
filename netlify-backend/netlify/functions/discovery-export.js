@@ -2,7 +2,10 @@
  * Netlify Function: discovery-export
  * GET /.netlify/functions/discovery-export
  *
- * Public (no auth) endpoint that serves the discovery-export blob as JSON.
+ * Public (no auth) endpoint that serves the promoted "watch" list as JSON.
+ * Promote (watchlist) moves a candidate into the `discovery-watch` blob, and
+ * merkliste enriches its matching tickers from that list — so this bridge
+ * serves `discovery-watch` (not the separate `discovery-export` briefcase blob).
  * Consumed by the merkliste proxy (server-side fetch, no CORS required).
  */
 
@@ -17,7 +20,7 @@ export default async function handler(req) {
   }
 
   const store = getStore({ name: 'discovery-data', consistency: 'strong' });
-  const data = await store.get('discovery-export', { type: 'json' });
+  const data = await store.get('discovery-watch', { type: 'json' });
 
   const body = data ?? { candidates: [] };
 
