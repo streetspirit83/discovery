@@ -477,13 +477,18 @@ export class CandidateList {
   }
 
   // Lang & Schwarz intraday quote (EUR, the Trade-Republic venue) for the given
-  // candidates. Async (network via proxy); returns a bulk-update list.
+  // candidates. Fetched in parallel batches (network via proxy); returns a
+  // bulk-update list.
   async runLsQuote(ids, opts) {
+    const idSet = new Set(ids);
+    const targets = this.candidates.filter((c) => idSet.has(c.id));
     const updates = [];
-    for (const c of this.candidates) {
-      if (!ids.includes(c.id)) continue;
-      c.ls_quote = await fetchLsQuote(c, opts);
-      updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
+    const BATCH = 5;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      await Promise.all(targets.slice(i, i + BATCH).map(async (c) => {
+        c.ls_quote = await fetchLsQuote(c, opts);
+        updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
+      }));
     }
     this.renderRows();
     return updates;

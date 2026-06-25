@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625g';
+import { CandidateList } from './components/candidate-list.js?v=20260625j';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -1220,13 +1220,21 @@ async function init() {
     const rb = document.getElementById('btn-refresh');
     rb.classList.add('spin');
     try {
+      // Capture the selection before reloading (switchBlob clears it).
+      const selectedIds = [...candidateList.selected];
+
       // 1. Reload stored data + merkliste entries.
       allBlobs[currentBlobType] = null;
       await switchBlob(currentBlobType);
       await loadMerklisteEntries(true);
 
       if (useMock) { toast('Aktualisiert (Mock-Modus)', 'info', 1500); return; }
-      const ids = (allBlobs[currentBlobType]?.candidates ?? []).map((c) => c.id);
+      // Scope: selected rows if any, else the filtered/visible set (= all when
+      // no filter is active → full refresh).
+      const targets = selectedIds.length
+        ? (allBlobs[currentBlobType]?.candidates ?? []).filter((c) => selectedIds.includes(c.id))
+        : candidateList.getFiltered();
+      const ids = targets.map((c) => c.id);
       if (!ids.length) { toast('Aktualisiert', 'info', 1500); return; }
 
       // 2. Fetch + calculate everything: LS quotes → TV data → Momentum.
