@@ -9,6 +9,7 @@ import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260622f';
 import { normalizeExchange } from '../lib/exchange-map.js';
+import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260625c';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -247,6 +248,7 @@ function sortValue(c, col) {
     case 'mk_entry':    return c.mk_entry ?? null;
     case 'mk_pl':       return plData(c)?.pct ?? null;
     case 'range52':     return rangePos(c.tv_data) ?? null;
+    case 'atrp':        return c.tv_data?.atrp ?? null;
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
@@ -356,6 +358,31 @@ const VIEWS = {
     { key:'tv_analysts',    label:'Analysten', title:'Anzahl Analysten mit Empfehlung', num:true, fmt:c=>fmtNum(c.tv_data?.recommendation_total,0) },
   ],
 };
+
+// Score view: all scoring columns (Standard keeps only the headline Score) plus
+// the performance + raw-metric columns folded in for a single analytical deep-dive.
+VIEWS.score = [
+  { key:'tv_overall_score',        label:'Score',  title:'Overall Score 0–100', num:true, fmt:c=>renderOverallScore(liveOverallScore(c.tv_data)) },
+  { key:'tv_trend_strength_score', label:'Stärke', title:'Trend Strength Score 0–100', num:true, fmt:c=>renderTrendStrengthScore(c.tv_data?.trend_strength_score) },
+  { key:'tv_health_score',         label:'Health', title:'Financial Health Score 0–100', num:true, fmt:c=>renderHealthScore(liveHealthScore(c.tv_data)) },
+  { key:'tv_cycle_score',          label:'PCHS',   title:'Price Cycle & Historical Position Score 0–100', num:true, fmt:c=>renderCycleScore(c.tv_data?.cycle_score) },
+  { key:'momentum',                label:'Mom',    title:'Momentum-Punkte 0–100', num:true, fmt:c=>renderMomentumCheck(c.momentum_check) },
+  { key:'tv_entry_score',          label:'Entry',  title:'Entry Timing Score 0–100', num:true, fmt:c=>renderEntryScore(liveEntryScore(c.tv_data)) },
+  { key:'tv_rating1m',             label:'Trend',  title:'Empfehlung 1 Monat (Trend)', num:true, fmt:c=>{ const r=c.tv_data?.recommend_all_1m; return `<span class="tv-rating-txt--${tvRatingClass(r)}">${r!=null?`${tvRatingGlyph(r)} ${fmtNum(r,2)}`:'—'}</span>`; } },
+  ...VIEWS.performance,
+  ...VIEWS.metrics,
+];
+
+// Meta view: identity + context columns moved out of the Standard view.
+VIEWS.meta = [
+  { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:c=>`<span class="name-cell" title="${c.name ?? ''}">${c.name ?? '—'}</span>` },
+  { key:'sector',      label:'Sektor',         title:'Sektor', num:false, fmt:c=>`<span class="sector-cell">${c.sector ?? '—'}</span>` },
+  { key:'sources',     label:'Quellen',        title:'Signal-Quellen', num:false, fmt:c=>renderSourceBadges(c.sources) },
+  { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(c.links?.tradingview,TV_LOGO,'TradingView','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
+  { key:'discovered',  label:'in',             title:'Erstmals entdeckt', num:false, fmt:c=>`<span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>` },
+  { key:'signal_text', label:'Letztes Signal', title:'Letztes Signal aus den Quellen', num:false, fmt:c=>`<span class="signal-text">${getLatestSignal(c)}</span>` },
+  { key:'currency',    label:'Wä',        title:'Börsenwährung', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
+];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -558,34 +585,18 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      // \u2500\u2500 Decision block (most important first) \u2500\u2500
-      cols += this.th('name', 'Name', 'class="col-name-data"');
-      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio');
-      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand');
+      // Lean decision view. Einstand + P/L only when the \u2605 (portfolio) filter is on.
+      if (this.filters.broker === 'star') {
+        cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio');
+        cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand');
+      }
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
+      cols += `<th class="num">Verlauf</th>`;
+      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne');
       cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
-      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      // \u2500\u2500 Indicators \u2500\u2500
-      cols += this.thNum('tv_trend_strength_score', 'St\u00e4rke', 'Trend Strength Score 0\u2013100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) \u00b7 85+ = Structural Power-Trend');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
-      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar');
-      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0\u2013100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) \u00b7 80+ = Prime Entry');
-      cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
-      cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
-      cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
-      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M \u2013 rollierend ~21 Handelstage zur\u00fcck');
-      cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      // \u2500\u2500 Context \u2500\u2500
-      cols += this.th('sector', 'Sektor');
-      cols += this.th('sources', 'Quellen');
-      cols += `<th>Links</th>`;
-      cols += this.th('discovered', 'in');
-      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite');
-      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
-      cols += `<th>Letztes Signal</th>`;
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c');
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += `<th class="num">Aktion</th>`;
     } else {
@@ -716,9 +727,12 @@ export class CandidateList {
       const isSelected = this.selected.has(c.id);
 
       const symHtml = `<div class="sym-cell">
-        <span class="sym-strong">${c.symbol}</span>
-        <span class="exch-tag">${c.exchange}</span>
-        ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
+        <div class="sym-cell__top">
+          <span class="sym-strong">${c.symbol}</span>
+          ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
+          ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
+        </div>
+        <span class="exch-tag exch-tag--sub">${c.exchange}</span>
       </div>`;
 
       const actionTd = `<td class="num"><div class="row-actions">
@@ -734,42 +748,18 @@ export class CandidateList {
 
       let dataCols;
       if (this.viewMode === 'standard') {
-        const r   = tv?.recommend_all_1m;
-        const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '\u2014'}</span>`;
-        const linksTd = `<td><div class="link-cluster">
-            ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
-            ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
-            ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
-          </div></td>`;
+        const portfolioCols = this.filters.broker === 'star'
+          ? `<td class="num">${renderMkEntry(c)}</td><td class="num">${renderPL(c)}</td>`
+          : '';
         dataCols =
-          // \u2500\u2500 Decision block \u2500\u2500
-          `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
-          `<td class="num">${renderMkEntry(c)}</td>` +
-          `<td class="num">${renderPL(c)}</td>` +
+          portfolioCols +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
+          `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${renderSignal(c)}</td>` +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          // \u2500\u2500 Indicators \u2500\u2500
-          `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
-          `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
-          `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
-          `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
-          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
-          `<td class="num">${trendCell}</td>` +
-          heatPctTd(tv?.change_1d) +
-          heatPctTd(tv?.perf_w) +
-          heatPctTd(tv?.perf_1m) +
-          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
-          // \u2500\u2500 Context \u2500\u2500
-          `<td><span class="sector-cell">${c.sector ?? '\u2014'}</span></td>` +
-          `<td>${renderSourceBadges(c.sources)}</td>` +
-          linksTd +
-          `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
-          trCheckTd +
-          brokerTd +
-          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
           starTd + actionTd;
       } else {
         dataCols = VIEWS[this.viewMode].map((d) =>

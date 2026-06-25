@@ -246,8 +246,13 @@ td.col-anchor, th.col-anchor { box-shadow:inset 0 -1px 0 var(--border), inset -1
 input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
 
 /* Symbol cell */
-.sym-cell, .symbol-cell { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
-.sym-strong { font-weight:var(--fw-bold); }
+.symbol-cell { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+.sym-cell { display:flex; flex-direction:column; align-items:flex-start; gap:1px; }
+.sym-cell__top { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+.sym-strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
+/* Exchange as a small plain sub-line under the symbol */
+.exch-tag--sub { background:none; border:none; padding:0; font-size:var(--fs-1);
+  color:var(--muted); letter-spacing:.02em; }
 .symbol-cell strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
 
 /* Exchange tag */

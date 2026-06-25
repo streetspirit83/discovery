@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625a';
+import { CandidateList } from './components/candidate-list.js?v=20260625c';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -54,7 +54,7 @@ const uiState = (() => {
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
   // Migrate persisted view modes from the old 3-view layout
-  if (!['standard', 'performance', 'price', 'metrics', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  if (!['standard', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
   return s;
 })();
 function saveUiState() {
@@ -369,9 +369,9 @@ function renderTopbar() {
 function renderSubbar() {
   const tabs = [
     { key: 'standard',     label: 'Standard' },
-    { key: 'performance',  label: 'Performance' },
+    { key: 'score',        label: 'Score' },
+    { key: 'meta',         label: 'Meta' },
     { key: 'price',        label: 'Preis' },
-    { key: 'metrics',      label: 'Metriken' },
     { key: 'fundamentals', label: 'Fundamental' },
   ];
   const vs = document.getElementById('view-switch');
