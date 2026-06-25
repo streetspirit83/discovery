@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625l';
+import { CandidateList } from './components/candidate-list.js?v=20260625n';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -1193,14 +1193,9 @@ async function init() {
 
   updateMockBadge();
 
-  // Hard refresh (page load): pull merkliste "Einstand" prices, then auto-refresh
-  // live LS quotes for ★ portfolio tickers only (bounded credit cost).
-  loadMerklisteEntries(true).then(() => {
-    if (useMock) return;
-    const portfolioIds = (allBlobs[currentBlobType]?.candidates ?? [])
-      .filter((c) => c.in_portfolio).map((c) => c.id);
-    if (portfolioIds.length) runLsQuoteForSelection(portfolioIds);
-  });
+  // On load: pull merkliste "Einstand"/shares only. LS quotes are fetched
+  // on demand (LS-Kurs button) — no automatic LS fetch on load.
+  loadMerklisteEntries(true);
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
   document.getElementById('scrim').addEventListener('pointerup', () => {

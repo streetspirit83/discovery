@@ -479,13 +479,17 @@ export class CandidateList {
   // Lang & Schwarz intraday quote (EUR, the Trade-Republic venue) for the given
   // candidates. Async (network via proxy); returns a bulk-update list.
   async runLsQuote(ids, opts) {
+    const idSet = new Set(ids);
+    const targets = this.candidates.filter((c) => idSet.has(c.id));
+    // Show a pulsing placeholder in the LS cell while fetching (animated feedback).
+    targets.forEach((c) => { c.ls_quote = { loading: true }; });
+    this.renderRows();
     const updates = [];
-    for (const c of this.candidates) {
-      if (!ids.includes(c.id)) continue;
+    for (const c of targets) {
       c.ls_quote = await fetchLsQuote(c, opts);
       updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
+      this.renderRows(); // resolve cell-by-cell → cascade fill animation
     }
-    this.renderRows();
     return updates;
   }
 
@@ -1041,6 +1045,7 @@ function renderTrCheck(c) {
 // display currency; carries the informative state tooltip.
 function lsPriceCell(c) {
   const q = c.ls_quote;
+  if (q?.loading) return '<span class="ls-loading" title="lädt…"></span>';
   if (!q)         return '<span class="muted-dash" title="Ungeprüft – „LS-Kurs“ in der Bulk-Leiste ausführen">—</span>';
   if (q.no_isin)  return '<span class="muted-dash" title="Keine ISIN – erst „TV Daten“ laden">—</span>';
   if (q.price == null) return `<span class="muted-dash" title="${q.error ?? 'Kein LS-Kurs'}">—</span>`;
