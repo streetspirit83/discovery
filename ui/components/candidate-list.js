@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js';
+import { icons } from '../lib/icons.js?v=20260625l';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -857,16 +857,17 @@ export class CandidateList {
     const ba = document.getElementById('bulk-actions');
     if (!ba) return;
     ba.innerHTML = `
-      <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-tr-check">🛒 TR-Check</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-ls-quote">📈 LS-Kurs</button>
-      <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
-      <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
-      <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-copy-prompt">📋 Research-Prompt</button>
-      <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
-      <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
+      <button class="bulk-btn bulk-btn--icon bulk-btn--del" id="bulk-delete" title="Ausgewählte löschen" aria-label="Löschen">${icons.trash}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-clear" title="Auswahl leeren" aria-label="Auswahl leeren">${icons.xMark}</button>
+      <div class="bulk-spacer"></div>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-tv-data" title="TV-Daten laden" aria-label="TV-Daten"><img class="bulk-tvlogo" src="${TV_LOGO}" alt=""></button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-ls-quote" title="LS-Kurs laden" aria-label="LS-Kurs">${icons.activity}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-export" title="Exportieren" aria-label="Export">${icons.briefcase}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-promote" title="Promoten (Watchlist)" aria-label="Promoten">${icons.bookmark}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-dismiss" title="Ablehnen (Archiv)" aria-label="Ablehnen">${icons.archive}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-enrich" title="AI-Enrichment" aria-label="Enrich">${icons.sparkles}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-copy-prompt" title="Research-Prompt kopieren" aria-label="Research-Prompt">${icons.clipboard}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-tr-check" title="TR-Check (Trade Republic)" aria-label="TR-Check">${icons.cart}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));

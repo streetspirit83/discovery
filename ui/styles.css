@@ -550,21 +550,29 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .bulkbar {
   position:sticky; bottom:0; z-index:var(--z-bulkbar);
   display:flex; align-items:center; gap:var(--s-2);
-  height:var(--h-bulkbar); padding:0 var(--s-4);
-  background:var(--surface-2); border-top:1px solid var(--accent);
+  height:var(--h-bulkbar); padding:0 var(--s-3);
+  background:var(--surface-2); border-top:1px solid var(--border);
+  box-shadow:0 -2px 6px rgba(0,23,31,0.05);
   transform:translateY(100%); transition:transform var(--t-sheet) var(--ease);
 }
 .bulkbar.is-open { transform:translateY(0); }
-.bulk-count { color:var(--accent); font-weight:var(--fw-bold); font-size:var(--fs-3); white-space:nowrap; }
-.bulk-actions { display:flex; align-items:center; gap:var(--s-1); margin-left:auto; overflow-x:auto; }
+.bulk-count { color:var(--muted); font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap; }
+.bulk-actions { display:flex; align-items:center; gap:var(--s-1); flex:1; overflow-x:auto; }
+.bulk-spacer { flex:1; min-width:var(--s-2); }
+/* Compact icon-only action buttons (merkliste style) with hover tooltips */
 .bulk-btn {
-  display:inline-flex; align-items:center; gap:var(--s-1);
-  height:36px; padding:0 var(--s-3); border-radius:var(--r-1);
-  border:1px solid var(--border); background:var(--surface-3);
-  color:var(--text); font-size:var(--fs-2); white-space:nowrap;
-  transition:opacity var(--t-fast) var(--ease);
+  display:inline-flex; align-items:center; justify-content:center; gap:4px; flex-shrink:0;
+  height:32px; padding:0 var(--s-2); border-radius:var(--r-1);
+  border:1px solid var(--border); background:var(--surface);
+  color:var(--muted); font-size:var(--fs-2); white-space:nowrap;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
+.bulk-btn--icon { width:32px; padding:0; }
+.bulk-btn:hover { background:var(--surface-3); border-color:var(--text); color:var(--text); }
 .bulk-btn:active { opacity:0.7; }
+.bulk-btn--del { color:var(--neg); }
+.bulk-btn--del:hover { background:var(--neg); border-color:var(--neg); color:#fff; }
+.bulk-tvlogo { width:16px; height:16px; border-radius:3px; display:block; }
 .bulk-btn--neg    { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
 .bulk-btn--pos    { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
 .bulk-btn--ai     { background:var(--ai-weak);  border-color:var(--ai);  color:var(--ai); }
