@@ -527,8 +527,8 @@ export class CandidateList {
     return `<th ${extra} aria-sort="${this.ariaSort(col)}">
       <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
   }
-  thNum(col, label, title = '') {
-    return `<th class="num" ${title ? `title="${title}"` : ''} aria-sort="${this.ariaSort(col)}">
+  thNum(col, label, title = '', extraClass = '') {
+    return `<th class="num ${extraClass}" ${title ? `title="${title}"` : ''} aria-sort="${this.ariaSort(col)}">
       <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
   }
 
@@ -585,11 +585,10 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      // Lean decision view. Einstand + P/L only when the \u2605 (portfolio) filter is on.
-      if (this.filters.broker === 'star') {
-        cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio');
-        cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand');
-      }
+      // Lean decision view. Einstand + P/L are always in the DOM but hidden via
+      // CSS unless the \u2605 (portfolio) filter is active (keeps header/row parity).
+      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio');
+      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand', 'col-portfolio');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
@@ -707,6 +706,9 @@ export class CandidateList {
   }
 
   renderRows() {
+    // Show the Einstand/P/L columns only in Standard view with the ★ filter on.
+    this.thead.closest('table')?.classList.toggle(
+      'show-portfolio-cols', this.viewMode === 'standard' && this.filters.broker === 'star');
     const rows = this.getSorted(this.getFiltered());
     this.tbody.innerHTML = '';
 
@@ -748,11 +750,9 @@ export class CandidateList {
 
       let dataCols;
       if (this.viewMode === 'standard') {
-        const portfolioCols = this.filters.broker === 'star'
-          ? `<td class="num">${renderMkEntry(c)}</td><td class="num">${renderPL(c)}</td>`
-          : '';
         dataCols =
-          portfolioCols +
+          `<td class="num col-portfolio">${renderMkEntry(c)}</td>` +
+          `<td class="num col-portfolio">${renderPL(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${render52wRange(tv)}</td>` +

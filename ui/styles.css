@@ -499,6 +499,11 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
 .pl { font-variant-numeric:tabular-nums; }
 .pl__abs { font-size:var(--fs-1); opacity:.75; margin-left:3px; }
+
+.detail-hint { margin-top:6px; font-size:var(--fs-1); color:var(--muted); line-height:1.4; }
+
+/* Portfolio-only columns (Einstand, P/L): visible only under the ★ filter */
+.candidate-table:not(.show-portfolio-cols) .col-portfolio { display:none; }
 /* Trade Republic / LS tradability check */
 .tr-check {
   display:inline-block; min-width:20px; text-align:center;

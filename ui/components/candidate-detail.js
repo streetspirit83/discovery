@@ -245,6 +245,18 @@ export class CandidateDetail {
       </div>
 
       <div class="detail-section">
+        <h3>Merkliste-Mapping</h3>
+        <div class="link-url-fields">
+          <div class="link-url-row">
+            <label>Merkliste-Symbol (Fallback)</label>
+            <input type="text" id="lf-merkliste" value="${c.merkliste_symbol ?? ''}" placeholder="z. B. RHM oder RHM.DE">
+          </div>
+          <button class="btn btn-sm btn-secondary" id="detail-save-merkliste">Mapping speichern</button>
+          <p class="detail-hint">Zusätzlicher Schlüssel, um diesen Kandidaten dem Merkliste-Portfolio zuzuordnen (Einstand &amp; P/L), falls Symbol/Yahoo-Symbol nicht matchen.</p>
+        </div>
+      </div>
+
+      <div class="detail-section">
         <h3>Notizen</h3>
         <textarea id="detail-notes" class="notes-editor" placeholder="Notizen…" rows="3">${c.notes ?? ''}</textarea>
         <button class="btn btn-sm btn-secondary" id="detail-save-notes">Speichern</button>
@@ -309,6 +321,12 @@ export class CandidateDetail {
       const notes = this.el.querySelector('#detail-notes').value;
       c.notes = notes;
       this.onAction?.('saveNotes', c, { notes });
+    });
+
+    this.el.querySelector('#detail-save-merkliste')?.addEventListener('pointerup', () => {
+      const value = this.el.querySelector('#lf-merkliste').value.trim() || null;
+      c.merkliste_symbol = value;
+      this.onAction?.('saveMerklisteSymbol', c, { value });
     });
 
     this.el.querySelector('#detail-enrich').addEventListener('pointerup', async () => {

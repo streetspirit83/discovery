@@ -60,7 +60,8 @@ export function applyMerklisteEntries(candidates, maps) {
   let matched = 0;
   for (const c of candidates) {
     let hit = null;
-    for (const alias of [c.symbol, c.yahoo_symbol]) {
+    // Manual override (merkliste_symbol) is tried last, as an explicit fallback.
+    for (const alias of [c.symbol, c.yahoo_symbol, c.merkliste_symbol]) {
       const key = up(alias);
       if (key && maps.bySym.has(key)) { hit = maps.bySym.get(key); break; }
     }

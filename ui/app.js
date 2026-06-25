@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260625c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -20,7 +20,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
-import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625a';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -871,6 +871,24 @@ async function handleAction(action, candidate, extras = {}) {
       }
     }
     toast('Links aktualisiert', 'success', 1500);
+  }
+
+  if (action === 'saveMerklisteSymbol') {
+    candidate.merkliste_symbol = extras.value;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { merkliste_symbol: extras.value });
+      } catch (err) {
+        toast(`Mapping speichern fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    // Re-apply the merkliste portfolio map so Einstand/P/L pick up the new key.
+    if (merklisteMaps) {
+      applyMerklisteEntries(blob.candidates, merklisteMaps);
+      candidateList.renderRows();
+    }
+    toast('Merkliste-Mapping gespeichert', 'success', 1500);
   }
 
   if (action === 'enriched') {
