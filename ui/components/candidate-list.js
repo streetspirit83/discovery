@@ -585,12 +585,12 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      // Lean decision view. Einstand + P/L are always in the DOM but hidden via
+      // Lean decision view. Entry + P/L are always in the DOM but hidden via
       // CSS unless the \u2605 (portfolio) filter is active (keeps header/row parity).
-      cols += this.thNum('mk_entry', 'Einstand', 'Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio');
-      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Einstand) \u00b7 in % und \u2013 mit entry_shares \u2013 in \u20ac \u00b7 braucht LS-Kurs + Einstand', 'col-portfolio');
+      cols += this.thNum('mk_entry', 'Entry', 'Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
+      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Entry) \u00b7 % oben, absolut in \u20ac (mit entry_shares) darunter \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += `<th class="num">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne');
@@ -737,9 +737,11 @@ export class CandidateList {
         <span class="exch-tag exch-tag--sub">${c.exchange}</span>
       </div>`;
 
+      const trigSet = !!(c.intraday_trigger && (c.intraday_trigger.markers || c.intraday_trigger.stop_loss));
       const actionTd = `<td class="num"><div class="row-actions">
         ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
         ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
+        <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? 'Trigger bearbeiten (Marker / Stop-Loss)' : 'Trigger hinzufügen (Marker / Stop-Loss)'}">${trigSet ? '✓' : '+'}</button>
       </div></td>`;
 
       const starTd = `<td class="num"><button class="act-btn act-btn--star${c.in_portfolio ? ' is-active' : ''}" data-action="toggleStar" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button></td>`;
@@ -752,9 +754,9 @@ export class CandidateList {
       if (this.viewMode === 'standard') {
         dataCols =
           `<td class="num col-portfolio">${renderMkEntry(c)}</td>` +
-          `<td class="num col-portfolio">${renderPL(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
+          `<td class="num col-portfolio">${renderPL(c)}</td>` +
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
@@ -803,6 +805,7 @@ export class CandidateList {
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
+      tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
 
       // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
       // it can be pasted into the Trade Republic app search.
@@ -1053,11 +1056,11 @@ function lsChgCell(c) {
 // portfolio (stored in EUR). Blank when the ticker isn't in the portfolio.
 function renderMkEntry(c) {
   if (c.mk_entry == null) {
-    return '<span class="muted-dash" title="Nicht im Merkliste-Portfolio / kein Einstand gepflegt">—</span>';
+    return '<span class="muted-dash" title="Nicht im Merkliste-Portfolio / kein Entry gepflegt">—</span>';
   }
   const sym = displayCurrency === 'USD' ? '$' : '€';
   const px  = fmtNum(c.mk_entry * convFromEur(), 2);
-  return `<span title="Einstand: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
+  return `<span title="Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
 }
 
 // ── Decision-view derived values + visuals ───────────────────────────────────
@@ -1075,17 +1078,18 @@ function plData(c) {
 
 function renderPL(c) {
   const d = plData(c);
-  if (!d) return '<span class="muted-dash" title="Braucht Einstand (Merkliste) + LS-Kurs">—</span>';
+  if (!d) return '<span class="muted-dash" title="Braucht Entry (Merkliste) + LS-Kurs">—</span>';
   const cls = posNegClass(d.pct);
   const sym = displayCurrency === 'USD' ? '$' : '€';
-  const absTxt = d.absEur != null
-    ? ` <span class="pl__abs">${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 0)}${sym}</span>`
+  // Two lines: % change on top, absolute € (when shares known) right below.
+  const absLine = d.absEur != null
+    ? `<span class="pl__abs">${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 0)}${sym}</span>`
     : '';
   const tip = `P/L ${fmtPct(d.pct)}`
     + (d.absEur != null ? ` · ${fmtNum(d.absEur * convFromEur(), 2)}${sym}` : '')
-    + ` · Einstand ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
+    + ` · Entry ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
     + (c.mk_shares != null ? ` · ${c.mk_shares} St.` : ' · keine Stückzahl');
-  return `<span class="pl ${cls}" title="${tip}">${fmtPct(d.pct)}${absTxt}</span>`;
+  return `<span class="pl ${cls}" title="${tip}"><span class="pl__pct">${fmtPct(d.pct)}</span>${absLine}</span>`;
 }
 
 // Position of the current price within its 52-week range (0..1). Native currency

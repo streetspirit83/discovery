@@ -2,13 +2,14 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625d';
+import { CandidateList } from './components/candidate-list.js?v=20260625e';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderIntradayModal } from './components/intraday-modal.js?v=20260622g';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260625e';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -871,6 +872,18 @@ async function handleAction(action, candidate, extras = {}) {
       }
     }
     toast('Links aktualisiert', 'success', 1500);
+  }
+
+  if (action === 'openTrigger') {
+    openTriggerEditor(candidate, {
+      onSaveTrigger: async (id, trigger) => {
+        if (useMock || !storageClient) return;
+        await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
+      },
+      onSaved: () => candidateList.renderRows(),
+      toast,
+    });
+    return;
   }
 
   if (action === 'saveMerklisteSymbol') {
