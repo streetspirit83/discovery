@@ -377,23 +377,10 @@ function renderSubbar() {
   ];
   const vs = document.getElementById('view-switch');
   vs.innerHTML =
-    `<button class="seg-btn seg-btn--portfolio${uiState.fBroker === 'star' ? ' seg-btn--active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>` +
     tabs.map(({ key, label }) =>
       `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
     ).join('') +
-    `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
     `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
-  vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
-  vs.querySelector('#portfolio-toggle').addEventListener('click', () => {
-    const on = uiState.fBroker !== 'star';
-    uiState.fBroker = on ? 'star' : '';
-    saveUiState();
-    candidateList.setFilter('broker', uiState.fBroker);
-    const btn = document.getElementById('portfolio-toggle');
-    btn.classList.toggle('seg-btn--active', on);
-    btn.setAttribute('aria-pressed', String(on));
-    renderFilterbar(); // keep the Markierungen dropdown in sync
-  });
   vs.querySelector('#currency-toggle').addEventListener('click', () => {
     uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
     saveUiState();
@@ -422,6 +409,7 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
+    <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
     <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
       <option value="">Score</option>
       <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
@@ -442,6 +430,16 @@ function renderFilterbar() {
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
     </select>`;
+
+  fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
+    const on = uiState.fBroker !== 'star';
+    uiState.fBroker = on ? 'star' : '';
+    saveUiState();
+    candidateList.setFilter('broker', uiState.fBroker);
+    const btn = fb.querySelector('#portfolio-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
 
   fb.querySelector('#filter-score').addEventListener('change', (e) => {
     uiState.fScore = e.target.value;
@@ -1219,10 +1217,30 @@ async function init() {
 
   // ── Topbar buttons ───────────────────────────────────────────────────────────
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
-    allBlobs[currentBlobType] = null;
-    await switchBlob(currentBlobType);
-    await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
-    toast('Aktualisiert', 'info', 1500);
+    const rb = document.getElementById('btn-refresh');
+    rb.classList.add('spin');
+    try {
+      // 1. Reload stored data + merkliste entries.
+      allBlobs[currentBlobType] = null;
+      await switchBlob(currentBlobType);
+      await loadMerklisteEntries(true);
+
+      if (useMock) { toast('Aktualisiert (Mock-Modus)', 'info', 1500); return; }
+      const ids = (allBlobs[currentBlobType]?.candidates ?? []).map((c) => c.id);
+      if (!ids.length) { toast('Aktualisiert', 'info', 1500); return; }
+
+      // 2. Fetch + calculate everything: TV data → Momentum → LS quotes.
+      toast('🔄 Aktualisiere: TV-Daten · Momentum · LS …', 'info', 4000);
+      await handleBulkAction('tv-data', ids);            // fetch + persist TV data
+      const momUpdates = candidateList.runMomentumCheck(ids); // recompute momentum
+      if (momUpdates.length && storageClient) {
+        try { await storageClient.bulkUpdateCandidates(currentBlobType, momUpdates); } catch {}
+      }
+      await runLsQuoteForSelection(ids);                 // fetch + persist LS quotes
+      toast('✓ Alles aktualisiert: TV · Momentum · LS', 'success', 2500);
+    } finally {
+      rb.classList.remove('spin');
+    }
   });
 
   document.getElementById('btn-run').addEventListener('pointerup', openRunSheet);

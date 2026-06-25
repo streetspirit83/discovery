@@ -150,6 +150,14 @@ svg { display:block; }
   max-width:104px; text-overflow:ellipsis;
 }
 .filter-select--active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+/* ★ portfolio toggle, moved into the filterbar left of the Score dropdown */
+.filter-star {
+  height:32px; min-width:32px; padding:0 var(--s-2); flex-shrink:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--muted);
+  border-radius:var(--r-pill); font-size:14px; line-height:1; cursor:pointer;
+}
+.filter-star.is-active { background:var(--accent-weak); border-color:var(--accent); color:#f5a623; }
 .pill--reset {
   display:inline-flex; align-items:center; gap:var(--s-1);
   background:var(--accent-weak); border-color:var(--accent); color:var(--accent);
@@ -457,7 +465,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .currency-tag { font-size: var(--fs-1); color: var(--muted); letter-spacing: .03em; }
 .seg-btn--momentum { margin-left: auto; display: inline-flex; align-items: center; }
 .seg-btn--momentum svg { display: block; }
-.seg-btn--currency { font-variant-numeric: tabular-nums; }
+.seg-btn--currency { font-variant-numeric: tabular-nums; margin-left: auto; }
 .seg-btn--portfolio { font-size: 14px; line-height: 1; }
 .seg-btn--portfolio.seg-btn--active { background: var(--accent); border-color: var(--accent); color: #ffd34d; }
 
