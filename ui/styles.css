@@ -497,9 +497,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .signal__dot--none   { background:var(--surface-3); border:1px solid var(--border); }
 
 /* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
-.pl { display:inline-flex; flex-direction:column; align-items:flex-end;
-  line-height:1.15; font-variant-numeric:tabular-nums; }
-.pl__abs { font-size:var(--fs-1); opacity:.75; }
+.pl { font-variant-numeric:tabular-nums; }
 .act-btn--trigger.is-active { color:var(--accent); }
 
 .detail-hint { margin-top:6px; font-size:var(--fs-1); color:var(--muted); line-height:1.4; }

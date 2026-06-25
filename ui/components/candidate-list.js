@@ -248,7 +248,11 @@ function sortValue(c, col) {
     case 'mk_entry':    return c.mk_entry ?? null;
     case 'mk_pl':       return plData(c)?.pct ?? null;
     case 'range52':     return rangePos(c.tv_data) ?? null;
-    case 'atrp':        return c.tv_data?.atrp ?? null;
+    case 'atrp': {       // sort by current spread: today's move relative to one ATR
+      const a = c.tv_data?.atrp;
+      const ch = c.ls_quote?.change_pct ?? c.tv_data?.change_1d;
+      return (a > 0 && ch != null) ? Math.abs(ch) / a : null;
+    }
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
@@ -593,7 +597,7 @@ export class CandidateList {
       cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Entry) \u00b7 % oben, absolut in \u20ac (mit entry_shares) darunter \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += `<th class="num">Verlauf</th>`;
-      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne');
+      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
       cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c');
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
@@ -1081,15 +1085,12 @@ function renderPL(c) {
   if (!d) return '<span class="muted-dash" title="Braucht Entry (Merkliste) + LS-Kurs">—</span>';
   const cls = posNegClass(d.pct);
   const sym = displayCurrency === 'USD' ? '$' : '€';
-  // Two lines: % change on top, absolute € (when shares known) right below.
-  const absLine = d.absEur != null
-    ? `<span class="pl__abs">${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 0)}${sym}</span>`
-    : '';
+  // Cell shows the % only; the absolute € lives in the tooltip.
   const tip = `P/L ${fmtPct(d.pct)}`
-    + (d.absEur != null ? ` · ${fmtNum(d.absEur * convFromEur(), 2)}${sym}` : '')
+    + (d.absEur != null ? ` · ${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 2)}${sym}` : '')
     + ` · Entry ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
     + (c.mk_shares != null ? ` · ${c.mk_shares} St.` : ' · keine Stückzahl');
-  return `<span class="pl ${cls}" title="${tip}"><span class="pl__pct">${fmtPct(d.pct)}</span>${absLine}</span>`;
+  return `<span class="pl ${cls}" title="${tip}">${fmtPct(d.pct)}</span>`;
 }
 
 // Position of the current price within its 52-week range (0..1). Native currency
