@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625j';
+import { CandidateList } from './components/candidate-list.js?v=20260625k';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -1217,38 +1217,10 @@ async function init() {
 
   // ── Topbar buttons ───────────────────────────────────────────────────────────
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
-    const rb = document.getElementById('btn-refresh');
-    rb.classList.add('spin');
-    try {
-      // Capture the selection before reloading (switchBlob clears it).
-      const selectedIds = [...candidateList.selected];
-
-      // 1. Reload stored data + merkliste entries.
-      allBlobs[currentBlobType] = null;
-      await switchBlob(currentBlobType);
-      await loadMerklisteEntries(true);
-
-      if (useMock) { toast('Aktualisiert (Mock-Modus)', 'info', 1500); return; }
-      // Scope: selected rows if any, else the filtered/visible set (= all when
-      // no filter is active → full refresh).
-      const targets = selectedIds.length
-        ? (allBlobs[currentBlobType]?.candidates ?? []).filter((c) => selectedIds.includes(c.id))
-        : candidateList.getFiltered();
-      const ids = targets.map((c) => c.id);
-      if (!ids.length) { toast('Aktualisiert', 'info', 1500); return; }
-
-      // 2. Fetch + calculate everything: LS quotes → TV data → Momentum.
-      toast('🔄 Aktualisiere: LS · TV-Daten · Momentum …', 'info', 4000);
-      await runLsQuoteForSelection(ids);                 // fetch + persist LS quotes first
-      await handleBulkAction('tv-data', ids);            // then fetch + persist TV data
-      const momUpdates = candidateList.runMomentumCheck(ids); // momentum needs TV data
-      if (momUpdates.length && storageClient) {
-        try { await storageClient.bulkUpdateCandidates(currentBlobType, momUpdates); } catch {}
-      }
-      toast('✓ Alles aktualisiert: LS · TV · Momentum', 'success', 2500);
-    } finally {
-      rb.classList.remove('spin');
-    }
+    allBlobs[currentBlobType] = null;
+    await switchBlob(currentBlobType);
+    await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
+    toast('Aktualisiert', 'info', 1500);
   });
 
   document.getElementById('btn-run').addEventListener('pointerup', openRunSheet);
