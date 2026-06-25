@@ -762,9 +762,10 @@ export class CandidateList {
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           starTd + actionTd;
       } else {
-        dataCols = VIEWS[this.viewMode].map((d) =>
-          `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
-        ).join('') + actionTd + starTd + brokerTd + trCheckTd;
+        dataCols = VIEWS[this.viewMode].map((d) => {
+          const heat = HEAT_KEYS.has(d.key) ? heatStyle(sortValue(c, d.key)) : '';
+          return `<td class="${d.num ? 'num' : ''}"${heat}>${d.fmt(c)}</td>`;
+        }).join('') + actionTd + starTd + brokerTd + trCheckTd;
       }
 
       const tr = document.createElement('tr');
@@ -1123,6 +1124,8 @@ function heatStyle(v) {
   const rgb = v > 0 ? '34,197,94' : v < 0 ? '239,68,68' : '0,0,0';
   return ` style="background:rgba(${rgb},${a.toFixed(3)})"`;
 }
+// Performance/change columns that get the heat-strip background in data views.
+const HEAT_KEYS = new Set(['tv_chg1d','tv_chg1w','tv_chg1m','tv_perfw','tv_perf1m','tv_perf3m','tv_perf6m','tv_growth6m']);
 function heatPctTd(v) {
   return `<td class="num"${heatStyle(v)}><span class="${posNegClass(v)}">${fmtPct(v)}</span></td>`;
 }
