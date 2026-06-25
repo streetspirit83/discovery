@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260625n';
+import { CandidateList } from './components/candidate-list.js?v=20260625o';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -50,7 +50,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -429,6 +429,12 @@ function renderFilterbar() {
       <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
+    </select>
+    <select class="filter-select" id="filter-tr" title="Filter nach Trade-Republic-Handelbarkeit">
+      <option value="">TR</option>
+      <option value="no"${uiState.fTr === 'no' ? ' selected' : ''}>✗ nicht handelbar</option>
+      <option value="yes"${uiState.fTr === 'yes' ? ' selected' : ''}>✓ handelbar</option>
+      <option value="unchecked"${uiState.fTr === 'unchecked' ? ' selected' : ''}>? ungeprüft</option>
     </select>`;
 
   fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
@@ -457,6 +463,12 @@ function renderFilterbar() {
     uiState.fCap = e.target.value;
     saveUiState();
     candidateList.setFilter('capSize', uiState.fCap);
+  });
+
+  fb.querySelector('#filter-tr').addEventListener('change', (e) => {
+    uiState.fTr = e.target.value;
+    saveUiState();
+    candidateList.setFilter('tr', uiState.fTr);
   });
 
   renderSelectedPill();
@@ -1179,6 +1191,7 @@ async function init() {
     capSize: uiState.fCap    ?? '',
     broker:  uiState.fBroker ?? '',
     score:   uiState.fScore  ?? '',
+    tr:      uiState.fTr     ?? '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,

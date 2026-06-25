@@ -397,7 +397,7 @@ export class CandidateList {
     this.onBulkAction      = onBulkAction;
     this.onSelectionChange = onSelectionChange;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -426,6 +426,10 @@ export class CandidateList {
     this.filters[key] = value;
     this.selected.clear();
     this.showSelectedOnly = false;
+    // When a filter is active, auto-select the visible rows so bulk actions
+    // (e.g. delete all „nicht handelbar") can be applied immediately.
+    const anyActive = Object.values(this.filters).some((v) => v !== '' && v != null);
+    if (anyActive) for (const c of this.getFiltered()) this.selected.add(c.id);
     this.renderRows();
     this.renderBulkBar();
   }
@@ -541,9 +545,12 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score } = this.filters;
+    const { state, sector, capSize, broker, score, tr } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
+      if (tr === 'no'        && c.tr_check?.tradable !== false) return false; // nur „nicht handelbar"
+      if (tr === 'yes'       && c.tr_check?.tradable !== true)  return false;
+      if (tr === 'unchecked' && c.tr_check?.tradable != null)   return false;
       if (state   && c.workspace_state !== state)               return false;
       if (sector === '__no_sector__' && c.sector)               return false;
       if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
