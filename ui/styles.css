@@ -6,10 +6,10 @@
 :root {
   /* Colors */
   --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --surface-3:#e2e8f0;
-  --sheet-bg:#ffffff; --border:#cbd5e1; --text:#0f172a; --muted:#475569;
-  --accent:#2563eb; --accent-weak:#e3edfd;
-  --pos:#15803d; --pos-weak:#dcfce7;
-  --neg:#b91c1c; --neg-weak:#fee2e2;
+  --sheet-bg:#ffffff; --border:#D9D7D7; --text:#00171F; --muted:#6b7378;
+  --accent:#00A8E8; --accent-weak:#e2f4fc;
+  --pos:#348535; --pos-weak:#dcfce7;
+  --neg:#EF4242; --neg-weak:#fee2e2;
   --warn:#b45309; --ai:#7c3aed; --ai-weak:#ede9fe;
   --scrim:rgba(0,23,31,0.32);
 
@@ -26,8 +26,8 @@
   --r-1:4px; --r-2:8px; --r-pill:999px;
 
   /* Typography */
-  --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  --font-mono:ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
+  --font-ui:"DM Sans",-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:"DM Mono",ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
   --fs-1:11px; --fs-2:12px; --fs-3:13px; --fs-4:14px; --fs-5:16px; --fs-6:18px;
   --fw-reg:400; --fw-med:500; --fw-bold:700; --lh:1.45;
 
@@ -50,7 +50,7 @@
 [data-theme="dark"] {
   --bg:#0b1220; --surface:#111827; --surface-2:#0f172a; --surface-3:#1e293b;
   --sheet-bg:#0a0f1a; --border:#334155; --text:#e2e8f0; --muted:#94a3b8;
-  --accent:#3b82f6; --accent-weak:#16243f;
+  --accent:#38bdf8; --accent-weak:#16243f;
   --pos:#4ade80; --pos-weak:#0f2a1a;
   --neg:#f87171; --neg-weak:#3a1414;
   --warn:#fbbf24; --ai:#a78bfa; --ai-weak:#241a3d;
@@ -171,11 +171,11 @@ svg { display:block; }
    ════════════════════════════════════════════════════════════════ */
 .candidate-table {
   width:100%; border-collapse:separate; border-spacing:0;
-  font-family:var(--font-mono); font-size:var(--fs-3);
+  font-family:var(--font-mono); font-size:var(--fs-4);
 }
 .candidate-table th,
 .candidate-table td {
-  padding:var(--s-2) var(--s-3); text-align:left; white-space:nowrap;
+  padding:10px var(--s-3); text-align:left; white-space:nowrap;
   box-shadow:inset 0 -1px 0 var(--border);
 }
 .candidate-table thead th {
