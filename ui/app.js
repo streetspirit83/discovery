@@ -1229,15 +1229,15 @@ async function init() {
       const ids = (allBlobs[currentBlobType]?.candidates ?? []).map((c) => c.id);
       if (!ids.length) { toast('Aktualisiert', 'info', 1500); return; }
 
-      // 2. Fetch + calculate everything: TV data → Momentum → LS quotes.
-      toast('🔄 Aktualisiere: TV-Daten · Momentum · LS …', 'info', 4000);
-      await handleBulkAction('tv-data', ids);            // fetch + persist TV data
-      const momUpdates = candidateList.runMomentumCheck(ids); // recompute momentum
+      // 2. Fetch + calculate everything: LS quotes → TV data → Momentum.
+      toast('🔄 Aktualisiere: LS · TV-Daten · Momentum …', 'info', 4000);
+      await runLsQuoteForSelection(ids);                 // fetch + persist LS quotes first
+      await handleBulkAction('tv-data', ids);            // then fetch + persist TV data
+      const momUpdates = candidateList.runMomentumCheck(ids); // momentum needs TV data
       if (momUpdates.length && storageClient) {
         try { await storageClient.bulkUpdateCandidates(currentBlobType, momUpdates); } catch {}
       }
-      await runLsQuoteForSelection(ids);                 // fetch + persist LS quotes
-      toast('✓ Alles aktualisiert: TV · Momentum · LS', 'success', 2500);
+      toast('✓ Alles aktualisiert: LS · TV · Momentum', 'success', 2500);
     } finally {
       rb.classList.remove('spin');
     }
