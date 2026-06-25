@@ -1024,6 +1024,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 
 /* Intra-Day modal */
 .intraday-modal { width:min(720px,100%); }
+/* Markets modal: indices on top, the Markets sub-page embedded below */
+.markets-modal { width:min(960px,98vw); height:90vh; }
+.markets-modal .modal-body { display:flex; flex-direction:column; gap:var(--s-3); padding:16px; }
+.markets-frame { flex:1; width:100%; min-height:300px; border:0; border-radius:var(--r-1); background:var(--surface); }
 .id-indicators { display:flex; gap:var(--s-2); flex-wrap:wrap; margin-bottom:var(--s-3); }
 .id-ind {
   display:flex; flex-direction:column; gap:2px; align-items:center;

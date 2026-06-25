@@ -8,8 +8,9 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622g';
+import { renderIntradayModal } from './components/intraday-modal.js?v=20260625p';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260625e';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -285,13 +286,6 @@ function openIntradayModal() {
         storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
       }
       return candidate.ls_quote;
-    },
-    // Indices + VIX (DAX / NASDAQ / NIKKEI / VIX) via the TV scanner.
-    onFetchIndicators: async () => {
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (useMock || !backendUrl || !secret) return null;
-      return fetchMarketIndicators({ backendUrl, secret });
     },
     // Persist a row's trigger (price markers + stop-loss) when configured.
     onSaveTrigger: async (id, trigger) => {
@@ -1273,6 +1267,18 @@ async function init() {
   });
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
+
+  // Markets slot → open the Markets modal (indices + embedded Markets sub-page).
+  document.getElementById('nav-markets').addEventListener('pointerup', () => {
+    renderMarketsModal({
+      onFetchIndicators: async () => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchMarketIndicators({ backendUrl, secret });
+      },
+    });
+  });
 
   // ── First run hint ───────────────────────────────────────────────────────────
   if (!isConfigured()) {
