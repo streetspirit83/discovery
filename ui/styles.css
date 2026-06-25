@@ -33,7 +33,7 @@
 
   /* Bar heights */
   --h-topbar:52px; --h-subbar:44px; --h-filterbar:48px;
-  --h-bulkbar:52px; --h-botnav:56px;
+  --h-bulkbar:60px; --h-botnav:56px;
 
   /* Motion */
   --t-fast:0.12s; --t-sheet:0.2s; --ease:ease; --flash:1.2s;
@@ -562,17 +562,18 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* Compact icon-only action buttons (merkliste style) with hover tooltips */
 .bulk-btn {
   display:inline-flex; align-items:center; justify-content:center; gap:4px; flex-shrink:0;
-  height:32px; padding:0 var(--s-2); border-radius:var(--r-1);
+  height:46px; padding:0 var(--s-2); border-radius:var(--r-1);
   border:1px solid var(--border); background:var(--surface);
   color:var(--muted); font-size:var(--fs-2); white-space:nowrap;
   transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.bulk-btn--icon { width:32px; padding:0; }
+.bulk-btn--icon { width:46px; padding:0; }
+.bulk-btn svg { width:30px; height:30px; }
 .bulk-btn:hover { background:var(--surface-3); border-color:var(--text); color:var(--text); }
 .bulk-btn:active { opacity:0.7; }
 .bulk-btn--del { color:var(--neg); }
 .bulk-btn--del:hover { background:var(--neg); border-color:var(--neg); color:#fff; }
-.bulk-tvlogo { width:16px; height:16px; border-radius:3px; display:block; }
+.bulk-tvlogo { width:30px; height:30px; border-radius:5px; display:block; }
 .bulk-btn--neg    { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
 .bulk-btn--pos    { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
 .bulk-btn--ai     { background:var(--ai-weak);  border-color:var(--ai);  color:var(--ai); }
