@@ -7,7 +7,7 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260622f';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260625c';
 

@@ -88,12 +88,23 @@ export async function fetchLsQuote(candidate, { backendUrl, secret }) {
   let data; try { data = JSON.parse(body); } catch { data = null; }
   const points = data?.series?.intraday?.data;
   if (!Array.isArray(points) || points.length === 0) {
+    // Diagnostic: surface what LS actually returned so a format/IP-block change
+    // is visible in eruda instead of silently collapsing to a dash.
+    console.warn('[LS] no intraday series', {
+      symbol: candidate.symbol, instrumentId,
+      seriesKeys: data?.series ? Object.keys(data.series) : null,
+      bodyHead: String(body).slice(0, 200),
+    });
     return { error: 'Keine Intraday-Daten', instrument_id: instrumentId, checked_at: now };
   }
 
   const last = points[points.length - 1];
   const price = Array.isArray(last) ? last[1] : null;
   const ts    = Array.isArray(last) ? last[0] : null;
+  if (!Array.isArray(last)) {
+    // Point shape changed (e.g. {x,y} objects instead of [ts,price] tuples).
+    console.warn('[LS] unexpected point shape', { symbol: candidate.symbol, samplePoint: last });
+  }
 
   const prevLine = (data?.info?.plotlines ?? []).find((p) => p.id === 'previousDay');
   const prevClose = prevLine?.value ?? null;
