@@ -14,7 +14,7 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
-import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626b';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626c';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';

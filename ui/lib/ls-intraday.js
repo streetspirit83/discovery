@@ -122,17 +122,13 @@ export async function fetchLsQuote(candidate, { backendUrl, secret }) {
   // dash if the day's series is short. Log the full series structure so an LS
   // format change (series moved to another resolution key) is visible.
   if (series.length < 2) {
-    const seriesObj = data?.series ?? {};
-    console.warn('[LS] short series — price OK but no sparkline', {
-      symbol: candidate.symbol,
-      pointsLen: points.length,
-      seriesLen: series.length,
-      firstPoint: points[0],
-      lastPoint: points[points.length - 1],
-      resolutions: Object.fromEntries(
-        Object.keys(seriesObj).map((k) => [k, Array.isArray(seriesObj[k]?.data) ? seriesObj[k].data.length : null]),
-      ),
-    });
+    // Inline (string) dumps so eruda can't collapse them — shows verbatim where
+    // the day series is (or confirms LS now sends a single quote).
+    console.warn('[LS] short series — price OK but no sparkline · ' + candidate.symbol
+      + ' · pointsLen=' + points.length
+      + ' · seriesKeys=' + JSON.stringify(Object.keys(data?.series ?? {}))
+      + ' · series=' + JSON.stringify(data?.series).slice(0, 500)
+      + ' · infoKeys=' + JSON.stringify(Object.keys(data?.info ?? {})));
   }
 
   return {
