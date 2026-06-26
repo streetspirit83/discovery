@@ -118,6 +118,23 @@ export async function fetchLsQuote(candidate, { backendUrl, secret }) {
   const dayLow  = allPrices.length ? Math.min(...allPrices) : null;
   const dayHigh = allPrices.length ? Math.max(...allPrices) : null;
 
+  // Diagnostic: the price (last point) can succeed while the sparkline stays a
+  // dash if the day's series is short. Log the full series structure so an LS
+  // format change (series moved to another resolution key) is visible.
+  if (series.length < 2) {
+    const seriesObj = data?.series ?? {};
+    console.warn('[LS] short series — price OK but no sparkline', {
+      symbol: candidate.symbol,
+      pointsLen: points.length,
+      seriesLen: series.length,
+      firstPoint: points[0],
+      lastPoint: points[points.length - 1],
+      resolutions: Object.fromEntries(
+        Object.keys(seriesObj).map((k) => [k, Array.isArray(seriesObj[k]?.data) ? seriesObj[k].data.length : null]),
+      ),
+    });
+  }
+
   return {
     price,
     prev_close: prevClose,
