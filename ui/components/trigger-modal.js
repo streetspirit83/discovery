@@ -1,88 +1,181 @@
 /**
- * Stand-alone Trigger editor (price markers + computed stop-loss).
+ * Alert editor (formerly the free-text "Trigger" modal).
  *
- * Mirrors the editor embedded in the Intra-Day modal so the same modal can be
- * opened from the candidate table's action column. Self-contained: takes the
- * candidate plus persistence/refresh callbacks. Reuses the global modal CSS.
+ * Manages a candidate's `c.alerts` array — multiple alerts per ticker, each a
+ * merkliste-compatible alert object. Three ways to add:
+ *   • Manual price (≥/≤ a price in EUR)
+ *   • %-from-entry stop/target (+10/+20/−10/−20/Manual %) anchored on the
+ *     Merkliste entry (fallback Mein Entry / LS price)
+ *   • Indicator presets (RSI overbought/oversold, MACD bullish/bearish)
+ *
+ * Every change persists immediately via onSaveAlerts(id, alerts).
  */
 
-function fmtNum(v, dec = 2) {
-  if (v == null) return '—';
-  return Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-const lastPrice = (c) => c.ls_quote?.price ?? c.tv_data?.close_1m ?? c.tv_data?.close ?? null;
-const atrpOf = (c) => c.tv_data?.atrp ?? null;
+import {
+  entryBasisEur, alertSummary, dirBadge, isAlertTriggered,
+  buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert,
+} from '../lib/alerts.js?v=20260626f';
 
-function stopLossOptions(c) {
-  const L = lastPrice(c), a = atrpOf(c), tv = c.tv_data ?? {};
-  const opts = [];
-  if (L != null) {
-    if (a != null) {
-      opts.push({ v: 'atr1', label: `−1×ATR  (${fmtNum(L * (1 - a / 100))})` });
-      opts.push({ v: 'atr2', label: `−2×ATR  (${fmtNum(L * (1 - 2 * a / 100))})` });
-    }
-    [5, 8, 10].forEach((p) => opts.push({ v: `pct${p}`, label: `−${p}%  (${fmtNum(L * (1 - p / 100))})` }));
-  }
-  if (tv.ema20 != null)    opts.push({ v: 'ema20',   label: `EMA20  (${fmtNum(tv.ema20)})` });
-  if (tv.pivot_s2 != null) opts.push({ v: 'pivots2', label: `Pivot S2  (${fmtNum(tv.pivot_s2)})` });
-  return opts;
-}
+const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
+
+const PCT_OPTS = [
+  { v: '10',  label: 'Ziel +10%' },
+  { v: '20',  label: 'Ziel +20%' },
+  { v: '-10', label: 'Stop −10%' },
+  { v: '-20', label: 'Stop −20%' },
+  { v: 'manual', label: 'Manuell % …' },
+];
+
+const PRESETS = [
+  { v: 'rsi_os', label: 'RSI überverkauft' },
+  { v: 'rsi_ob', label: 'RSI überkauft' },
+  { v: 'macd_up', label: 'MACD bullish' },
+  { v: 'macd_dn', label: 'MACD bearish' },
+];
 
 /**
- * @param {object} c candidate (mutated with c.intraday_trigger on save)
+ * @param {object} c candidate (mutated: c.alerts)
  * @param {object} opts
- * @param {(id:string,trigger:object)=>Promise<void>} [opts.onSaveTrigger] persistence
- * @param {()=>void} [opts.onSaved] re-render hook after save
+ * @param {(id:string, alerts:object[])=>Promise<void>} [opts.onSaveAlerts]
+ * @param {()=>void} [opts.onSaved] re-render the table after a change
  * @param {(msg:string,type?:string)=>void} [opts.toast]
  */
-export function openTriggerEditor(c, { onSaveTrigger, onSaved, toast } = {}) {
+export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
   if (!c) return;
-  const existing = c.intraday_trigger ?? {};
-  const opts = stopLossOptions(c);
+  if (!Array.isArray(c.alerts)) c.alerts = [];
+  const basis = entryBasisEur(c);
 
   const sub = document.createElement('div');
   sub.className = 'modal-overlay id-sub-overlay';
   sub.innerHTML = `
-    <div class="modal id-trigger-modal" role="dialog" aria-modal="true" aria-label="Trigger">
+    <div class="modal id-trigger-modal" role="dialog" aria-modal="true" aria-label="Alerts">
       <div class="modal-header">
-        <h2>Trigger · ${c.symbol}</h2>
+        <h2>Alerts · ${c.symbol}</h2>
         <button class="modal-close" id="idt-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">
-        <div class="form-group">
-          <label for="idt-markers">Preismarker (Freitext)</label>
-          <textarea id="idt-markers" rows="3" placeholder="z. B. Einstieg 7,50 · Ziel 9,20 · Beobachten ab 8,00">${existing.markers ?? ''}</textarea>
+        <div class="alert-entry-row">
+          Entry-Basis: <strong>${fmtEur(basis.value)}</strong>
+          <span class="muted">${basis.source ? `(${basis.source})` : '(kein Entry / Kurs)'}</span>
         </div>
-        <div class="form-group">
-          <label for="idt-stop">Stop-Loss-Marke (berechnet)</label>
-          <select id="idt-stop">
-            <option value="">— keine —</option>
-            ${opts.map((o) => `<option value="${o.v}"${existing.stop_loss === o.v ? ' selected' : ''}>${o.label}</option>`).join('')}
-          </select>
-          <small>Marken aus Last-Kurs, ATRP und TV-Leveln berechnet.</small>
+
+        <ul class="alert-list" id="idt-list"></ul>
+
+        <div class="alert-add">
+          <div class="alert-add__group">
+            <label>Stop / Ziel (% von Entry)</label>
+            <select id="idt-pct">
+              <option value="">— wählen —</option>
+              ${PCT_OPTS.map((o) => `<option value="${o.v}">${o.label}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="alert-add__group">
+            <label>Manueller Preis-Alert</label>
+            <div class="alert-add__manual">
+              <select id="idt-dir">
+                <option value="above">Kurs ≥</option>
+                <option value="below">Kurs ≤</option>
+              </select>
+              <input type="number" step="any" id="idt-price" placeholder="Preis €">
+              <button class="btn btn-secondary" id="idt-add-price">+</button>
+            </div>
+          </div>
+
+          <div class="alert-add__group">
+            <label>Indikator-Presets</label>
+            <div class="alert-add__presets">
+              ${PRESETS.map((p) => `<button class="chip-btn" data-preset="${p.v}">${p.label}</button>`).join('')}
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" id="idt-cancel">Abbrechen</button>
-        <button class="btn btn-primary" id="idt-save">Speichern</button>
+        <button class="btn btn-primary" id="idt-done">Fertig</button>
       </div>
     </div>`;
   document.body.appendChild(sub);
 
-  const closeSub = () => sub.remove();
-  sub.querySelector('#idt-close').addEventListener('pointerup', closeSub);
-  sub.querySelector('#idt-cancel').addEventListener('pointerup', closeSub);
-  sub.addEventListener('pointerup', (e) => { if (e.target === sub) closeSub(); });
-  sub.querySelector('#idt-save').addEventListener('pointerup', async () => {
-    const trigger = {
-      markers: sub.querySelector('#idt-markers').value.trim(),
-      stop_loss: sub.querySelector('#idt-stop').value,
-      saved_at: new Date().toISOString(),
-    };
-    c.intraday_trigger = trigger;
+  const listEl = sub.querySelector('#idt-list');
+
+  function persist() {
     onSaved?.();
-    closeSub();
-    try { await onSaveTrigger?.(c.id, trigger); }
-    catch (err) { toast?.(`Trigger nicht gespeichert: ${err.message}`, 'error'); }
+    Promise.resolve(onSaveAlerts?.(c.id, c.alerts)).catch((err) =>
+      toast?.(`Alert nicht gespeichert: ${err.message}`, 'error'));
+  }
+
+  function renderList() {
+    if (!c.alerts.length) {
+      listEl.innerHTML = '<li class="alert-empty muted">Noch keine Alerts. Unten hinzufügen.</li>';
+      return;
+    }
+    listEl.innerHTML = c.alerts.map((a) => {
+      const off = a.enabled === false;
+      const trig = !off && isAlertTriggered(c, a);
+      return `<li class="alert-item${off ? ' is-off' : ''}${trig ? ' is-trig' : ''}" data-id="${a.id}">
+        <button class="alert-toggle" data-act="toggle" title="${off ? 'Aktivieren' : 'Stummschalten'}">${off ? '○' : '●'}</button>
+        <span class="alert-badge">${dirBadge(a)}</span>
+        <span class="alert-text">${alertSummary(a)}</span>
+        ${trig ? '<span class="alert-trig-tag">ausgelöst</span>' : ''}
+        <button class="alert-del" data-act="del" title="Löschen">🗑</button>
+      </li>`;
+    }).join('');
+  }
+
+  function addAlert(a) {
+    if (!a) { toast?.('Kein Entry/Kurs für Berechnung', 'error'); return; }
+    c.alerts.push(a);
+    renderList();
+    persist();
+  }
+
+  // %-from-entry dropdown
+  sub.querySelector('#idt-pct').addEventListener('change', (e) => {
+    const v = e.target.value;
+    e.target.value = '';
+    if (!v) return;
+    let pct;
+    if (v === 'manual') {
+      const raw = window.prompt('Prozent vom Entry (z. B. 15 für +15%, -8 für Stop −8%):', '');
+      if (raw == null) return;
+      pct = parseFloat(raw.replace(',', '.'));
+      if (!Number.isFinite(pct)) { toast?.('Ungültige Prozentangabe', 'error'); return; }
+    } else {
+      pct = parseFloat(v);
+    }
+    addAlert(buildEntryPctAlert(c, pct));
   });
+
+  // Manual price
+  sub.querySelector('#idt-add-price').addEventListener('pointerup', () => {
+    const price = parseFloat(sub.querySelector('#idt-price').value);
+    if (!Number.isFinite(price)) { toast?.('Preis eingeben', 'error'); return; }
+    const dir = sub.querySelector('#idt-dir').value;
+    addAlert(buildManualPriceAlert({ dir, priceEur: +price.toFixed(4) }));
+    sub.querySelector('#idt-price').value = '';
+  });
+
+  // Indicator presets
+  sub.querySelectorAll('[data-preset]').forEach((btn) =>
+    btn.addEventListener('pointerup', () => addAlert(buildPresetAlert(btn.dataset.preset))));
+
+  // List actions (toggle / delete) — delegated
+  listEl.addEventListener('pointerup', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const li = btn.closest('.alert-item');
+    const a = c.alerts.find((x) => x.id === li?.dataset.id);
+    if (!a) return;
+    if (btn.dataset.act === 'toggle') a.enabled = a.enabled === false;
+    else if (btn.dataset.act === 'del') c.alerts = c.alerts.filter((x) => x.id !== a.id);
+    renderList();
+    persist();
+  });
+
+  const close = () => sub.remove();
+  sub.querySelector('#idt-close').addEventListener('pointerup', close);
+  sub.querySelector('#idt-done').addEventListener('pointerup', close);
+  sub.addEventListener('pointerup', (e) => { if (e.target === sub) close(); });
+
+  renderList();
 }

@@ -2,14 +2,14 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260626e';
+import { CandidateList } from './components/candidate-list.js?v=20260626f';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260625c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260625p';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260625e';
+import { renderAlertModal } from './components/alert-modal.js?v=20260626f';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260626f';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
@@ -39,6 +39,7 @@ const L = {
   settings: luc('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
   home:     luc('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
   intraday: luc('<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>'),
+  bell:     luc('<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>'),
   inbox:    luc('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
   portfolio:luc('<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>'),
   markets:  luc('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>'),
@@ -237,66 +238,28 @@ async function runLsQuoteForSelection(idsArg) {
   }
 }
 
-// ── Intra-Day modal (Home nav slot) ─────────────────────────────────────────────
-// When the detail sheet is opened from here, closing it should bring this modal
-// back (see closeDetailSheet).
-let reopenIntradayOnDetailClose = false;
+// ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
+// Replaces the former Intra-Day modal: lists every candidate that has alerts,
+// with a global mute and per-alert enable/disable. Persists enabled-changes.
+function persistAlerts(id, alerts) {
+  if (useMock || !storageClient) return Promise.resolve();
+  return storageClient.updateCandidate(currentBlobType, id, { alerts });
+}
 
-function openIntradayModal() {
+function openAlertModal() {
   const blob = allBlobs[currentBlobType];
-  // Mirror the main list's active filters (sector/cap/broker/score/selection).
   const candidates = candidateList ? candidateList.getFiltered() : (blob?.candidates ?? []);
-  renderIntradayModal({
+  renderAlertModal({
     candidates,
     toast,
-    // One-time prep before a refresh sweep: gate on backend, backfill any
-    // missing ISINs (needed for the LS lookup) in a single TV call.
-    onRefreshPrepare: async (ids) => {
-      if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return { ok: false }; }
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return { ok: false }; }
-      const b = allBlobs[currentBlobType];
-      const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
-      const missing = (b?.candidates ?? []).filter(
-        (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
-      );
-      if (missing.length) {
-        toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 8000);
-        try {
-          const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
-          const ups = [];
-          for (const [cid, upd] of enr) {
-            const c = missing.find((x) => x.id === cid);
-            if (c) { Object.assign(c, upd); ups.push({ candidate_id: cid, updates: upd }); }
-          }
-          if (ups.length) await storageClient.bulkUpdateCandidates(currentBlobType, ups).catch(() => {});
-        } catch (err) { console.warn('[Intraday] ISIN backfill failed:', err.message); }
-      }
-      return { ok: true };
-    },
-    // Fetch ONE ticker's LS quote (mutates the candidate, persists best-effort).
-    // The modal awaits these one at a time and animates each row as it lands.
-    onRefreshTicker: async (candidate) => {
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (!backendUrl || !secret) return null;
-      candidate.ls_quote = await fetchLsQuote(candidate, { backendUrl, secret });
-      if (storageClient) {
-        storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
-      }
-      return candidate.ls_quote;
-    },
-    // Persist a row's trigger (price markers + stop-loss) when configured.
-    onSaveTrigger: async (id, trigger) => {
-      if (useMock || !storageClient) return;
-      await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
-    },
-    // Tap a symbol → open the candidate detail sheet; remember to reopen on close.
-    onOpenDetail: (candidate) => {
-      reopenIntradayOnDetailClose = true;
-      candidateDetail?.show(candidate);
-      openDetailSheet();
+    onSaveAlerts: persistAlerts,
+    // Edit shortcut → open the full alert editor for one candidate.
+    onOpenEditor: (candidate) => {
+      openTriggerEditor(candidate, {
+        onSaveAlerts: persistAlerts,
+        onSaved: () => candidateList?.renderRows(),
+        toast,
+      });
     },
   });
 }
@@ -498,7 +461,7 @@ function renderSelectedPill() {
 function renderBotnav() {
   const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark };
   const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
-  document.getElementById('nav-home-icon').innerHTML   = L.intraday;
+  document.getElementById('nav-home-icon').innerHTML   = L.bell;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
   document.getElementById('nav-portfolio-icon').innerHTML = L.portfolio;
@@ -520,10 +483,6 @@ function closeDetailSheet() {
   detailSheetOpen = false;
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
-  if (reopenIntradayOnDetailClose) {
-    reopenIntradayOnDetailClose = false;
-    openIntradayModal(); // came from Intra-Day → bring it back
-  }
 }
 
 // Mobile-friendly swipe-to-dismiss for a right-edge sheet: drag right to close.
@@ -862,10 +821,7 @@ async function handleAction(action, candidate, extras = {}) {
 
   if (action === 'openTrigger') {
     openTriggerEditor(candidate, {
-      onSaveTrigger: async (id, trigger) => {
-        if (useMock || !storageClient) return;
-        await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
-      },
+      onSaveAlerts: persistAlerts,
       onSaved: () => candidateList.renderRows(),
       toast,
     });
@@ -1263,7 +1219,7 @@ async function init() {
   // ── Botnav ───────────────────────────────────────────────────────────────────
   document.getElementById('nav-home').addEventListener('pointerup', () => {
     document.getElementById('content').scrollTo({ top: 0, behavior: 'smooth' });
-    openIntradayModal();
+    openAlertModal();
   });
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);

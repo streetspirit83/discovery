@@ -757,11 +757,12 @@ export class CandidateList {
         <span class="exch-tag exch-tag--sub">${c.exchange}</span>
       </div>`;
 
-      const trigSet = !!(c.intraday_trigger && (c.intraday_trigger.markers || c.intraday_trigger.stop_loss));
+      const alertCount = Array.isArray(c.alerts) ? c.alerts.filter((a) => a && a.enabled !== false).length : 0;
+      const trigSet = alertCount > 0;
       const actionTd = `<td class="num"><div class="row-actions">
         ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
         ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
-        <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? 'Trigger bearbeiten (Marker / Stop-Loss)' : 'Trigger hinzufügen (Marker / Stop-Loss)'}">${trigSet ? '✓' : '+'}</button>
+        <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? `Alerts bearbeiten (${alertCount} aktiv)` : 'Alert hinzufügen'}">${trigSet ? alertCount : '+'}</button>
       </div></td>`;
 
       const starTd = `<td class="num"><button class="act-btn act-btn--star${c.in_portfolio ? ' is-active' : ''}" data-action="toggleStar" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button></td>`;
