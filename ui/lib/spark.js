@@ -42,7 +42,7 @@ export function sparkCellHTML(c, fmtNum) {
   }
   const lo = q.day_low, hi = q.day_high;
   const tip = (lo != null && hi != null) ? `Tagesspanne ${fmtNum(lo, 2)}–${fmtNum(hi, 2)}` : 'Tagesverlauf (LS)';
-  return `<span title="${tip}">${sparklineSVG(s, q.prev_close, q.change_pct)}</span>`;
+  return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sparklineSVG(s, q.prev_close, q.change_pct)}</span>`;
 }
 
 // Standard-table cell: ATRP value + a bar of today's move vs. the typical ATR move.

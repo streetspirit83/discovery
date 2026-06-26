@@ -9,7 +9,7 @@ import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260625c';
+import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -485,8 +485,13 @@ export class CandidateList {
   async runLsQuote(ids, opts) {
     const idSet = new Set(ids);
     const targets = this.candidates.filter((c) => idSet.has(c.id));
-    // Show a pulsing placeholder in the LS cell while fetching (animated feedback).
-    targets.forEach((c) => { c.ls_quote = { loading: true }; });
+    // Keep any existing values visible and just pulse them while fetching; only
+    // show the blank placeholder on the first-ever fetch (no prior price).
+    targets.forEach((c) => {
+      c.ls_quote = (c.ls_quote && c.ls_quote.price != null)
+        ? { ...c.ls_quote, _fetching: true }
+        : { loading: true };
+    });
     this.renderRows();
     const updates = [];
     for (const c of targets) {
@@ -1059,14 +1064,14 @@ function lsPriceCell(c) {
   const sym = displayCurrency === 'USD' ? '$' : '€';
   const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
-  return `<span title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
+  return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
 }
 
 // LS change-vs-previous-close cell (Standard view).
 function lsChgCell(c) {
   const q = c.ls_quote;
   if (!q || q.change_pct == null) return '<span class="muted-dash">—</span>';
-  return `<span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>`;
+  return `<span class="${posNegClass(q.change_pct)}${q._fetching ? ' is-fetching' : ''}">${fmtPct(q.change_pct)}</span>`;
 }
 
 // Merkliste cost basis ("Einstand") — the manual entry price from the merkliste
