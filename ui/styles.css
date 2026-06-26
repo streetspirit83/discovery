@@ -1150,13 +1150,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   border-top:1px dashed var(--border); }
 .alert-add__group { display:flex; flex-direction:column; gap:.3rem; }
 .alert-add__group > label { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
-.alert-add__group select, .alert-add__manual input { padding:.4rem .5rem; border:1px solid var(--border);
+.alert-add__group select, .alert-add__manual input { padding:.5rem .6rem; border:1px solid var(--border);
   border-radius:var(--r-1); background:var(--surface); color:var(--text); font-size:var(--fs-2); }
-.alert-add__manual { display:flex; gap:.4rem; align-items:center; }
-.alert-add__manual select { flex:0 0 auto; }
-.alert-add__manual input { flex:1; min-width:0; }
-.alert-add__manual .btn { flex:0 0 auto; padding:.4rem .8rem; }
+.alert-add__manual { display:flex; gap:.4rem; align-items:stretch; }
+.alert-add__manual .dir-select { flex:0 0 3.25rem; width:3.25rem; text-align:center;
+  font-size:var(--fs-3); padding:.5rem .3rem; }
+.alert-add__manual input { flex:1 1 auto; min-width:0; font-size:var(--fs-3); }
+.alert-add__manual .btn { flex:0 0 auto; padding:.5rem 1rem; font-size:var(--fs-3); }
 .alert-add__presets { display:flex; flex-wrap:wrap; gap:.4rem; }
+.alert-tier { font-size:var(--fs-1); font-weight:600; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.03em; margin:.5rem 0 .1rem; }
+.alert-tier:first-child { margin-top:0; }
 
 /* Overview modal */
 .alert-modal__bar { display:flex; align-items:center; gap:.75rem;

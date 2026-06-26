@@ -14,7 +14,7 @@
 import {
   entryBasisEur, alertSummary, dirBadge, isAlertTriggered,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert,
-} from '../lib/alerts.js?v=20260626f';
+} from '../lib/alerts.js?v=20260626g';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 
@@ -26,7 +26,15 @@ const PCT_OPTS = [
   { v: 'manual', label: 'Manuell % …' },
 ];
 
-const PRESETS = [
+// Price-driven (live LS price vs stored EMA level).
+const MA_PRESETS = [
+  { v: 'ema20',  label: '≤ EMA20' },
+  { v: 'ema50',  label: '≤ EMA50' },
+  { v: 'ema200', label: '≤ EMA200' },
+];
+
+// Pure TV-snapshot indicators (only as fresh as the last TV fetch).
+const IND_PRESETS = [
   { v: 'rsi_os', label: 'RSI überverkauft' },
   { v: 'rsi_ob', label: 'RSI überkauft' },
   { v: 'macd_up', label: 'MACD bullish' },
@@ -62,6 +70,8 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
         <ul class="alert-list" id="idt-list"></ul>
 
         <div class="alert-add">
+          <div class="alert-tier">Kurs · LS live</div>
+
           <div class="alert-add__group">
             <label>Stop / Ziel (% von Entry)</label>
             <select id="idt-pct">
@@ -71,21 +81,28 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
           </div>
 
           <div class="alert-add__group">
-            <label>Manueller Preis-Alert</label>
+            <label>Manueller Preis-Alert (€)</label>
             <div class="alert-add__manual">
-              <select id="idt-dir">
-                <option value="above">Kurs ≥</option>
-                <option value="below">Kurs ≤</option>
+              <select id="idt-dir" class="dir-select" aria-label="Richtung">
+                <option value="above">≥</option>
+                <option value="below">≤</option>
               </select>
-              <input type="number" step="any" id="idt-price" placeholder="Preis €">
-              <button class="btn btn-secondary" id="idt-add-price">+</button>
+              <input type="number" step="any" inputmode="decimal" id="idt-price" placeholder="Preis in €">
+              <button class="btn btn-primary" id="idt-add-price" aria-label="Hinzufügen">＋</button>
             </div>
           </div>
 
+          <div class="alert-tier">Gleitende Durchschnitte · Kurs live, EMA aus TV-Daten</div>
           <div class="alert-add__group">
-            <label>Indikator-Presets</label>
             <div class="alert-add__presets">
-              ${PRESETS.map((p) => `<button class="chip-btn" data-preset="${p.v}">${p.label}</button>`).join('')}
+              ${MA_PRESETS.map((p) => `<button class="chip-btn" data-preset="${p.v}">${p.label}</button>`).join('')}
+            </div>
+          </div>
+
+          <div class="alert-tier">Indikatoren · nur TV-Snapshot (letzter TV-Fetch)</div>
+          <div class="alert-add__group">
+            <div class="alert-add__presets">
+              ${IND_PRESETS.map((p) => `<button class="chip-btn" data-preset="${p.v}">${p.label}</button>`).join('')}
             </div>
           </div>
         </div>

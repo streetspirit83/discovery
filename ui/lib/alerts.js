@@ -75,6 +75,9 @@ export function alertSummary(a) {
   switch (a.type) {
     case 'price_above': return `Kurs ≥ ${fmtEur(a.threshold)}${a.label ? ` · ${a.label}` : ''}`;
     case 'price_below': return `Kurs ≤ ${fmtEur(a.threshold)}${a.label ? ` · ${a.label}` : ''}`;
+    case 'ma20_below':  return `Kurs ≤ EMA20`;
+    case 'ma50_below':  return `Kurs ≤ EMA50`;
+    case 'ma200_below': return `Kurs ≤ EMA200`;
     case 'rsi_above':   return `RSI ≥ ${a.threshold}`;
     case 'rsi_below':   return `RSI ≤ ${a.threshold}`;
     case 'macd_bullish':return `MACD dreht bullish`;
@@ -122,12 +125,16 @@ export function buildEntryPctAlert(c, pct) {
   };
 }
 
-/* Quick indicator presets (currency-free). */
+/* Presets. EMA crosses are price-driven (live LS price vs stored EMA level);
+   RSI/MACD are pure TV-snapshot indicators. */
 export function buildPresetAlert(kind) {
   const base = { id: newAlertId(), enabled: true, basis: { kind: 'preset' }, created_at: new Date().toISOString() };
   switch (kind) {
-    case 'rsi_ob': return { ...base, type: 'rsi_above', threshold: 70, dir: 'sell', label: 'RSI überkauft' };
-    case 'rsi_os': return { ...base, type: 'rsi_below', threshold: 30, dir: 'buy',  label: 'RSI überverkauft' };
+    case 'ema20':  return { ...base, type: 'ma20_below',  dir: 'buy',  label: 'Kurs ≤ EMA20' };
+    case 'ema50':  return { ...base, type: 'ma50_below',  dir: 'buy',  label: 'Kurs ≤ EMA50' };
+    case 'ema200': return { ...base, type: 'ma200_below', dir: 'buy',  label: 'Kurs ≤ EMA200' };
+    case 'rsi_ob': return { ...base, type: 'rsi_above', threshold: 70, dir: 'sell', label: 'RSI ≥ 70 (überkauft)' };
+    case 'rsi_os': return { ...base, type: 'rsi_below', threshold: 30, dir: 'buy',  label: 'RSI ≤ 30 (überverkauft)' };
     case 'macd_up':return { ...base, type: 'macd_bullish', dir: 'buy',  label: 'MACD bullish' };
     case 'macd_dn':return { ...base, type: 'macd_bearish', dir: 'sell', label: 'MACD bearish' };
     default: return null;

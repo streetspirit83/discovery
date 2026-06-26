@@ -8,7 +8,7 @@
  *   • the live triggered state, and an edit shortcut into the alert editor.
  */
 
-import { ALERTS_MUTED_KEY, alertSummary, dirBadge, isAlertTriggered, candidateQuoteEur } from '../lib/alerts.js?v=20260626f';
+import { ALERTS_MUTED_KEY, alertSummary, dirBadge, isAlertTriggered, candidateQuoteEur } from '../lib/alerts.js?v=20260626g';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 

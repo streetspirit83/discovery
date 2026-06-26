@@ -8,8 +8,8 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260626f';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260626f';
+import { renderAlertModal } from './components/alert-modal.js?v=20260626g';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260626g';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
