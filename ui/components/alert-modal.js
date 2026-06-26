@@ -21,7 +21,7 @@ const isMuted = () => localStorage.getItem(ALERTS_MUTED_KEY) === '1';
  * @param {(c:object)=>void} [opts.onOpenEditor] open the full alert editor
  * @param {(msg:string,type?:string)=>void} [opts.toast]
  */
-export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, toast } = {}) {
+export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, onSetMute, toast } = {}) {
   if (document.getElementById('alert-modal-overlay')) return;
   const all = candidates ?? [];
 
@@ -112,10 +112,13 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, toast
     }
   });
 
-  // Global mute toggle
+  // Global mute toggle — local for instant UI + server so the push honors it.
   overlay.querySelector('#al-mute').addEventListener('pointerup', () => {
-    localStorage.setItem(ALERTS_MUTED_KEY, isMuted() ? '0' : '1');
+    const next = !isMuted();
+    localStorage.setItem(ALERTS_MUTED_KEY, next ? '1' : '0');
     render();
+    Promise.resolve(onSetMute?.(next)).catch((err) =>
+      toast?.(`Mute nicht synchronisiert: ${err.message}`, 'error'));
   });
 
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };

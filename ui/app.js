@@ -8,7 +8,7 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260626g';
+import { renderAlertModal } from './components/alert-modal.js?v=20260626h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260626g';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { loadStorageClient } from './lib/storage-client.js';
@@ -253,6 +253,7 @@ function openAlertModal() {
     candidates,
     toast,
     onSaveAlerts: persistAlerts,
+    onSetMute: (m) => (useMock || !storageClient ? Promise.resolve() : storageClient.writeConfig({ alerts_muted: m })),
     // Edit shortcut → open the full alert editor for one candidate.
     onOpenEditor: (candidate) => {
       openTriggerEditor(candidate, {
