@@ -1,5 +1,5 @@
 import { enrichCandidate } from '../lib/claude-api.js';
-import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627a';
+import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627b';
 import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -7,6 +7,8 @@ const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
 const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
 
 const CLOSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+const CHEV_L = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`;
+const CHEV_R = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
 
 function formatDate(isoStr) {
   if (!isoStr) return '';
@@ -23,6 +25,13 @@ function formatMarketCap(mc) {
   if (mc >= 1e6)  return `${(mc / 1e6).toFixed(0)}M`;
   return mc.toLocaleString('de-DE');
 }
+
+// Percent-unit fundamentals (already in %, e.g. 25.3 → "25.3%").
+function pctVal(v) { return v == null ? '—' : `${v.toFixed(1)}%`; }
+// Plain decimal ratios (e.g. debt/equity, EV/EBITDA).
+function ratioVal(v) { return v == null ? '—' : v.toFixed(2); }
+// Colour growth figures green/red.
+function growthCls(v) { return v == null ? '' : v >= 0 ? 'tv-pos' : 'tv-neg'; }
 
 function tvRatingClass(r) {
   if (r == null) return 'neutral';
@@ -65,6 +74,12 @@ function renderTVData(c) {
         <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—'}</strong></div>
         <div class="tv-kv"><span>RSI</span><strong>${tv.rsi != null ? tv.rsi.toFixed(1) : '—'}</strong></div>
         <div class="tv-kv"><span>Beta</span><strong>${tv.beta != null ? tv.beta.toFixed(2) : '—'}</strong></div>
+        <div class="tv-kv"><span>ROE</span><strong>${pctVal(tv.return_on_equity)}</strong></div>
+        <div class="tv-kv"><span>Op-Marge</span><strong>${pctVal(tv.operating_margin)}</strong></div>
+        <div class="tv-kv"><span>Umsatz YoY</span><strong class="${growthCls(tv.total_revenue_yoy_growth_ttm)}">${pctVal(tv.total_revenue_yoy_growth_ttm)}</strong></div>
+        <div class="tv-kv"><span>EBITDA YoY</span><strong class="${growthCls(tv.ebitda_yoy_growth_ttm)}">${pctVal(tv.ebitda_yoy_growth_ttm)}</strong></div>
+        <div class="tv-kv"><span>Debt/Equity</span><strong>${ratioVal(tv.debt_to_equity)}</strong></div>
+        <div class="tv-kv"><span>EV/EBITDA</span><strong>${ratioVal(tv.enterprise_value_ebitda_ttm)}</strong></div>
       </div>
       ${c.sector ? `<div class="tv-meta"><span class="tag">${c.sector}</span>${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}</div>` : ''}
       <small class="tv-fetched">Stand: ${formatDate(tv.fetched_at)}</small>
@@ -162,11 +177,24 @@ function linkBtn(href, logo, label, cssClass) {
 }
 
 export class CandidateDetail {
-  constructor(sheetEl, { onAction, onClose }) {
+  constructor(sheetEl, { onAction, onClose, getSiblings }) {
     this.el = sheetEl;
     this.onAction = onAction;
     this.onClose = onClose;
+    this.getSiblings = getSiblings;   // () => ordered candidate list (current table sort)
     this.candidate = null;
+  }
+
+  // Step to the prev/next candidate in the current sort order (swipe / arrows).
+  navigate(dir) {
+    const list = this.getSiblings?.() ?? [];
+    if (list.length < 2 || !this.candidate) return;
+    const i = list.findIndex((c) => c.id === this.candidate.id);
+    if (i < 0) return;
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    this.show(list[j]);
+    this.el.scrollTop = 0;
   }
 
   show(candidate) {
@@ -201,6 +229,17 @@ export class CandidateDetail {
           <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
         </div>
       </div>
+
+      ${(() => {
+        const list = this.getSiblings?.() ?? [];
+        const idx = list.findIndex((x) => x.id === c.id);
+        if (list.length < 2 || idx < 0) return '';
+        return `<div class="detail-nav">
+          <button class="detail-nav__btn" id="detail-prev" ${idx <= 0 ? 'disabled' : ''} aria-label="Vorheriger Kandidat">${CHEV_L} Zurück</button>
+          <span class="detail-nav__pos">${idx + 1} / ${list.length}</span>
+          <button class="detail-nav__btn" id="detail-next" ${idx >= list.length - 1 ? 'disabled' : ''} aria-label="Nächster Kandidat">Weiter ${CHEV_R}</button>
+        </div>`;
+      })()}
 
       <div class="detail-state">
         Status: <strong>${stateMap[c.workspace_state] ?? c.workspace_state}</strong>
@@ -317,6 +356,9 @@ export class CandidateDetail {
     this.el.querySelector('#detail-export')?.addEventListener('pointerup', () => {
       this.onAction?.('export', c);
     });
+
+    this.el.querySelector('#detail-prev')?.addEventListener('pointerup', () => this.navigate(-1));
+    this.el.querySelector('#detail-next')?.addEventListener('pointerup', () => this.navigate(1));
 
     this.el.querySelector('#detail-save-links').addEventListener('pointerup', () => {
       const newLinks = {

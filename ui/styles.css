@@ -28,7 +28,7 @@
   /* Typography */
   --font-ui:"DM Sans",-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   --font-mono:"DM Mono",ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
-  --fs-1:11px; --fs-2:12px; --fs-3:13px; --fs-4:14px; --fs-5:16px; --fs-6:18px;
+  --fs-1:14px; --fs-2:15px; --fs-3:16px; --fs-4:17px; --fs-5:19px; --fs-6:21px;
   --fw-reg:400; --fw-med:500; --fw-bold:700; --lh:1.45;
 
   /* Bar heights */
@@ -1314,22 +1314,65 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .score-ring--WEAK   .score-ring__val { stroke:var(--neg); } .score-ring--WEAK .score-ring__num { color:var(--neg); }
 .score-ring--empty  .score-ring__num { color:var(--muted); }
 
+/* Detail prev/next navigation strip */
+.detail-nav {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:6px 4px 2px;
+}
+.detail-nav__btn {
+  display:inline-flex; align-items:center; gap:4px; padding:5px 12px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-pill);
+  color:var(--text); font:inherit; font-size:var(--fs-1); font-weight:var(--fw-bold); cursor:pointer;
+}
+.detail-nav__btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+.detail-nav__btn:disabled { opacity:.4; cursor:default; }
+.detail-nav__btn svg { display:block; }
+.detail-nav__pos { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+
+/* Ladder row: chart + colour legend to the right */
+.pv-ladder-row { display:flex; gap:8px; align-items:flex-start; }
+.pv-ladder-wrap { flex:1 1 auto; min-width:0; }
+.pv-legend { flex:0 0 auto; width:96px; display:flex; flex-direction:column; gap:7px; padding-top:6px; }
+.pv-leg__item { display:flex; align-items:center; gap:6px; font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.pv-leg__sw { width:12px; height:3px; border-radius:2px; flex-shrink:0; }
+.pv-leg__sw--cur     { height:0; border-top:3px solid var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.pv-leg__sw--anchor  { background:var(--muted); }
+.pv-leg__sw--ma      { background:#2980b9; }
+.pv-leg__sw--band    { background:var(--ai); }
+.pv-leg__sw--resist  { background:var(--neg); }
+.pv-leg__sw--support { background:var(--pos); }
+
+/* Return-per-period diverging bars */
+.pv-perf { display:flex; flex-direction:column; gap:7px; }
+.pv-perf__row {
+  display:grid; grid-template-columns:38px 1fr 58px; align-items:center; gap:8px;
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums;
+}
+.pv-perf__lbl { font-weight:var(--fw-bold); color:var(--muted); }
+.pv-perf__track { position:relative; height:12px; background:var(--surface-3); border-radius:var(--r-1); overflow:hidden; }
+.pv-perf__zero { position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--border); }
+.pv-perf__bar { position:absolute; top:2px; bottom:2px; border-radius:2px; }
+.pv-perf__bar.pos { background:var(--pos); }
+.pv-perf__bar.neg { background:var(--neg); }
+.pv-perf__val { text-align:right; font-weight:var(--fw-bold); }
+.pv-perf__val.pos { color:var(--pos); }
+.pv-perf__val.neg { color:var(--neg); }
+
 /* Vertical price ladder (SVG) */
-.pv-ladder-wrap { max-width:340px; margin:2px auto 0; }
 .pv-ladder { display:block; overflow:visible; }
 .pv-bar { fill:var(--surface-3); }
 .pv-cap { fill:var(--ai-weak); }
 .pv-bb  { fill:var(--accent); opacity:.12; }
 .pv-tick { stroke-width:2; }
 .pv-tick--anchor  { stroke:var(--muted); }
-.pv-tick--ma      { stroke:var(--accent); }
+.pv-tick--ma      { stroke:#2980b9; }
 .pv-tick--band    { stroke:var(--ai); }
 .pv-tick--resist  { stroke:var(--neg); }
 .pv-tick--support { stroke:var(--pos); }
 .pv-leader { stroke:var(--border); stroke-width:1; }
-.pv-lbl { font-size:10px; fill:var(--text); font-family:var(--font-ui); }
+.pv-lbl { font-size:13px; fill:var(--text); font-family:var(--font-ui); }
 .pv-lbl--anchor { fill:var(--muted); }
-.pv-lbl--ma     { fill:var(--accent); }
+.pv-lbl--ma     { fill:#2980b9; }
 .pv-lbl--cur    { fill:var(--accent); font-weight:700; }
 .pv-cur { stroke:var(--accent); stroke-width:2.5; }
 .pv-cur-dot { fill:var(--accent); }
