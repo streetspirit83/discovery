@@ -20,46 +20,49 @@ import { normalizeExchange }         from './exchange-map.js';
 
 const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
 
-/* Freeze the key scores of the *previous* tv_data into a compact snapshot so the
- * next fetch can compute deltas ("Top Movers vs. letzter Fetch"). Returns null
- * when the old data carries no computable composite score. */
-function buildSnapshot(oldTv) {
-  if (!oldTv) return null;
+/* MACD histogram (macd − signal) — the value whose sign-flip we track. */
+function macdHist(tv) {
+  return tv.macd != null && tv.macd_signal != null ? +(tv.macd - tv.macd_signal).toFixed(4) : null;
+}
+
+/* Build the per-day closing record from the freshly computed tv_data. Every
+ * tracked score is captured so the dashboard can derive a gapless day-over-day
+ * time series for each of them (the last fetch of a day is the closing value). */
+function snapshotRecord(tv) {
   const overall = computeOverallScore({
-    perfW:         oldTv.perf_w,
-    perf1M:        oldTv.perf_1m,
-    change1D:      oldTv.change_1d,
-    ebitdaGrowth:  oldTv.ebitda_yoy_growth_fy ?? oldTv.ebitda_yoy_growth_ttm,
-    rating1M:      oldTv.recommend_all_1m,
-    trendStrength: oldTv.trend_strength_score?.total,
-    entry:         oldTv.entry_score?.total,
-    health:        oldTv.health_score?.total,
-    cycle:         oldTv.cycle_score?.total,
+    perfW:         tv.perf_w,
+    perf1M:        tv.perf_1m,
+    change1D:      tv.change_1d,
+    ebitdaGrowth:  tv.ebitda_yoy_growth_fy ?? tv.ebitda_yoy_growth_ttm,
+    rating1M:      tv.recommend_all_1m,
+    trendStrength: tv.trend_strength_score?.total,
+    entry:         tv.entry_score?.total,
+    health:        tv.health_score?.total,
+    cycle:         tv.cycle_score?.total,
   })?.total ?? null;
-  if (overall == null) return null;
   return {
-    at:             oldTv.fetched_at ?? null,
+    d:              (tv.fetched_at ?? new Date().toISOString()).slice(0, 10),
     overall,
-    trend_strength: oldTv.trend_strength_score?.total ?? null,
-    entry:          oldTv.entry_score?.total ?? null,
-    health:         oldTv.health_score?.total ?? null,
-    cycle:          oldTv.cycle_score?.total ?? null,
-    trend:          oldTv.trend_score?.total ?? null,
-    mom:            computeMomentumCheck(oldTv)?.total ?? null,
-    rsi:            oldTv.rsi ?? null,
+    trend_strength: tv.trend_strength_score?.total ?? null,
+    entry:          tv.entry_score?.total ?? null,
+    health:         tv.health_score?.total ?? null,
+    cycle:          tv.cycle_score?.total ?? null,
+    trend:          tv.trend_score?.total ?? null,
+    mom:            computeMomentumCheck(tv)?.total ?? null,
+    rsi:            tv.rsi ?? null,
+    macd_hist:      macdHist(tv),
   };
 }
 
-const sameDay = (a, b) =>
-  a != null && b != null && String(a).slice(0, 10) === String(b).slice(0, 10);
+const dayOf = (s) => s?.d ?? (s?.at ? String(s.at).slice(0, 10) : null);
 
-/* Prepend `snap` to the existing history, keeping at most one entry per calendar
- * day (a same-day re-fetch replaces the head) and capping at SNAPSHOT_MAX. */
-function pushSnapshot(history, snap) {
-  if (!snap) return Array.isArray(history) ? history.slice(0, SNAPSHOT_MAX) : [];
+/* Upsert today's closing record into the per-day series (newest first). A later
+ * same-day fetch replaces the head ("letzter Wert zählt"); a new day prepends.
+ * Capped at SNAPSHOT_MAX so consecutive days net into a gapless time series. */
+function upsertSnapshot(history, rec) {
   const hist = Array.isArray(history) ? history.slice() : [];
-  if (hist[0] && sameDay(hist[0].at, snap.at)) hist[0] = snap;
-  else hist.unshift(snap);
+  if (hist[0] && dayOf(hist[0]) === rec.d) hist[0] = rec;
+  else hist.unshift(rec);
   return hist.slice(0, SNAPSHOT_MAX);
 }
 
@@ -643,8 +646,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
   const currency = EXCHANGE_CURRENCY[candidate.exchange];
   if (currency) updates.currency = currency;
 
-  // Archive the previous fetch's scores so the dashboard can show score deltas.
-  updates.tv_data.snapshot = pushSnapshot(candidate.tv_data?.snapshot, buildSnapshot(candidate.tv_data));
+  // Append today's closing scores to the per-day series so the dashboard can
+  // derive a gapless day-over-day time series (deltas) for every score.
+  updates.tv_data.snapshot = upsertSnapshot(candidate.tv_data?.snapshot, snapshotRecord(updates.tv_data));
 
   return updates;
 }

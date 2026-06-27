@@ -1263,6 +1263,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   font-variant-numeric:tabular-nums;
 }
 .dash-chip b { font-weight:var(--fw-bold); }
+.dash-chip svg { width:12px; height:12px; vertical-align:-1px; }
 .dash-chip:hover { background:var(--accent-weak); }
 .dash-chip--mom { border-color:var(--accent); }
 .dash-chip--mom b { color:var(--accent); }
@@ -1270,3 +1271,25 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .dash-chip--ob b  { color:var(--neg); }
 .dash-chip--sky   { border-color:var(--ai); }
 .dash-chip--sky b { color:var(--ai); }
+.dash-sig__label--up   { color:var(--pos); }
+.dash-sig__label--down { color:var(--neg); }
+.dash-chip--up   { border-color:var(--pos); }
+.dash-chip--up b { color:var(--pos); }
+.dash-chip--down   { border-color:var(--neg); }
+.dash-chip--down b { color:var(--neg); }
+.dash-none { color:var(--muted); font-size:var(--fs-2); }
+
+/* Expand toggle / hints / sub-labels */
+.dash-more {
+  width:100%; background:none; border:none; color:var(--accent); font:inherit;
+  font-size:var(--fs-1); font-weight:var(--fw-bold); padding:7px 8px; cursor:pointer;
+  text-align:center; border-radius:var(--r-1);
+}
+.dash-more:hover { background:var(--accent-weak); }
+.dash-hint { padding:6px 8px 2px; color:var(--muted); font-size:var(--fs-1); }
+.dash-sub {
+  padding:5px 8px 2px; font-size:var(--fs-1); font-weight:var(--fw-bold);
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.dash-sub--pos { color:var(--pos); }
+.dash-sub--neg { color:var(--neg); }

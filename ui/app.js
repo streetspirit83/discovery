@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260626h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260626g';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -76,6 +76,7 @@ let merklisteMaps = null; // { bySym } of entry_price_manual from merkliste "mai
 
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
+let returnToMonitor = null; // set when a detail sheet is opened from the Monitor dashboard
 let bucketSheetOpen = false;
 let runSheetOpen = false;
 
@@ -486,6 +487,8 @@ function closeDetailSheet() {
   detailSheetOpen = false;
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
+  // If the sheet was opened from the Monitor dashboard, restore it (X or swipe).
+  if (returnToMonitor) { const back = returnToMonitor; returnToMonitor = null; back(); }
 }
 
 // Mobile-friendly swipe-to-dismiss for a right-edge sheet: drag right to close.
@@ -1245,7 +1248,9 @@ async function init() {
     renderDashboardModal({
       candidates,
       bucket: currentBlobType,
-      onOpenDetail: (candidate) => {
+      onOpenDetail: (candidate, ctrl) => {
+        ctrl?.hide();                        // keep the dashboard mounted, just hidden
+        returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes
         candidateDetail.show(candidate);
         openDetailSheet();
       },
