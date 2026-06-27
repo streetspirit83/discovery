@@ -193,18 +193,54 @@ export function bollingerGaugeHTML(tv) {
   </div>`;
 }
 
+/* ── Return-per-period diverging bars ────────────────────────────────────── */
+
+export function perfBarsHTML(tv) {
+  const rows = [
+    ['Δ1T', tv.change_1d], ['1W', tv.perf_w], ['1M', tv.perf_1m], ['3M', tv.perf_3m], ['6M', tv.perf_6m],
+  ].filter(([, v]) => v != null);
+  if (!rows.length) return '';
+  const maxAbs = Math.max(1, ...rows.map(([, v]) => Math.abs(v)));
+  return `<div class="pv-perf">${rows.map(([lbl, v]) => {
+    const w = Math.abs(v) / maxAbs * 50;
+    const pos = v >= 0;
+    const style = pos ? `left:50%;width:${w.toFixed(1)}%` : `left:${(50 - w).toFixed(1)}%;width:${w.toFixed(1)}%`;
+    return `<div class="pv-perf__row" title="${esc(lbl)}: ${pctTxt(v)}">
+      <span class="pv-perf__lbl">${esc(lbl)}</span>
+      <span class="pv-perf__track"><span class="pv-perf__zero"></span><span class="pv-perf__bar ${pos ? 'pos' : 'neg'}" style="${style}"></span></span>
+      <span class="pv-perf__val ${pos ? 'pos' : 'neg'}">${pctTxt(v)}</span>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ── Colour legend for the ladder ────────────────────────────────────────── */
+
+function priceLadderLegend() {
+  const it = (cls, label) => `<span class="pv-leg__item"><span class="pv-leg__sw pv-leg__sw--${cls}"></span>${label}</span>`;
+  return `<div class="pv-legend">
+    ${it('cur', 'Kurs')}${it('anchor', 'ATH/52W')}${it('ma', 'EMA/SMA')}
+    ${it('band', 'Bollinger')}${it('resist', 'Widerstand')}${it('support', 'Stütze')}
+  </div>`;
+}
+
 /* ── Section assembly ────────────────────────────────────────────────────── */
 
 export function renderPerformanceSection(tv) {
   if (!tv) return '';
   const ladder = priceLadderSVG(tv);
+  const hasLadder = !ladder.includes('pv-empty');
+  const perf = perfBarsHTML(tv);
   const ranges = rangeBandsHTML(tv);
   const gauge = bollingerGaugeHTML(tv);
-  if (!ranges && !gauge && ladder.includes('pv-empty')) return '';
+  if (!hasLadder && !perf && !ranges && !gauge) return '';
   return `
     <div class="detail-section">
       <h3>Performance</h3>
-      <div class="pv-ladder-wrap">${ladder}</div>
+      <div class="pv-ladder-row">
+        <div class="pv-ladder-wrap">${ladder}</div>
+        ${hasLadder ? priceLadderLegend() : ''}
+      </div>
+      ${perf ? `<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}` : ''}
       ${ranges ? `<h4 class="pv-subhead">Range je Zeithorizont</h4>${ranges}` : ''}
       ${gauge ? `<h4 class="pv-subhead">Bollinger / Volatilität</h4>${gauge}` : ''}
     </div>`;

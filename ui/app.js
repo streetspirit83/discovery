@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260626f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260627d';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260627e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -491,11 +491,13 @@ function closeDetailSheet() {
   if (returnToMonitor) { const back = returnToMonitor; returnToMonitor = null; back(); }
 }
 
-// Mobile-friendly swipe-to-dismiss for a right-edge sheet: drag right to close.
-// Only acts on clearly-horizontal gestures so vertical scrolling still works.
-function initSheetSwipe(el, onDismiss) {
+// Mobile swipe navigation for the detail sheet: swipe left → next candidate,
+// swipe right → previous. Gives a small damped drag feedback, then snaps back
+// and steps to the neighbour. Only acts on clearly-horizontal gestures so
+// vertical scrolling still works.
+function initSheetSwipe(el, { onPrev, onNext } = {}) {
   let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horizontal = false;
-  const THRESHOLD = 70;
+  const THRESHOLD = 60;
 
   el.addEventListener('touchstart', (e) => {
     if (!el.classList.contains('is-open') || e.touches.length !== 1) return;
@@ -513,28 +515,18 @@ function initSheetSwipe(el, onDismiss) {
       decided = true;
       horizontal = Math.abs(dx) > Math.abs(dy);
     }
-    if (!horizontal) return;          // vertical scroll → leave alone
-    if (dx < 0) dx = 0;               // only drag toward the closing edge (right)
-    el.style.transform = `translateX(${dx}px)`;
+    if (!horizontal) return;                  // vertical scroll → leave alone
+    el.style.transform = `translateX(${(dx * 0.35).toFixed(0)}px)`; // damped feedback
   }, { passive: true });
 
   const end = () => {
     if (!dragging) return;
     dragging = false;
     el.style.transition = '';
-    if (horizontal && dx > THRESHOLD) {
-      el.style.transform = 'translateX(100%)'; // finish sliding out, then close
-      let done = false;
-      const finish = () => {
-        if (done) return; done = true;
-        onDismiss();             // flips state + removes is-open (class also = 100%)
-        el.style.transform = ''; // clear inline; class keeps it off-screen
-      };
-      el.addEventListener('transitionend', (ev) => { if (ev.propertyName === 'transform') finish(); }, { once: true });
-      setTimeout(finish, 350);   // fallback if transitionend doesn't fire
-    } else {
-      el.style.transform = '';   // snap back to open position
-    }
+    el.style.transform = '';                  // always snap back; navigation swaps content
+    if (!horizontal) return;
+    if (dx <= -THRESHOLD) onNext?.();
+    else if (dx >= THRESHOLD) onPrev?.();
   };
   el.addEventListener('touchend', end);
   el.addEventListener('touchcancel', end);
@@ -1130,8 +1122,13 @@ async function init() {
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
     onAction: handleAction,
     onClose: closeDetailSheet,
+    // Siblings = the candidates in the current table sort order, for prev/next.
+    getSiblings: () => (candidateList ? candidateList.getSorted(candidateList.getFiltered()) : []),
   });
-  initSheetSwipe(document.getElementById('detail-sheet'), () => candidateDetail.hide());
+  initSheetSwipe(document.getElementById('detail-sheet'), {
+    onPrev: () => candidateDetail.navigate(-1),
+    onNext: () => candidateDetail.navigate(1),
+  });
 
   // Apply saved view mode before first data load
   if (uiState.view !== 'standard') {
