@@ -1,4 +1,6 @@
 import { enrichCandidate } from '../lib/claude-api.js';
+import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627a';
+import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -194,7 +196,10 @@ export class CandidateDetail {
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} 📋</small>` : ''}
         </div>
-        <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
+        <div class="detail-header-right">
+          ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
+          <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
+        </div>
       </div>
 
       <div class="detail-state">
@@ -206,12 +211,15 @@ export class CandidateDetail {
         ${c.workspace_state !== 'dismissed'
           ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">✗ Ablehnen</button>`
           : ''}
+        <button class="btn btn-sm btn-secondary" id="detail-export">⤓ Export</button>
         ${c.workspace_state === 'new'
           ? `<button class="btn btn-sm" id="detail-review">👁 Als gesehen markieren</button>`
           : ''}
       </div>
 
       ${renderTVData(c)}
+
+      ${renderPerformanceSection(c.tv_data)}
 
       <div class="detail-section">
         <h3>Quellen (${c.sources.length})</h3>
@@ -304,6 +312,10 @@ export class CandidateDetail {
       this.onAction?.('review', c);
       c.workspace_state = 'reviewed';
       this.render();
+    });
+
+    this.el.querySelector('#detail-export')?.addEventListener('pointerup', () => {
+      this.onAction?.('export', c);
     });
 
     this.el.querySelector('#detail-save-links').addEventListener('pointerup', () => {
