@@ -1186,6 +1186,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .dash-pulse {
   background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-2);
   padding:10px 12px; display:flex; flex-direction:column; gap:6px; font-size:var(--fs-2);
+  flex-shrink:0;
 }
 .dash-pulse__top, .dash-pulse__bot {
   display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
@@ -1203,7 +1204,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .dash-pulse .neg { color:var(--neg); }
 
 /* Cards */
-.dash-card { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.dash-card { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; flex-shrink:0; }
 .dash-card__head {
   display:flex; align-items:center; gap:7px; padding:9px 12px;
   border-bottom:1px solid var(--border); background:var(--surface-3);
