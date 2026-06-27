@@ -1294,3 +1294,81 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .dash-sub--pos { color:var(--pos); }
 .dash-sub--neg { color:var(--neg); }
+
+/* ════════════════════════════════════════════════════════════════
+   DETAIL MODAL — SCORE RING + PRICE VISUALIZATIONS
+   ════════════════════════════════════════════════════════════════ */
+.detail-header-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+
+.score-ring { position:relative; width:52px; height:52px; flex-shrink:0; }
+.score-ring svg { display:block; }
+.score-ring__track { fill:none; stroke:var(--surface-3); stroke-width:5; }
+.score-ring__val { fill:none; stroke-width:5; stroke-linecap:round; transition:stroke-dashoffset .4s ease; }
+.score-ring__num {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-weight:var(--fw-bold); font-size:var(--fs-4); font-variant-numeric:tabular-nums;
+}
+.score-ring--STRONG .score-ring__val { stroke:#27ae60; } .score-ring--STRONG .score-ring__num { color:#27ae60; }
+.score-ring--GOOD   .score-ring__val { stroke:#2980b9; } .score-ring--GOOD   .score-ring__num { color:#2980b9; }
+.score-ring--MIXED  .score-ring__val { stroke:#d68910; } .score-ring--MIXED  .score-ring__num { color:#d68910; }
+.score-ring--WEAK   .score-ring__val { stroke:var(--neg); } .score-ring--WEAK .score-ring__num { color:var(--neg); }
+.score-ring--empty  .score-ring__num { color:var(--muted); }
+
+/* Vertical price ladder (SVG) */
+.pv-ladder-wrap { max-width:340px; margin:2px auto 0; }
+.pv-ladder { display:block; overflow:visible; }
+.pv-bar { fill:var(--surface-3); }
+.pv-cap { fill:var(--ai-weak); }
+.pv-bb  { fill:var(--accent); opacity:.12; }
+.pv-tick { stroke-width:2; }
+.pv-tick--anchor  { stroke:var(--muted); }
+.pv-tick--ma      { stroke:var(--accent); }
+.pv-tick--band    { stroke:var(--ai); }
+.pv-tick--resist  { stroke:var(--neg); }
+.pv-tick--support { stroke:var(--pos); }
+.pv-leader { stroke:var(--border); stroke-width:1; }
+.pv-lbl { font-size:10px; fill:var(--text); font-family:var(--font-ui); }
+.pv-lbl--anchor { fill:var(--muted); }
+.pv-lbl--ma     { fill:var(--accent); }
+.pv-lbl--cur    { fill:var(--accent); font-weight:700; }
+.pv-cur { stroke:var(--accent); stroke-width:2.5; }
+.pv-cur-dot { fill:var(--accent); }
+.pv-foot { font-size:var(--fs-1); color:var(--muted); margin-top:8px; line-height:1.6; text-align:center; }
+.pv-foot b { color:var(--text); }
+.pv-foot .pos { color:var(--pos); } .pv-foot .neg { color:var(--neg); }
+.pv-empty { color:var(--muted); font-size:var(--fs-2); }
+.pv-muted { color:var(--muted); }
+.pv-subhead {
+  font-size:var(--fs-1); text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+  margin:14px 0 6px; font-weight:var(--fw-bold);
+}
+
+/* Range bands per timeframe */
+.pv-ranges { display:flex; flex-direction:column; gap:7px; }
+.pv-range {
+  display:grid; grid-template-columns:30px 48px 1fr 48px 34px; align-items:center; gap:6px;
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums;
+}
+.pv-range__lbl { font-weight:var(--fw-bold); color:var(--muted); }
+.pv-range__lo, .pv-range__hi { color:var(--muted); }
+.pv-range__hi { text-align:right; }
+.pv-range__pos { text-align:right; font-weight:var(--fw-bold); color:var(--text); }
+.pv-range__track { position:relative; height:8px; background:var(--surface-3); border-radius:var(--r-pill); }
+.pv-range__fill { position:absolute; left:0; top:0; bottom:0; background:var(--accent-weak); border-radius:var(--r-pill); }
+.pv-range__dot {
+  position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  background:var(--accent); transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-2);
+}
+
+/* Bollinger / volatility gauge */
+.pv-gauge { display:flex; flex-direction:column; gap:5px; font-size:var(--fs-1); }
+.pv-gauge__head { display:flex; justify-content:space-between; align-items:baseline; }
+.pv-gauge__head b { font-weight:var(--fw-bold); color:var(--text); }
+.pv-gauge__head .pos { color:var(--pos); } .pv-gauge__head .neg { color:var(--neg); }
+.pv-bb-track { position:relative; height:10px; background:var(--surface-3); border-radius:var(--r-pill); }
+.pv-bb__atr { position:absolute; top:0; bottom:0; background:var(--accent-weak); border-radius:var(--r-pill); }
+.pv-bb__dot {
+  position:absolute; top:50%; width:11px; height:11px; border-radius:50%;
+  background:var(--accent); transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-2);
+}
+.pv-bb-scale { display:flex; justify-content:space-between; color:var(--muted); }
