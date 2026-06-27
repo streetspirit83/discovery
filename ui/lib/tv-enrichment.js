@@ -14,7 +14,54 @@ import { computeCycleScore }         from './tv-cycle-score.js';
 import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
 import { computeEntryScore }         from './tv-entry-score.js';
 import { computeEntryPrices }        from './tv-entry-prices.js';
+import { computeOverallScore }       from './tv-overall-score.js';
+import { computeMomentumCheck }      from './tv-momentum-check.js';
 import { normalizeExchange }         from './exchange-map.js';
+
+const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
+
+/* Freeze the key scores of the *previous* tv_data into a compact snapshot so the
+ * next fetch can compute deltas ("Top Movers vs. letzter Fetch"). Returns null
+ * when the old data carries no computable composite score. */
+function buildSnapshot(oldTv) {
+  if (!oldTv) return null;
+  const overall = computeOverallScore({
+    perfW:         oldTv.perf_w,
+    perf1M:        oldTv.perf_1m,
+    change1D:      oldTv.change_1d,
+    ebitdaGrowth:  oldTv.ebitda_yoy_growth_fy ?? oldTv.ebitda_yoy_growth_ttm,
+    rating1M:      oldTv.recommend_all_1m,
+    trendStrength: oldTv.trend_strength_score?.total,
+    entry:         oldTv.entry_score?.total,
+    health:        oldTv.health_score?.total,
+    cycle:         oldTv.cycle_score?.total,
+  })?.total ?? null;
+  if (overall == null) return null;
+  return {
+    at:             oldTv.fetched_at ?? null,
+    overall,
+    trend_strength: oldTv.trend_strength_score?.total ?? null,
+    entry:          oldTv.entry_score?.total ?? null,
+    health:         oldTv.health_score?.total ?? null,
+    cycle:          oldTv.cycle_score?.total ?? null,
+    trend:          oldTv.trend_score?.total ?? null,
+    mom:            computeMomentumCheck(oldTv)?.total ?? null,
+    rsi:            oldTv.rsi ?? null,
+  };
+}
+
+const sameDay = (a, b) =>
+  a != null && b != null && String(a).slice(0, 10) === String(b).slice(0, 10);
+
+/* Prepend `snap` to the existing history, keeping at most one entry per calendar
+ * day (a same-day re-fetch replaces the head) and capping at SNAPSHOT_MAX. */
+function pushSnapshot(history, snap) {
+  if (!snap) return Array.isArray(history) ? history.slice(0, SNAPSHOT_MAX) : [];
+  const hist = Array.isArray(history) ? history.slice() : [];
+  if (hist[0] && sameDay(hist[0].at, snap.at)) hist[0] = snap;
+  else hist.unshift(snap);
+  return hist.slice(0, SNAPSHOT_MAX);
+}
 
 const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
@@ -595,6 +642,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
 
   const currency = EXCHANGE_CURRENCY[candidate.exchange];
   if (currency) updates.currency = currency;
+
+  // Archive the previous fetch's scores so the dashboard can show score deltas.
+  updates.tv_data.snapshot = pushSnapshot(candidate.tv_data?.snapshot, buildSnapshot(candidate.tv_data));
 
   return updates;
 }

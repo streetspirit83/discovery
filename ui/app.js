@@ -11,6 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260626h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260626g';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627a';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
@@ -467,6 +468,7 @@ function renderBotnav() {
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
   document.getElementById('nav-portfolio-icon').innerHTML = L.portfolio;
   document.getElementById('nav-markets-icon').innerHTML   = L.markets;
+  document.getElementById('nav-monitor-icon').innerHTML   = L.activity;
 }
 
 // ── Sheet management ───────────────────────────────────────────────────────────
@@ -1233,6 +1235,19 @@ async function init() {
         const secret     = localStorage.getItem('discovery_secret');
         if (useMock || !backendUrl || !secret) return null;
         return fetchMarketIndicators({ backendUrl, secret });
+      },
+    });
+  });
+
+  // Monitor slot → dashboard for the active bucket (score movers, perf, signals).
+  document.getElementById('nav-monitor').addEventListener('pointerup', () => {
+    const candidates = allBlobs[currentBlobType]?.candidates ?? [];
+    renderDashboardModal({
+      candidates,
+      bucket: currentBlobType,
+      onOpenDetail: (candidate) => {
+        candidateDetail.show(candidate);
+        openDetailSheet();
       },
     });
   });
