@@ -139,6 +139,13 @@ export default async function handler(req) {
     return respond(200, { ok: true });
   }
 
+  // --- op: read_ls_history (nightly LS intraday snapshots, 10-day rolling) ---
+  if (op === 'read_ls_history') {
+    let doc;
+    try { doc = await store.get('discovery-ls-history', { type: 'json' }); } catch { doc = null; }
+    return respond(200, { ok: true, data: doc ?? { history: {}, updated_at: null } });
+  }
+
   // --- op: read ---
   if (op === 'read') {
     if (!blobType || !BLOB_NAMES[blobType]) {

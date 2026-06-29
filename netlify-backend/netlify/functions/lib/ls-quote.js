@@ -31,8 +31,8 @@ async function resolveInstrumentId(candidate) {
   return hit?.instrumentId ?? null;
 }
 
-/* LS intraday last price (EUR) + previous close. null when unavailable. */
-export async function fetchLsPrice(candidate) {
+/* Shared: resolve + fetch the intraday chart. → { id, points, prevClose } | null */
+async function fetchLsChart(candidate) {
   const id = await resolveInstrumentId(candidate);
   if (id == null) return null;
   const body = await lsGet(`https://www.ls-tc.de/_rpc/json/instrument/chart/dataForInstrument?instrumentId=${encodeURIComponent(id)}&series=intraday`);
@@ -40,13 +40,52 @@ export async function fetchLsPrice(candidate) {
   let data; try { data = JSON.parse(body); } catch { return null; }
   const points = data?.series?.intraday?.data;
   if (!Array.isArray(points) || !points.length) return null;
-  const last = points[points.length - 1];
+  const prevLine = (data?.info?.plotlines ?? []).find((p) => p.id === 'previousDay');
+  return { id, points, prevClose: prevLine?.value ?? null };
+}
+
+/* Evenly downsample [ts,price][] to ~n prices (first + last kept). */
+function downsample(points, n) {
+  const prices = points.map((p) => (Array.isArray(p) ? p[1] : null)).filter((v) => v != null);
+  if (prices.length <= n) return prices;
+  const step = (prices.length - 1) / (n - 1);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(prices[Math.round(i * step)]);
+  return out;
+}
+
+/* LS intraday last price (EUR) + previous close. null when unavailable. */
+export async function fetchLsPrice(candidate) {
+  const chart = await fetchLsChart(candidate);
+  if (!chart) return null;
+  const last = chart.points[chart.points.length - 1];
   const price = Array.isArray(last) ? last[1] : null;
   if (price == null) return null;
-  const prevLine = (data?.info?.plotlines ?? []).find((p) => p.id === 'previousDay');
-  const prevClose = prevLine?.value ?? null;
+  const prevClose = chart.prevClose;
   const change_pct = (prevClose != null && prevClose !== 0) ? (price - prevClose) / prevClose * 100 : null;
-  return { price, prev_close: prevClose, change_pct, ls_id: id, source: 'ls' };
+  return { price, prev_close: prevClose, change_pct, ls_id: chart.id, source: 'ls' };
+}
+
+/* Full intraday snapshot for the daily history: downsampled series + day range. */
+export async function fetchLsSnapshot(candidate, n = 40) {
+  const chart = await fetchLsChart(candidate);
+  if (!chart) return null;
+  const all = chart.points.map((p) => (Array.isArray(p) ? p[1] : null)).filter((v) => v != null);
+  if (!all.length) return null;
+  const last = chart.points[chart.points.length - 1];
+  const close = Array.isArray(last) ? last[1] : null;
+  const ts    = Array.isArray(last) ? last[0] : null;
+  const prevClose = chart.prevClose;
+  const change_pct = (prevClose != null && prevClose !== 0 && close != null) ? (close - prevClose) / prevClose * 100 : null;
+  return {
+    close,
+    prev_close: prevClose,
+    change_pct,
+    day_low: Math.min(...all),
+    day_high: Math.max(...all),
+    series: downsample(chart.points, n),
+    ts,
+  };
 }
 
 /* ── Yahoo fallback ─────────────────────────────────────────────────── */
