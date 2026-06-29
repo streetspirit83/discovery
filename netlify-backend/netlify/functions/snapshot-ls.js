@@ -16,7 +16,7 @@
  */
 
 import { getStore } from '@netlify/blobs';
-import { fetchLsSnapshot } from './lib/ls-quote.js';
+import { fetchLsSnapshot, fetchYahooVolume } from './lib/ls-quote.js';
 
 const WATCH_BLOB  = 'discovery-watch';
 const HISTORY_KEY = 'discovery-ls-history';
@@ -45,12 +45,16 @@ export default async () => {
     const snap = await fetchLsSnapshot(c).catch(() => null);
     if (!snap || snap.close == null) { console.log(`[snapshot-ls] ${c.symbol}: keine LS-Daten`); continue; }
 
+    // Daily volume comes from Yahoo (LS intraday is price-only).
+    const ysym = c.yahoo_symbol || c.symbol;
+    const volume = ysym ? await fetchYahooVolume(ysym).catch(() => null) : null;
+
     const entry = history[c.id] ?? { symbol: c.symbol, name: c.name ?? null, snapshots: [] };
     entry.symbol = c.symbol;
     entry.name = c.name ?? entry.name ?? null;
     // Replace today's entry if the job re-runs, then keep the last 10 days.
     entry.snapshots = entry.snapshots.filter((s) => s.date !== today);
-    entry.snapshots.push({ date: today, ...snap });
+    entry.snapshots.push({ date: today, ...snap, volume });
     entry.snapshots = entry.snapshots.slice(-MAX_DAYS);
     history[c.id] = entry;
     captured++;

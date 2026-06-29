@@ -121,6 +121,14 @@ export async function fetchYahooPrice(symbol) {
   return p != null ? +p : null;
 }
 
+/* Yahoo day's regular-market volume (share count, currency-agnostic). LS's
+   intraday RPC is price-only, so daily volume for the snapshot comes from here. */
+export async function fetchYahooVolume(symbol) {
+  const result = await yahooMeta(symbol);
+  const v = result?.meta?.regularMarketVolume;
+  return v != null ? +v : null;
+}
+
 /* EUR/USD (USD per 1 EUR) via Yahoo. null → no conversion. */
 export async function fetchEurUsd() {
   const result = await yahooMeta('EURUSD=X');
