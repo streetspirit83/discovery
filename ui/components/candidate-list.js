@@ -260,6 +260,9 @@ function sortValue(c, col) {
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
+    case 'tv_sma20':  return tv?.sma20 ?? null;
+    case 'tv_sma50':  return tv?.sma50 ?? null;
+    case 'tv_sma200': return tv?.sma200 ?? null;
     case 'tv_macd':   return tv?.macd ?? null;
     case 'tv_adx':    return tv?.adx ?? null;
     case 'tv_cci':    return tv?.cci20_1m ?? null;
@@ -315,9 +318,9 @@ const VIEWS = {
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
-    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema20) },
-    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema50) },
-    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema200) },
+    { key:'tv_sma20',   label:'SMA20',  title:'SMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma20) },
+    { key:'tv_sma50',   label:'SMA50',  title:'SMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma50) },
+    { key:'tv_sma200',  label:'SMA200', title:'SMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma200) },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
     { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },
