@@ -1,10 +1,10 @@
 /**
  * Alert-Overview modal — compact triage list, one row per symbol.
  *
- * Per row: symbol (tap → detail), name (truncated), trigger price, %Δ to that
- * trigger, and a Watch/Buy/Stop advice badge. Triggered symbols are highlighted.
- * Editing here is limited to a per-symbol +/- enable toggle; full alert editing
- * stays in the table's "+" editor. A global mute sits at the top.
+ * Per row: symbol, name (truncated), trigger price, %Δ to that trigger, and a
+ * Watch/Buy/Stop advice badge. Triggered symbols are highlighted. Tapping a row
+ * opens the alert editor (add/modify); the per-symbol +/- toggle enables or
+ * mutes all of that symbol's alerts. A global mute sits at the top.
  */
 
 import {
@@ -20,11 +20,11 @@ const isMuted = () => localStorage.getItem(ALERTS_MUTED_KEY) === '1';
  * @param {object} opts
  * @param {object[]} opts.candidates current candidates (those with alerts are shown)
  * @param {(id:string, alerts:object[])=>Promise<void>} [opts.onSaveAlerts]
- * @param {(c:object)=>void} [opts.onOpenDetail] tap a symbol → open detail
+ * @param {(c:object)=>void} [opts.onOpenEditor] tap a row → open the alert editor
  * @param {(muted:boolean)=>void} [opts.onSetMute]
  * @param {(msg:string,type?:string)=>void} [opts.toast]
  */
-export function renderAlertModal({ candidates, onSaveAlerts, onOpenDetail, onSetMute, toast } = {}) {
+export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, onSetMute, toast } = {}) {
   if (document.getElementById('alert-modal-overlay')) return;
   const all = candidates ?? [];
 
@@ -58,7 +58,7 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenDetail, onSet
     const adv = candidateAdvice(c);
     const q = candidateQuoteEur(c);
     return `<tr class="alrow${trig ? ' is-trig' : ''}${anyOn ? '' : ' is-off'}" data-cid="${c.id}">
-      <td class="alrow__sym"><button class="alrow__symbtn" data-open="${c.id}">${c.symbol}</button></td>
+      <td class="alrow__sym"><span class="alrow__symbtn">${c.symbol}</span></td>
       <td class="alrow__name" title="${(c.name || '').replace(/"/g, '')}">${c.name || ''}</td>
       <td class="num alrow__trig">${pa ? fmtEur(pa.threshold) : '—'}</td>
       <td class="num alrow__delta ${pa && pa.deltaPct != null ? (pa.deltaPct >= 0 ? 'pos' : 'neg') : ''}">${pa ? fmtPct(pa.deltaPct) : (q.price != null ? '—' : '—')}</td>
@@ -89,12 +89,7 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenDetail, onSet
   }
 
   bodyEl.addEventListener('pointerup', (e) => {
-    const open = e.target.closest('[data-open]');
-    if (open) {
-      const c = all.find((x) => x.id === open.dataset.open);
-      if (c && onOpenDetail) { close(); onOpenDetail(c); }
-      return;
-    }
+    // Per-symbol +/- toggle (does not open the editor).
     const tog = e.target.closest('[data-tog]');
     if (tog) {
       const c = all.find((x) => x.id === tog.dataset.tog);
@@ -104,6 +99,13 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenDetail, onSet
       render();
       Promise.resolve(onSaveAlerts?.(c.id, c.alerts)).catch((err) =>
         toast?.(`Nicht gespeichert: ${err.message}`, 'error'));
+      return;
+    }
+    // Tap anywhere else on the row → open the alert editor.
+    const row = e.target.closest('.alrow');
+    if (row) {
+      const c = all.find((x) => x.id === row.dataset.cid);
+      if (c && onOpenEditor) { close(); onOpenEditor(c); }
     }
   });
 

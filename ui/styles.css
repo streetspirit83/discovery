@@ -1430,6 +1430,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .alert-table { width:100%; border-collapse:collapse; table-layout:auto; }
 .alert-table td { padding:.45rem .4rem; border-bottom:1px solid var(--border);
   white-space:nowrap; font-size:var(--fs-2); }
+.alrow { cursor:pointer; }
+.alrow:hover { background:var(--surface-2); }
 .alrow.is-trig { background:var(--neg-weak); }
 .alrow.is-off { opacity:.5; }
 .alrow__symbtn { background:none; border:none; padding:0; cursor:pointer; font-weight:700;

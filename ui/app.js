@@ -8,7 +8,7 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260627h';
+import { renderAlertModal } from './components/alert-modal.js?v=20260627i';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260627h';
 import { triggeredCount } from './lib/alerts.js?v=20260627h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
@@ -257,10 +257,13 @@ function openAlertModal() {
     toast,
     onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
     onSetMute: (m) => (useMock || !storageClient ? Promise.resolve() : storageClient.writeConfig({ alerts_muted: m })),
-    // Tap a symbol → open its detail sheet.
-    onOpenDetail: (candidate) => {
-      candidateDetail?.show(candidate);
-      openDetailSheet();
+    // Tap a row → open the alert editor (add / modify alerts).
+    onOpenEditor: (candidate) => {
+      openTriggerEditor(candidate, {
+        onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+        onSaved: () => { candidateList?.renderRows(); updateAlertBadge(); },
+        toast,
+      });
     },
   });
 }
