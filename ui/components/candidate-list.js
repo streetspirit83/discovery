@@ -262,6 +262,7 @@ function sortValue(c, col) {
     case 'tv_ema200': return tv?.ema200 ?? null;
     case 'tv_sma20':  return tv?.sma20 ?? null;
     case 'tv_sma50':  return tv?.sma50 ?? null;
+    case 'tv_sma100': return tv?.sma100 ?? null;
     case 'tv_sma200': return tv?.sma200 ?? null;
     case 'tv_macd':   return tv?.macd ?? null;
     case 'tv_adx':    return tv?.adx ?? null;
@@ -320,6 +321,7 @@ const VIEWS = {
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
     { key:'tv_sma20',   label:'SMA20',  title:'SMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma20) },
     { key:'tv_sma50',   label:'SMA50',  title:'SMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma50) },
+    { key:'tv_sma100',  label:'SMA100', title:'SMA 100',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma100) },
     { key:'tv_sma200',  label:'SMA200', title:'SMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma200) },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },

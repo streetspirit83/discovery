@@ -229,6 +229,7 @@ const TV_COLUMNS = [
   'recommendation_total',                      // 108 — Anzahl Analysten
   'isin',                                      // 109 — ISIN (für TR/LS-Abgleich)
   'SMA20',                                     // 110 — SMA 20 (Preis-Tabelle)
+  'SMA100',                                    // 111 — SMA 100 (Preis-Tabelle)
 ];
 
 const COL = {
@@ -349,6 +350,7 @@ recommendMA1M: 53,
   recommendationTotal:   108,
   isin:                  109,
   sma20:                 110,
+  sma100:                111,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -529,6 +531,7 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       aroon_down: d[COL.aroonDownD] ?? null,
       sma20:      d[COL.sma20]      ?? null,
       sma50:      d[COL.sma50]      ?? null,
+      sma100:     d[COL.sma100]     ?? null,
       sma200:     d[COL.sma200]     ?? null,
       ema10:      d[COL.ema10]      ?? null,
       volume:     d[COL.volume]     ?? null,
