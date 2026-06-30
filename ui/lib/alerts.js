@@ -91,6 +91,57 @@ export function dirBadge(a) {
   return d === 'sell' ? '🔴' : d === 'buy' ? '🟢' : '🟡';
 }
 
+/* ── Triage helpers (compact Alert-Overview + sub-nav badge) ──────────── */
+
+const activeAlerts = (c) => (Array.isArray(c.alerts) ? c.alerts.filter((a) => a.enabled !== false) : []);
+
+/* How many of a candidate's enabled alerts currently fire. */
+export function candidateTriggeredCount(c) {
+  const q = candidateQuoteEur(c);
+  return activeAlerts(c).filter((a) => evalAlert(a, q)).length;
+}
+
+/* Total triggered alerts across a candidate list — for the red sub-nav badge. */
+export function triggeredCount(candidates) {
+  return (candidates || []).reduce((n, c) => n + candidateTriggeredCount(c), 0);
+}
+
+/* Whether a candidate has at least one currently-firing enabled alert. */
+export function candidateTriggered(c) {
+  const q = candidateQuoteEur(c);
+  return activeAlerts(c).some((a) => evalAlert(a, q));
+}
+
+/* The single price alert to surface in the compact row: a firing one if any,
+   else the nearest by |%Δ|. → { threshold, deltaPct, triggered } | null */
+export function primaryPriceAlert(c) {
+  const q = candidateQuoteEur(c);
+  const price = q.price;
+  const priceAlerts = activeAlerts(c).filter((a) => a.type === 'price_above' || a.type === 'price_below');
+  if (!priceAlerts.length || price == null) return null;
+  const rows = priceAlerts.map((a) => ({
+    threshold: a.threshold,
+    deltaPct: a.threshold ? +(((price - a.threshold) / a.threshold) * 100).toFixed(2) : null,
+    triggered: evalAlert(a, q),
+  }));
+  return rows.find((r) => r.triggered)
+    ?? rows.filter((r) => r.deltaPct != null).sort((x, y) => Math.abs(x.deltaPct) - Math.abs(y.deltaPct))[0]
+    ?? null;
+}
+
+/* Trading advice for a symbol → { label, cls }. Three buckets per request:
+   Stop (protective sell), Buy, Watch. Firing alerts take precedence; sell
+   (downside / take-profit) is prioritised over buy for safety. */
+export function candidateAdvice(c) {
+  const q = candidateQuoteEur(c);
+  const act = activeAlerts(c);
+  const firing = act.filter((a) => evalAlert(a, q));
+  const pool = firing.length ? firing : act;
+  if (pool.some((a) => alertDir(a) === 'sell'))  return { label: 'Stop',  cls: 'neg' };
+  if (pool.some((a) => alertDir(a) === 'buy'))   return { label: 'Buy',   cls: 'pos' };
+  return { label: 'Watch', cls: 'watch' };
+}
+
 /* ── Builders ────────────────────────────────────────────────────────── */
 
 export function buildManualPriceAlert({ dir, priceEur }) {

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260627e">
+  <link rel="stylesheet" href="styles.css?v=20260627h">
 </head>
 <body>
 <div id="app">
@@ -26,7 +26,11 @@
 
   <nav class="subbar" aria-label="Spaltenansicht">
     <div class="segmented" id="view-switch" role="tablist"></div>
-    <span id="mode-badge" class="mode-badge" style="margin-left:auto;flex-shrink:0"></span>
+    <button class="subnav-alert" id="subnav-alert" aria-label="Alert-Übersicht" title="Alert-Übersicht" style="margin-left:auto">
+      <span id="subnav-alert-icon"></span>
+      <span class="alert-badge-count" id="alert-badge-count" hidden></span>
+    </button>
+    <span id="mode-badge" class="mode-badge" style="flex-shrink:0"></span>
   </nav>
 
   <div class="filterbar" id="filterbar" aria-label="Filter"></div>
@@ -72,6 +76,6 @@
 
 <script src="//cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
-<script type="module" src="app.js?v=20260627g"></script>
+<script type="module" src="app.js?v=20260627h"></script>
 </body>
 </html>

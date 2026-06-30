@@ -396,13 +396,14 @@ VIEWS.meta = [
 // ── Component ────────────────────────────────────────────────────────────────
 
 export class CandidateList {
-  constructor({ onSelect, onAction, onBulkAction, onSelectionChange }) {
+  constructor({ onSelect, onAction, onBulkAction, onSelectionChange, onAfterRender }) {
     this.onSelect          = onSelect;
     this.onAction          = onAction;
     this.onBulkAction      = onBulkAction;
     this.onSelectionChange = onSelectionChange;
+    this.onAfterRender     = onAfterRender;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -555,9 +556,10 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
+      if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
       if (tr === 'no'        && c.tr_check?.tradable !== false) return false; // nur „nicht handelbar"
       if (tr === 'yes'       && c.tr_check?.tradable !== true)  return false;
       if (tr === 'unchecked' && c.tr_check?.tradable != null)   return false;
@@ -866,6 +868,7 @@ export class CandidateList {
 
     this.syncSelectAll();
     this.renderBulkBar();
+    this.onAfterRender?.();
   }
 
   renderBulkBar() {

@@ -2,14 +2,15 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260627g';
+import { CandidateList } from './components/candidate-list.js?v=20260627h';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260627e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260626h';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260626g';
+import { renderAlertModal } from './components/alert-modal.js?v=20260627h';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260627h';
+import { triggeredCount } from './lib/alerts.js?v=20260627h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
 import { loadStorageClient } from './lib/storage-client.js';
@@ -53,7 +54,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -250,21 +251,27 @@ function persistAlerts(id, alerts) {
 
 function openAlertModal() {
   const blob = allBlobs[currentBlobType];
-  const candidates = candidateList ? candidateList.getFiltered() : (blob?.candidates ?? []);
+  const candidates = candidateList ? candidateList.candidates : (blob?.candidates ?? []);
   renderAlertModal({
     candidates,
     toast,
-    onSaveAlerts: persistAlerts,
+    onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
     onSetMute: (m) => (useMock || !storageClient ? Promise.resolve() : storageClient.writeConfig({ alerts_muted: m })),
-    // Edit shortcut → open the full alert editor for one candidate.
-    onOpenEditor: (candidate) => {
-      openTriggerEditor(candidate, {
-        onSaveAlerts: persistAlerts,
-        onSaved: () => candidateList?.renderRows(),
-        toast,
-      });
+    // Tap a symbol → open its detail sheet.
+    onOpenDetail: (candidate) => {
+      candidateDetail?.show(candidate);
+      openDetailSheet();
     },
   });
+}
+
+// Red sub-nav badge: number of currently-triggered alerts (hidden when 0).
+function updateAlertBadge() {
+  const badge = document.getElementById('alert-badge-count');
+  if (!badge) return;
+  const n = candidateList ? triggeredCount(candidateList.candidates) : 0;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
 }
 
 // ── Merkliste portfolio import (Einstand column) ────────────────────────────────
@@ -361,6 +368,15 @@ function renderSubbar() {
       });
     });
   });
+
+  // Sub-nav alert button (static element) — wire once.
+  const alertBtn = document.getElementById('subnav-alert');
+  if (alertBtn && !alertBtn.dataset.wired) {
+    alertBtn.dataset.wired = '1';
+    document.getElementById('subnav-alert-icon').innerHTML = L.bell;
+    alertBtn.addEventListener('pointerup', openAlertModal);
+  }
+  updateAlertBadge();
 }
 
 function renderFilterbar() {
@@ -370,6 +386,7 @@ function renderFilterbar() {
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
     <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
+    <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>
     <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
       <option value="">Score</option>
       <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
@@ -403,6 +420,16 @@ function renderFilterbar() {
     saveUiState();
     candidateList.setFilter('broker', uiState.fBroker);
     const btn = fb.querySelector('#portfolio-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+
+  fb.querySelector('#alerts-toggle').addEventListener('click', () => {
+    const on = uiState.fAlerts !== 'active';
+    uiState.fAlerts = on ? 'active' : '';
+    saveUiState();
+    candidateList.setFilter('alerts', uiState.fAlerts);
+    const btn = fb.querySelector('#alerts-toggle');
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', String(on));
   });
@@ -1117,6 +1144,7 @@ async function init() {
     onAction: handleAction,
     onBulkAction: handleBulkAction,
     onSelectionChange: () => renderSelectedPill(),
+    onAfterRender: () => updateAlertBadge(),
   });
 
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
@@ -1145,6 +1173,7 @@ async function init() {
     broker:  uiState.fBroker ?? '',
     score:   uiState.fScore  ?? '',
     tr:      uiState.fTr     ?? '',
+    alerts:  uiState.fAlerts ?? '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,

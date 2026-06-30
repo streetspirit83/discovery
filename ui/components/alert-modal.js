@@ -1,27 +1,30 @@
 /**
- * Alert-Overview modal — replaces the Intra-Day modal on the Home nav slot.
+ * Alert-Overview modal — compact triage list, one row per symbol.
  *
- * Lists every candidate that has at least one alert, with:
- *   • a global "Mute all" toggle at the top (localStorage; the scheduled push
- *     will read the same flag from a settings blob later),
- *   • a select/unselect (●/○) icon per alert to enable/disable it individually,
- *   • the live triggered state, and an edit shortcut into the alert editor.
+ * Per row: symbol (tap → detail), name (truncated), trigger price, %Δ to that
+ * trigger, and a Watch/Buy/Stop advice badge. Triggered symbols are highlighted.
+ * Editing here is limited to a per-symbol +/- enable toggle; full alert editing
+ * stays in the table's "+" editor. A global mute sits at the top.
  */
 
-import { ALERTS_MUTED_KEY, alertSummary, dirBadge, isAlertTriggered, candidateQuoteEur } from '../lib/alerts.js?v=20260626g';
+import {
+  candidateQuoteEur, candidateTriggered, primaryPriceAlert, candidateAdvice,
+  ALERTS_MUTED_KEY,
+} from '../lib/alerts.js?v=20260627h';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
-
+const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`);
 const isMuted = () => localStorage.getItem(ALERTS_MUTED_KEY) === '1';
 
 /**
  * @param {object} opts
  * @param {object[]} opts.candidates current candidates (those with alerts are shown)
  * @param {(id:string, alerts:object[])=>Promise<void>} [opts.onSaveAlerts]
- * @param {(c:object)=>void} [opts.onOpenEditor] open the full alert editor
+ * @param {(c:object)=>void} [opts.onOpenDetail] tap a symbol → open detail
+ * @param {(muted:boolean)=>void} [opts.onSetMute]
  * @param {(msg:string,type?:string)=>void} [opts.toast]
  */
-export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, onSetMute, toast } = {}) {
+export function renderAlertModal({ candidates, onSaveAlerts, onOpenDetail, onSetMute, toast } = {}) {
   if (document.getElementById('alert-modal-overlay')) return;
   const all = candidates ?? [];
 
@@ -45,17 +48,31 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, onSet
   document.body.appendChild(overlay);
 
   const bodyEl = overlay.querySelector('#al-body');
+  const withAlerts = () => all.filter((c) => Array.isArray(c.alerts) && c.alerts.length);
 
-  function withAlerts() {
-    return all.filter((c) => Array.isArray(c.alerts) && c.alerts.length);
+  function rowHtml(c) {
+    const muted = isMuted();
+    const trig = !muted && candidateTriggered(c);
+    const anyOn = c.alerts.some((a) => a.enabled !== false);
+    const pa = primaryPriceAlert(c);
+    const adv = candidateAdvice(c);
+    const q = candidateQuoteEur(c);
+    return `<tr class="alrow${trig ? ' is-trig' : ''}${anyOn ? '' : ' is-off'}" data-cid="${c.id}">
+      <td class="alrow__sym"><button class="alrow__symbtn" data-open="${c.id}">${c.symbol}</button></td>
+      <td class="alrow__name" title="${(c.name || '').replace(/"/g, '')}">${c.name || ''}</td>
+      <td class="num alrow__trig">${pa ? fmtEur(pa.threshold) : '—'}</td>
+      <td class="num alrow__delta ${pa && pa.deltaPct != null ? (pa.deltaPct >= 0 ? 'pos' : 'neg') : ''}">${pa ? fmtPct(pa.deltaPct) : (q.price != null ? '—' : '—')}</td>
+      <td class="alrow__adv"><span class="adv-badge adv-${adv.cls}">${adv.label}</span></td>
+      <td class="num alrow__tog"><button class="alrow__plusminus" data-tog="${c.id}" title="${anyOn ? 'Alle Alerts stummschalten' : 'Alle Alerts aktivieren'}">${anyOn ? '−' : '+'}</button></td>
+    </tr>`;
   }
 
   function render() {
     const muted = isMuted();
     const cands = withAlerts();
-    const totalAlerts = cands.reduce((n, c) => n + c.alerts.length, 0);
+    const trigN = muted ? 0 : cands.reduce((n, c) => n + (candidateTriggered(c) ? 1 : 0), 0);
     overlay.querySelector('#al-count').textContent =
-      cands.length ? `${cands.length} Ticker · ${totalAlerts} Alerts` : '';
+      cands.length ? `${cands.length} Symbole${trigN ? ` · ${trigN} ausgelöst` : ''}` : '';
     const muteBtn = overlay.querySelector('#al-mute');
     muteBtn.className = `btn ${muted ? 'btn-primary' : 'btn-secondary'}`;
     muteBtn.innerHTML = muted ? '🔕 Alle stummgeschaltet' : '🔔 Alle aktiv';
@@ -65,60 +82,36 @@ export function renderAlertModal({ candidates, onSaveAlerts, onOpenEditor, onSet
         <span class="muted">Über das <strong>+</strong> in der Tabelle (Aktions-Spalte) Alerts hinzufügen.</span></div>`;
       return;
     }
-
-    bodyEl.innerHTML = cands.map((c) => {
-      const q = candidateQuoteEur(c);
-      const rows = c.alerts.map((a) => {
-        const off = a.enabled === false;
-        const trig = !muted && !off && isAlertTriggered(c, a);
-        return `<li class="alert-item${off ? ' is-off' : ''}${trig ? ' is-trig' : ''}" data-cid="${c.id}" data-aid="${a.id}">
-          <button class="alert-toggle" data-act="toggle" title="${off ? 'Aktivieren' : 'Stummschalten'}">${off ? '○' : '●'}</button>
-          <span class="alert-badge">${dirBadge(a)}</span>
-          <span class="alert-text">${alertSummary(a)}</span>
-          ${trig ? '<span class="alert-trig-tag">ausgelöst</span>' : ''}
-        </li>`;
-      }).join('');
-      return `<section class="alert-card${muted ? ' is-muted' : ''}">
-        <header class="alert-card__head">
-          <div>
-            <strong>${c.symbol}</strong> <span class="muted">${c.name ?? ''}</span>
-            <div class="alert-card__px">LS ${fmtEur(q.price)}</div>
-          </div>
-          <button class="chip-btn" data-edit="${c.id}">＋ / bearbeiten</button>
-        </header>
-        <ul class="alert-list">${rows}</ul>
-      </section>`;
-    }).join('');
+    // Triggered first, then by symbol.
+    const sorted = [...cands].sort((a, b) =>
+      (candidateTriggered(b) - candidateTriggered(a)) || String(a.symbol).localeCompare(b.symbol));
+    bodyEl.innerHTML = `<table class="alert-table"><tbody>${sorted.map(rowHtml).join('')}</tbody></table>`;
   }
 
-  // Per-alert enable/disable
   bodyEl.addEventListener('pointerup', (e) => {
-    const toggle = e.target.closest('[data-act="toggle"]');
-    if (toggle) {
-      const li = toggle.closest('.alert-item');
-      const c = all.find((x) => x.id === li.dataset.cid);
-      const a = c?.alerts.find((x) => x.id === li.dataset.aid);
-      if (!a) return;
-      a.enabled = a.enabled === false;
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      const c = all.find((x) => x.id === open.dataset.open);
+      if (c && onOpenDetail) { close(); onOpenDetail(c); }
+      return;
+    }
+    const tog = e.target.closest('[data-tog]');
+    if (tog) {
+      const c = all.find((x) => x.id === tog.dataset.tog);
+      if (!c) return;
+      const turnOn = !c.alerts.some((a) => a.enabled !== false);
+      c.alerts.forEach((a) => { a.enabled = turnOn; });
       render();
       Promise.resolve(onSaveAlerts?.(c.id, c.alerts)).catch((err) =>
         toast?.(`Nicht gespeichert: ${err.message}`, 'error'));
-      return;
-    }
-    const edit = e.target.closest('[data-edit]');
-    if (edit) {
-      const c = all.find((x) => x.id === edit.dataset.edit);
-      if (c && onOpenEditor) { close(); onOpenEditor(c); }
     }
   });
 
-  // Global mute toggle — local for instant UI + server so the push honors it.
   overlay.querySelector('#al-mute').addEventListener('pointerup', () => {
     const next = !isMuted();
     localStorage.setItem(ALERTS_MUTED_KEY, next ? '1' : '0');
     render();
-    Promise.resolve(onSetMute?.(next)).catch((err) =>
-      toast?.(`Mute nicht synchronisiert: ${err.message}`, 'error'));
+    Promise.resolve(onSetMute?.(next)).catch((err) => toast?.(`Mute nicht synchronisiert: ${err.message}`, 'error'));
   });
 
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };

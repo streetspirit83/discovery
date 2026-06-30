@@ -14,7 +14,7 @@
 import {
   entryBasisEur, alertSummary, dirBadge, isAlertTriggered,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert,
-} from '../lib/alerts.js?v=20260626g';
+} from '../lib/alerts.js?v=20260627h';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 

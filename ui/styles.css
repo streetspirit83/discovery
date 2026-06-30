@@ -1415,3 +1415,36 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   background:var(--accent); transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-2);
 }
 .pv-bb-scale { display:flex; justify-content:space-between; color:var(--muted); }
+
+/* ── Sub-nav alert button + badge ──────────────────────────────────────── */
+.subnav-alert { position:relative; display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:30px; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted); cursor:pointer; flex-shrink:0; margin-right:.4rem; }
+.subnav-alert:hover { background:var(--surface-3); color:var(--text); }
+.alert-badge-count { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:999px; background:var(--neg); color:#fff; font-size:10px; font-weight:700;
+  line-height:16px; text-align:center; box-shadow:0 0 0 2px var(--surface-2); }
+.alert-badge-count[hidden] { display:none; }
+
+/* ── Compact Alert-Overview table (one row per symbol) ─────────────────── */
+.alert-table { width:100%; border-collapse:collapse; table-layout:auto; }
+.alert-table td { padding:.45rem .4rem; border-bottom:1px solid var(--border);
+  white-space:nowrap; font-size:var(--fs-2); }
+.alrow.is-trig { background:var(--neg-weak); }
+.alrow.is-off { opacity:.5; }
+.alrow__symbtn { background:none; border:none; padding:0; cursor:pointer; font-weight:700;
+  color:var(--accent); font-size:var(--fs-2); }
+.alrow__symbtn:hover { text-decoration:underline; }
+.alrow__name { color:var(--muted); max-width:9rem; overflow:hidden; text-overflow:ellipsis; }
+.alrow__trig { font-variant-numeric:tabular-nums; }
+.alrow__delta { font-variant-numeric:tabular-nums; }
+.alrow__delta.pos { color:var(--pos); }
+.alrow__delta.neg { color:var(--neg); }
+.adv-badge { display:inline-block; padding:.1rem .45rem; border-radius:999px; font-size:var(--fs-1);
+  font-weight:700; }
+.adv-pos   { background:var(--pos-weak); color:var(--pos); }
+.adv-neg   { background:var(--neg-weak); color:var(--neg); }
+.adv-watch { background:var(--surface-3); color:var(--muted); }
+.alrow__plusminus { width:26px; height:26px; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); cursor:pointer; font-size:var(--fs-3); line-height:1; }
+.alrow__plusminus:hover { background:var(--surface-3); }
