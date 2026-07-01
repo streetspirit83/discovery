@@ -295,7 +295,7 @@ export function renderIntradayModal({ candidates, onRefreshPrepare, onRefreshTic
       }
       [5, 8, 10].forEach((p) => opts.push({ v: `pct${p}`, label: `−${p}%  (${fmtNum(L * (1 - p / 100))})` }));
     }
-    if (tv.ema20 != null)    opts.push({ v: 'ema20',   label: `EMA20  (${fmtNum(tv.ema20)})` });
+    if (tv.sma20 != null)    opts.push({ v: 'sma20',   label: `SMA20  (${fmtNum(tv.sma20)})` });
     if (tv.pivot_s2 != null) opts.push({ v: 'pivots2', label: `Pivot S2  (${fmtNum(tv.pivot_s2)})` });
     return opts;
   }

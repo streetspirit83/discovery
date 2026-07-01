@@ -2,15 +2,15 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260627h';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260627e';
+import { CandidateList } from './components/candidate-list.js?v=20260627j';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260627j';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260627i';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260627h';
-import { triggeredCount } from './lib/alerts.js?v=20260627h';
+import { renderAlertModal } from './components/alert-modal.js?v=20260627j';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260627j';
+import { triggeredCount } from './lib/alerts.js?v=20260627j';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
 import { loadStorageClient } from './lib/storage-client.js';

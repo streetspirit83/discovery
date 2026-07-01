@@ -14,7 +14,7 @@
 import {
   entryBasisEur, alertSummary, dirBadge, isAlertTriggered,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert,
-} from '../lib/alerts.js?v=20260627h';
+} from '../lib/alerts.js?v=20260627j';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 
@@ -26,11 +26,11 @@ const PCT_OPTS = [
   { v: 'manual', label: 'Manuell % …' },
 ];
 
-// Price-driven (live LS price vs stored EMA level).
+// Price-driven (live LS price vs stored SMA level).
 const MA_PRESETS = [
-  { v: 'ema20',  label: '≤ EMA20' },
-  { v: 'ema50',  label: '≤ EMA50' },
-  { v: 'ema200', label: '≤ EMA200' },
+  { v: 'sma20',  label: '≤ SMA20' },
+  { v: 'sma50',  label: '≤ SMA50' },
+  { v: 'sma200', label: '≤ SMA200' },
 ];
 
 // Pure TV-snapshot indicators (only as fresh as the last TV fetch).
@@ -92,7 +92,7 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
             </div>
           </div>
 
-          <div class="alert-tier">Gleitende Durchschnitte · Kurs live, EMA aus TV-Daten</div>
+          <div class="alert-tier">Gleitende Durchschnitte · Kurs live, SMA aus TV-Daten</div>
           <div class="alert-add__group">
             <div class="alert-add__presets">
               ${MA_PRESETS.map((p) => `<button class="chip-btn" data-preset="${p.v}">${p.label}</button>`).join('')}

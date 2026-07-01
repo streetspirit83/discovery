@@ -40,6 +40,25 @@ function convFromEur() {
   return fxEurUsd;
 }
 
+// Colour an SMA level by its position vs. the current price: 'pos' (green) when
+// the SMA sits at/below the price (price above its average = bullish support),
+// 'neg' (red) when it sits above the price. Compared in display currency so the
+// LS price (EUR) and the native SMA are apples-to-apples. Reference = live LS
+// price, else the TV close.
+function smaVsPriceClass(c, smaNative) {
+  if (smaNative == null) return '';
+  const ls = c.ls_quote?.price;
+  let refDisplay;
+  if (ls != null) {
+    refDisplay = ls * convFromEur();
+  } else {
+    const close = c.tv_data?.close_1m ?? c.tv_data?.close;
+    if (close == null) return '';
+    refDisplay = close * convFactor(c);
+  }
+  return smaNative * convFactor(c) <= refDisplay ? 'pos' : 'neg';
+}
+
 // ── Price setup situation (Preis view) ──────────────────────────────────────
 function priceSituation(tv) {
   if (!tv) return null;
@@ -60,10 +79,10 @@ function priceSituation(tv) {
     icon = '🚀'; label = 'Blue-Sky: Kurs über 52W-Hoch – kein struktureller Widerstand';
   } else if (nearHigh != null && close >= nearHigh * 0.98) {
     icon = '🎯'; label = 'Breakout-Nähe: Kurs ≤2% unter dem 1M/3M-Hoch';
-  } else if (tv.ema20 != null && tv.ema50 != null && close < tv.ema20 && close >= tv.ema50) {
-    icon = '🔄'; label = 'Pullback im Trend: Kurs unter EMA20, über EMA50';
-  } else if (tv.ema50 != null && close < tv.ema50) {
-    icon = '📉'; label = 'Unter Trend: Kurs unter EMA50';
+  } else if (tv.sma20 != null && tv.sma50 != null && close < tv.sma20 && close >= tv.sma50) {
+    icon = '🔄'; label = 'Pullback im Trend: Kurs unter SMA20, über SMA50';
+  } else if (tv.sma50 != null && close < tv.sma50) {
+    icon = '📉'; label = 'Unter Trend: Kurs unter SMA50';
   } else {
     icon = '➖'; label = 'Range: kein klares Setup';
   }
@@ -72,12 +91,12 @@ function priceSituation(tv) {
 }
 
 // Initial suggestions for the editable entry/target fields:
-// Entry orientiert sich an der EMA20 (kurzfristige Mittellinie, Fallback Kurs),
+// Entry orientiert sich an der SMA20 (kurzfristige Mittellinie, Fallback Kurs),
 // Ziel = Entry × 1,2 (mind. 20 % Upside).
 function suggestedEntry(c) {
   const tv = c.tv_data;
   if (!tv) return null;
-  const v = tv.ema20 ?? tv.close_1m ?? tv.close;
+  const v = tv.sma20 ?? tv.close_1m ?? tv.close;
   return v != null ? Math.round(v * 100) / 100 : null;
 }
 function suggestedTarget(c) {
@@ -257,9 +276,6 @@ function sortValue(c, col) {
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
-    case 'tv_ema20':  return tv?.ema20 ?? null;
-    case 'tv_ema50':  return tv?.ema50 ?? null;
-    case 'tv_ema200': return tv?.ema200 ?? null;
     case 'tv_sma20':  return tv?.sma20 ?? null;
     case 'tv_sma50':  return tv?.sma50 ?? null;
     case 'tv_sma100': return tv?.sma100 ?? null;
@@ -314,15 +330,15 @@ const VIEWS = {
   price: [
     { key:'currency',  label:'W\u00e4',  title:'W\u00e4hrung der B\u00f6rse (Preise werden nach USD/EUR umgerechnet, andere W\u00e4hrungen bleiben nativ)', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
     { key:'setup',     label:'Setup', title:'Preis-Situation: \ud83d\ude80 Blue-Sky \u00b7 \ud83c\udfaf Breakout-N\u00e4he \u00b7 \ud83d\udd04 Pullback im Trend \u00b7 \ud83d\udcc9 unter Trend \u00b7 \u2796 Range \u00b7 \u26a0 Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'\u2014';} },
-    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: EMA20, kursiv) \u2013 editierbar, wird gespeichert', num:true, fmt:c=>priceInput(c,'my_entry') },
+    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: SMA20, kursiv) \u2013 editierbar, wird gespeichert', num:true, fmt:c=>priceInput(c,'my_entry') },
     { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
-    { key:'tv_sma20',   label:'SMA20',  title:'SMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma20) },
-    { key:'tv_sma50',   label:'SMA50',  title:'SMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma50) },
-    { key:'tv_sma100',  label:'SMA100', title:'SMA 100',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma100) },
-    { key:'tv_sma200',  label:'SMA200', title:'SMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma200) },
+    { key:'tv_sma20',   label:'SMA20',  title:'SMA 20 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma20)}">${fmtPrice(c, c.tv_data?.sma20)}</span>` },
+    { key:'tv_sma50',   label:'SMA50',  title:'SMA 50 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma50)}">${fmtPrice(c, c.tv_data?.sma50)}</span>` },
+    { key:'tv_sma100',  label:'SMA100', title:'SMA 100 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma100)}">${fmtPrice(c, c.tv_data?.sma100)}</span>` },
+    { key:'tv_sma200',  label:'SMA200', title:'SMA 200 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma200)}">${fmtPrice(c, c.tv_data?.sma200)}</span>` },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
     { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },

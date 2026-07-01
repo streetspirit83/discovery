@@ -1,5 +1,5 @@
 import { enrichCandidate } from '../lib/claude-api.js';
-import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627b';
+import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627j';
 import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';

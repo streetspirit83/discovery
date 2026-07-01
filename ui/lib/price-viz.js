@@ -3,7 +3,7 @@
  *
  * No historical OHLC series exists in tv_data, so these are *positioning*
  * visuals: where the current price sits relative to the many level fields TV
- * provides (52W range, ATH, EMAs, Bollinger, pivots, Donchian, timeframe ranges).
+ * provides (52W range, ATH, SMAs, Bollinger, pivots, Donchian, timeframe ranges).
  *
  * All generators are pure and return strings. Colours come from CSS via classes.
  */
@@ -74,7 +74,7 @@ export function priceLadderSVG(tv) {
     ['ATH', ath, 'anchor'], ['52W-H', hi52, 'anchor'],
     ['R2', tv.pivot_r2, 'resist'], ['R1', tv.pivot_r1, 'resist'],
     ['Donch↑', tv.donch_ch20_upper_1m, 'resist'], ['BB↑', tv.bb_upper, 'band'],
-    ['EMA20', tv.ema20, 'ma'], ['EMA50', tv.ema50, 'ma'], ['EMA200', tv.ema200, 'ma'], ['SMA200', tv.sma200, 'ma'],
+    ['SMA20', tv.sma20, 'ma'], ['SMA50', tv.sma50, 'ma'], ['SMA100', tv.sma100, 'ma'], ['SMA200', tv.sma200, 'ma'],
     ['BB↓', tv.bb_lower, 'band'], ['Donch↓', tv.donch_ch20_lower_1m, 'support'],
     ['S1', tv.pivot_s1, 'support'], ['S2', tv.pivot_s2, 'support'],
     ['52W-T', lo52, 'anchor'],
@@ -84,7 +84,7 @@ export function priceLadderSVG(tv) {
   const tradable = raw.filter(([, , t]) => t !== 'anchor');
   const resist = tradable.filter(([, v]) => v > cur).sort((a, b) => a[1] - b[1])[0];
   const support = tradable.filter(([, v]) => v < cur).sort((a, b) => b[1] - a[1])[0];
-  const labelSet = new Set(['ATH', '52W-H', '52W-T', 'EMA20', 'EMA50', 'EMA200']);
+  const labelSet = new Set(['ATH', '52W-H', '52W-T', 'SMA20', 'SMA50', 'SMA200']);
   if (resist) labelSet.add(resist[0]);
   if (support) labelSet.add(support[0]);
 
@@ -121,7 +121,7 @@ export function priceLadderSVG(tv) {
     ? `<rect x="${barX}" y="${top}" width="${barW}" height="${(mainTop - top).toFixed(1)}" class="pv-cap"/>` : '';
 
   const pos52 = clamp01((cur - lo52) / mainSpan) * 100;
-  const above = ['ema20', 'ema50', 'ema200'].map((k) => (tv[k] != null && cur >= tv[k] ? '✓' : '·')).join('');
+  const above = ['sma20', 'sma50', 'sma200'].map((k) => (tv[k] != null && cur >= tv[k] ? '✓' : '·')).join('');
 
   return `
     <svg class="pv-ladder" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
@@ -130,7 +130,7 @@ export function priceLadderSVG(tv) {
       ${capRect}${bbBand}${ticks}${labels}${curMark}
     </svg>
     <p class="pv-foot">
-      52W-Position <b>${pos52.toFixed(0)}%</b> · EMA20/50/200 <b>${above}</b>
+      52W-Position <b>${pos52.toFixed(0)}%</b> · SMA20/50/200 <b>${above}</b>
       ${resist ? ` · Widerstand ${esc(resist[0])} <span class="neg">${pctTxt((resist[1] - cur) / cur * 100)}</span>` : ''}
       ${support ? ` · Stütze ${esc(support[0])} <span class="pos">${pctTxt((support[1] - cur) / cur * 100)}</span>` : ''}
     </p>`;
@@ -218,7 +218,7 @@ export function perfBarsHTML(tv) {
 function priceLadderLegend() {
   const it = (cls, label) => `<span class="pv-leg__item"><span class="pv-leg__sw pv-leg__sw--${cls}"></span>${label}</span>`;
   return `<div class="pv-legend">
-    ${it('cur', 'Kurs')}${it('anchor', 'ATH/52W')}${it('ma', 'EMA/SMA')}
+    ${it('cur', 'Kurs')}${it('anchor', 'ATH/52W')}${it('ma', 'SMA')}
     ${it('band', 'Bollinger')}${it('resist', 'Widerstand')}${it('support', 'Stütze')}
   </div>`;
 }
