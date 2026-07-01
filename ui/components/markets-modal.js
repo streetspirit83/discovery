@@ -6,6 +6,8 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
+import { icons } from '../lib/icons.js?v=20260701c';
+
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701b';
 
 const DEFAULT_INDICATORS = [
@@ -30,7 +32,8 @@ const posNeg = (v) => (v == null ? '' : v >= 0 ? 'pos' : 'neg');
 function indicatorChip(i) {
   const href = INDICATOR_LINKS[i.label];
   const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} · heute ${fmtPct(i.change)} · 1M ${fmtPct(i.perf1m)} – auf TradingView öffnen`;
-  // Top line = today's move (primary), bottom line = trailing 1-month move (1px smaller).
+  // Top line = today's move (primary); bottom line = trailing 1-month move, one
+  // font-step smaller per STYLEGUIDE.md §2 (stacked stat-block).
   const inner = `<span class="id-ind__label">${i.label}</span>
     <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
     <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
@@ -49,9 +52,11 @@ export function renderMarketsModal({ indicators, onFetchIndicators } = {}) {
   overlay.innerHTML = `
     <div class="modal markets-modal" role="dialog" aria-modal="true" aria-label="Märkte">
       <div class="modal-header">
-        <h2>📊 Märkte</h2>
-        <a class="premkt-link" href="${PREMARKETS_URL}" target="_blank" rel="noopener" title="CNN Pre-Markets in neuem Tab öffnen">📈 PreMarkets ↗</a>
-        <button class="modal-close" id="mk-close" aria-label="Schließen">✕</button>
+        <h2>${icons.barChart2} Märkte</h2>
+        <div class="modal-header-actions">
+          <a class="link-chip" href="${PREMARKETS_URL}" target="_blank" rel="noopener" title="CNN Pre-Markets öffnen" aria-label="CNN Pre-Markets öffnen">${icons.trendingUp}</a>
+          <button class="icon-btn" id="mk-close" aria-label="Schließen">${icons.xMark}</button>
+        </div>
       </div>
       <div class="modal-body">
         <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>

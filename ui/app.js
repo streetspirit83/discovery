@@ -11,7 +11,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260627j';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260627j';
 import { triggeredCount } from './lib/alerts.js?v=20260627j';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260701b';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260701c';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';

@@ -70,11 +70,10 @@ Hauptwert    ← groß, --fw-bold, tabular-nums                (z. B. --fs-5)
 Nebenwert    ← IMMER kleiner als der Hauptwert darüber      (eine Stufe kleiner)
 ```
 
-**Harte Regel:** Ein Wert in der **zweiten Zeile** eines Blocks ist **immer
-kleiner** als der Wert direkt darüber – nie gleich groß, nie größer. Eine
-Font-Stufe kleiner ist der Standard (z. B. Hauptwert `--fs-5` → Nebenwert
-`--fs-4`). „Nur minimal kleiner" ist ausdrücklich erlaubt, aber der Nebenwert
-darf den Hauptwert optisch nie dominieren.
+**Harte Regel:** Ein Wert in der **zweiten Zeile** eines Blocks ist **genau eine
+Font-Stufe kleiner** als der Wert direkt darüber (auf der `--fs-*`-Leiter eine
+Stufe runter, z. B. Hauptwert `--fs-5` → Nebenwert `--fs-4`). Nie gleich groß,
+nie größer.
 
 Einheiten/Perioden-Tags (`1M`, `%`, `Ø`) sind **immer** kleiner und `--muted`,
 nie so groß wie der Wert selbst.

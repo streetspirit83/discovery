@@ -25,6 +25,11 @@ Open `ui/index.html` directly in a browser – no build step needed.
 Works with mock data without any backend.
 Settings → configure backend URL, secret, and Claude API key for full functionality.
 
+**Before any UI change, read [`ui/STYLEGUIDE.md`](ui/STYLEGUIDE.md)** – the binding
+design rules (design tokens, Lucide-only icons via `ui/lib/icons.js`, icon-only
+links, stacked stat-blocks with a smaller second line, single-row panels). UI
+changes are agreed as a visual/plan in chat first, then built.
+
 ## Key Design Decisions
 - All storage goes through Netlify Blobs (3 blobs: inbox, archive, export)
 - Dedup by symbol+exchange: inbox merges sources, archive/export skips
