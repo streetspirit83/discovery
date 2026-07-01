@@ -1,7 +1,7 @@
-import { runScreen, rowsToCandidates, fetchGlobalQuotes } from '../lib/tv-screener.js?v=20260701a';
-import { MARKETS } from '../lib/tv-fields.js?v=20260701a';
-import { loadStorageClient } from '../lib/storage-client.js?v=20260701a';
-import { normalizeExchange } from '../lib/exchange-map.js?v=20260701a';
+import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
+import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
+import { loadStorageClient } from '../lib/storage-client.js?v=20260701b';
+import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
 const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
@@ -15,19 +15,6 @@ const PERF_COLS = [
   { key: 'py', label: '1J', idx: 6 },
 ];
 const KEY_TO_IDX = Object.fromEntries(PERF_COLS.map((c) => [c.key, c.idx]));
-
-// ─── Macro barometer: benchmark indices ─────────────────────────────────────────
-// The three equity indices drive the Risk-On/Risk-Off breadth; VIX is a fear
-// overlay (rising = risk-off), not part of the breadth count. Tickers verified in
-// tv-enrichment.js. Columns fetched from TradingView's global scan:
-//   idx 0 = change (today %) · idx 1 = Perf.W (1W %) · idx 2 = Perf.1M (1M %)
-const MACRO_INDICES = [
-  { label: 'DAX',    ticker: 'XETR:DAX' },
-  { label: 'NASDAQ', ticker: 'NASDAQ:IXIC' },
-  { label: 'NIKKEI', ticker: 'TVC:NI225' },
-];
-const VIX_TICKER = 'TVC:VIX';
-const INDEX_COLS = ['change', 'Perf.W', 'Perf.1M'];
 
 // Map a canonical exchange code (post normalizeExchange) → market slug, for
 // attributing an import row to the right market regardless of which regional
@@ -56,7 +43,6 @@ let drill = null;
 let drillSort = { key: 'pm', dir: 'desc' };  // independent sort for the drill table
 let drillSelected = new Set();               // set of row.s currently checked for import
 let loading = false, loadDone = 0;
-let indexData = null;   // Map<ticker, row.d> for the macro barometer, or null before load
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function readSettings() {
@@ -177,7 +163,6 @@ function dedupeRows(rows) {
 // ─── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
   if (!backendUrl || !secret) return;
-  loadIndices();   // fire-and-forget: refresh the macro barometer in parallel
   loading = true; loadDone = 0; marketData = {}; drill = null;
   renderContent();
 
@@ -244,78 +229,6 @@ function wireSetupBox() {
   document.getElementById('su-cancel')?.addEventListener('click', render);
 }
 
-// ─── PreMarkets quick-link ───────────────────────────────────────────────────────
-// Direct jump to CNN's pre-market overview, pinned at the very top of the sub-nav.
-function premarketsBarHtml() {
-  return `
-    <div class="mkt-topbar">
-      <a class="premkt-link" href="https://edition.cnn.com/markets/premarkets" target="_blank" rel="noopener"
-         title="CNN Pre-Markets in neuem Tab öffnen">📈 PreMarkets ↗</a>
-    </div>`;
-}
-
-// ─── Macro barometer ─────────────────────────────────────────────────────────────
-// A short, simple 1-month sentiment read on the major benchmark indices
-// (DAX · NASDAQ · NIKKEI). We take each index's 1-month performance (Perf.1M) and
-// derive a *breadth* signal: how many of the three are up over the month, confirmed
-// by their mean move. Breadth across the key regions is the classic risk-on/off
-// tell. VIX's 1M change is shown as a fear overlay (rising VIX = risk-off) but does
-// not alter the equity-breadth verdict.
-function loadIndices() {
-  if (!backendUrl || !secret) return;
-  const tickers = [...MACRO_INDICES.map((i) => i.ticker), VIX_TICKER];
-  fetchGlobalQuotes(tickers, INDEX_COLS, { backendUrl, secret })
-    .then((map) => { indexData = map; })
-    .catch(() => { indexData = null; })
-    .finally(renderMacro);
-}
-
-function computeMacro() {
-  if (!indexData) return null;
-  const idx = MACRO_INDICES.map((i) => ({ label: i.label, pm: indexData.get(i.ticker)?.[2] ?? null }));
-  const vals = idx.map((i) => i.pm).filter((v) => v != null);
-  if (!vals.length) return null;
-  const total = vals.length;
-  const up = vals.filter((v) => v > 0).length;
-  const avg = vals.reduce((a, b) => a + b, 0) / total;   // equal-weighted mean 1M %
-  const vix1m = indexData.get(VIX_TICKER)?.[2] ?? null;  // VIX 1M change %
-  let regime, cls, arrow;
-  if (up >= 2 && avg > 0)      { regime = 'Risk-On';  cls = 'macro-on';      arrow = '▲'; }
-  else if (up <= 1 && avg < 0) { regime = 'Risk-Off'; cls = 'macro-off';     arrow = '▼'; }
-  else                         { regime = 'Neutral';  cls = 'macro-neutral'; arrow = '▬'; }
-  return { idx, up, total, avg, vix1m, regime, cls, arrow };
-}
-
-// Coloured 1M chip for one index. `invert` flips the sign→colour mapping for VIX,
-// where a rising value (positive %) signals fear and is shown red.
-function macroChip(label, v, invert = false) {
-  const dir = v == null ? 0 : (invert ? -Math.sign(v) : Math.sign(v));
-  const cls = dir > 0 ? 'macro-up' : dir < 0 ? 'macro-down' : '';
-  return `<span class="macro-idx">${label}<strong class="${cls}">${fmtPct(v)}</strong></span>`;
-}
-
-function renderMacro() {
-  const el = document.getElementById('mkt-macro');
-  if (!el) return;
-  const m = computeMacro();
-  if (!m) { el.innerHTML = ''; return; }
-  const chips = m.idx.map((i) => macroChip(i.label, i.pm)).join('');
-  const vixChip = m.vix1m != null
-    ? macroChip('VIX', m.vix1m, true)
-    : '';
-  el.innerHTML = `
-    <div class="macro-bar ${m.cls}" title="1-Monats-Trend der Leitindizes DAX · NASDAQ · NIKKEI">
-      <span class="macro-icon">${m.arrow}</span>
-      <div class="macro-main">
-        <span class="macro-label">Makro-Barometer <span class="macro-sub">· 1M-Trend der Leitindizes</span></span>
-        <span class="macro-regime">${m.regime} <span class="macro-breadth">(${m.up}/${m.total} im Plus · Ø ${fmtPct(m.avg)})</span></span>
-      </div>
-      <div class="macro-stats" title="1-Monats-Performance je Index. VIX rot = steigende Volatilität (Risk-Off).">
-        ${chips}${vixChip}
-      </div>
-    </div>`;
-}
-
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
@@ -323,7 +236,6 @@ function render() {
   if (!backendUrl || !secret) {
     app.innerHTML = `
       <div class="mkt-container">
-        ${premarketsBarHtml()}
         <div class="mkt-header">
           <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none">← Discovery</a>
           <h1 class="mkt-title">Markets Performance</h1>
@@ -336,7 +248,6 @@ function render() {
 
   app.innerHTML = `
     <div class="mkt-container">
-      ${premarketsBarHtml()}
       <div class="mkt-header">
         <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none; flex-shrink:0">← Discovery</a>
         <h1 class="mkt-title">Markets Performance</h1>
@@ -347,7 +258,6 @@ function render() {
         <button class="mkt-tab${tab === 'countries' ? ' active' : ''}" id="tab-countries">Länder</button>
         <button class="mkt-tab${tab === 'sectors' ? ' active' : ''}" id="tab-sectors">Sektoren</button>
       </div>
-      <div id="mkt-macro"></div>
       <div id="mkt-content"></div>
     </div>`;
 
@@ -373,8 +283,6 @@ function render() {
 function renderContent() {
   const el = document.getElementById('mkt-content');
   if (!el) return;
-
-  renderMacro();
 
   if (loading) {
     el.innerHTML = `<div class="mkt-progress" id="mkt-progress">⏳ 0/${MARKETS.length} Märkte geladen …</div>

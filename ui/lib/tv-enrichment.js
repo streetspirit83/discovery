@@ -683,7 +683,8 @@ export async function fetchFxRate({ backendUrl, secret }) {
 /**
  * Market indicators for the Intra-Day header. Verified TV tickers:
  *   XETR:DAX · NASDAQ:IXIC (Composite) · TVC:NI225 · TVC:VIX
- * @returns {Promise<{label:string,value:number|null,change:number|null}[]>}
+ * `change` is today's move %, `perf1m` the trailing 1-month performance %.
+ * @returns {Promise<{label:string,value:number|null,change:number|null,perf1m:number|null}[]>}
  */
 const MARKET_INDICATORS = [
   { label: 'DAX',    ticker: 'XETR:DAX' },
@@ -693,17 +694,17 @@ const MARKET_INDICATORS = [
 ];
 
 export async function fetchMarketIndicators({ backendUrl, secret }) {
-  const fallback = MARKET_INDICATORS.map(({ label }) => ({ label, value: null, change: null }));
+  const fallback = MARKET_INDICATORS.map(({ label }) => ({ label, value: null, change: null, perf1m: null }));
   try {
     const bodyStr = await proxyPost(backendUrl, secret,
       'https://scanner.tradingview.com/global/scan',
-      { symbols: { tickers: MARKET_INDICATORS.map((i) => i.ticker), query: { types: [] } }, columns: ['close', 'change'] },
+      { symbols: { tickers: MARKET_INDICATORS.map((i) => i.ticker), query: { types: [] } }, columns: ['close', 'change', 'Perf.1M'] },
     );
     const rows = JSON.parse(bodyStr)?.data ?? [];
     const byTicker = new Map(rows.map((r) => [r.s, r.d]));
     return MARKET_INDICATORS.map(({ label, ticker }) => {
       const d = byTicker.get(ticker);
-      return { label, value: d?.[0] ?? null, change: d?.[1] ?? null };
+      return { label, value: d?.[0] ?? null, change: d?.[1] ?? null, perf1m: d?.[2] ?? null };
     });
   } catch (err) {
     console.warn('[TV] market indicators fetch failed:', err.message);

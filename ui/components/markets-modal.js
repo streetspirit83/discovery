@@ -6,14 +6,16 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701a';
+const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701b';
 
 const DEFAULT_INDICATORS = [
-  { label: 'DAX',    value: null, change: null },
-  { label: 'NASDAQ', value: null, change: null },
-  { label: 'NIKKEI', value: null, change: null },
-  { label: 'VIX',    value: null, change: null },
+  { label: 'DAX',    value: null, change: null, perf1m: null },
+  { label: 'NASDAQ', value: null, change: null, perf1m: null },
+  { label: 'NIKKEI', value: null, change: null, perf1m: null },
+  { label: 'VIX',    value: null, change: null, perf1m: null },
 ];
+
+const PREMARKETS_URL = 'https://edition.cnn.com/markets/premarkets';
 
 const INDICATOR_LINKS = {
   DAX:    'https://www.tradingview.com/symbols/XETR-DAX/?utm_source=androidapp&utm_medium=share',
@@ -27,9 +29,11 @@ const posNeg = (v) => (v == null ? '' : v >= 0 ? 'pos' : 'neg');
 
 function indicatorChip(i) {
   const href = INDICATOR_LINKS[i.label];
-  const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} – auf TradingView öffnen`;
+  const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} · heute ${fmtPct(i.change)} · 1M ${fmtPct(i.perf1m)} – auf TradingView öffnen`;
+  // Top line = today's move (primary), bottom line = trailing 1-month move (1px smaller).
   const inner = `<span class="id-ind__label">${i.label}</span>
-    <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>`;
+    <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span>
+    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
   return href
     ? `<a class="id-ind id-ind--link" href="${href}" target="_blank" rel="noopener" title="${tip}">${inner}</a>`
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
@@ -46,6 +50,7 @@ export function renderMarketsModal({ indicators, onFetchIndicators } = {}) {
     <div class="modal markets-modal" role="dialog" aria-modal="true" aria-label="Märkte">
       <div class="modal-header">
         <h2>📊 Märkte</h2>
+        <a class="premkt-link" href="${PREMARKETS_URL}" target="_blank" rel="noopener" title="CNN Pre-Markets in neuem Tab öffnen">📈 PreMarkets ↗</a>
         <button class="modal-close" id="mk-close" aria-label="Schließen">✕</button>
       </div>
       <div class="modal-body">

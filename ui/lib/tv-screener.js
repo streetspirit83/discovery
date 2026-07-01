@@ -89,32 +89,6 @@ export async function runScreen({ market, filter, columns, sort, count }, { back
   return { totalCount: parsed.totalCount ?? parsed.data.length, rows: parsed.data };
 }
 
-// ─── Fetch specific index/symbol tickers ────────────────────────────────────────
-/**
- * Fetch a fixed set of tickers via TradingView's *global* scan (not a per-market
- * screen). Used for the macro barometer, which tracks named benchmark indices
- * (DAX, Nasdaq, Nikkei, VIX) rather than a screened stock universe.
- * @param {string[]} tickers  e.g. ['XETR:DAX','NASDAQ:IXIC','TVC:NI225']
- * @param {string[]} columns  e.g. ['change','Perf.W','Perf.1M']
- * @param {{ backendUrl: string, secret: string }} auth
- * @returns {Promise<Map<string, any[]>>} ticker → row.d column values
- */
-export async function fetchGlobalQuotes(tickers, columns, { backendUrl, secret }) {
-  const bodyStr = await proxyPost(
-    backendUrl, secret,
-    'https://scanner.tradingview.com/global/scan',
-    { symbols: { tickers, query: { types: [] } }, columns },
-  );
-  let parsed;
-  try {
-    parsed = JSON.parse(bodyStr);
-  } catch {
-    throw new Error('TradingView lieferte ungültiges JSON');
-  }
-  const rows = Array.isArray(parsed?.data) ? parsed.data : [];
-  return new Map(rows.map((r) => [r.s, r.d]));
-}
-
 // ─── Map rows → candidates ──────────────────────────────────────────────────────
 function parseTicker(s) {
   const colon = s.indexOf(':');
