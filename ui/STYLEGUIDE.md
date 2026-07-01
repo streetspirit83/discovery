@@ -23,6 +23,10 @@ before you assume it's a bug"** (fehlendes UX-Affordance statt Bugfix).
 4. **Wiederverwenden statt neu erfinden.** Es gibt bereits `.btn`, `.icon-btn`,
    `.link-chip`, `.id-ind`, `.modal-*`. Neue Komponenten nur, wenn nichts passt.
 5. **Lesbarkeit vor Dichte.** Lieber ein klar lesbarer Block als viele winzige.
+6. **Zellen/Kacheln ausfüllen.** Inhalt nutzt die **volle Breite und Höhe** der
+   Zelle: minimale Paddings, kein unnötiger Weißraum. Im Zweifel den Inhalt
+   vergrößern (Schrift/Element), statt Leerraum stehen zu lassen – innerhalb der
+   Slim-Regel für Panels (§5). Gilt für Tabellenzellen, Kacheln, Buttons.
 
 ---
 

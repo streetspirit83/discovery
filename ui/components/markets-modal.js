@@ -37,7 +37,7 @@ function indicatorChip(i) {
   // one font-step smaller (§2).
   const inner = `<span class="id-ind__label">${i.label}</span>
     <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change, 1) : '–'}</span>
-    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m, 0) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
+    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m, 1) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
   return href
     ? `<a class="id-ind id-ind--link" href="${href}" target="_blank" rel="noopener" title="${tip}">${inner}</a>`
     : `<div class="id-ind" title="${tip}">${inner}</div>`;

@@ -1054,15 +1054,16 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    keep each column slim so all four fit even on a phone; 1M line is one font step
    smaller (§2). Scoped to the Markets modal so the Intra-Day chips stay unchanged. */
 .markets-modal .id-indicators { flex-wrap:nowrap; gap:var(--s-1); margin-bottom:0; }
-.markets-modal .id-ind { flex:1 1 0; min-width:0; gap:0; padding:var(--s-1) 2px; border-radius:var(--r-2); overflow:hidden; }
+.markets-modal .id-ind { flex:1 1 0; min-width:0; gap:0; padding:2px; border-radius:var(--r-2); overflow:hidden; }
 .markets-modal .id-ind__label,
 .markets-modal .id-ind__val,
 .markets-modal .id-ind__m1 { white-space:nowrap; }
-/* Label below the smallest token so the longest name (NASDAQ) still fits four
-   columns on a ~320px phone (STYLEGUIDE.md §5, dense-panel exception). */
+/* Fill the cell: minimal padding, content sized up to use the width/height
+   (STYLEGUIDE.md §0.6). Label below the smallest token so NASDAQ still fits four
+   columns even on a ~320px phone. */
 .markets-modal .id-ind__label { letter-spacing:0; font-size:12px; }
-.markets-modal .id-ind__val { font-size:var(--fs-2); font-weight:var(--fw-bold); line-height:1.25; }
-.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-1); font-variant-numeric:tabular-nums; line-height:1.25; }
+.markets-modal .id-ind__val { font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1.25; }
+.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-2); font-variant-numeric:tabular-nums; line-height:1.25; }
 .markets-modal .id-ind__m1tag { font-size:11px; color:var(--muted); font-weight:var(--fw-bold); }
 .id-toolbar { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
 .id-refresh {
