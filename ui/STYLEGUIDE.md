@@ -120,22 +120,29 @@ Vorbild: `chipLink()` in `candidate-list.js` → `.link-chip`.
 
 ## 5. Panels / Daten-Reihen
 
-- Ein **Panel/Indikator-Streifen** legt seine Items in **einer horizontalen,
-  umbrechenden Zeile** an (`display:flex; gap:var(--s-2); flex-wrap:wrap`) –
-  nicht vertikal gestapelt. Vorbild: `.id-indicators` mit `.id-ind`-Kacheln.
+Ein **Panel/Indikator-Streifen** legt seine Items in **einer horizontalen Zeile**
+an. Vorbild: `.id-indicators` mit `.id-ind`-Kacheln.
 
-### Ein Panel ist ein **schmaler Streifen** (harte Regel)
-Sitzt ein Panel **über Primärinhalt** (Tabelle, iframe, Chart), darf es diesem
-**keinen nennenswerten Platz nehmen**. Der darunterliegende Inhalt ist die
-Hauptsache, der Streifen nur Kontext. Deshalb:
+### Feste kleine Anzahl → **eine Zeile, gleich breite Spalten** (harte Regel)
+Bei einer **festen, kleinen Anzahl** Blöcke (z. B. die **4 Index-Kacheln**)
+stehen **immer alle in EINER Zeile** – sie brechen **nie** auf eine zweite Zeile
+um, auch nicht auf dem Handy:
+
+- `flex-wrap: nowrap` am Container.
+- Jede Kachel `flex: 1 1 0; min-width: 0` → gleich breite Spalten, die zusammen
+  die Zeile füllen und bei wenig Platz **schrumpfen** (statt umzubrechen).
+- Damit vier Spalten auch schmal passen: **vertikal gestapelt** (Label / Wert /
+  Nebenwert je eigene kurze Zeile), Werte `white-space: nowrap`.
+
+> (Nur bei **variabler/großer** Item-Zahl ist `flex-wrap: wrap` richtig.)
+
+### Ein Panel über Primärinhalt ist ein **schmaler Streifen**
+Sitzt ein Panel über Primärinhalt (Tabelle, iframe, Chart), darf es diesem
+**keinen nennenswerten Platz nehmen**:
 
 - **Kompakt halten, nicht vergrößern.** Kacheln nicht „größer machen, damit man
   besser sieht" – das war der Fehler. Hauptwert **≤ `--fs-3`**, Padding
-  **≤ `--s-1` vertikal**, `line-height ≈ 1.15`, **max. 2 Zeilen** pro Kachel.
-- Um Höhe zu sparen, darf das **Label mit dem Hauptwert in einer Zeile** stehen
-  (`Label +0,5 %`), der Nebenwert kommt darunter (eine Stufe kleiner, §2).
-- Kacheln **nicht auf volle Breite dehnen** (`flex:1 …` vermeiden), sonst wirkt
-  der Streifen massig. Natürliche Breite + Umbruch genügt.
+  **≤ `--s-1`**, `line-height ≈ 1.2`, **max. 3 kurze Zeilen** pro Kachel.
 - Panels sitzen im dafür vorgesehenen Container (z. B. **Markets-Modal**), nicht
   in einen kleinen iframe gequetscht.
 
@@ -189,19 +196,19 @@ Touch-Ziele ≥ 32px. Hover/aktiv über Token-Farben, nicht über feste Werte.
 
 ## 10. Worked Example – Index-Kachel (Markets-Modal)
 
-Zielbild für die DAX/NASDAQ/NIKKEI/VIX-Kacheln: **kompakt, schmaler Streifen**
-(2 Zeilen), damit der iframe darunter Platz behält.
+Zielbild: **4 gleich breite Blöcke in EINER Zeile** (nowrap), je 3 kurze Zeilen,
+schmaler Streifen – der iframe darunter behält den Platz.
 
 ```
-┌────────────────┐  ┌────────────────┐
-│ DAX   +0,5 %   │  │ VIX   +1,1 %   │  ← Zeile 1: Label + heute (--fs-3, bold)
-│ +4,2 % 1M      │  │ −12,0 % 1M     │  ← Zeile 2: 1M, eine Stufe kleiner (--fs-2)
-└────────────────┘  └────────────────┘
+┌────────┬────────┬────────┬────────┐
+│  DAX   │ NASDAQ │ NIKKEI │  VIX   │  ← Label (--fs-1, muted)
+│ +0,5 % │ +0,3 % │ −0,2 % │ +1,1 % │  ← heute (--fs-3, bold)
+│+4,2% 1M│+6,1% 1M│+2,8% 1M│−12% 1M │  ← 1M (--fs-2, eine Stufe kleiner)
+└────────┴────────┴────────┴────────┘
+   flex:1 1 0 · min-width:0 · flex-wrap:nowrap → nie Umbruch
 ```
-- Kacheln in **einer** flex-Zeile (`.id-indicators`), kompakt, **nicht** auf
-  volle Breite gedehnt.
-- Hauptwert ≤ `--fs-3`, Padding ≤ `--s-1` vertikal → Streifen bleibt schmal (§5).
-- Farbe der Werte über `.pos`/`.neg`.
+- Gleich breite, schrumpfende Spalten – nie auf eine zweite Zeile umbrechen (§5).
+- Werte `white-space:nowrap`, Farbe über `.pos`/`.neg`.
 - Links (PreMarkets etc.) als **Icon-Only** aus `icons.js` – kein Text, kein Emoji.
 
 _Änderungen an diesem Guide ebenfalls vorab im Chat abstimmen._

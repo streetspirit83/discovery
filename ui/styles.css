@@ -1049,16 +1049,21 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .id-ind__label { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; }
 .id-ind__val { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
 
-/* Markets modal: compact 2-line index chips forming a SLIM strip so the iframe
-   below keeps its space (STYLEGUIDE.md §5). Line 1 = label + today's move,
-   line 2 = 1-month move one font-step smaller (§2). Scoped to the Markets modal
-   so the Intra-Day chips stay unchanged. */
-.markets-modal .id-indicators { gap:var(--s-2); margin-bottom:0; }
-.markets-modal .id-ind { gap:1px; padding:var(--s-1) var(--s-2); min-width:0; border-radius:var(--r-2); }
-.markets-modal .id-ind__top { display:inline-flex; align-items:baseline; gap:var(--s-1); }
-.markets-modal .id-ind__val { font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1.15; }
-.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-2); font-variant-numeric:tabular-nums; line-height:1.15; }
-.markets-modal .id-ind__m1tag { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; }
+/* Markets modal: the 4 index blocks always sit in ONE non-wrapping row as equal,
+   shrinking columns (STYLEGUIDE.md §5). Narrow stacked chips (label / today / 1M)
+   keep each column slim so all four fit even on a phone; 1M line is one font step
+   smaller (§2). Scoped to the Markets modal so the Intra-Day chips stay unchanged. */
+.markets-modal .id-indicators { flex-wrap:nowrap; gap:var(--s-1); margin-bottom:0; }
+.markets-modal .id-ind { flex:1 1 0; min-width:0; gap:0; padding:var(--s-1) 2px; border-radius:var(--r-2); overflow:hidden; }
+.markets-modal .id-ind__label,
+.markets-modal .id-ind__val,
+.markets-modal .id-ind__m1 { white-space:nowrap; }
+/* Label below the smallest token so the longest name (NASDAQ) still fits four
+   columns on a ~320px phone (STYLEGUIDE.md §5, dense-panel exception). */
+.markets-modal .id-ind__label { letter-spacing:0; font-size:12px; }
+.markets-modal .id-ind__val { font-size:var(--fs-2); font-weight:var(--fw-bold); line-height:1.25; }
+.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-1); font-variant-numeric:tabular-nums; line-height:1.25; }
+.markets-modal .id-ind__m1tag { font-size:11px; color:var(--muted); font-weight:var(--fw-bold); }
 .id-toolbar { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
 .id-refresh {
   display:inline-flex; align-items:center; justify-content:center;

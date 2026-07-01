@@ -32,11 +32,12 @@ const posNeg = (v) => (v == null ? '' : v >= 0 ? 'pos' : 'neg');
 function indicatorChip(i) {
   const href = INDICATOR_LINKS[i.label];
   const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} · heute ${fmtPct(i.change)} · 1M ${fmtPct(i.perf1m)} – auf TradingView öffnen`;
-  // Compact 2-line chip (STYLEGUIDE.md §5): line 1 = label + today's move, line 2
-  // = 1-month move one font-step smaller (§2). Kept slim so the iframe below keeps
-  // its space.
-  const inner = `<span class="id-ind__top"><span class="id-ind__label">${i.label}</span><span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change) : '–'}</span></span>
-    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
+  // Narrow stacked chip (STYLEGUIDE.md §5): label / today / 1M, each on its own
+  // short line so four equal blocks fit in ONE non-wrapping row; the 1M line is
+  // one font-step smaller (§2).
+  const inner = `<span class="id-ind__label">${i.label}</span>
+    <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change, 1) : '–'}</span>
+    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m, 0) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
   return href
     ? `<a class="id-ind id-ind--link" href="${href}" target="_blank" rel="noopener" title="${tip}">${inner}</a>`
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
