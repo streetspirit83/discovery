@@ -6,7 +6,7 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/';
+const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701a';
 
 const DEFAULT_INDICATORS = [
   { label: 'DAX',    value: null, change: null },

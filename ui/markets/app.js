@@ -1,7 +1,7 @@
-import { runScreen, rowsToCandidates, fetchGlobalQuotes } from '../lib/tv-screener.js';
-import { MARKETS } from '../lib/tv-fields.js';
-import { loadStorageClient } from '../lib/storage-client.js';
-import { normalizeExchange } from '../lib/exchange-map.js';
+import { runScreen, rowsToCandidates, fetchGlobalQuotes } from '../lib/tv-screener.js?v=20260701a';
+import { MARKETS } from '../lib/tv-fields.js?v=20260701a';
+import { loadStorageClient } from '../lib/storage-client.js?v=20260701a';
+import { normalizeExchange } from '../lib/exchange-map.js?v=20260701a';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
 const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
