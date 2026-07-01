@@ -229,6 +229,57 @@ function wireSetupBox() {
   document.getElementById('su-cancel')?.addEventListener('click', render);
 }
 
+// ─── PreMarkets quick-link ───────────────────────────────────────────────────────
+// Direct jump to CNN's pre-market overview, pinned at the very top of the sub-nav.
+function premarketsBarHtml() {
+  return `
+    <div class="mkt-topbar">
+      <a class="premkt-link" href="https://edition.cnn.com/markets/premarkets" target="_blank" rel="noopener"
+         title="CNN Pre-Markets in neuem Tab öffnen">📈 PreMarkets ↗</a>
+    </div>`;
+}
+
+// ─── Macro barometer ─────────────────────────────────────────────────────────────
+// A short, simple macro-regime gauge: a *breadth / diffusion index* over the
+// major markets' 1-month trend. Each market's cap-weighted 1M performance (its
+// countryAgg.pm) is a proxy for that country's broad index; we count how many are
+// rising and average the moves. Breadth (share of markets in the green) is the
+// classic risk-on/risk-off tell — more robust than any single index because it
+// captures whether the advance is broad or narrow. Confirmed by the mean 1M move,
+// it maps to Risk-On / Neutral / Risk-Off.
+function computeMacro() {
+  const vals = countryAggs.map((c) => c.pm).filter((v) => v != null);
+  if (!vals.length) return null;
+  const total = vals.length;
+  const up = vals.filter((v) => v > 0).length;
+  const breadth = (up / total) * 100;                       // % of markets positive over 1M
+  const avg = vals.reduce((a, b) => a + b, 0) / total;      // equal-weighted mean 1M %
+  let regime, cls, arrow;
+  if (breadth >= 60 && avg > 0)      { regime = 'Risk-On';  cls = 'macro-on';      arrow = '▲'; }
+  else if (breadth <= 40 && avg < 0) { regime = 'Risk-Off'; cls = 'macro-off';     arrow = '▼'; }
+  else                               { regime = 'Neutral';  cls = 'macro-neutral'; arrow = '▬'; }
+  return { up, total, breadth, avg, regime, cls, arrow };
+}
+
+function renderMacro() {
+  const el = document.getElementById('mkt-macro');
+  if (!el) return;
+  const m = computeMacro();
+  if (!m) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="macro-bar ${m.cls}" title="Marktbreite über den 1-Monats-Trend der ${m.total} Leitmärkte">
+      <span class="macro-icon">${m.arrow}</span>
+      <div class="macro-main">
+        <span class="macro-label">Makro-Barometer <span class="macro-sub">· 1M-Trend der Leitmärkte</span></span>
+        <span class="macro-regime">${m.regime}</span>
+      </div>
+      <div class="macro-stats">
+        <span title="Anteil der Märkte mit positivem 1-Monats-Trend"><strong>${m.up}/${m.total}</strong> Märkte im Plus (${m.breadth.toFixed(0)}%)</span>
+        <span title="Durchschnittliche 1-Monats-Performance über alle Märkte">Ø 1M <strong>${fmtPct(m.avg)}</strong></span>
+      </div>
+    </div>`;
+}
+
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
@@ -236,6 +287,7 @@ function render() {
   if (!backendUrl || !secret) {
     app.innerHTML = `
       <div class="mkt-container">
+        ${premarketsBarHtml()}
         <div class="mkt-header">
           <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none">← Discovery</a>
           <h1 class="mkt-title">Markets Performance</h1>
@@ -248,6 +300,7 @@ function render() {
 
   app.innerHTML = `
     <div class="mkt-container">
+      ${premarketsBarHtml()}
       <div class="mkt-header">
         <a href="../index.html" class="btn btn-secondary btn-sm" style="text-decoration:none; flex-shrink:0">← Discovery</a>
         <h1 class="mkt-title">Markets Performance</h1>
@@ -258,6 +311,7 @@ function render() {
         <button class="mkt-tab${tab === 'countries' ? ' active' : ''}" id="tab-countries">Länder</button>
         <button class="mkt-tab${tab === 'sectors' ? ' active' : ''}" id="tab-sectors">Sektoren</button>
       </div>
+      <div id="mkt-macro"></div>
       <div id="mkt-content"></div>
     </div>`;
 
@@ -283,6 +337,8 @@ function render() {
 function renderContent() {
   const el = document.getElementById('mkt-content');
   if (!el) return;
+
+  renderMacro();
 
   if (loading) {
     el.innerHTML = `<div class="mkt-progress" id="mkt-progress">⏳ 0/${MARKETS.length} Märkte geladen …</div>

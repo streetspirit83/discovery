@@ -8,6 +8,24 @@
   <style>
     body { font-family: var(--font-ui); background: var(--bg); color: var(--text); margin: 0; }
     .mkt-container { max-width: 980px; margin: 0 auto; padding: 1rem; }
+    /* PreMarkets quick-link – pinned at the very top of the markets sub-nav */
+    .mkt-topbar { display: flex; justify-content: flex-end; margin-bottom: .5rem; }
+    .premkt-link { display: inline-flex; align-items: center; gap: .35rem; text-decoration: none; font-size: .82rem; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: .28rem .7rem; transition: background var(--t-fast), color var(--t-fast); }
+    .premkt-link:hover { background: var(--accent); color: #fff; }
+    /* Macro barometer – 1-month breadth/diffusion gauge over the major markets */
+    .macro-bar { display: flex; align-items: center; gap: .7rem; padding: .55rem .8rem; border-radius: var(--radius); border: 1px solid var(--border); border-left-width: 4px; background: var(--surface); margin-bottom: 1rem; flex-wrap: wrap; }
+    .macro-icon { font-size: 1.05rem; line-height: 1; }
+    .macro-main { display: flex; flex-direction: column; gap: .1rem; }
+    .macro-label { font-size: .72rem; color: var(--muted); font-weight: 500; }
+    .macro-sub { font-weight: 400; }
+    .macro-regime { font-size: .95rem; font-weight: 700; }
+    .macro-stats { display: flex; gap: 1rem; margin-left: auto; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
+    .macro-stats strong { color: var(--text); }
+    .macro-on     { border-left-color: #16a34a; } .macro-on .macro-regime     { color: #16a34a; } .macro-on .macro-icon     { color: #16a34a; }
+    .macro-off    { border-left-color: #dc2626; } .macro-off .macro-regime    { color: #dc2626; } .macro-off .macro-icon    { color: #dc2626; }
+    .macro-neutral{ border-left-color: var(--muted); } .macro-neutral .macro-regime{ color: var(--text); }
+    [data-theme="dark"] .macro-on .macro-regime, [data-theme="dark"] .macro-on .macro-icon   { color: #4ade80; }
+    [data-theme="dark"] .macro-off .macro-regime, [data-theme="dark"] .macro-off .macro-icon { color: #f87171; }
     .mkt-header { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .mkt-title { font-size: 1.05rem; font-weight: 600; margin: 0; flex: 1; }
     .mkt-tabs { display: flex; gap: .2rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
