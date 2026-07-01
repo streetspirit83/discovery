@@ -1049,13 +1049,15 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .id-ind__label { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; }
 .id-ind__val { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
 
-/* Markets modal: larger, legible index chips with a 1-month sub-line one font
-   step smaller than the today value above it (STYLEGUIDE.md §2). Scoped to the
-   Markets modal so the Intra-Day chips stay unchanged. */
-.markets-modal .id-indicators { gap:var(--s-3); }
-.markets-modal .id-ind { gap:3px; padding:var(--s-2) var(--s-4); min-width:104px; flex:1 1 104px; border-radius:var(--r-2); }
-.markets-modal .id-ind__val { font-size:var(--fs-5); font-weight:var(--fw-bold); line-height:1.15; }
-.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:var(--s-1); font-size:var(--fs-4); font-variant-numeric:tabular-nums; line-height:1.15; }
+/* Markets modal: compact 2-line index chips forming a SLIM strip so the iframe
+   below keeps its space (STYLEGUIDE.md §5). Line 1 = label + today's move,
+   line 2 = 1-month move one font-step smaller (§2). Scoped to the Markets modal
+   so the Intra-Day chips stay unchanged. */
+.markets-modal .id-indicators { gap:var(--s-2); margin-bottom:0; }
+.markets-modal .id-ind { gap:1px; padding:var(--s-1) var(--s-2); min-width:0; border-radius:var(--r-2); }
+.markets-modal .id-ind__top { display:inline-flex; align-items:baseline; gap:var(--s-1); }
+.markets-modal .id-ind__val { font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1.15; }
+.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-2); font-variant-numeric:tabular-nums; line-height:1.15; }
 .markets-modal .id-ind__m1tag { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; }
 .id-toolbar { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
 .id-refresh {

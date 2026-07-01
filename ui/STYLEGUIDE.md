@@ -121,9 +121,21 @@ Vorbild: `chipLink()` in `candidate-list.js` → `.link-chip`.
 ## 5. Panels / Daten-Reihen
 
 - Ein **Panel/Indikator-Streifen** legt seine Items in **einer horizontalen,
-  umbrechenden Zeile** an (`display:flex; gap:var(--s-3); flex-wrap:wrap`) –
+  umbrechenden Zeile** an (`display:flex; gap:var(--s-2); flex-wrap:wrap`) –
   nicht vertikal gestapelt. Vorbild: `.id-indicators` mit `.id-ind`-Kacheln.
-- Jedes Item ist ein kompakter Stat-Block nach Abschnitt 2.
+
+### Ein Panel ist ein **schmaler Streifen** (harte Regel)
+Sitzt ein Panel **über Primärinhalt** (Tabelle, iframe, Chart), darf es diesem
+**keinen nennenswerten Platz nehmen**. Der darunterliegende Inhalt ist die
+Hauptsache, der Streifen nur Kontext. Deshalb:
+
+- **Kompakt halten, nicht vergrößern.** Kacheln nicht „größer machen, damit man
+  besser sieht" – das war der Fehler. Hauptwert **≤ `--fs-3`**, Padding
+  **≤ `--s-1` vertikal**, `line-height ≈ 1.15`, **max. 2 Zeilen** pro Kachel.
+- Um Höhe zu sparen, darf das **Label mit dem Hauptwert in einer Zeile** stehen
+  (`Label +0,5 %`), der Nebenwert kommt darunter (eine Stufe kleiner, §2).
+- Kacheln **nicht auf volle Breite dehnen** (`flex:1 …` vermeiden), sonst wirkt
+  der Streifen massig. Natürliche Breite + Umbruch genügt.
 - Panels sitzen im dafür vorgesehenen Container (z. B. **Markets-Modal**), nicht
   in einen kleinen iframe gequetscht.
 
@@ -177,20 +189,19 @@ Touch-Ziele ≥ 32px. Hover/aktiv über Token-Farben, nicht über feste Werte.
 
 ## 10. Worked Example – Index-Kachel (Markets-Modal)
 
-Zielbild für die DAX/NASDAQ/NIKKEI/VIX-Kacheln, styleguide-konform:
+Zielbild für die DAX/NASDAQ/NIKKEI/VIX-Kacheln: **kompakt, schmaler Streifen**
+(2 Zeilen), damit der iframe darunter Platz behält.
 
 ```
-┌───────────┐
-│ DAX       │  ← Label  --fs-1, --muted, --fw-bold
-│ +0,5 %    │  ← Hauptwert (heute) groß, --fw-bold, tabular-nums
-│ +4,2 % 1M │  ← Nebenwert (1M) eine Stufe kleiner, „1M" als --muted-Tag
-└───────────┘
+┌────────────────┐  ┌────────────────┐
+│ DAX   +0,5 %   │  │ VIX   +1,1 %   │  ← Zeile 1: Label + heute (--fs-3, bold)
+│ +4,2 % 1M      │  │ −12,0 % 1M     │  ← Zeile 2: 1M, eine Stufe kleiner (--fs-2)
+└────────────────┘  └────────────────┘
 ```
-- Kacheln in **einer** flex-Zeile (`.id-indicators`), nicht gestapelt.
+- Kacheln in **einer** flex-Zeile (`.id-indicators`), kompakt, **nicht** auf
+  volle Breite gedehnt.
+- Hauptwert ≤ `--fs-3`, Padding ≤ `--s-1` vertikal → Streifen bleibt schmal (§5).
 - Farbe der Werte über `.pos`/`.neg`.
-- Etwaige Links (TradingView der Kachel, PreMarkets) als **Icon-Only** aus
-  `icons.js` – kein Textlabel, kein Emoji.
-```
-```
+- Links (PreMarkets etc.) als **Icon-Only** aus `icons.js` – kein Text, kein Emoji.
 
 _Änderungen an diesem Guide ebenfalls vorab im Chat abstimmen._
