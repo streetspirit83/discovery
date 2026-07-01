@@ -75,3 +75,15 @@ Never propose or implement adapters that require a paid subscription or API key 
 
 ### Diagnose before you assume it's a bug
 Unexpected behaviour (e.g. an item "disappearing" after an action) is often intended behaviour with a missing UX affordance (a toast, a redirect, a drawer close). Check the intended flow first before writing fix code.
+
+## Git Workflow
+
+### Always promote finished work to `main` yourself — don't ask
+The user has given standing permission to push to `main`. When a unit of work is complete and verified, promote it without asking. Full sequence each time:
+1. Commit on the feature branch (`claude/<...>`).
+2. Push the feature branch.
+3. Merge the feature branch into `main` (resolve conflicts; verify the merge didn't silently drop changes — a parallel `main` once dropped a column + a function that were re-added in the same region).
+4. Push `main`.
+5. Fast-forward the feature branch back to `main` so the next round starts clean.
+
+Pushing to `main` triggers both deploys (GitHub Pages UI + Netlify backend), so batch Netlify-touching changes first (see "Netlify deploys cost credits").

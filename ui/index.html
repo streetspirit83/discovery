@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discovery Workspace</title>
-  <link rel="stylesheet" href="styles.css?v=20260622g">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260627i">
 </head>
 <body>
 <div id="app">
@@ -22,6 +25,10 @@
   </header>
 
   <nav class="subbar" aria-label="Spaltenansicht">
+    <button class="subnav-alert" id="subnav-alert" aria-label="Alert-Übersicht" title="Alert-Übersicht">
+      <span id="subnav-alert-icon"></span>
+      <span class="alert-badge-count" id="alert-badge-count" hidden></span>
+    </button>
     <div class="segmented" id="view-switch" role="tablist"></div>
     <span id="mode-badge" class="mode-badge" style="margin-left:auto;flex-shrink:0"></span>
   </nav>
@@ -43,11 +50,20 @@
 
   <nav class="botnav" aria-label="Hauptnavigation">
     <button class="botnav__slot botnav__slot--active" id="nav-home">
-      <span id="nav-home-icon"></span><span>Intra-Day</span>
+      <span id="nav-home-icon"></span><span>Alerts</span>
     </button>
     <button class="botnav__slot" id="nav-bucket" aria-haspopup="dialog">
       <span id="nav-bucket-icon"></span>
       <span class="botnav__bucket-label" id="nav-bucket-label">Inbox</span>
+    </button>
+    <a class="botnav__slot" id="nav-portfolio" href="https://merkliste-app.netlify.app/">
+      <span id="nav-portfolio-icon"></span><span>Portfolio</span>
+    </a>
+    <button class="botnav__slot" id="nav-markets" aria-haspopup="dialog">
+      <span id="nav-markets-icon"></span><span>Markets</span>
+    </button>
+    <button class="botnav__slot" id="nav-monitor" aria-haspopup="dialog">
+      <span id="nav-monitor-icon"></span><span>Monitor</span>
     </button>
   </nav>
 </div>
@@ -60,6 +76,6 @@
 
 <script src="//cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
-<script type="module" src="app.js?v=20260622g"></script>
+<script type="module" src="app.js?v=20260627i"></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/query2\.finance\.yahoo\.com\//,
   /^https:\/\/scanner\.tradingview\.com\//,
   /^https:\/\/www\.ls-tc\.de\//,
+  /^https:\/\/merkliste-app\.netlify\.app\//,
 ];
 
 function isAllowed(url) {

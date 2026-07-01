@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js';
+import { icons } from '../lib/icons.js?v=20260625l';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -7,8 +7,9 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260622f';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
+import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -244,12 +245,25 @@ function sortValue(c, col) {
     case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
     case 'ls_price':    return c.ls_quote?.price ?? null;
     case 'ls_chg':      return c.ls_quote?.change_pct ?? null;
+    case 'mk_entry':    return c.mk_entry ?? null;
+    case 'mk_pl':       return plData(c)?.pct ?? null;
+    case 'range52':     return rangePos(c.tv_data) ?? null;
+    case 'atrp': {       // sort by current spread, signed → green (up) to red (down)
+      const a = c.tv_data?.atrp;
+      const ch = c.ls_quote?.change_pct ?? c.tv_data?.change_1d;
+      return (a > 0 && ch != null) ? ch / a : null;
+    }
+    case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
     case 'tv_ema20':  return tv?.ema20 ?? null;
     case 'tv_ema50':  return tv?.ema50 ?? null;
     case 'tv_ema200': return tv?.ema200 ?? null;
+    case 'tv_sma20':  return tv?.sma20 ?? null;
+    case 'tv_sma50':  return tv?.sma50 ?? null;
+    case 'tv_sma100': return tv?.sma100 ?? null;
+    case 'tv_sma200': return tv?.sma200 ?? null;
     case 'tv_macd':   return tv?.macd ?? null;
     case 'tv_adx':    return tv?.adx ?? null;
     case 'tv_cci':    return tv?.cci20_1m ?? null;
@@ -305,9 +319,10 @@ const VIEWS = {
     { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
     { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
     { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
-    { key:'tv_ema20',   label:'EMA20',  title:'EMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema20) },
-    { key:'tv_ema50',   label:'EMA50',  title:'EMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema50) },
-    { key:'tv_ema200',  label:'EMA200', title:'EMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.ema200) },
+    { key:'tv_sma20',   label:'SMA20',  title:'SMA 20',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma20) },
+    { key:'tv_sma50',   label:'SMA50',  title:'SMA 50',                           num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma50) },
+    { key:'tv_sma100',  label:'SMA100', title:'SMA 100',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma100) },
+    { key:'tv_sma200',  label:'SMA200', title:'SMA 200',                          num:true, fmt:c=>fmtPrice(c, c.tv_data?.sma200) },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
     { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },
@@ -353,16 +368,42 @@ const VIEWS = {
   ],
 };
 
+// Score view: all scoring columns (Standard keeps only the headline Score) plus
+// the performance + raw-metric columns folded in for a single analytical deep-dive.
+VIEWS.score = [
+  { key:'tv_overall_score',        label:'Score',  title:'Overall Score 0–100', num:true, fmt:c=>renderOverallScore(liveOverallScore(c.tv_data)) },
+  { key:'tv_trend_strength_score', label:'Stärke', title:'Trend Strength Score 0–100', num:true, fmt:c=>renderTrendStrengthScore(c.tv_data?.trend_strength_score) },
+  { key:'tv_health_score',         label:'Health', title:'Financial Health Score 0–100', num:true, fmt:c=>renderHealthScore(liveHealthScore(c.tv_data)) },
+  { key:'tv_cycle_score',          label:'PCHS',   title:'Price Cycle & Historical Position Score 0–100', num:true, fmt:c=>renderCycleScore(c.tv_data?.cycle_score) },
+  { key:'momentum',                label:'Mom',    title:'Momentum-Punkte 0–100', num:true, fmt:c=>renderMomentumCheck(c.momentum_check) },
+  { key:'tv_entry_score',          label:'Entry',  title:'Entry Timing Score 0–100', num:true, fmt:c=>renderEntryScore(liveEntryScore(c.tv_data)) },
+  { key:'tv_rating1m',             label:'Trend',  title:'Empfehlung 1 Monat (Trend)', num:true, fmt:c=>{ const r=c.tv_data?.recommend_all_1m; return `<span class="tv-rating-txt--${tvRatingClass(r)}">${r!=null?`${tvRatingGlyph(r)} ${fmtNum(r,2)}`:'—'}</span>`; } },
+  ...VIEWS.performance,
+  ...VIEWS.metrics,
+];
+
+// Meta view: identity + context columns moved out of the Standard view.
+VIEWS.meta = [
+  { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:c=>`<span class="name-cell" title="${c.name ?? ''}">${c.name ?? '—'}</span>` },
+  { key:'sector',      label:'Sektor',         title:'Sektor', num:false, fmt:c=>`<span class="sector-cell">${c.sector ?? '—'}</span>` },
+  { key:'sources',     label:'Quellen',        title:'Signal-Quellen', num:false, fmt:c=>renderSourceBadges(c.sources) },
+  { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(c.links?.tradingview,TV_LOGO,'TradingView','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
+  { key:'discovered',  label:'in',             title:'Erstmals entdeckt', num:false, fmt:c=>`<span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>` },
+  { key:'signal_text', label:'Letztes Signal', title:'Letztes Signal aus den Quellen', num:false, fmt:c=>`<span class="signal-text">${getLatestSignal(c)}</span>` },
+  { key:'currency',    label:'Wä',        title:'Börsenwährung', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
+];
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export class CandidateList {
-  constructor({ onSelect, onAction, onBulkAction, onSelectionChange }) {
+  constructor({ onSelect, onAction, onBulkAction, onSelectionChange, onAfterRender }) {
     this.onSelect          = onSelect;
     this.onAction          = onAction;
     this.onBulkAction      = onBulkAction;
     this.onSelectionChange = onSelectionChange;
+    this.onAfterRender     = onAfterRender;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -391,6 +432,10 @@ export class CandidateList {
     this.filters[key] = value;
     this.selected.clear();
     this.showSelectedOnly = false;
+    // When a filter is active, auto-select the visible rows so bulk actions
+    // (e.g. delete all „nicht handelbar") can be applied immediately.
+    const anyActive = Object.values(this.filters).some((v) => v !== '' && v != null);
+    if (anyActive) for (const c of this.getFiltered()) this.selected.add(c.id);
     this.renderRows();
     this.renderBulkBar();
   }
@@ -444,13 +489,22 @@ export class CandidateList {
   // Lang & Schwarz intraday quote (EUR, the Trade-Republic venue) for the given
   // candidates. Async (network via proxy); returns a bulk-update list.
   async runLsQuote(ids, opts) {
+    const idSet = new Set(ids);
+    const targets = this.candidates.filter((c) => idSet.has(c.id));
+    // Keep any existing values visible and just pulse them while fetching; only
+    // show the blank placeholder on the first-ever fetch (no prior price).
+    targets.forEach((c) => {
+      c.ls_quote = (c.ls_quote && c.ls_quote.price != null)
+        ? { ...c.ls_quote, _fetching: true }
+        : { loading: true };
+    });
+    this.renderRows();
     const updates = [];
-    for (const c of this.candidates) {
-      if (!ids.includes(c.id)) continue;
+    for (const c of targets) {
       c.ls_quote = await fetchLsQuote(c, opts);
       updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
+      this.renderRows(); // resolve cell-by-cell → cascade fill animation
     }
-    this.renderRows();
     return updates;
   }
 
@@ -496,15 +550,19 @@ export class CandidateList {
     return `<th ${extra} aria-sort="${this.ariaSort(col)}">
       <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
   }
-  thNum(col, label, title = '') {
-    return `<th class="num" ${title ? `title="${title}"` : ''} aria-sort="${this.ariaSort(col)}">
+  thNum(col, label, title = '', extraClass = '') {
+    return `<th class="num ${extraClass}" ${title ? `title="${title}"` : ''} aria-sort="${this.ariaSort(col)}">
       <button class="sort-btn" data-sort="${col}">${label} ${this.sortGlyph(col)}</button></th>`;
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
+      if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
+      if (tr === 'no'        && c.tr_check?.tradable !== false) return false; // nur „nicht handelbar"
+      if (tr === 'yes'       && c.tr_check?.tradable !== true)  return false;
+      if (tr === 'unchecked' && c.tr_check?.tradable != null)   return false;
       if (state   && c.workspace_state !== state)               return false;
       if (sector === '__no_sector__' && c.sector)               return false;
       if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
@@ -554,27 +612,17 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      cols += this.th('name', 'Name', 'class="col-name-data"');
-      cols += this.th('sector', 'Sektor');
-      cols += this.th('sources', 'Quellen');
-      cols += `<th>Links</th>`;
-      cols += this.th('discovered', 'in');
-      cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
-      cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
-      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
+      // Lean decision view. Entry + P/L are always in the DOM but hidden via
+      // CSS unless the \u2605 (portfolio) filter is active (keeps header/row parity).
+      cols += this.thNum('mk_entry', 'Entry', 'Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio');
+      cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
-      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 aus allen Spalten: PerfW (15) + Perf1M (15) + \u03941T (5) + EBITDA% (15) + Trend (10) + St\u00e4rke (12) + Entry (10) + Health (10) + PCHS (8) \u00b7 fehlende Werte werden renormalisiert');
-      cols += this.thNum('momentum', 'Mom', 'Momentum-Punkte 0\u2013100: \u00d8Gr/M (25) + Beschleunigung (15) + ADX (20) + RSI 50\u201368 (15) + Aroon-Abstand (15) + Volumen (10) \u00b7 anteilige Punkte statt harter Gates, fehlende Daten renormalisiert \u00b7 Ampel: \u226565 gr\u00fcn, \u226540 gelb, sonst rot \u00b7 Earnings deckelt auf gelb \u00b7 Puls-Button in der Subbar berechnet f\u00fcr ausgew\u00e4hlte Ticker');
-      cols += this.thNum('tv_rating1m',    'Trend',   'Empfehlung 1 Monat (Trend)');
-      cols += this.thNum('tv_chg1d',       '\u03941T',     'Ver\u00e4nderung heute (1 Tag)');
-      cols += this.thNum('tv_perfw',        'PerfW',   'Perf.W \u2013 rollierend ~5 Handelstage zur\u00fcck');
-      cols += this.thNum('tv_perf1m',      'Perf1M',  'Perf.1M \u2013 rollierend ~21 Handelstage zur\u00fcck');
-      cols += this.thNum('tv_entry_score',  'Entry',   'Entry Timing Score 0\u2013100: RSI (25) + MACD (20) + Stochastic (20) + Preis vs EMA20 (20) + Bollinger (15) \u00b7 80+ = Prime Entry');
-      cols += this.thNum('tv_ebitdagrowth','EBITDA%', 'EBITDA YoY Wachstum');
-      cols += this.thNum('tv_health_score','Health',  'Financial Health Score 0\u2013100: Size & Scale (15) + YoY Growth (35) + Cash & Efficiency (25) + Leverage & Risk (25) \u00b7 75+ = Safe Allocation');
-      cols += this.thNum('tv_cycle_score',          'PCHS',   'Price Cycle & Historical Position Score 0\u2013100: Lifetime-Range + ATH-Drawdown + 52W-Zyklus + 6M-Trend');
-      cols += this.thNum('tv_trend_strength_score', 'St\u00e4rke', 'Trend Strength Score 0\u2013100: ADX (25) + Aroon (20) + SMA50>SMA200 (20) + Preis>SMA50 (15) + EMA10>EMA20 (10) + Volumen (10) \u00b7 85+ = Structural Power-Trend');
-      cols += `<th>Letztes Signal</th>`;
+      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Entry) \u00b7 % oben, absolut in \u20ac (mit entry_shares) darunter \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
+      cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
+      cols += `<th class="num">Verlauf</th>`;
+      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
+      cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c');
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += `<th class="num">Aktion</th>`;
     } else {
@@ -685,6 +733,9 @@ export class CandidateList {
   }
 
   renderRows() {
+    // Show the Einstand/P/L columns only in Standard view with the ★ filter on.
+    this.thead.closest('table')?.classList.toggle(
+      'show-portfolio-cols', this.viewMode === 'standard' && this.filters.broker === 'star');
     const rows = this.getSorted(this.getFiltered());
     this.tbody.innerHTML = '';
 
@@ -705,14 +756,20 @@ export class CandidateList {
       const isSelected = this.selected.has(c.id);
 
       const symHtml = `<div class="sym-cell">
-        <span class="sym-strong">${c.symbol}</span>
-        <span class="exch-tag">${c.exchange}</span>
-        ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
+        <div class="sym-cell__top">
+          <span class="sym-strong">${c.symbol}</span>
+          ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
+          ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
+        </div>
+        <span class="exch-tag exch-tag--sub">${c.exchange}</span>
       </div>`;
 
+      const alertCount = Array.isArray(c.alerts) ? c.alerts.filter((a) => a && a.enabled !== false).length : 0;
+      const trigSet = alertCount > 0;
       const actionTd = `<td class="num"><div class="row-actions">
         ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
         ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
+        <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? `Alerts bearbeiten (${alertCount} aktiv)` : 'Alert hinzufügen'}">${trigSet ? alertCount : '+'}</button>
       </div></td>`;
 
       const starTd = `<td class="num"><button class="act-btn act-btn--star${c.in_portfolio ? ' is-active' : ''}" data-action="toggleStar" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button></td>`;
@@ -723,40 +780,22 @@ export class CandidateList {
 
       let dataCols;
       if (this.viewMode === 'standard') {
-        const r   = tv?.recommend_all_1m;
-        const trendCell = `<span class="tv-rating-txt--${tvRatingClass(r)}">${r != null ? `${tvRatingGlyph(r)} ${fmtNum(r, 2)}` : '\u2014'}</span>`;
-        const linksTd = `<td><div class="link-cluster">
-            ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
-            ${chipLink(links.stocktwits,  ST_LOGO, 'StockTwits',  'link-chip--st')}
-            ${chipLink(links.yahoo,       YH_LOGO, 'Yahoo Finance','link-chip--yahoo')}
-          </div></td>`;
         dataCols =
-          `<td class="col-name-data"><span class="name-cell" title="${c.name}">${c.name}</span></td>` +
-          `<td><span class="sector-cell">${c.sector ?? '\u2014'}</span></td>` +
-          `<td>${renderSourceBadges(c.sources)}</td>` +
-          linksTd +
-          `<td><span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span></td>` +
-          brokerTd +
-          trCheckTd +
+          `<td class="num col-portfolio">${renderMkEntry(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
+          `<td class="num col-portfolio">${renderPL(c)}</td>` +
+          `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
+          `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
+          `<td class="num">${renderSignal(c)}</td>` +
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          `<td class="num">${renderMomentumCheck(c.momentum_check)}</td>` +
-          `<td class="num">${trendCell}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.change_1d)}">${fmtPct(tv?.change_1d)}</span></td>` +
-          `<td class="num"><span class="${posNegClass(tv?.perf_w)}">${fmtPct(tv?.perf_w)}</span></td>` +
-          `<td class="num"><span class="${posNegClass(tv?.perf_1m)}">${fmtPct(tv?.perf_1m)}</span></td>` +
-          `<td class="num">${renderEntryScore(liveEntryScore(tv))}</td>` +
-          `<td class="num"><span class="${posNegClass(tv?.ebitda_yoy_growth_fy)}">${tv?.ebitda_yoy_growth_fy != null ? fmtNum(tv.ebitda_yoy_growth_fy, 1) + '%' : '\u2014'}</span></td>` +
-          `<td class="num">${renderHealthScore(liveHealthScore(tv))}</td>` +
-          `<td class="num">${renderCycleScore(tv?.cycle_score)}</td>` +
-          `<td class="num">${renderTrendStrengthScore(tv?.trend_strength_score)}</td>` +
-          `<td><span class="signal-text">${getLatestSignal(c)}</span></td>` +
           starTd + actionTd;
       } else {
-        dataCols = VIEWS[this.viewMode].map((d) =>
-          `<td class="${d.num ? 'num' : ''}">${d.fmt(c)}</td>`
-        ).join('') + actionTd + starTd + brokerTd + trCheckTd;
+        dataCols = VIEWS[this.viewMode].map((d) => {
+          const heat = HEAT_KEYS.has(d.key) ? heatStyle(sortValue(c, d.key)) : '';
+          return `<td class="${d.num ? 'num' : ''}"${heat}>${d.fmt(c)}</td>`;
+        }).join('') + actionTd + starTd + brokerTd + trCheckTd;
       }
 
       const tr = document.createElement('tr');
@@ -794,6 +833,7 @@ export class CandidateList {
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
+      tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
 
       // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
       // it can be pasted into the Trade Republic app search.
@@ -828,6 +868,7 @@ export class CandidateList {
 
     this.syncSelectAll();
     this.renderBulkBar();
+    this.onAfterRender?.();
   }
 
   renderBulkBar() {
@@ -841,16 +882,17 @@ export class CandidateList {
     const ba = document.getElementById('bulk-actions');
     if (!ba) return;
     ba.innerHTML = `
-      <button class="bulk-btn bulk-btn--accent" id="bulk-tv-data">${icons.barChart2} TV Daten</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-tr-check">🛒 TR-Check</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-ls-quote">📈 LS-Kurs</button>
-      <button class="bulk-btn bulk-btn--neg"    id="bulk-dismiss">${icons.xMark} Ablehnen</button>
-      <button class="bulk-btn bulk-btn--pos"    id="bulk-promote">${icons.check} Promoten</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-export">↗ Export</button>
-      <button class="bulk-btn bulk-btn--ai"     id="bulk-enrich">${icons.sparkles} Enrich</button>
-      <button class="bulk-btn bulk-btn--accent" id="bulk-copy-prompt">📋 Research-Prompt</button>
-      <button class="bulk-btn bulk-btn--neg"    id="bulk-delete">${icons.trash} Löschen</button>
-      <button class="bulk-btn bulk-btn--neutral" id="bulk-clear" aria-label="Auswahl leeren">${icons.xMark}</button>`;
+      <button class="bulk-btn bulk-btn--icon bulk-btn--del" id="bulk-delete" title="Ausgewählte löschen" aria-label="Löschen">${icons.trash}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-clear" title="Auswahl leeren" aria-label="Auswahl leeren">${icons.xMark}</button>
+      <div class="bulk-spacer"></div>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-tv-data" title="TV-Daten laden" aria-label="TV-Daten"><img class="bulk-tvlogo" src="${TV_LOGO}" alt=""></button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-ls-quote" title="LS-Kurs laden" aria-label="LS-Kurs">${icons.activity}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-export" title="Exportieren" aria-label="Export">${icons.briefcase}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-promote" title="Promoten (Watchlist)" aria-label="Promoten">${icons.bookmark}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-dismiss" title="Ablehnen (Archiv)" aria-label="Ablehnen">${icons.archive}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-enrich" title="AI-Enrichment" aria-label="Enrich">${icons.sparkles}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-copy-prompt" title="Research-Prompt kopieren" aria-label="Research-Prompt">${icons.clipboard}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-tr-check" title="TR-Check (Trade Republic)" aria-label="TR-Check">${icons.cart}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
@@ -1024,20 +1066,100 @@ function renderTrCheck(c) {
 // display currency; carries the informative state tooltip.
 function lsPriceCell(c) {
   const q = c.ls_quote;
+  if (q?.loading) return '<span class="ls-loading" title="lädt…"></span>';
   if (!q)         return '<span class="muted-dash" title="Ungeprüft – „LS-Kurs“ in der Bulk-Leiste ausführen">—</span>';
   if (q.no_isin)  return '<span class="muted-dash" title="Keine ISIN – erst „TV Daten“ laden">—</span>';
   if (q.price == null) return `<span class="muted-dash" title="${q.error ?? 'Kein LS-Kurs'}">—</span>`;
   const sym = displayCurrency === 'USD' ? '$' : '€';
   const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
-  return `<span title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
+  return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
 }
 
 // LS change-vs-previous-close cell (Standard view).
 function lsChgCell(c) {
   const q = c.ls_quote;
   if (!q || q.change_pct == null) return '<span class="muted-dash">—</span>';
-  return `<span class="${posNegClass(q.change_pct)}">${fmtPct(q.change_pct)}</span>`;
+  return `<span class="${posNegClass(q.change_pct)}${q._fetching ? ' is-fetching' : ''}">${fmtPct(q.change_pct)}</span>`;
+}
+
+// Merkliste cost basis ("Einstand") — the manual entry price from the merkliste
+// portfolio (stored in EUR). Blank when the ticker isn't in the portfolio.
+function renderMkEntry(c) {
+  if (c.mk_entry == null) {
+    return '<span class="muted-dash" title="Nicht im Merkliste-Portfolio / kein Entry gepflegt">—</span>';
+  }
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const px  = fmtNum(c.mk_entry * convFromEur(), 2);
+  return `<span title="Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR)">${sym}${px}</span>`;
+}
+
+// ── Decision-view derived values + visuals ───────────────────────────────────
+
+// P/L of a portfolio ticker: live LS price (EUR) vs. merkliste Einstand (EUR).
+// pct needs entry+LS; absEur additionally needs entry_shares.
+function plData(c) {
+  const entry = c.mk_entry;
+  const ls    = c.ls_quote?.price;
+  if (entry == null || entry === 0 || ls == null) return null;
+  const pct    = (ls - entry) / entry * 100;
+  const absEur = c.mk_shares != null ? (ls - entry) * c.mk_shares : null;
+  return { pct, absEur };
+}
+
+function renderPL(c) {
+  const d = plData(c);
+  if (!d) return '<span class="muted-dash" title="Braucht Entry (Merkliste) + LS-Kurs">—</span>';
+  const cls = posNegClass(d.pct);
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  // Cell shows the % only; the absolute € lives in the tooltip.
+  const tip = `P/L ${fmtPct(d.pct)}`
+    + (d.absEur != null ? ` · ${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.absEur * convFromEur()), 2)}${sym}` : '')
+    + ` · Entry ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
+    + (c.mk_shares != null ? ` · ${c.mk_shares} St.` : ' · keine Stückzahl');
+  return `<span class="pl ${cls}" title="${tip}">${fmtPct(d.pct)}</span>`;
+}
+
+// Position of the current price within its 52-week range (0..1). Native currency
+// throughout (price + 52W hi/lo are all TV native), so no FX conversion needed.
+function rangePos(tv) {
+  const close = tv?.close_1m ?? tv?.close;
+  const hi = tv?.price_52_week_high, lo = tv?.price_52_week_low;
+  if (close == null || hi == null || lo == null || hi <= lo) return null;
+  return Math.min(1, Math.max(0, (close - lo) / (hi - lo)));
+}
+
+function render52wRange(tv) {
+  const pos = rangePos(tv);
+  if (pos == null) return '<span class="muted-dash">—</span>';
+  const close = tv.close_1m ?? tv.close;
+  const pct = Math.round(pos * 100);
+  const tip = `52W-Spanne: ${fmtNum(tv.price_52_week_low, 2)} … ${fmtNum(tv.price_52_week_high, 2)} · Kurs ${fmtNum(close, 2)} (${pct}% der Spanne)`;
+  return `<span class="range52" title="${tip}"><span class="range52__track"><span class="range52__dot" style="left:${pct}%"></span></span></span>`;
+}
+
+// Consolidated direction chip: momentum traffic-light + 1M trend arrow.
+function renderSignal(c) {
+  const v = c.momentum_check?.verdict ?? null;
+  const r = c.tv_data?.recommend_all_1m ?? null;
+  if (v == null && r == null) return '<span class="muted-dash">—</span>';
+  const dot   = `<span class="signal__dot signal__dot--${v ?? 'none'}"></span>`;
+  const arrow = r != null ? `<span class="tv-rating-txt--${tvRatingClass(r)}">${tvRatingGlyph(r)}</span>` : '';
+  const tip = `Momentum: ${v ?? 'n/a'} · Trend (1M): ${r != null ? fmtNum(r, 2) : 'n/a'}`;
+  return `<span class="signal" title="${tip}">${dot}${arrow}</span>`;
+}
+
+// % cell with a magnitude-scaled red/green background tint (heat-strip effect).
+function heatStyle(v) {
+  if (v == null) return '';
+  const a = Math.min(Math.abs(v) / 8, 1) * 0.30; // cap tint at ±8%
+  const rgb = v > 0 ? '34,197,94' : v < 0 ? '239,68,68' : '0,0,0';
+  return ` style="background:rgba(${rgb},${a.toFixed(3)})"`;
+}
+// Performance/change columns that get the heat-strip background in data views.
+const HEAT_KEYS = new Set(['tv_chg1d','tv_chg1w','tv_chg1m','tv_perfw','tv_perf1m','tv_perf3m','tv_perf6m','tv_growth6m']);
+function heatPctTd(v) {
+  return `<td class="num"${heatStyle(v)}><span class="${posNegClass(v)}">${fmtPct(v)}</span></td>`;
 }
 
 function renderMomentumCheck(mc) {
@@ -1059,7 +1181,9 @@ function renderMomentumCheck(mc) {
 function renderOverallScore(os) {
   if (!os) return '<span class="muted-dash">—</span>';
   const tip = `${os.label} (${Object.entries(os.breakdown).map(([k, v]) => `${k}:${v}`).join(' ')}) · Datenabdeckung ${os.coverage}/100`;
-  return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}</span>`;
+  const w = Math.max(0, Math.min(100, os.total));
+  return `<span class="overall-score overall-score--${os.labelCode}" title="${tip}">${os.total}` +
+    `<span class="score-gauge"><span class="score-gauge__fill" style="width:${w}%"></span></span></span>`;
 }
 
 function renderUpside(up, side) {

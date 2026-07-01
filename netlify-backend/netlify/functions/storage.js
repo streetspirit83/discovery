@@ -21,6 +21,7 @@ function emptyConfig() {
     schema_version: 'discovery-config-1.0',
     updated_at: new Date().toISOString(),
     presets: [],
+    alerts_muted: false,
   };
 }
 
@@ -122,17 +123,27 @@ export default async function handler(req) {
     if (!config || typeof config !== 'object') {
       return respond(400, { ok: false, error: 'Missing config' });
     }
-    if (!Array.isArray(config.presets)) {
-      return respond(400, { ok: false, error: 'config.presets must be an array' });
-    }
+    // Merge with existing so a partial write (e.g. only alerts_muted from the
+    // Alert-Overview) doesn't clobber presets, and vice-versa.
+    let existing;
+    try { existing = await store.get(CONFIG_KEY, { type: 'json' }); } catch { existing = null; }
+    existing = existing ?? emptyConfig();
     const doc = {
       schema_version: 'discovery-config-1.0',
-      presets: config.presets,
+      presets: Array.isArray(config.presets) ? config.presets : (existing.presets ?? []),
+      alerts_muted: typeof config.alerts_muted === 'boolean' ? config.alerts_muted : (existing.alerts_muted ?? false),
       updated_at: new Date().toISOString(),
     };
     await store.setJSON(CONFIG_KEY, doc);
-    log('info', 'storage: write_config', { presets: doc.presets.length });
+    log('info', 'storage: write_config', { presets: doc.presets.length, alerts_muted: doc.alerts_muted });
     return respond(200, { ok: true });
+  }
+
+  // --- op: read_ls_history (nightly LS intraday snapshots, 10-day rolling) ---
+  if (op === 'read_ls_history') {
+    let doc;
+    try { doc = await store.get('discovery-ls-history', { type: 'json' }); } catch { doc = null; }
+    return respond(200, { ok: true, data: doc ?? { history: {}, updated_at: null } });
   }
 
   // --- op: read ---

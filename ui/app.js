@@ -2,17 +2,21 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260622f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260622e';
+import { CandidateList } from './components/candidate-list.js?v=20260627h';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260627e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderIntradayModal } from './components/intraday-modal.js?v=20260622g';
+import { renderAlertModal } from './components/alert-modal.js?v=20260627i';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260627h';
+import { triggeredCount } from './lib/alerts.js?v=20260627h';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260625p';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260622b';
-import { fetchLsQuote } from './lib/ls-intraday.js?v=20260622f';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260627g';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
@@ -20,6 +24,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -36,7 +41,10 @@ const L = {
   settings: luc('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
   home:     luc('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
   intraday: luc('<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>'),
+  bell:     luc('<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>'),
   inbox:    luc('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+  portfolio:luc('<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>'),
+  markets:  luc('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>'),
   archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
   bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
@@ -46,12 +54,12 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
   // Migrate persisted view modes from the old 3-view layout
-  if (!['standard', 'performance', 'price', 'metrics', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  if (!['standard', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
   return s;
 })();
 function saveUiState() {
@@ -65,9 +73,11 @@ let allBlobs = { inbox: null, archive: null, export: null, watch: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
+let merklisteMaps = null; // { bySym } of entry_price_manual from merkliste "main"
 
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
+let returnToMonitor = null; // set when a detail sheet is opened from the Monitor dashboard
 let bucketSheetOpen = false;
 let runSheetOpen = false;
 
@@ -231,75 +241,63 @@ async function runLsQuoteForSelection(idsArg) {
   }
 }
 
-// ── Intra-Day modal (Home nav slot) ─────────────────────────────────────────────
-// When the detail sheet is opened from here, closing it should bring this modal
-// back (see closeDetailSheet).
-let reopenIntradayOnDetailClose = false;
+// ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
+// Replaces the former Intra-Day modal: lists every candidate that has alerts,
+// with a global mute and per-alert enable/disable. Persists enabled-changes.
+function persistAlerts(id, alerts) {
+  if (useMock || !storageClient) return Promise.resolve();
+  return storageClient.updateCandidate(currentBlobType, id, { alerts });
+}
 
-function openIntradayModal() {
+function openAlertModal() {
   const blob = allBlobs[currentBlobType];
-  // Mirror the main list's active filters (sector/cap/broker/score/selection).
-  const candidates = candidateList ? candidateList.getFiltered() : (blob?.candidates ?? []);
-  renderIntradayModal({
+  const candidates = candidateList ? candidateList.candidates : (blob?.candidates ?? []);
+  renderAlertModal({
     candidates,
     toast,
-    // One-time prep before a refresh sweep: gate on backend, backfill any
-    // missing ISINs (needed for the LS lookup) in a single TV call.
-    onRefreshPrepare: async (ids) => {
-      if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return { ok: false }; }
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return { ok: false }; }
-      const b = allBlobs[currentBlobType];
-      const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
-      const missing = (b?.candidates ?? []).filter(
-        (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
-      );
-      if (missing.length) {
-        toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 8000);
-        try {
-          const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
-          const ups = [];
-          for (const [cid, upd] of enr) {
-            const c = missing.find((x) => x.id === cid);
-            if (c) { Object.assign(c, upd); ups.push({ candidate_id: cid, updates: upd }); }
-          }
-          if (ups.length) await storageClient.bulkUpdateCandidates(currentBlobType, ups).catch(() => {});
-        } catch (err) { console.warn('[Intraday] ISIN backfill failed:', err.message); }
-      }
-      return { ok: true };
-    },
-    // Fetch ONE ticker's LS quote (mutates the candidate, persists best-effort).
-    // The modal awaits these one at a time and animates each row as it lands.
-    onRefreshTicker: async (candidate) => {
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (!backendUrl || !secret) return null;
-      candidate.ls_quote = await fetchLsQuote(candidate, { backendUrl, secret });
-      if (storageClient) {
-        storageClient.updateCandidate(currentBlobType, candidate.id, { ls_quote: candidate.ls_quote }).catch(() => {});
-      }
-      return candidate.ls_quote;
-    },
-    // Indices + VIX (DAX / NASDAQ / NIKKEI / VIX) via the TV scanner.
-    onFetchIndicators: async () => {
-      const backendUrl = localStorage.getItem('discovery_backend_url');
-      const secret     = localStorage.getItem('discovery_secret');
-      if (useMock || !backendUrl || !secret) return null;
-      return fetchMarketIndicators({ backendUrl, secret });
-    },
-    // Persist a row's trigger (price markers + stop-loss) when configured.
-    onSaveTrigger: async (id, trigger) => {
-      if (useMock || !storageClient) return;
-      await storageClient.updateCandidate(currentBlobType, id, { intraday_trigger: trigger });
-    },
-    // Tap a symbol → open the candidate detail sheet; remember to reopen on close.
-    onOpenDetail: (candidate) => {
-      reopenIntradayOnDetailClose = true;
-      candidateDetail?.show(candidate);
-      openDetailSheet();
+    onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+    onSetMute: (m) => (useMock || !storageClient ? Promise.resolve() : storageClient.writeConfig({ alerts_muted: m })),
+    // Tap a row → open the alert editor (add / modify alerts).
+    onOpenEditor: (candidate) => {
+      openTriggerEditor(candidate, {
+        onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+        onSaved: () => { candidateList?.renderRows(); updateAlertBadge(); },
+        toast,
+      });
     },
   });
+}
+
+// Red sub-nav badge: number of currently-triggered alerts (hidden when 0).
+function updateAlertBadge() {
+  const badge = document.getElementById('alert-badge-count');
+  if (!badge) return;
+  const n = candidateList ? triggeredCount(candidateList.candidates) : 0;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+}
+
+// ── Merkliste portfolio import (Einstand column) ────────────────────────────────
+// Pull entry_price_manual from the merkliste "main" blob and attach it to the
+// matching candidates as `mk_entry` (matched by symbol). Held in memory only
+// (merkliste stays the source of truth); re-fetched on load and manual refresh.
+async function loadMerklisteEntries(force = false) {
+  if (useMock) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  if (force || !merklisteMaps) {
+    try {
+      merklisteMaps = await fetchMerklisteEntries({ backendUrl, secret });
+    } catch (err) {
+      console.warn('[merkliste] entry import failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!merklisteMaps || !blob?.candidates || !candidateList) return;
+  applyMerklisteEntries(blob.candidates, merklisteMaps);
+  candidateList.renderRows(); // mutate-in-place re-render; keeps selection intact
 }
 
 // ── Mode badge ─────────────────────────────────────────────────────────────────
@@ -342,18 +340,17 @@ function renderTopbar() {
 function renderSubbar() {
   const tabs = [
     { key: 'standard',     label: 'Standard' },
-    { key: 'performance',  label: 'Performance' },
+    { key: 'score',        label: 'Score' },
+    { key: 'meta',         label: 'Meta' },
     { key: 'price',        label: 'Preis' },
-    { key: 'metrics',      label: 'Metriken' },
     { key: 'fundamentals', label: 'Fundamental' },
   ];
   const vs = document.getElementById('view-switch');
-  vs.innerHTML = tabs.map(({ key, label }) =>
-    `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
-  ).join('') +
-    `<button class="seg-btn seg-btn--momentum" id="btn-momentum" title="Momentum-Check (Schritte 1–3) für ausgewählte Ticker berechnen → Ampel in Spalte „Mom"">${L.activity}</button>` +
+  vs.innerHTML =
+    tabs.map(({ key, label }) =>
+      `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
+    ).join('') +
     `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
-  vs.querySelector('#btn-momentum').addEventListener('click', () => runMomentumCheckForSelection());
   vs.querySelector('#currency-toggle').addEventListener('click', () => {
     uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
     saveUiState();
@@ -374,6 +371,15 @@ function renderSubbar() {
       });
     });
   });
+
+  // Sub-nav alert button (static element) — wire once.
+  const alertBtn = document.getElementById('subnav-alert');
+  if (alertBtn && !alertBtn.dataset.wired) {
+    alertBtn.dataset.wired = '1';
+    document.getElementById('subnav-alert-icon').innerHTML = L.bell;
+    alertBtn.addEventListener('pointerup', openAlertModal);
+  }
+  updateAlertBadge();
 }
 
 function renderFilterbar() {
@@ -382,37 +388,53 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
-    <select class="filter-select" id="filter-broker" title="Filter nach Broker- oder Portfolio-Markierung">
-      <option value="">Alle Markierungen</option>
-      <option value="broker"${uiState.fBroker === 'broker' ? ' selected' : ''}>✓ Broker</option>
-      <option value="star"${uiState.fBroker === 'star' ? ' selected' : ''}>★ Portfolio</option>
-      <option value="none"${uiState.fBroker === 'none' ? ' selected' : ''}>— Ohne Broker</option>
-    </select>
-    <select class="filter-select" id="filter-score">
-      <option value="">Alle Scores</option>
+    <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
+    <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>
+    <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
+      <option value="">Score</option>
       <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
       <option value="70"${uiState.fScore === '70' ? ' selected' : ''}>Score 70–79</option>
       <option value="60"${uiState.fScore === '60' ? ' selected' : ''}>Score 60–69</option>
       <option value="40"${uiState.fScore === '40' ? ' selected' : ''}>Score 40–59</option>
       <option value="0"${uiState.fScore === '0' ? ' selected' : ''}>Score &lt; 40</option>
     </select>
-    <select class="filter-select" id="filter-sector">
-      <option value="">Alle Sektoren</option>
+    <select class="filter-select" id="filter-sector" title="Filter nach Sektor">
+      <option value="">Sectors</option>
       <option value="__no_sector__"${uiState.fSector === '__no_sector__' ? ' selected' : ''}>— Ohne Sektor</option>
       ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
     </select>
-    <select class="filter-select" id="filter-cap">
-      <option value="">Alle Größen</option>
+    <select class="filter-select" id="filter-cap" title="Filter nach Marktkapitalisierung">
+      <option value="">Size</option>
       <option value="micro"${uiState.fCap === 'micro' ? ' selected' : ''}>Micro</option>
       <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
       <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
       <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
+    </select>
+    <select class="filter-select" id="filter-tr" title="Filter nach Trade-Republic-Handelbarkeit">
+      <option value="">TR</option>
+      <option value="no"${uiState.fTr === 'no' ? ' selected' : ''}>✗ nicht handelbar</option>
+      <option value="yes"${uiState.fTr === 'yes' ? ' selected' : ''}>✓ handelbar</option>
+      <option value="unchecked"${uiState.fTr === 'unchecked' ? ' selected' : ''}>? ungeprüft</option>
     </select>`;
 
-  fb.querySelector('#filter-broker').addEventListener('change', (e) => {
-    uiState.fBroker = e.target.value;
+  fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
+    const on = uiState.fBroker !== 'star';
+    uiState.fBroker = on ? 'star' : '';
     saveUiState();
     candidateList.setFilter('broker', uiState.fBroker);
+    const btn = fb.querySelector('#portfolio-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+
+  fb.querySelector('#alerts-toggle').addEventListener('click', () => {
+    const on = uiState.fAlerts !== 'active';
+    uiState.fAlerts = on ? 'active' : '';
+    saveUiState();
+    candidateList.setFilter('alerts', uiState.fAlerts);
+    const btn = fb.querySelector('#alerts-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
   });
 
   fb.querySelector('#filter-score').addEventListener('change', (e) => {
@@ -431,6 +453,12 @@ function renderFilterbar() {
     uiState.fCap = e.target.value;
     saveUiState();
     candidateList.setFilter('capSize', uiState.fCap);
+  });
+
+  fb.querySelector('#filter-tr').addEventListener('change', (e) => {
+    uiState.fTr = e.target.value;
+    saveUiState();
+    candidateList.setFilter('tr', uiState.fTr);
   });
 
   renderSelectedPill();
@@ -466,9 +494,12 @@ function renderSelectedPill() {
 function renderBotnav() {
   const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark };
   const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
-  document.getElementById('nav-home-icon').innerHTML   = L.intraday;
+  document.getElementById('nav-home-icon').innerHTML   = L.bell;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
+  document.getElementById('nav-portfolio-icon').innerHTML = L.portfolio;
+  document.getElementById('nav-markets-icon').innerHTML   = L.markets;
+  document.getElementById('nav-monitor-icon').innerHTML   = L.activity;
 }
 
 // ── Sheet management ───────────────────────────────────────────────────────────
@@ -486,17 +517,17 @@ function closeDetailSheet() {
   detailSheetOpen = false;
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
-  if (reopenIntradayOnDetailClose) {
-    reopenIntradayOnDetailClose = false;
-    openIntradayModal(); // came from Intra-Day → bring it back
-  }
+  // If the sheet was opened from the Monitor dashboard, restore it (X or swipe).
+  if (returnToMonitor) { const back = returnToMonitor; returnToMonitor = null; back(); }
 }
 
-// Mobile-friendly swipe-to-dismiss for a right-edge sheet: drag right to close.
-// Only acts on clearly-horizontal gestures so vertical scrolling still works.
-function initSheetSwipe(el, onDismiss) {
+// Mobile swipe navigation for the detail sheet: swipe left → next candidate,
+// swipe right → previous. Gives a small damped drag feedback, then snaps back
+// and steps to the neighbour. Only acts on clearly-horizontal gestures so
+// vertical scrolling still works.
+function initSheetSwipe(el, { onPrev, onNext } = {}) {
   let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horizontal = false;
-  const THRESHOLD = 70;
+  const THRESHOLD = 60;
 
   el.addEventListener('touchstart', (e) => {
     if (!el.classList.contains('is-open') || e.touches.length !== 1) return;
@@ -514,28 +545,18 @@ function initSheetSwipe(el, onDismiss) {
       decided = true;
       horizontal = Math.abs(dx) > Math.abs(dy);
     }
-    if (!horizontal) return;          // vertical scroll → leave alone
-    if (dx < 0) dx = 0;               // only drag toward the closing edge (right)
-    el.style.transform = `translateX(${dx}px)`;
+    if (!horizontal) return;                  // vertical scroll → leave alone
+    el.style.transform = `translateX(${(dx * 0.35).toFixed(0)}px)`; // damped feedback
   }, { passive: true });
 
   const end = () => {
     if (!dragging) return;
     dragging = false;
     el.style.transition = '';
-    if (horizontal && dx > THRESHOLD) {
-      el.style.transform = 'translateX(100%)'; // finish sliding out, then close
-      let done = false;
-      const finish = () => {
-        if (done) return; done = true;
-        onDismiss();             // flips state + removes is-open (class also = 100%)
-        el.style.transform = ''; // clear inline; class keeps it off-screen
-      };
-      el.addEventListener('transitionend', (ev) => { if (ev.propertyName === 'transform') finish(); }, { once: true });
-      setTimeout(finish, 350);   // fallback if transitionend doesn't fire
-    } else {
-      el.style.transform = '';   // snap back to open position
-    }
+    el.style.transform = '';                  // always snap back; navigation swaps content
+    if (!horizontal) return;
+    if (dx <= -THRESHOLD) onNext?.();
+    else if (dx >= THRESHOLD) onPrev?.();
   };
   el.addEventListener('touchend', end);
   el.addEventListener('touchcancel', end);
@@ -649,6 +670,8 @@ async function switchBlob(blobType) {
   uiState.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
+  // Carry merkliste entry prices onto this bucket's candidates before first render.
+  if (merklisteMaps) applyMerklisteEntries(allBlobs[blobType].candidates, merklisteMaps);
   candidateList.setData(allBlobs[blobType].candidates);
   renderBotnav();
   renderFilterbar();
@@ -822,6 +845,33 @@ async function handleAction(action, candidate, extras = {}) {
       }
     }
     toast('Links aktualisiert', 'success', 1500);
+  }
+
+  if (action === 'openTrigger') {
+    openTriggerEditor(candidate, {
+      onSaveAlerts: persistAlerts,
+      onSaved: () => candidateList.renderRows(),
+      toast,
+    });
+    return;
+  }
+
+  if (action === 'saveMerklisteSymbol') {
+    candidate.merkliste_symbol = extras.value;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { merkliste_symbol: extras.value });
+      } catch (err) {
+        toast(`Mapping speichern fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    // Re-apply the merkliste portfolio map so Einstand/P/L pick up the new key.
+    if (merklisteMaps) {
+      applyMerklisteEntries(blob.candidates, merklisteMaps);
+      candidateList.renderRows();
+    }
+    toast('Merkliste-Mapping gespeichert', 'success', 1500);
   }
 
   if (action === 'enriched') {
@@ -1097,13 +1147,19 @@ async function init() {
     onAction: handleAction,
     onBulkAction: handleBulkAction,
     onSelectionChange: () => renderSelectedPill(),
+    onAfterRender: () => updateAlertBadge(),
   });
 
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
     onAction: handleAction,
     onClose: closeDetailSheet,
+    // Siblings = the candidates in the current table sort order, for prev/next.
+    getSiblings: () => (candidateList ? candidateList.getSorted(candidateList.getFiltered()) : []),
   });
-  initSheetSwipe(document.getElementById('detail-sheet'), () => candidateDetail.hide());
+  initSheetSwipe(document.getElementById('detail-sheet'), {
+    onPrev: () => candidateDetail.navigate(-1),
+    onNext: () => candidateDetail.navigate(1),
+  });
 
   // Apply saved view mode before first data load
   if (uiState.view !== 'standard') {
@@ -1119,6 +1175,8 @@ async function init() {
     capSize: uiState.fCap    ?? '',
     broker:  uiState.fBroker ?? '',
     score:   uiState.fScore  ?? '',
+    tr:      uiState.fTr     ?? '',
+    alerts:  uiState.fAlerts ?? '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,
@@ -1132,6 +1190,10 @@ async function init() {
   await switchBlob(currentBlobType);
 
   updateMockBadge();
+
+  // On load: pull merkliste "Einstand"/shares only. LS quotes are fetched
+  // on demand (LS-Kurs button) — no automatic LS fetch on load.
+  loadMerklisteEntries(true);
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
   document.getElementById('scrim').addEventListener('pointerup', () => {
@@ -1150,6 +1212,7 @@ async function init() {
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
     allBlobs[currentBlobType] = null;
     await switchBlob(currentBlobType);
+    await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
     toast('Aktualisiert', 'info', 1500);
   });
 
@@ -1191,10 +1254,37 @@ async function init() {
   // ── Botnav ───────────────────────────────────────────────────────────────────
   document.getElementById('nav-home').addEventListener('pointerup', () => {
     document.getElementById('content').scrollTo({ top: 0, behavior: 'smooth' });
-    openIntradayModal();
+    openAlertModal();
   });
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
+
+  // Markets slot → open the Markets modal (indices + embedded Markets sub-page).
+  document.getElementById('nav-markets').addEventListener('pointerup', () => {
+    renderMarketsModal({
+      onFetchIndicators: async () => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchMarketIndicators({ backendUrl, secret });
+      },
+    });
+  });
+
+  // Monitor slot → dashboard for the active bucket (score movers, perf, signals).
+  document.getElementById('nav-monitor').addEventListener('pointerup', () => {
+    const candidates = allBlobs[currentBlobType]?.candidates ?? [];
+    renderDashboardModal({
+      candidates,
+      bucket: currentBlobType,
+      onOpenDetail: (candidate, ctrl) => {
+        ctrl?.hide();                        // keep the dashboard mounted, just hidden
+        returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes
+        candidateDetail.show(candidate);
+        openDetailSheet();
+      },
+    });
+  });
 
   // ── First run hint ───────────────────────────────────────────────────────────
   if (!isConfigured()) {
