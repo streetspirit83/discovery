@@ -1,4 +1,4 @@
-import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
+import { runScreen, rowsToCandidates, fetchGlobalQuotes } from '../lib/tv-screener.js';
 import { MARKETS } from '../lib/tv-fields.js';
 import { loadStorageClient } from '../lib/storage-client.js';
 import { normalizeExchange } from '../lib/exchange-map.js';
@@ -15,6 +15,19 @@ const PERF_COLS = [
   { key: 'py', label: '1J', idx: 6 },
 ];
 const KEY_TO_IDX = Object.fromEntries(PERF_COLS.map((c) => [c.key, c.idx]));
+
+// ─── Macro barometer: benchmark indices ─────────────────────────────────────────
+// The three equity indices drive the Risk-On/Risk-Off breadth; VIX is a fear
+// overlay (rising = risk-off), not part of the breadth count. Tickers verified in
+// tv-enrichment.js. Columns fetched from TradingView's global scan:
+//   idx 0 = change (today %) · idx 1 = Perf.W (1W %) · idx 2 = Perf.1M (1M %)
+const MACRO_INDICES = [
+  { label: 'DAX',    ticker: 'XETR:DAX' },
+  { label: 'NASDAQ', ticker: 'NASDAQ:IXIC' },
+  { label: 'NIKKEI', ticker: 'TVC:NI225' },
+];
+const VIX_TICKER = 'TVC:VIX';
+const INDEX_COLS = ['change', 'Perf.W', 'Perf.1M'];
 
 // Map a canonical exchange code (post normalizeExchange) → market slug, for
 // attributing an import row to the right market regardless of which regional
@@ -43,6 +56,7 @@ let drill = null;
 let drillSort = { key: 'pm', dir: 'desc' };  // independent sort for the drill table
 let drillSelected = new Set();               // set of row.s currently checked for import
 let loading = false, loadDone = 0;
+let indexData = null;   // Map<ticker, row.d> for the macro barometer, or null before load
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function readSettings() {
@@ -163,6 +177,7 @@ function dedupeRows(rows) {
 // ─── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
   if (!backendUrl || !secret) return;
+  loadIndices();   // fire-and-forget: refresh the macro barometer in parallel
   loading = true; loadDone = 0; marketData = {}; drill = null;
   renderContent();
 
@@ -240,25 +255,43 @@ function premarketsBarHtml() {
 }
 
 // ─── Macro barometer ─────────────────────────────────────────────────────────────
-// A short, simple macro-regime gauge: a *breadth / diffusion index* over the
-// major markets' 1-month trend. Each market's cap-weighted 1M performance (its
-// countryAgg.pm) is a proxy for that country's broad index; we count how many are
-// rising and average the moves. Breadth (share of markets in the green) is the
-// classic risk-on/risk-off tell — more robust than any single index because it
-// captures whether the advance is broad or narrow. Confirmed by the mean 1M move,
-// it maps to Risk-On / Neutral / Risk-Off.
+// A short, simple 1-month sentiment read on the major benchmark indices
+// (DAX · NASDAQ · NIKKEI). We take each index's 1-month performance (Perf.1M) and
+// derive a *breadth* signal: how many of the three are up over the month, confirmed
+// by their mean move. Breadth across the key regions is the classic risk-on/off
+// tell. VIX's 1M change is shown as a fear overlay (rising VIX = risk-off) but does
+// not alter the equity-breadth verdict.
+function loadIndices() {
+  if (!backendUrl || !secret) return;
+  const tickers = [...MACRO_INDICES.map((i) => i.ticker), VIX_TICKER];
+  fetchGlobalQuotes(tickers, INDEX_COLS, { backendUrl, secret })
+    .then((map) => { indexData = map; })
+    .catch(() => { indexData = null; })
+    .finally(renderMacro);
+}
+
 function computeMacro() {
-  const vals = countryAggs.map((c) => c.pm).filter((v) => v != null);
+  if (!indexData) return null;
+  const idx = MACRO_INDICES.map((i) => ({ label: i.label, pm: indexData.get(i.ticker)?.[2] ?? null }));
+  const vals = idx.map((i) => i.pm).filter((v) => v != null);
   if (!vals.length) return null;
   const total = vals.length;
   const up = vals.filter((v) => v > 0).length;
-  const breadth = (up / total) * 100;                       // % of markets positive over 1M
-  const avg = vals.reduce((a, b) => a + b, 0) / total;      // equal-weighted mean 1M %
+  const avg = vals.reduce((a, b) => a + b, 0) / total;   // equal-weighted mean 1M %
+  const vix1m = indexData.get(VIX_TICKER)?.[2] ?? null;  // VIX 1M change %
   let regime, cls, arrow;
-  if (breadth >= 60 && avg > 0)      { regime = 'Risk-On';  cls = 'macro-on';      arrow = '▲'; }
-  else if (breadth <= 40 && avg < 0) { regime = 'Risk-Off'; cls = 'macro-off';     arrow = '▼'; }
-  else                               { regime = 'Neutral';  cls = 'macro-neutral'; arrow = '▬'; }
-  return { up, total, breadth, avg, regime, cls, arrow };
+  if (up >= 2 && avg > 0)      { regime = 'Risk-On';  cls = 'macro-on';      arrow = '▲'; }
+  else if (up <= 1 && avg < 0) { regime = 'Risk-Off'; cls = 'macro-off';     arrow = '▼'; }
+  else                         { regime = 'Neutral';  cls = 'macro-neutral'; arrow = '▬'; }
+  return { idx, up, total, avg, vix1m, regime, cls, arrow };
+}
+
+// Coloured 1M chip for one index. `invert` flips the sign→colour mapping for VIX,
+// where a rising value (positive %) signals fear and is shown red.
+function macroChip(label, v, invert = false) {
+  const dir = v == null ? 0 : (invert ? -Math.sign(v) : Math.sign(v));
+  const cls = dir > 0 ? 'macro-up' : dir < 0 ? 'macro-down' : '';
+  return `<span class="macro-idx">${label}<strong class="${cls}">${fmtPct(v)}</strong></span>`;
 }
 
 function renderMacro() {
@@ -266,16 +299,19 @@ function renderMacro() {
   if (!el) return;
   const m = computeMacro();
   if (!m) { el.innerHTML = ''; return; }
+  const chips = m.idx.map((i) => macroChip(i.label, i.pm)).join('');
+  const vixChip = m.vix1m != null
+    ? macroChip('VIX', m.vix1m, true)
+    : '';
   el.innerHTML = `
-    <div class="macro-bar ${m.cls}" title="Marktbreite über den 1-Monats-Trend der ${m.total} Leitmärkte">
+    <div class="macro-bar ${m.cls}" title="1-Monats-Trend der Leitindizes DAX · NASDAQ · NIKKEI">
       <span class="macro-icon">${m.arrow}</span>
       <div class="macro-main">
-        <span class="macro-label">Makro-Barometer <span class="macro-sub">· 1M-Trend der Leitmärkte</span></span>
-        <span class="macro-regime">${m.regime}</span>
+        <span class="macro-label">Makro-Barometer <span class="macro-sub">· 1M-Trend der Leitindizes</span></span>
+        <span class="macro-regime">${m.regime} <span class="macro-breadth">(${m.up}/${m.total} im Plus · Ø ${fmtPct(m.avg)})</span></span>
       </div>
-      <div class="macro-stats">
-        <span title="Anteil der Märkte mit positivem 1-Monats-Trend"><strong>${m.up}/${m.total}</strong> Märkte im Plus (${m.breadth.toFixed(0)}%)</span>
-        <span title="Durchschnittliche 1-Monats-Performance über alle Märkte">Ø 1M <strong>${fmtPct(m.avg)}</strong></span>
+      <div class="macro-stats" title="1-Monats-Performance je Index. VIX rot = steigende Volatilität (Risk-Off).">
+        ${chips}${vixChip}
       </div>
     </div>`;
 }
