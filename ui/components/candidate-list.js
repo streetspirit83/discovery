@@ -4,12 +4,14 @@ import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
+import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702d';
+import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal } from '../lib/ls-history-signals.js?v=20260702d';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -260,6 +262,14 @@ function sortValue(c, col) {
     case 'my_entry':    return c.my_entry ?? null;
     case 'my_target':   return c.my_target ?? null;
     case 'setup':       return priceSituation(tv)?.icon ?? null;
+    case 'trade_cluster':     return classifyCluster(tv)?.idx ?? null;
+    case 'trade_target':      return tradeTarget(tv) ?? null;
+    case 'trade_short_entry': return breakoutEntry(tv) ?? null;
+    case 'trade_long_entry': { const p = pivotSet(tv); return p?.w.r1 ?? p?.m.r1 ?? null; }
+    case 'trade_exit_l':      return exitLevels(tv, undefined, c.ls_history)?.primaryLong?.value ?? null;
+    case 'trade_exit_s':      return exitLevels(tv, undefined, c.ls_history)?.primaryShort?.value ?? null;
+    case 'trade_breakout':    return detectBreakoutSetup(c.ls_history, classifyCluster(tv)?.avgVol)?.breakoutProbabilityPct ?? null;
+    case 'trade_breakdown':   return detectBreakdownRisk(c.ls_history, classifyCluster(tv)?.avgVol)?.breakdownProbabilityPct ?? null;
     case 'momentum':    return c.momentum_check?.total ?? ({ green: 3, yellow: 2, red: 1 }[c.momentum_check?.verdict] ?? null);
     case 'tr_check':    return c.tr_check == null ? null : (c.tr_check.tradable ? 2 : c.tr_check.tradable === false ? 1 : 0);
     case 'ls_price':    return c.ls_quote?.price ?? null;
@@ -309,9 +319,120 @@ function sortValue(c, col) {
   }
 }
 
+// ── Trade view cells ─────────────────────────────────────────────────────────
+// LS-history snapshots are attached by app.js as `c.ls_history` (10-day rolling,
+// only populated for watch-bucket tickers — the nightly snapshot covers watch).
+
+function fmtVol(v) { return v == null ? '—' : fmtMCap(v); }
+
+function renderCluster(c) {
+  const cl = classifyCluster(c.tv_data);
+  if (!cl) return '—';
+  const tv = c.tv_data;
+  const tip = `ATRP ${fmtNum(tv?.atrp, 1)}% · MCap ${fmtMCap(tv?.market_cap)}`
+    + ` · Vol-Basis Ø V${cl.volBasis} (${fmtVol(cl.avgVol)})`
+    + ` · ATR-Mult ${cl.atrMult} · Gewinnziel +${cl.gainPct}%`
+    + (cl.atrpIdx != null && cl.mcapIdx != null && cl.atrpIdx !== cl.mcapIdx
+      ? ` · ATRP→${CLUSTER_SHORT[cl.atrpIdx]} / MCap→${CLUSTER_SHORT[cl.mcapIdx]} (ATRP 2× gewichtet)` : '');
+  return `<span class="cluster-badge cluster-badge--${cl.key}" title="${tip}">${cl.label}</span>`;
+}
+const CLUSTER_SHORT = ['Stab', 'Mod', 'Mom', 'Hyp'];
+
+function renderTradeTarget(c) {
+  const cl = classifyCluster(c.tv_data);
+  const t = tradeTarget(c.tv_data, cl);
+  if (t == null) return '—';
+  return `<span class="pos" title="Kurs + ${cl.gainPct}% (Cluster ${cl.label})">${fmtPrice(c, t)}</span>`;
+}
+
+// "Short Entry" (per Setup-Box): 20-day breakout level + bottom-stabilization tag.
+function renderTradeEntryS(c) {
+  const be = breakoutEntry(c.tv_data);
+  const bottom = detectBottomSignal(c.ls_history);
+  const parts = [];
+  parts.push(be != null
+    ? `<span title="Breakout-Entry: high|20 + 0,01% (high|20 = ${fmtPrice(c, c.tv_data?.high_20d)})">${fmtPrice(c, be)}</span>`
+    : '<span class="muted-dash" title="Kein high|20 – „TV Daten“ neu laden">—</span>');
+  if (bottom?.isBottom) {
+    parts.push(`<span class="bottom-tag" title="Bottom-Stabilisierung erkannt (alle 4 Kriterien) · ${bottom.basis === 'swing-low' ? 'bestätigtes Swing-Low' : 'Kapitulations-Tief'} ${fmtPrice(c, bottom.bottomPrice)}">B ${fmtPrice(c, bottom.bottomPrice)}</span>`);
+  }
+  return parts.join(' ');
+}
+
+// "Long Entry": weekly pivot R1 as headline, full 1W/1M pivot set in the tooltip.
+function renderTradeEntryL(c) {
+  const p = pivotSet(c.tv_data);
+  if (!p) return '<span class="muted-dash" title="Keine Pivots – „TV Daten“ neu laden">—</span>';
+  const f = (v) => (v == null ? '—' : fmtPrice(c, v));
+  const tip = `1W: R1 ${f(p.w.r1)} · R2 ${f(p.w.r2)} · R3 ${f(p.w.r3)} · S1 ${f(p.w.s1)} · S2 ${f(p.w.s2)} · S3 ${f(p.w.s3)}`
+    + ` — 1M: R1 ${f(p.m.r1)} · R2 ${f(p.m.r2)} · R3 ${f(p.m.r3)} · S1 ${f(p.m.s1)} · S2 ${f(p.m.s2)} · S3 ${f(p.m.s3)}`;
+  const head = p.w.r1 ?? p.m.r1;
+  return `<span title="${tip}">${f(head)}</span>`;
+}
+
+function exitTip(list, c) {
+  return list.map((x) => `${x.label}: ${fmtPrice(c, x.value)}`).join(' · ');
+}
+
+function renderTradeExit(c, side) {
+  const ex = exitLevels(c.tv_data, undefined, c.ls_history);
+  if (!ex) return '—';
+  const primary = side === 'long' ? ex.primaryLong : ex.primaryShort;
+  const list = side === 'long' ? ex.long : ex.short;
+  if (!primary) return '—';
+  return `<span class="${side === 'long' ? 'neg' : ''}" title="${exitTip(list, c)} · Stops je −0,02 unter Support">${fmtPrice(c, primary.value)}</span>`;
+}
+
+const NO_HISTORY_TIP = '10-Tage-LS-Historie fehlt – nightly Snapshot läuft nur für den Watch-Bucket';
+
+function probCriteriaCodes(criteria, map) {
+  return Object.entries(map).filter(([k]) => criteria[k]).map(([, code]) => code).join('+') || 'keine Kriterien';
+}
+
+function renderBreakoutProb(c) {
+  const cl = classifyCluster(c.tv_data);
+  const r = detectBreakoutSetup(c.ls_history, cl?.avgVol);
+  if (!r) return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  const codes = probCriteriaCodes(r.criteria, {
+    extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'MF', flatTopBullFlag: 'Flag',
+  });
+  const dm = c.tv_data?.pivot_demark_r1_1w;
+  const tip = `Breakout nächste ~10T (Heuristik): ${codes}`
+    + (dm != null ? ` · Demark R1|1W ${fmtPrice(c, dm)}` : '')
+    + (c.tv_data?.rsi != null ? ` · RSI ${fmtNum(c.tv_data.rsi, 0)} (überkauft ≠ Malus)` : '');
+  return `<span class="${r.breakoutProbabilityPct >= 50 ? 'pos' : ''}" title="${tip}">${r.breakoutProbabilityPct}%</span>`;
+}
+
+function renderBreakdownProb(c) {
+  const cl = classifyCluster(c.tv_data);
+  const r = detectBreakdownRisk(c.ls_history, cl?.avgVol);
+  if (!r) return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  const codes = probCriteriaCodes(r.criteria, {
+    volumeSpikeNoFollowThrough: 'Spike', distributionDay: 'Dist', nearRecentHigh: 'Hoch',
+  });
+  const dm = c.tv_data?.pivot_demark_s1_1w;
+  const tip = `Breakdown nächste ~10T (Heuristik): ${codes}`
+    + (dm != null ? ` · Demark S1|1W ${fmtPrice(c, dm)}` : '');
+  return `<span class="${r.breakdownProbabilityPct >= 50 ? 'neg' : ''}" title="${tip}">${r.breakdownProbabilityPct}%</span>`;
+}
+
 // ── Column definitions ───────────────────────────────────────────────────────
 
+// Setup situation (moved from the Preis view into the Trade view).
+const SETUP_COL = { key:'setup', label:'Setup', title:'Preis-Situation: 🚀 Blue-Sky · 🎯 Breakout-Nähe · 🔄 Pullback im Trend · 📉 unter Trend · ➖ Range · ⚠ Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'—';} };
+
 const VIEWS = {
+  trade: [
+    { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
+    { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
+    SETUP_COL,
+    { key:'trade_short_entry', label:'S-Entry', title:'Short-Entry: high|20 + 0,01% (20-Tage-Breakout) · B = Bottom-Stabilisierungs-Signal aus der 10T-LS-Historie (Trend-Abflachung + sinkendes Volumen am Support + Candle-Shift + Range-Kompression) mit Bottom-Kurs', num:true, fmt:renderTradeEntryS },
+    { key:'trade_long_entry', label:'L-Entry', title:'Long-Entry: Pivot.M.Classic R1|1W (Tooltip: R1–R3 / S1–S3 für 1W und 1M)', num:true, fmt:renderTradeEntryL },
+    { key:'trade_exit_l', label:'Exit L', title:'Long-Exits (engster Stop, Tooltip alle): L3M − 0,5×ATR · SMA200 − 0,5×ATR · Chandelier high|22 − ATR×Cluster-Mult · Support-Stops je −0,02', num:true, fmt:c=>renderTradeExit(c,'long') },
+    { key:'trade_exit_s', label:'Exit S', title:'Short-Exits (Chandelier low|22 + ATR×Mult, Tooltip alle): low|10 (LS) · SMA20-MOM · 2W-Low (LS absolut) · L1M − 0,5×ATR', num:true, fmt:c=>renderTradeExit(c,'short') },
+    { key:'trade_breakout', label:'Brk↑%', title:'Breakout-Wahrscheinlichkeit nächste ~10 Tage (Heuristik aus 10T-LS-Historie): enge Range · Volumenbestätigung · 1-Tages-Money-Flow · Flat-Top/Bull-Flag · überkauft zählt NICHT negativ', num:true, fmt:renderBreakoutProb },
+    { key:'trade_breakdown', label:'Brk↓%', title:'Breakdown-Wahrscheinlichkeit nächste ~10 Tage (Heuristik): Volumen-Spike ohne Follow-Through · Distribution-Day · Nähe zum Hoch', num:true, fmt:renderBreakdownProb },
+  ],
   performance: [
     { key:'tv_upside',  label:'▲POT1M', title:'Upside-Potenzial ~1 Monat: Drift + σ, gedeckelt am nächsten Widerstand · ⚠ = Earnings im Zeitfenster', num:true, fmt:c=>renderUpside(computeUpsidePotential(c.tv_data),'up') },
     { key:'tv_downside',label:'▼POT1M', title:'Downside-Risiko ~1 Monat: σ − Drift, gedeckelt an der nächsten Unterstützung', num:true, fmt:c=>renderUpside(computeUpsidePotential(c.tv_data),'down') },
@@ -329,12 +450,6 @@ const VIEWS = {
   ],
   price: [
     { key:'currency',  label:'W\u00e4',  title:'W\u00e4hrung der B\u00f6rse (Preise werden nach USD/EUR umgerechnet, andere W\u00e4hrungen bleiben nativ)', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
-    { key:'setup',     label:'Setup', title:'Preis-Situation: \ud83d\ude80 Blue-Sky \u00b7 \ud83c\udfaf Breakout-N\u00e4he \u00b7 \ud83d\udd04 Pullback im Trend \u00b7 \ud83d\udcc9 unter Trend \u00b7 \u2796 Range \u00b7 \u26a0 Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'\u2014';} },
-    { key:'my_entry',  label:'Mein Entry', title:'Entry-Preis (Vorschlag: SMA20, kursiv) \u2013 editierbar, wird gespeichert', num:true, fmt:c=>priceInput(c,'my_entry') },
-    { key:'my_target', label:'Mein Ziel',  title:'Kursziel (Vorschlag: Entry \u00d7 1,2 = mind. 20% Upside, kursiv) \u2013 editierbar, wird gespeichert \u00b7 native W\u00e4hrung', num:true, fmt:c=>priceInput(c,'my_target') },
-    { key:'tv_long_entry',  label:'Long',  title:'Long Entry Preis: \u00d8 aus BB.lower + Pivot S1 + (close + 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'long',convFactor(c)) },
-    { key:'tv_close',       label:'Kurs',  title:'Aktueller Kurs (1-Min Intraday, Fallback: Tagesschluss)', num:true, fmt:c=>fmtPrice(c, c.tv_data?.close_1m ?? c.tv_data?.close) },
-    { key:'tv_short_entry', label:'Short', title:'Short Entry Preis: \u00d8 aus BB.upper + Pivot R1 + (close \u2212 0.5\u00d7ATR)', num:true, fmt:c=>renderEntryPrice(liveEntryPrices(c.tv_data),'short',convFactor(c)) },
     { key:'tv_sma20',   label:'SMA20',  title:'SMA 20 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma20)}">${fmtPrice(c, c.tv_data?.sma20)}</span>` },
     { key:'tv_sma50',   label:'SMA50',  title:'SMA 50 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma50)}">${fmtPrice(c, c.tv_data?.sma50)}</span>` },
     { key:'tv_sma100',  label:'SMA100', title:'SMA 100 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma100)}">${fmtPrice(c, c.tv_data?.sma100)}</span>` },

@@ -230,6 +230,19 @@ const TV_COLUMNS = [
   'isin',                                      // 109 — ISIN (für TR/LS-Abgleich)
   'SMA20',                                     // 110 — SMA 20 (Preis-Tabelle)
   'SMA100',                                    // 111 — SMA 100 (Preis-Tabelle)
+  // Trade view: weekly + monthly classic pivots, Demark 1W, 20-day Donchian (daily)
+  'Pivot.M.Classic.R1|1W',                     // 112
+  'Pivot.M.Classic.R2|1W',                     // 113
+  'Pivot.M.Classic.R3|1W',                     // 114
+  'Pivot.M.Classic.S1|1W',                     // 115
+  'Pivot.M.Classic.S2|1W',                     // 116
+  'Pivot.M.Classic.S3|1W',                     // 117
+  'Pivot.M.Classic.R3',                        // 118 — 1M R3 (R1/R2/S1/S2 existieren schon)
+  'Pivot.M.Classic.S3',                        // 119 — 1M S3
+  'Pivot.M.Demark.R1|1W',                      // 120 — Breakout-Referenz
+  'Pivot.M.Demark.S1|1W',                      // 121
+  'DonchCh20.Upper',                           // 122 — high|20 (Tages-Timeframe)
+  'DonchCh20.Lower',                           // 123 — low|20 (Tages-Timeframe)
 ];
 
 const COL = {
@@ -351,6 +364,19 @@ recommendMA1M: 53,
   isin:                  109,
   sma20:                 110,
   sma100:                111,
+  // Trade view fields
+  pivotR1_1w:            112,
+  pivotR2_1w:            113,
+  pivotR3_1w:            114,
+  pivotS1_1w:            115,
+  pivotS2_1w:            116,
+  pivotS3_1w:            117,
+  pivotR3:               118,
+  pivotS3:               119,
+  pivotDemarkR1_1w:      120,
+  pivotDemarkS1_1w:      121,
+  donch20UpperD:         122,
+  donch20LowerD:         123,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -555,6 +581,19 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       high_3m:              d[COL.high3M]              ?? null,
       low_3m:               d[COL.low3M]               ?? null,
       recommendation_total: d[COL.recommendationTotal] ?? null,
+      // Trade view fields (weekly/monthly pivots, Demark 1W, 20-day Donchian)
+      pivot_r1_1w:          d[COL.pivotR1_1w]          ?? null,
+      pivot_r2_1w:          d[COL.pivotR2_1w]          ?? null,
+      pivot_r3_1w:          d[COL.pivotR3_1w]          ?? null,
+      pivot_s1_1w:          d[COL.pivotS1_1w]          ?? null,
+      pivot_s2_1w:          d[COL.pivotS2_1w]          ?? null,
+      pivot_s3_1w:          d[COL.pivotS3_1w]          ?? null,
+      pivot_r3:             d[COL.pivotR3]             ?? null,
+      pivot_s3:             d[COL.pivotS3]             ?? null,
+      pivot_demark_r1_1w:   d[COL.pivotDemarkR1_1w]    ?? null,
+      pivot_demark_s1_1w:   d[COL.pivotDemarkS1_1w]    ?? null,
+      high_20d:             d[COL.donch20UpperD]       ?? null,
+      low_20d:              d[COL.donch20LowerD]       ?? null,
       fetched_at:   new Date().toISOString(),
     },
   };

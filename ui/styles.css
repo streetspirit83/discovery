@@ -484,6 +484,21 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .momcheck--badge.momcheck--red    { background:rgba(231,76,60,.15); }
 .setup-icon { font-size: 13px; cursor: default; }
 
+/* Trade view: cluster badge + bottom-stabilization tag */
+.cluster-badge {
+  display:inline-block; padding:1px 6px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-1); white-space:nowrap;
+}
+.cluster-badge--stable   { background:rgba(41,128,185,.15);  color:#2980b9; }
+.cluster-badge--moderate { background:rgba(46,204,113,.15);  color:#27ae60; }
+.cluster-badge--momentum { background:rgba(243,156,18,.15);  color:#d68910; }
+.cluster-badge--hyper    { background:rgba(231,76,60,.15);   color:var(--neg); }
+.bottom-tag {
+  display:inline-block; margin-left:var(--s-1); padding:0 5px; border-radius:var(--r-1);
+  background:var(--pos-weak); color:var(--pos);
+  font-weight:var(--fw-bold); font-size:var(--fs-1); white-space:nowrap;
+}
+
 /* ── Decision-view visuals (Score gauge · 52W range · Signal · P/L) ─────────── */
 /* Score gauge: thin bar under the score number, filled by the score's own color */
 .score-gauge { display:block; height:3px; margin-top:1px; border-radius:2px;

@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260702a';
+import { CandidateList } from './components/candidate-list.js?v=20260702d';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260702c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -13,9 +13,9 @@ import { openTriggerEditor } from './components/trigger-modal.js?v=20260627j';
 import { triggeredCount } from './lib/alerts.js?v=20260627j';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260702a';
-import { loadStorageClient } from './lib/storage-client.js';
+import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260701b';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260702d';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -59,7 +59,7 @@ const uiState = (() => {
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
   // Migrate persisted view modes from the old 3-view layout
-  if (!['standard', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  if (!['standard', 'trade', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
   return s;
 })();
 function saveUiState() {
@@ -277,6 +277,29 @@ function updateAlertBadge() {
   badge.hidden = n === 0;
 }
 
+// ── LS snapshot history (Trade view: Breakout/Breakdown/Bottom signals) ────────
+// The nightly snapshot-ls function keeps a 10-day rolling history per
+// watch-bucket ticker. Loaded once per session (single blob read), attached to
+// the candidates as `c.ls_history` (snapshot array) for the Trade-view signals.
+let lsHistoryMap = null;
+
+async function loadLsHistory(force = false) {
+  if (useMock || !storageClient) return;
+  if (force || !lsHistoryMap) {
+    try {
+      const doc = await storageClient.readLsHistory();
+      lsHistoryMap = doc?.history ?? {};
+    } catch (err) {
+      console.warn('[ls-history] load failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!blob?.candidates || !candidateList) return;
+  for (const c of blob.candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
+  candidateList.renderRows();
+}
+
 // ── Merkliste portfolio import (Einstand column) ────────────────────────────────
 // Pull entry_price_manual from the merkliste "main" blob and attach it to the
 // matching candidates as `mk_entry` (matched by symbol). Held in memory only
@@ -340,6 +363,7 @@ function renderTopbar() {
 function renderSubbar() {
   const tabs = [
     { key: 'standard',     label: 'Standard' },
+    { key: 'trade',        label: 'Trade' },
     { key: 'score',        label: 'Score' },
     { key: 'meta',         label: 'Meta' },
     { key: 'price',        label: 'Preis' },
@@ -672,6 +696,13 @@ async function switchBlob(blobType) {
   await ensureBlob(blobType);
   // Carry merkliste entry prices onto this bucket's candidates before first render.
   if (merklisteMaps) applyMerklisteEntries(allBlobs[blobType].candidates, merklisteMaps);
+  // Attach the 10-day LS history (Trade-view signals) before first render;
+  // if it isn't loaded yet, fetch it once in the background (re-renders rows).
+  if (lsHistoryMap) {
+    for (const c of allBlobs[blobType].candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
+  } else {
+    loadLsHistory();
+  }
   candidateList.setData(allBlobs[blobType].candidates);
   renderBotnav();
   renderFilterbar();
@@ -1248,6 +1279,7 @@ async function init() {
     allBlobs[currentBlobType] = null;
     await switchBlob(currentBlobType);
     await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
+    await loadLsHistory(true);        // re-pull the 10-day LS history (Trade view)
     toast('Aktualisiert', 'info', 1500);
   });
 

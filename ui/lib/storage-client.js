@@ -53,6 +53,13 @@ export class StorageClient {
     return this.#post({ op: 'delete_candidate', blob_type: blobType, candidate_id: candidateId });
   }
 
+  /** Read the nightly LS snapshot history (10-day rolling, watch-bucket tickers).
+   *  Shape: { history: { [candidateId]: { symbol, name, snapshots:[…] } }, updated_at } */
+  async readLsHistory() {
+    const result = await this.#post({ op: 'read_ls_history' });
+    return result.data;
+  }
+
   /** Read the server-side config blob (screener presets, synced across devices). */
   async readConfig() {
     const result = await this.#post({ op: 'read_config' });

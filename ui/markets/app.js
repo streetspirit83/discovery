@@ -1,6 +1,6 @@
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
 import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
-import { loadStorageClient } from '../lib/storage-client.js?v=20260701b';
+import { loadStorageClient } from '../lib/storage-client.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
