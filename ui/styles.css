@@ -659,10 +659,18 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 
 /* Detail state bar */
-.detail-state-bar, .detail-state {
+.detail-state-bar {
   padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border);
   display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap; font-size:var(--fs-3);
 }
+/* Action row (Promoten/Ablehnen/Export): always one line (STYLEGUIDE.md §5) — on
+   narrow phones the buttons shrink via .btn-sm rather than wrap. */
+.detail-state {
+  padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap; font-size:var(--fs-3);
+}
+.detail-state .btn { flex:1 1 0; min-width:0; justify-content:center; }
+.detail-state .btn span, .detail-state .btn svg { flex-shrink:0; }
 
 /* Detail sections */
 .detail-section { padding:var(--s-4); border-bottom:1px solid var(--border); }
@@ -1442,7 +1450,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    DETAIL SHEET REWORK — header tags · toolbar · tabs · trade mockup
    ════════════════════════════════════════════════════════════════ */
 .detail-title { min-width:0; }
-.detail-tags { display:flex; flex-wrap:wrap; gap:var(--s-1); margin-top:var(--s-2); }
+/* Cluster/Sector tags: one line, no wrap (STYLEGUIDE.md §5) — scrolls
+   horizontally on narrow phones rather than breaking to a 2nd line. */
+.detail-tags { display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-top:var(--s-2); overflow-x:auto; }
+.detail-tags .tag { flex-shrink:0; white-space:nowrap; }
 .tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
 .isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }
 
@@ -1455,8 +1466,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .detail-toolbar__links, .detail-toolbar__actions { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
 .detail-toolbar__actions { margin-left:auto; }
 .detail-toolbar__sep { width:1px; height:20px; background:var(--border); flex-shrink:0; }
-.detail-toolbar .link-chip { width:32px; height:32px; border-radius:var(--r-1); }
-.detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:16px; height:16px; }
+/* Sub-nav icons: large touch targets, mobile-friendly (44px ≈ Apple/Android
+   minimum tap size, well above the styleguide's 32px floor). */
+.detail-toolbar .link-chip { width:44px; height:44px; border-radius:var(--r-2); flex-shrink:0; }
+.detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:22px; height:22px; }
 button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .link-chip--mock { opacity:0.45; }
 .detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }

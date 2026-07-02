@@ -413,11 +413,6 @@ export class CandidateDetail {
     if (!this.candidate) return;
     const c = this.candidate;
 
-    const stateMap = {
-      new: 'Neu', reviewed: 'Gesehen', promoted: 'Promoted',
-      dismissed: 'Abgelehnt', imported: 'Importiert',
-    };
-
     const tabPanels = {
       performance: renderPerformanceTab(c),
       trade:       renderTradeTab(c),
@@ -455,8 +450,6 @@ export class CandidateDetail {
       })()}
 
       <div class="detail-state">
-        Status: <strong>${stateMap[c.workspace_state] ?? c.workspace_state}</strong>
-        &nbsp;
         ${c.workspace_state !== 'promoted' && c.workspace_state !== 'imported'
           ? `<button class="btn btn-sm btn-success" id="detail-promote">${icons.check} Promoten</button>`
           : ''}
@@ -464,9 +457,6 @@ export class CandidateDetail {
           ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">${icons.xMark} Ablehnen</button>`
           : ''}
         <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} Export</button>
-        ${c.workspace_state === 'new'
-          ? `<button class="btn btn-sm" id="detail-review">${icons.eye} Gesehen</button>`
-          : ''}
       </div>
 
       ${renderToolbar(c)}
@@ -522,12 +512,6 @@ export class CandidateDetail {
     this.el.querySelector('#detail-dismiss')?.addEventListener('pointerup', () => {
       this.onAction?.('dismiss', c);
       c.workspace_state = 'dismissed';
-      this.render();
-    });
-
-    this.el.querySelector('#detail-review')?.addEventListener('pointerup', () => {
-      this.onAction?.('review', c);
-      c.workspace_state = 'reviewed';
       this.render();
     });
 
