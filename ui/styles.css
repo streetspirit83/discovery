@@ -493,6 +493,32 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .cluster-badge--moderate { background:rgba(46,204,113,.15);  color:#27ae60; }
 .cluster-badge--momentum { background:rgba(243,156,18,.15);  color:#d68910; }
 .cluster-badge--hyper    { background:rgba(231,76,60,.15);   color:var(--neg); }
+/* Price-cluster cell (Trade view): value + score chip, tap opens the popover */
+.cell-tip {
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  background:none; border:none; padding:2px var(--s-1); margin:-2px calc(-1 * var(--s-1));
+  font:inherit; color:inherit; font-variant-numeric:tabular-nums;
+  border-radius:var(--r-1); cursor:pointer; white-space:nowrap;
+}
+.cell-tip:hover { background:var(--surface-3); }
+.clu--sup { color:var(--pos); }
+.clu--res { color:var(--neg); }
+.clu--strong { font-weight:var(--fw-bold); }
+.clu-score {
+  font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold);
+  background:var(--surface-3); border-radius:var(--r-1); padding:0 4px;
+}
+.clu--strong .clu-score { background:var(--accent-weak); color:var(--accent); }
+
+/* Tap/click popover for data cells — replaces title tooltips on touch */
+.cell-tip-pop {
+  position:fixed; z-index:var(--z-toast); max-width:min(300px, calc(100vw - 16px));
+  background:var(--surface); color:var(--text); border:1px solid var(--border);
+  border-radius:var(--r-2); padding:var(--s-2) var(--s-3);
+  font-size:var(--fs-1); line-height:1.5; white-space:pre-line;
+  box-shadow:0 10px 30px rgba(0,0,0,0.18); pointer-events:none;
+}
+
 /* Group separator in wide views (Trade): subtle line at each group start */
 .candidate-table th.col-group-start,
 .candidate-table td.col-group-start { box-shadow:inset 2px 0 0 var(--border), inset 0 -1px 0 var(--border); }

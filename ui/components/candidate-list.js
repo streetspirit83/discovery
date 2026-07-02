@@ -12,6 +12,7 @@ import { normalizeExchange } from '../lib/exchange-map.js';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702d';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260702g';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -268,6 +269,8 @@ function sortValue(c, col) {
     case 'my_target':   return c.my_target ?? null;
     case 'setup':       return priceSituation(tv)?.icon ?? null;
     case 'trade_cluster':     return classifyCluster(tv)?.idx ?? null;
+    case 'trade_sup_cl':      return priceClustersFor(c)?.nearestSup?.score ?? null;
+    case 'trade_res_cl':      return priceClustersFor(c)?.nearestRes?.score ?? null;
     case 'trade_target':      return tradeTarget(tv) ?? null;
     case 'trade_brk20':       return breakoutEntry(tv) ?? null;
     case 'trade_bottom': {
@@ -413,6 +416,72 @@ function demarkCell(c, field) {
   return v == null ? '—' : fmtPrice(c, v);
 }
 
+// ── Price clusters (confluence zones) ────────────────────────────────────────
+
+// Native-currency reference price: live LS (EUR) converted where possible,
+// else the TV close — cluster sides must be judged in the levels' currency.
+function nativeRefPrice(c) {
+  const ls = c.ls_quote?.price;
+  if (ls != null) {
+    const nat = nativeCurrency(c);
+    if (nat === 'EUR') return ls;
+    if (nat === 'USD' && fxEurUsd) return ls * fxEurUsd;
+  }
+  return c.tv_data?.close_1m ?? c.tv_data?.close ?? null;
+}
+
+function priceClustersFor(c) {
+  const bottom = detectBottomSignal(c.ls_history);
+  const extraLevels = bottom?.isBottom && bottom.bottomPrice != null
+    ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3 }]
+    : [];
+  return computePriceClusters(c.tv_data, {
+    lsHistory: c.ls_history,
+    extraLevels,
+    refPrice: nativeRefPrice(c),
+  });
+}
+
+// Cluster cell: zone mid + score, full zone details in a tap-friendly popover
+// (`.cell-tip` button — works on touch, never triggers the row→detail open).
+function renderClusterCell(c, side) {
+  const pc = priceClustersFor(c);
+  const cl = side === 'sup' ? pc?.nearestSup : pc?.nearestRes;
+  if (!cl) return `<span class="muted-dash" title="${side === 'sup' ? 'Kein Support-Cluster unter dem Kurs' : 'Kein Resistance-Cluster über dem Kurs'} (min. 2 Level nötig)">—</span>`;
+  const tip = `${side === 'sup' ? 'Support' : 'Resistance'}-Cluster ${fmtPrice(c, cl.lo)}–${fmtPrice(c, cl.hi)}`
+    + `\nScore ${fmtNum(cl.score, 1)} · Abstand ${fmtPct(cl.distPct)}${cl.distAtr != null ? ` / ${fmtNum(Math.abs(cl.distAtr), 1)}×ATR` : ''}`
+    + `\nQuellen: ${cl.members.map((m) => m.label).join(' · ')}`;
+  const strong = cl.score >= 6 ? ' clu--strong' : '';
+  return `<button type="button" class="cell-tip clu clu--${side}${strong}" data-tip="${tip.replace(/"/g, '&quot;')}" aria-label="Cluster-Details">
+    ${fmtPrice(c, cl.mid)}<span class="clu-score">${fmtNum(cl.score, 1)}</span>
+  </button>`;
+}
+
+// Tap/click popover for data cells (title tooltips are invisible on touch).
+let tipEl = null, tipFor = null;
+function hideCellTip() { tipEl?.remove(); tipEl = null; tipFor = null; }
+function toggleCellTip(trigger) {
+  if (tipFor === trigger) { hideCellTip(); return; }
+  hideCellTip();
+  const text = trigger.dataset.tip;
+  if (!text) return;
+  tipEl = document.createElement('div');
+  tipEl.className = 'cell-tip-pop';
+  tipEl.textContent = text;
+  document.body.appendChild(tipEl);
+  const r = trigger.getBoundingClientRect();
+  const rect = tipEl.getBoundingClientRect();
+  const x = Math.min(Math.max(8, r.left + r.width / 2 - rect.width / 2), window.innerWidth - rect.width - 8);
+  let y = r.top - rect.height - 8;
+  if (y < 8) y = r.bottom + 8;
+  tipEl.style.left = `${x}px`;
+  tipEl.style.top = `${y}px`;
+  tipFor = trigger;
+}
+// Close on any outside tap or scroll (capture so table scrolling closes it too).
+document.addEventListener('pointerdown', (e) => { if (tipEl && !e.target.closest('.cell-tip')) hideCellTip(); }, true);
+document.addEventListener('scroll', hideCellTip, true);
+
 const NO_HISTORY_TIP = '10-Tage-LS-Historie fehlt – nightly Snapshot läuft nur für den Watch-Bucket';
 
 // History attached but still too short for the detectors (they need ≥5 days,
@@ -481,6 +550,10 @@ const VIEWS = {
     { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     SETUP_COL,
+    // Price cluster: nearest support zone — LS live price — nearest resistance zone
+    { key:'trade_sup_cl', label:'Sup-Cl', title:'Nächstes Support-Cluster unter dem Kurs: Konfluenz-Zone aus allen Leveln (Extremes, SMAs, Pivots 1W/1M, Demark, Donchian, BB, LS-Tiefs) · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, groupStart:true, fmt:c=>renderClusterCell(c,'sup') },
+    { key:'ls_price', label:'LS', title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) · „LS-Kurs“-Button in der Subbar', num:true, fmt:c=>lsPriceCell(c) },
+    { key:'trade_res_cl', label:'Res-Cl', title:'Nächstes Resistance-Cluster über dem Kurs: Konfluenz-Zone aus allen Leveln · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, fmt:c=>renderClusterCell(c,'res') },
     // Short Entry
     { key:'trade_brk20', label:'Brk20', title:'Short-Entry: high|20 + 0,01% (20-Tage-Breakout-Level)', num:true, groupStart:true, fmt:renderBrk20 },
     { key:'trade_bottom', label:'Bottom', title:'Short-Entry: Bottom-Stabilisierungs-Signal aus der 10T-LS-Historie — Label „B“ + Bottom-Kurs, wenn alle 4 Kriterien erfüllt (Trend-Abflachung · sinkendes Volumen am Support · Candle-Shift bearish→neutral · Range-Kompression) · Bottom-Kurs = bestätigtes Swing-Low bzw. Kapitulations-Tief', num:true, fmt:renderBottom },
@@ -619,6 +692,16 @@ export class CandidateList {
     this.renderBulkActions();
     this.renderThead();
     this.bindSelectAll();
+
+    // Delegated tap-popover for .cell-tip cells (mobile-friendly tooltips).
+    // 'click' fires for touch, mouse AND keyboard; the row's own pointerup
+    // handler already ignores button targets, so the detail sheet stays shut.
+    this.tbody.addEventListener('click', (e) => {
+      const t = e.target.closest('.cell-tip');
+      if (!t) return;
+      e.stopPropagation();
+      toggleCellTip(t);
+    });
   }
 
   setData(candidates) {
@@ -1010,10 +1093,11 @@ export class CandidateList {
         <td class="col-anchor">${symHtml}</td>
         ${dataCols}`;
 
-      // Row click → open detail
+      // Row click → open detail. closest() (not tagName) so taps on children of
+      // buttons/links (SVGs, score spans, .cell-tip popover triggers) never
+      // open the detail sheet.
       tr.addEventListener('pointerup', (e) => {
-        if (['INPUT', 'BUTTON', 'A'].includes(e.target.tagName)) return;
-        if (e.target.closest('.tr-check')) return; // ISIN-copy cell handles its own click
+        if (e.target.closest('input, button, a, .tr-check')) return;
         this.onSelect?.(c);
       });
       tr.addEventListener('keydown', (e) => {
