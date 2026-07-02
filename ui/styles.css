@@ -493,6 +493,9 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .cluster-badge--moderate { background:rgba(46,204,113,.15);  color:#27ae60; }
 .cluster-badge--momentum { background:rgba(243,156,18,.15);  color:#d68910; }
 .cluster-badge--hyper    { background:rgba(231,76,60,.15);   color:var(--neg); }
+/* Group separator in wide views (Trade): subtle line at each group start */
+.candidate-table th.col-group-start,
+.candidate-table td.col-group-start { box-shadow:inset 2px 0 0 var(--border), inset 0 -1px 0 var(--border); }
 .bottom-tag {
   display:inline-block; margin-left:var(--s-1); padding:0 5px; border-radius:var(--r-1);
   background:var(--pos-weak); color:var(--pos);
