@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260627j';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260627j';
+import { CandidateList } from './components/candidate-list.js?v=20260702a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260702a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -11,8 +11,8 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260627j';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260627j';
 import { triggeredCount } from './lib/alerts.js?v=20260627j';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260701f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260627b';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260702a';
 import { loadStorageClient } from './lib/storage-client.js';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260701b';
@@ -22,7 +22,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js';
+import { icons } from './lib/icons.js?v=20260702a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 
@@ -697,6 +697,41 @@ async function handleAction(action, candidate, extras = {}) {
 
   if (action === 'isinCopied') {
     toast(`📋 ${extras.value} kopiert – in TR-Suche einfügen`, 'success', 2500);
+    return;
+  }
+
+  // Detail toolbar: LS live quote for exactly this candidate, then repaint the sheet.
+  if (action === 'lsQuote') {
+    await runLsQuoteForSelection([candidate.id]);
+    if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  if (action === 'tdQuote') {
+    toast('TwelveData Swing-Kurse: noch Mockup – Umsetzung folgt', 'info', 3000);
+    return;
+  }
+
+  if (action === 'export') {
+    if (currentBlobType === 'export') {
+      toast('Bereits im Export-Bucket', 'info', 2000);
+      return;
+    }
+    if (!useMock) {
+      try {
+        await storageClient.moveCandidate(candidate.id, currentBlobType, 'export');
+        allBlobs.export = null;
+      } catch (err) {
+        toast(`Export fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    } else {
+      await mockInsert('export', candidate);
+    }
+    blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`↗ ${candidate.symbol} → Export`, 'success');
     return;
   }
 

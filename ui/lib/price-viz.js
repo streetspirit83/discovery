@@ -215,7 +215,7 @@ export function perfBarsHTML(tv) {
 
 /* ── Colour legend for the ladder ────────────────────────────────────────── */
 
-function priceLadderLegend() {
+export function priceLadderLegend() {
   const it = (cls, label) => `<span class="pv-leg__item"><span class="pv-leg__sw pv-leg__sw--${cls}"></span>${label}</span>`;
   return `<div class="pv-legend">
     ${it('cur', 'Kurs')}${it('anchor', 'ATH/52W')}${it('ma', 'SMA')}

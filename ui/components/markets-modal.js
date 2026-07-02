@@ -6,7 +6,7 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-import { icons } from '../lib/icons.js?v=20260701c';
+import { icons } from '../lib/icons.js?v=20260702a';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701b';
 

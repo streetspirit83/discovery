@@ -1438,6 +1438,79 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .pv-bb-scale { display:flex; justify-content:space-between; color:var(--muted); }
 
+/* ════════════════════════════════════════════════════════════════
+   DETAIL SHEET REWORK — header tags · toolbar · tabs · trade mockup
+   ════════════════════════════════════════════════════════════════ */
+.detail-title { min-width:0; }
+.detail-tags { display:flex; flex-wrap:wrap; gap:var(--s-1); margin-top:var(--s-2); }
+.tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
+.isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }
+
+/* Sub-header: one row — icon-only links (+ edit toggle) | quick actions */
+.detail-toolbar {
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap;
+  padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border);
+  overflow-x:auto;
+}
+.detail-toolbar__links, .detail-toolbar__actions { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
+.detail-toolbar__actions { margin-left:auto; }
+.detail-toolbar__sep { width:1px; height:20px; background:var(--border); flex-shrink:0; }
+.detail-toolbar .link-chip { width:32px; height:32px; border-radius:var(--r-1); }
+.detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:16px; height:16px; }
+button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.link-chip--mock { opacity:0.45; }
+.detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }
+
+/* Tab bar + panels inside the sheet */
+.detail-tabs { padding:0 var(--s-4); margin-bottom:0; background:var(--sheet-bg); }
+.detail-tabpanes > .tab-panel { padding:var(--s-4); border-bottom:1px solid var(--border); }
+.detail-tabpanes .pv-subhead:first-child { margin-top:0; }
+
+/* Performance tab: LS intraday stat block (value line > meta line, §2) */
+.detail-ls { display:flex; align-items:center; gap:var(--s-3); }
+.detail-ls .id-spark { width:120px; height:32px; flex-shrink:0; }
+.detail-ls__stat { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.detail-ls__price { font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-4); font-variant-numeric:tabular-nums; }
+.detail-ls__meta { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+.detail-ls__meta.pos { color:var(--pos); }
+.detail-ls__meta.neg { color:var(--neg); }
+.pv-volstats { display:flex; gap:var(--s-4); font-size:var(--fs-1); color:var(--muted); margin:var(--s-2) 0; }
+.pv-volstats b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Trade tab: Long/Short setup mockup box */
+.trade-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
+@media (max-width:479px) { .trade-grid { grid-template-columns:1fr; } }
+.trade-col { border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2); padding:var(--s-3); min-width:0; }
+.trade-col__head {
+  font-size:var(--fs-2); font-weight:var(--fw-bold); text-transform:uppercase;
+  letter-spacing:0.04em; margin-bottom:var(--s-2);
+}
+.trade-col--long  .trade-col__head { color:var(--pos); }
+.trade-col--short .trade-col__head { color:var(--neg); }
+.trade-sub {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  margin:var(--s-3) 0 var(--s-1);
+}
+.trade-sub small { font-weight:var(--fw-reg); }
+.trade-col__head + .trade-sub { margin-top:0; }
+.trade-row { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); padding:2px 0; font-size:var(--fs-2); }
+.trade-row span:first-child { min-width:0; overflow-wrap:anywhere; }
+.trade-val {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums; color:var(--muted);
+  background:var(--surface-3); border:1px dashed var(--border); border-radius:var(--r-1);
+  padding:0 var(--s-2); min-width:56px; text-align:right; flex-shrink:0;
+}
+
+/* Placeholder cards (Breakout/Breakdown/Swing-Check/Analyst Targets) */
+.ph-card { border:1px dashed var(--border); border-radius:var(--r-2); background:var(--surface-2); padding:var(--s-3); margin-top:var(--s-3); }
+.ph-card__head { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.ph-tag {
+  font-size:var(--fs-1); font-weight:var(--fw-reg); color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--r-pill); padding:0 var(--s-2);
+}
+.ph-card p { margin-top:var(--s-1); font-size:var(--fs-1); color:var(--muted); }
+.ph-note { font-size:var(--fs-1); color:var(--muted); margin-top:var(--s-2); }
+
 /* ── Sub-nav alert button + badge ──────────────────────────────────────── */
 .subnav-alert { position:relative; display:inline-flex; align-items:center; justify-content:center;
   width:34px; height:30px; border:1px solid var(--border); border-radius:var(--r-1);

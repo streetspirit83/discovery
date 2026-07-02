@@ -1,14 +1,22 @@
 import { enrichCandidate } from '../lib/claude-api.js';
-import { scoreRingSVG, renderPerformanceSection } from '../lib/price-viz.js?v=20260627j';
+import {
+  scoreRingSVG, priceLadderSVG, priceLadderLegend,
+  perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
+} from '../lib/price-viz.js?v=20260702a';
 import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
+import { sparklineSVG } from '../lib/spark.js?v=20260626e';
+import { icons } from '../lib/icons.js?v=20260702a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
 const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
 
-const CLOSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
-const CHEV_L = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`;
-const CHEV_R = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+const TABS = [
+  { key: 'performance', label: 'Performance' },
+  { key: 'trade',       label: 'Trade' },
+  { key: 'fundamental', label: 'Fundamental' },
+  { key: 'meta',        label: 'Meta' },
+];
 
 function formatDate(isoStr) {
   if (!isoStr) return '';
@@ -25,6 +33,10 @@ function formatMarketCap(mc) {
   if (mc >= 1e6)  return `${(mc / 1e6).toFixed(0)}M`;
   return mc.toLocaleString('de-DE');
 }
+
+const fmtNum = (v, dec = 2) => (v == null || Number.isNaN(v) ? '—'
+  : Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
+const fmtPct = (v, dec = 1) => (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(dec)}%`);
 
 // Percent-unit fundamentals (already in %, e.g. 25.3 → "25.3%").
 function pctVal(v) { return v == null ? '—' : `${v.toFixed(1)}%`; }
@@ -51,41 +63,247 @@ function tvRatingLabel(r) {
   return 'Neutral →';
 }
 
-function renderTVData(c) {
-  const tv = c.tv_data;
-  if (!tv) return '';
-  const ratingClass = tvRatingClass(tv.rating);
-  const description = tv.description ?? c.name ?? '';
-  const industry = c.sub_sector ?? tv.industry ?? '';
+/* ── Sub-header toolbar (icon-only links + quick actions) ─────────────────── */
+
+function chipLink(href, inner, label, extraClass = '') {
+  if (href) {
+    return `<a href="${href}" class="link-chip ${extraClass}" target="_blank" rel="noopener"
+      title="${label}" aria-label="${label}">${inner}</a>`;
+  }
+  return `<span class="link-chip link-chip--missing ${extraClass}" title="${label} – kein Link" aria-hidden="true">${inner}</span>`;
+}
+
+function chipBtn(id, inner, label, extraClass = '') {
+  return `<button type="button" class="link-chip ${extraClass}" id="${id}"
+    title="${label}" aria-label="${label}">${inner}</button>`;
+}
+
+function renderToolbar(c) {
+  const links = c.links ?? {};
+  const scUrl = c.symbol
+    ? `https://www.stockconsultant.com/consultnow/basicplus.cgi?symbol=${encodeURIComponent(c.symbol)}`
+    : null;
   return `
-    <div class="detail-section">
-      <h3>TV Daten</h3>
-      ${description ? `<p style="margin-bottom:8px;font-size:13px;color:var(--text)">${description}</p>` : ''}
-      ${industry ? `<p style="margin-bottom:10px;font-size:12px;color:var(--muted)">${industry}${c.sector ? ` · ${c.sector}` : ''}</p>` : ''}
-      <div class="tv-data-grid">
-        <div class="tv-kv">
-          <span>Rating</span>
-          <strong class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</strong>
-        </div>
-        <div class="tv-kv"><span>Market Cap</span><strong>${formatMarketCap(tv.market_cap)}</strong></div>
-        <div class="tv-kv"><span>Kurs</span><strong>${tv.close != null ? tv.close.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong></div>
-        <div class="tv-kv"><span>KGV (TTM)</span><strong>${tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—'}</strong></div>
-        <div class="tv-kv"><span>Dividende</span><strong>${tv.dividend_yield != null ? tv.dividend_yield.toFixed(2) + '%' : '—'}</strong></div>
-        <div class="tv-kv"><span>Nächste Earnings</span><strong>${tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—'}</strong></div>
-        <div class="tv-kv"><span>RSI</span><strong>${tv.rsi != null ? tv.rsi.toFixed(1) : '—'}</strong></div>
-        <div class="tv-kv"><span>Beta</span><strong>${tv.beta != null ? tv.beta.toFixed(2) : '—'}</strong></div>
-        <div class="tv-kv"><span>ROE</span><strong>${pctVal(tv.return_on_equity)}</strong></div>
-        <div class="tv-kv"><span>Op-Marge</span><strong>${pctVal(tv.operating_margin)}</strong></div>
-        <div class="tv-kv"><span>Umsatz YoY</span><strong class="${growthCls(tv.total_revenue_yoy_growth_ttm)}">${pctVal(tv.total_revenue_yoy_growth_ttm)}</strong></div>
-        <div class="tv-kv"><span>EBITDA YoY</span><strong class="${growthCls(tv.ebitda_yoy_growth_ttm)}">${pctVal(tv.ebitda_yoy_growth_ttm)}</strong></div>
-        <div class="tv-kv"><span>Debt/Equity</span><strong>${ratioVal(tv.debt_to_equity)}</strong></div>
-        <div class="tv-kv"><span>EV/EBITDA</span><strong>${ratioVal(tv.enterprise_value_ebitda_ttm)}</strong></div>
+    <div class="detail-toolbar">
+      <div class="detail-toolbar__links">
+        ${chipLink(links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView', 'link-chip--tv')}
+        ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
+        ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
+        ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
+        ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
       </div>
-      ${c.sector ? `<div class="tv-meta"><span class="tag">${c.sector}</span>${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}</div>` : ''}
-      <small class="tv-fetched">Stand: ${formatDate(tv.fetched_at)}</small>
+      <span class="detail-toolbar__sep"></span>
+      <div class="detail-toolbar__actions">
+        ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
+        ${chipBtn('detail-ls', icons.activity, 'LS-Echtzeitkurs laden (EUR)')}
+        ${chipBtn('detail-td', icons.candlestick, 'TwelveData Swing-Kurse – folgt (Mockup)', 'link-chip--mock')}
+      </div>
+    </div>
+    <div class="detail-links-edit" id="detail-links-edit" hidden>
+      <div class="link-url-fields">
+        <div class="link-url-row">
+          <label>TradingView URL</label>
+          <input type="url" id="lf-tv" value="${links.tradingview ?? ''}" placeholder="https://www.tradingview.com/…">
+        </div>
+        <div class="link-url-row">
+          <label>StockTwits URL</label>
+          <input type="url" id="lf-st" value="${links.stocktwits ?? ''}" placeholder="https://stocktwits.com/…">
+        </div>
+        <div class="link-url-row">
+          <label>Yahoo Finance URL</label>
+          <input type="url" id="lf-yahoo" value="${links.yahoo ?? ''}" placeholder="https://finance.yahoo.com/…">
+        </div>
+        <button class="btn btn-sm btn-secondary" id="detail-save-links">Links speichern</button>
+      </div>
     </div>
   `;
 }
+
+/* ── Tab 1: Performance ───────────────────────────────────────────────────── */
+
+function lsIntradayHTML(c) {
+  const q = c.ls_quote;
+  const followUp = `<p class="ph-note">10-Tage-Verlauf + Volumen-% (Tagesvolumen / Ø Vol 10T): folgt.</p>`;
+  if (!Array.isArray(q?.series) || q.series.length < 2) {
+    return `<h4 class="pv-subhead">Intraday (LS · EUR)</h4>
+      <p class="pv-empty">Kein LS-Tagesverlauf – über das Live-Icon in der Symbolleiste laden.</p>${followUp}`;
+  }
+  const chg = q.change_pct;
+  const chgCls = chg == null ? '' : chg >= 0 ? 'pos' : 'neg';
+  return `<h4 class="pv-subhead">Intraday (LS · EUR)</h4>
+    <div class="detail-ls" title="Tagesspanne ${fmtNum(q.day_low)}–${fmtNum(q.day_high)}">
+      ${sparklineSVG(q.series, q.prev_close, chg)}
+      <div class="detail-ls__stat">
+        <span class="detail-ls__price">${fmtNum(q.price)} €</span>
+        <span class="detail-ls__meta ${chgCls}">${fmtPct(chg)} · ${formatDate(q.checked_at)}</span>
+      </div>
+    </div>${followUp}`;
+}
+
+function volStatsHTML(tv) {
+  if (!tv || (tv.rsi == null && tv.atr == null)) return '';
+  return `<div class="pv-volstats">
+    <span>RSI <b>${tv.rsi != null ? tv.rsi.toFixed(1) : '—'}</b></span>
+    <span>ATR <b>${tv.atr != null ? fmtNum(tv.atr) : '—'}${tv.atrp != null ? ` (${tv.atrp.toFixed(1)}%)` : ''}</b></span>
+  </div>`;
+}
+
+function renderPerformanceTab(c) {
+  const tv = c.tv_data;
+  const parts = [];
+  if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
+  if (tv) {
+    const ladder = priceLadderSVG(tv);
+    if (!ladder.includes('pv-empty')) {
+      parts.push(`<h4 class="pv-subhead">Trend-Band (ATH · SMAs · 52W · Pivots)</h4>
+        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend()}</div>`);
+    }
+  }
+  parts.push(lsIntradayHTML(c));
+  if (tv) {
+    const perf = perfBarsHTML(tv);
+    if (perf) parts.push(`<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}`);
+    const ranges = rangeBandsHTML(tv);
+    const vol = volStatsHTML(tv);
+    const gauge = bollingerGaugeHTML(tv);
+    if (ranges || vol || gauge) {
+      parts.push(`<h4 class="pv-subhead">Range &amp; Volatilität (1M–52W)</h4>${ranges}${vol}${gauge}`);
+    }
+  }
+  return parts.join('');
+}
+
+/* ── Tab 2: Trade (UI-Mockup, Berechnung folgt) ───────────────────────────── */
+
+function tradeRow(label) {
+  return `<div class="trade-row" title="Platzhalter – Berechnung folgt">
+    <span>${label}</span><span class="trade-val">–</span>
+  </div>`;
+}
+
+function phCard(title, tag, note) {
+  return `<div class="ph-card">
+    <div class="ph-card__head">${title}${tag ? `<span class="ph-tag">${tag}</span>` : ''}</div>
+    <p>${note}</p>
+  </div>`;
+}
+
+function renderTradeTab() {
+  return `
+    <h4 class="pv-subhead">Setup-Box (Platzhalter – Berechnung folgt)</h4>
+    <div class="trade-grid">
+      <div class="trade-col trade-col--long">
+        <h5 class="trade-col__head">Long Setup</h5>
+        <div class="trade-sub">Entry-Trigger</div>
+        ${tradeRow('Pivot R1 (1W)')}
+        ${tradeRow('Pivot R2 / R3')}
+        ${tradeRow('Pivot R1 (1M)')}
+        <div class="trade-sub">Exits &amp; Hard Stops <small>(unter Support −0,02 €)</small></div>
+        ${tradeRow('L3M − 0,5 × ATR')}
+        ${tradeRow('SMA200 − 0,5 × ATR')}
+        ${tradeRow('Chandelier (High|22 − ATR|22 × Mult)')}
+      </div>
+      <div class="trade-col trade-col--short">
+        <h5 class="trade-col__head">Short Setup</h5>
+        <div class="trade-sub">Entry-Trigger</div>
+        ${tradeRow('Breakout: High|20 + 0,01 %')}
+        ${tradeRow('Bottom-Signal (Trend/Vol/Candle/Kompression)')}
+        <div class="trade-sub">Exits &amp; Trailing Stops</div>
+        ${tradeRow('Low|10')}
+        ${tradeRow('SMA20-MOM (&lt; SMA20 − 0,5 × ATR)')}
+        ${tradeRow('2W-Low (absolut)')}
+        ${tradeRow('L1M − 0,5 × ATR')}
+        ${tradeRow('Chandelier (Low|22 + ATR|22 × Mult)')}
+      </div>
+    </div>
+    ${phCard('Breakout-Wahrscheinlichkeit', 'Nächste 10 T', 'Platzhalter – Berechnung folgt (docs/BREAKOUT_PROBABILITY_SPEC.md).')}
+    ${phCard('Breakdown-Wahrscheinlichkeit', 'Nächste 10 T', 'Platzhalter – Berechnung folgt (docs/BREAKDOWN_PROBABILITY_SPEC.md).')}
+    ${phCard('Swing-Check', 'TwelveData', 'Platzhalter – Umsetzung folgt (docs/SWING_CHECK_HANDOVER.md).')}
+    ${phCard('Analyst Targets', '', 'Platzhalter – Datenquelle folgt.')}
+  `;
+}
+
+/* ── Tab 3: Fundamentaldaten (TV) ─────────────────────────────────────────── */
+
+function kv(label, value, cls = '') {
+  return `<div class="tv-kv"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
+}
+
+function renderFundamentalTab(c) {
+  const tv = c.tv_data;
+  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  const ratingClass = tvRatingClass(tv.rating);
+  return `
+    <div class="tv-data-grid">
+      ${kv('Rating', `<span class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</span>`)}
+      ${kv('Stand', formatDate(tv.fetched_at) || '—')}
+    </div>
+    <h4 class="pv-subhead">Markt</h4>
+    <div class="tv-data-grid">
+      ${kv('Kurs', fmtNum(tv.close))}
+      ${kv('Market Cap', formatMarketCap(tv.market_cap))}
+      ${kv('Beta', tv.beta != null ? tv.beta.toFixed(2) : '—')}
+      ${kv('Nächste Earnings', tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—')}
+    </div>
+    <h4 class="pv-subhead">Kennzahlen</h4>
+    <div class="tv-data-grid">
+      ${kv('KGV (TTM)', tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—')}
+      ${kv('ROE', pctVal(tv.return_on_equity))}
+      ${kv('Dividende', tv.dividend_yield != null ? `${tv.dividend_yield.toFixed(2)}%` : '—')}
+      ${kv('Debt/Equity', ratioVal(tv.debt_to_equity))}
+    </div>
+    <h4 class="pv-subhead">Wachstum</h4>
+    <div class="tv-data-grid">
+      ${kv('Umsatz YoY', pctVal(tv.total_revenue_yoy_growth_ttm), growthCls(tv.total_revenue_yoy_growth_ttm))}
+      ${kv('OP-Marge', pctVal(tv.operating_margin))}
+      ${kv('EBITDA YoY', pctVal(tv.ebitda_yoy_growth_ttm), growthCls(tv.ebitda_yoy_growth_ttm))}
+      ${kv('EV/EBITDA', ratioVal(tv.enterprise_value_ebitda_ttm))}
+    </div>
+  `;
+}
+
+/* ── Tab 4: Meta (Quellen + Merkliste-Mapping) ────────────────────────────── */
+
+function renderSource(source, idx) {
+  const rawJson = JSON.stringify(source.raw_signal ?? {}, null, 2);
+  return `
+    <details class="source-item" ${idx === 0 ? 'open' : ''}>
+      <summary>
+        <span class="source-adapter">${source.adapter}</span>
+        <span class="source-signal">${source.signal_type}</span>
+        <small>${formatDate(source.discovered_at)}</small>
+      </summary>
+      <div class="source-body">
+        <p class="source-snippet">${source.info_snippet ?? ''}</p>
+        <a href="${source.source_url}" target="_blank" rel="noopener">Quelle öffnen ↗</a>
+        <details class="raw-signal">
+          <summary>Raw Signal</summary>
+          <pre>${rawJson}</pre>
+        </details>
+      </div>
+    </details>
+  `;
+}
+
+function renderMetaTab(c) {
+  return `
+    <h4 class="pv-subhead">Screener / Signal-Herkunft (${c.sources.length})</h4>
+    <div class="sources-list">
+      ${c.sources.map((s, i) => renderSource(s, i)).join('')}
+    </div>
+    <h4 class="pv-subhead">Merkliste-Mapping</h4>
+    <div class="link-url-fields">
+      <div class="link-url-row">
+        <label>Merkliste-Symbol (Fallback)</label>
+        <input type="text" id="lf-merkliste" value="${c.merkliste_symbol ?? ''}" placeholder="z. B. RHM oder RHM.DE">
+      </div>
+      <button class="btn btn-sm btn-secondary" id="detail-save-merkliste">Mapping speichern</button>
+      <p class="detail-hint">Zusätzlicher Schlüssel, um diesen Kandidaten dem Merkliste-Portfolio zuzuordnen (Einstand &amp; P/L), falls Symbol/Yahoo-Symbol nicht matchen.</p>
+    </div>
+  `;
+}
+
+/* ── Enrichment (footer) ──────────────────────────────────────────────────── */
 
 function renderEnrichment(enrichment) {
   if (!enrichment) return '';
@@ -144,37 +362,7 @@ function renderEnrichment(enrichment) {
   `;
 }
 
-function renderSource(source, idx) {
-  const rawJson = JSON.stringify(source.raw_signal ?? {}, null, 2);
-  return `
-    <details class="source-item" ${idx === 0 ? 'open' : ''}>
-      <summary>
-        <span class="source-adapter">${source.adapter}</span>
-        <span class="source-signal">${source.signal_type}</span>
-        <small>${formatDate(source.discovered_at)}</small>
-      </summary>
-      <div class="source-body">
-        <p class="source-snippet">${source.info_snippet ?? ''}</p>
-        <a href="${source.source_url}" target="_blank" rel="noopener">Quelle öffnen ↗</a>
-        <details class="raw-signal">
-          <summary>Raw Signal</summary>
-          <pre>${rawJson}</pre>
-        </details>
-      </div>
-    </details>
-  `;
-}
-
-function linkBtn(href, logo, label, cssClass) {
-  if (href) {
-    return `<a href="${href}" target="_blank" rel="noopener" class="link-btn ${cssClass}">
-      <img src="${logo}" class="link-btn-logo" alt="" loading="lazy"> ${label} ↗
-    </a>`;
-  }
-  return `<span class="link-btn ${cssClass} link-btn--missing">
-    <img src="${logo}" class="link-btn-logo" alt="" loading="lazy"> ${label}
-  </span>`;
-}
+/* ── Component ────────────────────────────────────────────────────────────── */
 
 export class CandidateDetail {
   constructor(sheetEl, { onAction, onClose, getSiblings }) {
@@ -183,6 +371,7 @@ export class CandidateDetail {
     this.onClose = onClose;
     this.getSiblings = getSiblings;   // () => ordered candidate list (current table sort)
     this.candidate = null;
+    this.activeTab = 'performance';
   }
 
   // Step to the prev/next candidate in the current sort order (swipe / arrows).
@@ -198,6 +387,7 @@ export class CandidateDetail {
   }
 
   show(candidate) {
+    if (this.candidate?.id !== candidate.id) this.activeTab = 'performance'; // Tab 1 onload
     this.candidate = candidate;
     this.render();
   }
@@ -207,14 +397,32 @@ export class CandidateDetail {
     this.onClose?.();
   }
 
+  setTab(tab) {
+    this.activeTab = tab;
+    this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((b) => {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    this.el.querySelectorAll('.detail-tabpanes > .tab-panel').forEach((p) => {
+      p.classList.toggle('active', p.dataset.panel === tab);
+    });
+  }
+
   render() {
     if (!this.candidate) return;
     const c = this.candidate;
-    const links = c.links ?? {};
 
     const stateMap = {
       new: 'Neu', reviewed: 'Gesehen', promoted: 'Promoted',
       dismissed: 'Abgelehnt', imported: 'Importiert',
+    };
+
+    const tabPanels = {
+      performance: renderPerformanceTab(c),
+      trade:       renderTradeTab(c),
+      fundamental: renderFundamentalTab(c),
+      meta:        renderMetaTab(c),
     };
 
     this.el.innerHTML = `
@@ -222,11 +430,16 @@ export class CandidateDetail {
         <div class="detail-title">
           <h2>${c.symbol} <span class="exchange-tag">${c.exchange}</span></h2>
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
-          ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} 📋</small>` : ''}
+          ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} ${icons.clipboard}</small>` : ''}
+          <div class="detail-tags">
+            <span class="tag tag--ph" title="Cluster – folgt">Cluster</span>
+            ${c.sector ? `<span class="tag">${c.sector}</span>` : ''}
+            ${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}
+          </div>
         </div>
         <div class="detail-header-right">
           ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
-          <button class="icon-btn" id="detail-close" aria-label="Schließen">${CLOSE_ICON}</button>
+          <button class="icon-btn" id="detail-close" aria-label="Schließen">${icons.xMark}</button>
         </div>
       </div>
 
@@ -235,9 +448,9 @@ export class CandidateDetail {
         const idx = list.findIndex((x) => x.id === c.id);
         if (list.length < 2 || idx < 0) return '';
         return `<div class="detail-nav">
-          <button class="detail-nav__btn" id="detail-prev" ${idx <= 0 ? 'disabled' : ''} aria-label="Vorheriger Kandidat">${CHEV_L} Zurück</button>
+          <button class="detail-nav__btn" id="detail-prev" ${idx <= 0 ? 'disabled' : ''} aria-label="Vorheriger Kandidat">${icons.chevronLeft} Zurück</button>
           <span class="detail-nav__pos">${idx + 1} / ${list.length}</span>
-          <button class="detail-nav__btn" id="detail-next" ${idx >= list.length - 1 ? 'disabled' : ''} aria-label="Nächster Kandidat">Weiter ${CHEV_R}</button>
+          <button class="detail-nav__btn" id="detail-next" ${idx >= list.length - 1 ? 'disabled' : ''} aria-label="Nächster Kandidat">Weiter ${icons.chevronRight}</button>
         </div>`;
       })()}
 
@@ -245,62 +458,27 @@ export class CandidateDetail {
         Status: <strong>${stateMap[c.workspace_state] ?? c.workspace_state}</strong>
         &nbsp;
         ${c.workspace_state !== 'promoted' && c.workspace_state !== 'imported'
-          ? `<button class="btn btn-sm btn-success" id="detail-promote">✓ Promoten</button>`
+          ? `<button class="btn btn-sm btn-success" id="detail-promote">${icons.check} Promoten</button>`
           : ''}
         ${c.workspace_state !== 'dismissed'
-          ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">✗ Ablehnen</button>`
+          ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">${icons.xMark} Ablehnen</button>`
           : ''}
-        <button class="btn btn-sm btn-secondary" id="detail-export">⤓ Export</button>
+        <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} Export</button>
         ${c.workspace_state === 'new'
-          ? `<button class="btn btn-sm" id="detail-review">👁 Als gesehen markieren</button>`
+          ? `<button class="btn btn-sm" id="detail-review">${icons.eye} Gesehen</button>`
           : ''}
       </div>
 
-      ${renderTVData(c)}
+      ${renderToolbar(c)}
 
-      ${renderPerformanceSection(c.tv_data)}
-
-      <div class="detail-section">
-        <h3>Quellen (${c.sources.length})</h3>
-        <div class="sources-list">
-          ${c.sources.map((s, i) => renderSource(s, i)).join('')}
-        </div>
+      <div class="tab-bar detail-tabs" role="tablist">
+        ${TABS.map(({ key, label }) =>
+          `<button class="tab-btn${this.activeTab === key ? ' active' : ''}" data-tab="${key}"
+            role="tab" aria-selected="${this.activeTab === key}">${label}</button>`).join('')}
       </div>
-
-      <div class="detail-section">
-        <h3>Links</h3>
-        <div class="detail-links-btns">
-          ${linkBtn(links.tradingview, TV_LOGO, 'TradingView', 'link-tv')}
-          ${linkBtn(links.stocktwits, ST_LOGO, 'StockTwits',  'link-st')}
-          ${linkBtn(links.yahoo,      YH_LOGO, 'Yahoo Finance','link-yahoo')}
-        </div>
-        <div class="link-url-fields">
-          <div class="link-url-row">
-            <label>TradingView URL</label>
-            <input type="url" id="lf-tv" value="${links.tradingview ?? ''}" placeholder="https://www.tradingview.com/…">
-          </div>
-          <div class="link-url-row">
-            <label>StockTwits URL</label>
-            <input type="url" id="lf-st" value="${links.stocktwits ?? ''}" placeholder="https://stocktwits.com/…">
-          </div>
-          <div class="link-url-row">
-            <label>Yahoo Finance URL</label>
-            <input type="url" id="lf-yahoo" value="${links.yahoo ?? ''}" placeholder="https://finance.yahoo.com/…">
-          </div>
-          <button class="btn btn-sm btn-secondary" id="detail-save-links">Links speichern</button>
-        </div>
-      </div>
-
-      <div class="detail-section">
-        <h3>Merkliste-Mapping</h3>
-        <div class="link-url-fields">
-          <div class="link-url-row">
-            <label>Merkliste-Symbol (Fallback)</label>
-            <input type="text" id="lf-merkliste" value="${c.merkliste_symbol ?? ''}" placeholder="z. B. RHM oder RHM.DE">
-          </div>
-          <button class="btn btn-sm btn-secondary" id="detail-save-merkliste">Mapping speichern</button>
-          <p class="detail-hint">Zusätzlicher Schlüssel, um diesen Kandidaten dem Merkliste-Portfolio zuzuordnen (Einstand &amp; P/L), falls Symbol/Yahoo-Symbol nicht matchen.</p>
-        </div>
+      <div class="detail-tabpanes">
+        ${TABS.map(({ key }) =>
+          `<div class="tab-panel${this.activeTab === key ? ' active' : ''}" data-panel="${key}" role="tabpanel">${tabPanels[key]}</div>`).join('')}
       </div>
 
       <div class="detail-section">
@@ -316,7 +494,7 @@ export class CandidateDetail {
           : `<p class="no-enrichment">Noch kein Enrichment vorhanden.</p>`
         }
         <button class="btn btn-sm btn-ai" id="detail-enrich">
-          ${c.enrichment ? '🔄 Neu enrichen' : '✨ AI-Enrichment ausführen'}
+          ${icons.sparkles} ${c.enrichment ? 'Neu enrichen' : 'AI-Enrichment ausführen'}
         </button>
         <div id="enrich-status" class="enrich-status" style="display:none"></div>
       </div>
@@ -359,6 +537,28 @@ export class CandidateDetail {
 
     this.el.querySelector('#detail-prev')?.addEventListener('pointerup', () => this.navigate(-1));
     this.el.querySelector('#detail-next')?.addEventListener('pointerup', () => this.navigate(1));
+
+    // Tabs
+    this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((btn) => {
+      btn.addEventListener('pointerup', () => this.setTab(btn.dataset.tab));
+    });
+
+    // Toolbar: edit-toggle + quick actions
+    const editBtn = this.el.querySelector('#detail-edit-links');
+    editBtn.addEventListener('pointerup', () => {
+      const panel = this.el.querySelector('#detail-links-edit');
+      panel.hidden = !panel.hidden;
+      editBtn.classList.toggle('is-active', !panel.hidden);
+    });
+    this.el.querySelector('#detail-trigger').addEventListener('pointerup', () => {
+      this.onAction?.('openTrigger', c);
+    });
+    this.el.querySelector('#detail-ls').addEventListener('pointerup', () => {
+      this.onAction?.('lsQuote', c);
+    });
+    this.el.querySelector('#detail-td').addEventListener('pointerup', () => {
+      this.onAction?.('tdQuote', c);
+    });
 
     this.el.querySelector('#detail-save-links').addEventListener('pointerup', () => {
       const newLinks = {

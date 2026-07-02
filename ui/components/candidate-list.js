@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260625l';
+import { icons } from '../lib/icons.js?v=20260702a';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
