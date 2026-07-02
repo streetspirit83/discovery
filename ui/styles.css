@@ -633,6 +633,12 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .sheet.is-open { transform:translateX(0); }
 .sheet--detail { width:min(480px,86vw); }
 @media (max-width:767px) { .sheet--detail { width:100vw; } }
+/* The sheet is a column flexbox: once content is taller than the viewport, its
+   direct children shrink by default (flex-shrink:1) — and rows that set
+   overflow-x or min-width:0 have a ZERO minimum size, so they collapse to
+   slivers (toolbar icons "disappear", tag row turns into a clipped frame).
+   Rows must keep their natural height; the sheet itself scrolls. */
+.sheet--detail > * { flex-shrink:0; }
 
 .sheet__header {
   display:flex; align-items:flex-start; justify-content:space-between;
@@ -669,8 +675,12 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border);
   display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap; font-size:var(--fs-3);
 }
-.detail-state .btn { flex:1 1 0; min-width:0; justify-content:center; }
-.detail-state .btn span, .detail-state .btn svg { flex-shrink:0; }
+/* flex-basis:auto (not 0): free space is shared but wide labels ("Promoten")
+   keep more room than short ones ("Export"), so labels fit at phone widths. */
+.detail-state .btn { flex:1 1 auto; min-width:0; justify-content:center; padding:var(--s-1) var(--s-2); }
+.detail-state .btn svg { flex-shrink:0; }
+/* Label truncates with … instead of spilling out of a shrunken button. */
+.detail-state .btn .btn__label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Detail sections */
 .detail-section { padding:var(--s-4); border-bottom:1px solid var(--border); }
@@ -1450,9 +1460,13 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    DETAIL SHEET REWORK — header tags · toolbar · tabs · trade mockup
    ════════════════════════════════════════════════════════════════ */
 .detail-title { min-width:0; }
-/* Cluster/Sector tags: one line, no wrap (STYLEGUIDE.md §5) — scrolls
-   horizontally on narrow phones rather than breaking to a 2nd line. */
-.detail-tags { display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-top:var(--s-2); overflow-x:auto; }
+/* Cluster/Sector tags: one line, no wrap (STYLEGUIDE.md §5). If too narrow the
+   row pans horizontally, but without a visible scrollbar/frame. */
+.detail-tags {
+  display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-top:var(--s-2);
+  overflow-x:auto; scrollbar-width:none;
+}
+.detail-tags::-webkit-scrollbar { display:none; }
 .detail-tags .tag { flex-shrink:0; white-space:nowrap; }
 .tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
 .isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }

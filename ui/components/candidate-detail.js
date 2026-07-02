@@ -451,12 +451,12 @@ export class CandidateDetail {
 
       <div class="detail-state">
         ${c.workspace_state !== 'promoted' && c.workspace_state !== 'imported'
-          ? `<button class="btn btn-sm btn-success" id="detail-promote">${icons.check} Promoten</button>`
+          ? `<button class="btn btn-sm btn-success" id="detail-promote">${icons.check} <span class="btn__label">Promoten</span></button>`
           : ''}
         ${c.workspace_state !== 'dismissed'
-          ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">${icons.xMark} Ablehnen</button>`
+          ? `<button class="btn btn-sm btn-danger" id="detail-dismiss">${icons.xMark} <span class="btn__label">Ablehnen</span></button>`
           : ''}
-        <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} Export</button>
+        <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} <span class="btn__label">Export</span></button>
       </div>
 
       ${renderToolbar(c)}
