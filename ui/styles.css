@@ -1425,6 +1425,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .pv-leg__sw--band    { background:var(--ai); }
 .pv-leg__sw--resist  { background:var(--neg); }
 .pv-leg__sw--support { background:var(--pos); }
+.pv-leg__sw--clu-sup { background:var(--pos); opacity:.3; height:7px; }
+.pv-leg__sw--clu-res { background:var(--neg); opacity:.3; height:7px; }
 
 /* Return-per-period diverging bars */
 .pv-perf { display:flex; flex-direction:column; gap:7px; }
@@ -1460,6 +1462,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .pv-lbl--cur    { fill:var(--accent); font-weight:700; }
 .pv-cur { stroke:var(--accent); stroke-width:2.5; }
 .pv-cur-dot { fill:var(--accent); }
+/* Price-cluster confluence bands in the ladder (opacity set inline by score) */
+.pv-clu--sup { fill:var(--pos); }
+.pv-clu--res { fill:var(--neg); }
+.pv-clu--at  { fill:var(--accent); }
 .pv-foot { font-size:var(--fs-1); color:var(--muted); margin-top:8px; line-height:1.6; text-align:center; }
 .pv-foot b { color:var(--text); }
 .pv-foot .pos { color:var(--pos); } .pv-foot .neg { color:var(--neg); }
@@ -1530,6 +1536,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:22px; height:22px; }
 button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .link-chip--mock { opacity:0.45; }
+/* Currency toggle chip in the detail toolbar: text glyph instead of an icon */
+.link-chip .cur-label { font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1; }
 .detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }
 
 /* Tab bar + panels inside the sheet */

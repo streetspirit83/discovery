@@ -2,10 +2,14 @@ import { enrichCandidate } from '../lib/claude-api.js';
 import {
   scoreRingSVG, priceLadderSVG, priceLadderLegend,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
-} from '../lib/price-viz.js?v=20260702a';
+} from '../lib/price-viz.js?v=20260702h';
 import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
 import { sparklineSVG } from '../lib/spark.js?v=20260626e';
 import { icons } from '../lib/icons.js?v=20260702a';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
+import { detectBottomSignal } from '../lib/ls-history-signals.js?v=20260702e';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
+import { normalizeExchange } from '../lib/exchange-map.js';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -37,6 +41,37 @@ function formatMarketCap(mc) {
 const fmtNum = (v, dec = 2) => (v == null || Number.isNaN(v) ? '—'
   : Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
 const fmtPct = (v, dec = 1) => (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(dec)}%`);
+
+// ── Display currency (native ↔ USD/EUR toggle) ────────────────────────────────
+
+function nativeCur(c) { return EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? 'USD'; }
+
+// Same resolution order as the table: live TV rate, then the manual setting.
+function resolveFx() {
+  const live = parseFloat(localStorage.getItem('discovery_fx_eurusd_live') ?? '');
+  if (Number.isFinite(live) && live > 0) return live;
+  const manual = parseFloat((localStorage.getItem('discovery_fx_eurusd') ?? '').replace(',', '.'));
+  return Number.isFinite(manual) && manual > 0 ? manual : null;
+}
+
+// tv_data fields carrying absolute prices (percentages/ratios must NOT scale).
+const PRICE_FIELDS = [
+  'close', 'close_1m', 'open', 'atr',
+  'sma20', 'sma50', 'sma100', 'sma200', 'ema10', 'ema20', 'ema50', 'ema100', 'ema200',
+  'bb_upper', 'bb_lower', 'donch_ch20_lower_1m', 'donch_ch20_upper_1m', 'high_20d', 'low_20d',
+  'pivot_r1', 'pivot_r2', 'pivot_r3', 'pivot_s1', 'pivot_s2', 'pivot_s3',
+  'pivot_r1_1w', 'pivot_r2_1w', 'pivot_r3_1w', 'pivot_s1_1w', 'pivot_s2_1w', 'pivot_s3_1w',
+  'pivot_demark_r1_1w', 'pivot_demark_s1_1w',
+  'high_1m', 'low_1m', 'high_3m', 'low_3m', 'high_6m', 'low_6m',
+  'price_52_week_high', 'price_52_week_low', 'high_all', 'low_all', 'high_52w',
+];
+
+function convertTv(tv, factor) {
+  if (!tv || factor === 1) return tv;
+  const out = { ...tv };
+  for (const f of PRICE_FIELDS) if (out[f] != null) out[f] = out[f] * factor;
+  return out;
+}
 
 // Percent-unit fundamentals (already in %, e.g. 25.3 → "25.3%").
 function pctVal(v) { return v == null ? '—' : `${v.toFixed(1)}%`; }
@@ -78,11 +113,14 @@ function chipBtn(id, inner, label, extraClass = '') {
     title="${label}" aria-label="${label}">${inner}</button>`;
 }
 
-function renderToolbar(c) {
+function renderToolbar(c, disp) {
   const links = c.links ?? {};
   const scUrl = c.symbol
     ? `https://www.stockconsultant.com/consultnow/basicplus.cgi?symbol=${encodeURIComponent(c.symbol)}`
     : null;
+  const curTip = disp.canSwitch
+    ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
+    : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
   return `
     <div class="detail-toolbar">
       <div class="detail-toolbar__links">
@@ -94,6 +132,7 @@ function renderToolbar(c) {
       </div>
       <span class="detail-toolbar__sep"></span>
       <div class="detail-toolbar__actions">
+        ${chipBtn('detail-currency', `<span class="cur-label">${disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur}</span>`, curTip, disp.canSwitch ? (disp.factor !== 1 ? 'is-active' : '') : 'link-chip--mock')}
         ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
         ${chipBtn('detail-ls', icons.activity, 'LS-Echtzeitkurs laden (EUR)')}
         ${chipBtn('detail-td', icons.candlestick, 'TwelveData Swing-Kurse – folgt (Mockup)', 'link-chip--mock')}
@@ -121,20 +160,24 @@ function renderToolbar(c) {
 
 /* ── Tab 1: Performance ───────────────────────────────────────────────────── */
 
-function lsIntradayHTML(c) {
+function lsIntradayHTML(c, disp) {
   const q = c.ls_quote;
+  // LS quotes are EUR; convert to the display currency where a rate exists.
+  const f = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+  const sym = f == null ? '€' : disp.cur === 'EUR' ? '€' : '$';
+  const conv = (v) => (v == null || f == null ? v : v * f);
   const followUp = `<p class="ph-note">10-Tage-Verlauf + Volumen-% (Tagesvolumen / Ø Vol 10T): folgt.</p>`;
   if (!Array.isArray(q?.series) || q.series.length < 2) {
-    return `<h4 class="pv-subhead">Intraday (LS · EUR)</h4>
+    return `<h4 class="pv-subhead">Intraday (LS · ${sym})</h4>
       <p class="pv-empty">Kein LS-Tagesverlauf – über das Live-Icon in der Symbolleiste laden.</p>${followUp}`;
   }
   const chg = q.change_pct;
   const chgCls = chg == null ? '' : chg >= 0 ? 'pos' : 'neg';
-  return `<h4 class="pv-subhead">Intraday (LS · EUR)</h4>
-    <div class="detail-ls" title="Tagesspanne ${fmtNum(q.day_low)}–${fmtNum(q.day_high)}">
+  return `<h4 class="pv-subhead">Intraday (LS · ${sym})</h4>
+    <div class="detail-ls" title="Tagesspanne ${fmtNum(conv(q.day_low))}–${fmtNum(conv(q.day_high))}">
       ${sparklineSVG(q.series, q.prev_close, chg)}
       <div class="detail-ls__stat">
-        <span class="detail-ls__price">${fmtNum(q.price)} €</span>
+        <span class="detail-ls__price">${fmtNum(conv(q.price))} ${sym}</span>
         <span class="detail-ls__meta ${chgCls}">${fmtPct(chg)} · ${formatDate(q.checked_at)}</span>
       </div>
     </div>${followUp}`;
@@ -148,18 +191,28 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
-function renderPerformanceTab(c) {
-  const tv = c.tv_data;
+function renderPerformanceTab(c, disp) {
+  const tv = disp.tv;
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
   if (tv) {
-    const ladder = priceLadderSVG(tv);
+    // Price clusters (confluence zones) as coloured bands in the trend band.
+    // LS levels are EUR → factor into the display currency; unknown rate for
+    // other native currencies → LS levels are skipped, TV levels still cluster.
+    const bottom = detectBottomSignal(c.ls_history);
+    const extraLevels = bottom?.isBottom && bottom.bottomPrice != null
+      ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3, lsPrice: true }]
+      : [];
+    const lsF = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+    const refPrice = (c.ls_quote?.price != null && lsF != null) ? c.ls_quote.price * lsF : null;
+    const pc = computePriceClusters(tv, { lsHistory: c.ls_history, extraLevels, refPrice, lsToNative: lsF });
+    const ladder = priceLadderSVG(tv, pc?.clusters ?? null);
     if (!ladder.includes('pv-empty')) {
-      parts.push(`<h4 class="pv-subhead">Trend-Band (ATH · SMAs · 52W · Pivots)</h4>
-        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend()}</div>`);
+      parts.push(`<h4 class="pv-subhead">Trend-Band (ATH · SMAs · 52W · Pivots · Cluster)</h4>
+        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend(!!pc?.clusters?.length)}</div>`);
     }
   }
-  parts.push(lsIntradayHTML(c));
+  parts.push(lsIntradayHTML(c, disp));
   if (tv) {
     const perf = perfBarsHTML(tv);
     if (perf) parts.push(`<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}`);
@@ -229,8 +282,8 @@ function kv(label, value, cls = '') {
   return `<div class="tv-kv"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
 }
 
-function renderFundamentalTab(c) {
-  const tv = c.tv_data;
+function renderFundamentalTab(c, disp) {
+  const tv = disp?.tv ?? c.tv_data;
   if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
   const ratingClass = tvRatingClass(tv.rating);
   return `
@@ -372,6 +425,18 @@ export class CandidateDetail {
     this.getSiblings = getSiblings;   // () => ordered candidate list (current table sort)
     this.candidate = null;
     this.activeTab = 'performance';
+    this.altCurrency = false; // false = native currency, true = USD↔EUR switched
+  }
+
+  // Display-currency context for the current candidate: converted tv_data,
+  // active currency code and the EUR/USD rate (USD per 1 EUR).
+  displayInfo(c) {
+    const nat = nativeCur(c);
+    const fx = resolveFx();
+    const canSwitch = (nat === 'USD' || nat === 'EUR') && fx != null;
+    const cur = this.altCurrency && canSwitch ? (nat === 'USD' ? 'EUR' : 'USD') : nat;
+    const factor = cur === nat ? 1 : (nat === 'USD' ? 1 / fx : fx);
+    return { tv: convertTv(c.tv_data, factor), cur, factor, fx, canSwitch };
   }
 
   // Step to the prev/next candidate in the current sort order (swipe / arrows).
@@ -413,10 +478,11 @@ export class CandidateDetail {
     if (!this.candidate) return;
     const c = this.candidate;
 
+    const disp = this.displayInfo(c);
     const tabPanels = {
-      performance: renderPerformanceTab(c),
+      performance: renderPerformanceTab(c, disp),
       trade:       renderTradeTab(c),
-      fundamental: renderFundamentalTab(c),
+      fundamental: renderFundamentalTab(c, disp),
       meta:        renderMetaTab(c),
     };
 
@@ -459,7 +525,7 @@ export class CandidateDetail {
         <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} <span class="btn__label">Export</span></button>
       </div>
 
-      ${renderToolbar(c)}
+      ${renderToolbar(c, disp)}
 
       <div class="tab-bar detail-tabs" role="tablist">
         ${TABS.map(({ key, label }) =>
@@ -533,6 +599,11 @@ export class CandidateDetail {
       const panel = this.el.querySelector('#detail-links-edit');
       panel.hidden = !panel.hidden;
       editBtn.classList.toggle('is-active', !panel.hidden);
+    });
+    this.el.querySelector('#detail-currency').addEventListener('pointerup', () => {
+      if (!this.displayInfo(c).canSwitch) return;
+      this.altCurrency = !this.altCurrency;
+      this.render();
     });
     this.el.querySelector('#detail-trigger').addEventListener('pointerup', () => {
       this.onAction?.('openTrigger', c);

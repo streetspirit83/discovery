@@ -18,7 +18,13 @@ function lvl(price, label, family, w) {
   return price != null && Number.isFinite(price) && price > 0 ? { price, label, family, w } : null;
 }
 
-export function collectLevels(tv, lsHistory = null, extraLevels = []) {
+/**
+ * lsToNative: LS prices are ALWAYS EUR; TV levels are native currency. The
+ * factor converts LS-derived levels into the levels' currency (EUR native →
+ * 1, USD native → EUR/USD rate). `null` = no rate known → LS levels are
+ * skipped rather than clustered at the wrong scale.
+ */
+export function collectLevels(tv, lsHistory = null, extraLevels = [], lsToNative = 1) {
   if (!tv) return [];
   const p = [];
 
@@ -61,21 +67,28 @@ export function collectLevels(tv, lsHistory = null, extraLevels = []) {
   p.push(lvl(tv.bb_upper, 'BB↑', 'bb', 1));
   p.push(lvl(tv.bb_lower, 'BB↓', 'bb', 1));
 
-  // LS history: really-traded lows of the last 2 weeks
-  if (Array.isArray(lsHistory) && lsHistory.length) {
+  // LS history: really-traded lows of the last 2 weeks (EUR → native via factor)
+  if (Array.isArray(lsHistory) && lsHistory.length && lsToNative != null) {
     const dayLows = lsHistory.map((s) => s.day_low).filter((v) => v != null);
-    if (dayLows.length) p.push(lvl(Math.min(...dayLows), 'low|10 (LS)', 'ls', 1.5));
+    if (dayLows.length) p.push(lvl(Math.min(...dayLows) * lsToNative, 'low|10 (LS)', 'ls', 1.5));
     let intraMin = null;
     for (const s of lsHistory) {
       for (const v of [s.day_low, ...(Array.isArray(s.series) ? s.series : [])]) {
         if (v != null && (intraMin == null || v < intraMin)) intraMin = v;
       }
     }
-    if (intraMin != null) p.push(lvl(intraMin, '2W-Low (LS)', 'ls', 1.5));
+    if (intraMin != null) p.push(lvl(intraMin * lsToNative, '2W-Low (LS)', 'ls', 1.5));
   }
 
-  // Caller-provided extras (e.g. confirmed bottom price, later: TD swing zones)
-  for (const e of extraLevels) p.push(lvl(e.price, e.label, e.family ?? 'extra', e.w ?? 2));
+  // Caller-provided extras (e.g. confirmed bottom price, later: TD swing zones).
+  // Extras marked lsPrice are EUR and follow the same conversion rule.
+  for (const e of extraLevels) {
+    if (e.lsPrice) {
+      if (lsToNative != null) p.push(lvl(e.price * lsToNative, e.label, e.family ?? 'extra', e.w ?? 2));
+    } else {
+      p.push(lvl(e.price, e.label, e.family ?? 'extra', e.w ?? 2));
+    }
+  }
 
   return p.filter(Boolean);
 }
@@ -91,10 +104,10 @@ export function collectLevels(tv, lsHistory = null, extraLevels = []) {
  * Score = Σ weights × diversity bonus (+20% per additional level family,
  * capped at ×2): SMA200 + S1|1M + L3M beats three same-method pivots.
  */
-export function computePriceClusters(tv, { lsHistory = null, extraLevels = [], refPrice = null } = {}) {
+export function computePriceClusters(tv, { lsHistory = null, extraLevels = [], refPrice = null, lsToNative = 1 } = {}) {
   const ref = refPrice ?? tv?.close_1m ?? tv?.close;
   if (ref == null) return null;
-  const levels = collectLevels(tv, lsHistory, extraLevels).sort((a, b) => a.price - b.price);
+  const levels = collectLevels(tv, lsHistory, extraLevels, lsToNative).sort((a, b) => a.price - b.price);
   if (levels.length < 2) return null;
 
   const atr = tv.atr ?? null;

@@ -50,7 +50,7 @@ function spreadLabels(items, minGap, top, bottom) {
   return a;
 }
 
-export function priceLadderSVG(tv) {
+export function priceLadderSVG(tv, clusters = null) {
   const cur = tv.close_1m ?? tv.close;
   const lo52 = tv.price_52_week_low, hi52 = tv.price_52_week_high, ath = tv.high_all;
   if (cur == null || lo52 == null || hi52 == null || hi52 <= lo52) {
@@ -110,6 +110,22 @@ export function priceLadderSVG(tv) {
     bbBand = `<rect x="${barX}" y="${yu.toFixed(1)}" width="${barW}" height="${Math.max(1, yl - yu).toFixed(1)}" class="pv-bb"/>`;
   }
 
+  // Price-cluster confluence zones: coloured bands (green support / red
+  // resistance), opacity scales with the cluster score — the stronger the
+  // zone, the more visible the band.
+  let cluBands = '';
+  if (Array.isArray(clusters) && clusters.length) {
+    cluBands = clusters.map((cl) => {
+      const y1 = yOf(cl.hi), y2 = yOf(cl.lo);
+      if (y1 == null || y2 == null) return '';
+      const op = Math.min(0.4, 0.12 + cl.score * 0.03).toFixed(2);
+      const names = cl.members.map((m) => m.label).join(' + ');
+      return `<rect x="${(barX - 6).toFixed(1)}" y="${y1.toFixed(1)}" width="${barW + 6}" height="${Math.max(3, y2 - y1).toFixed(1)}"
+        class="pv-clu pv-clu--${cl.side}" style="opacity:${op}">
+        <title>Cluster ${fmt(cl.lo)}–${fmt(cl.hi)} · Score ${cl.score} · ${esc(names)}</title></rect>`;
+    }).join('');
+  }
+
   // Current price marker.
   const yc = yOf(cur);
   const curMark = `
@@ -127,7 +143,7 @@ export function priceLadderSVG(tv) {
     <svg class="pv-ladder" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="Kursposition relativ zu 52-Wochen-Spanne und Leveln">
       <rect x="${barX}" y="${mainTop.toFixed(1)}" width="${barW}" height="${(bottom - mainTop).toFixed(1)}" class="pv-bar"/>
-      ${capRect}${bbBand}${ticks}${labels}${curMark}
+      ${capRect}${bbBand}${cluBands}${ticks}${labels}${curMark}
     </svg>
     <p class="pv-foot">
       52W-Position <b>${pos52.toFixed(0)}%</b> · SMA20/50/200 <b>${above}</b>
@@ -215,11 +231,12 @@ export function perfBarsHTML(tv) {
 
 /* ── Colour legend for the ladder ────────────────────────────────────────── */
 
-export function priceLadderLegend() {
+export function priceLadderLegend(withClusters = false) {
   const it = (cls, label) => `<span class="pv-leg__item"><span class="pv-leg__sw pv-leg__sw--${cls}"></span>${label}</span>`;
   return `<div class="pv-legend">
     ${it('cur', 'Kurs')}${it('anchor', 'ATH/52W')}${it('ma', 'SMA')}
     ${it('band', 'Bollinger')}${it('resist', 'Widerstand')}${it('support', 'Stütze')}
+    ${withClusters ? it('clu-sup', 'Sup-Cluster') + it('clu-res', 'Res-Cluster') : ''}
   </div>`;
 }
 

@@ -105,8 +105,10 @@ function ls2wLow(snapshots) {
  * Exit ladders. Each entry: { key, label, value }.
  * Support-derived stops get the −0.02 pad; Chandelier/momentum formulas do not
  * (they are computed trigger levels, not support levels).
+ * lsToNative: LS snapshots are EUR — the factor converts LS-derived levels to
+ * the ticker's native currency (null = no rate → skip LS levels).
  */
-export function exitLevels(tv, cluster = classifyCluster(tv), snapshots = null) {
+export function exitLevels(tv, cluster = classifyCluster(tv), snapshots = null, lsToNative = 1) {
   if (!tv) return null;
   const atr = tv.atr;
   const half = atr != null ? 0.5 * atr : null;
@@ -119,11 +121,11 @@ export function exitLevels(tv, cluster = classifyCluster(tv), snapshots = null) 
     long.push({ key: 'chand', label: `Chandelier (high|22 − ${mult}×ATR)`, value: tv.high_1m - atr * mult });
 
   const short = [];
-  const l10 = lsLow10(snapshots);
-  if (l10 != null)                        short.push({ key: 'low10',   label: 'low|10 (LS)',      value: l10 - STOP_PAD });
+  const l10 = lsToNative != null ? lsLow10(snapshots) : null;
+  if (l10 != null)                        short.push({ key: 'low10',   label: 'low|10 (LS)',      value: l10 * lsToNative - STOP_PAD });
   if (tv.sma20 != null && half != null)   short.push({ key: 'sma20mom',label: 'SMA20-MOM (SMA20 − 0,5×ATR)', value: tv.sma20 - half });
-  const l2w = ls2wLow(snapshots);
-  if (l2w != null)                        short.push({ key: 'low2w',   label: '2W-Low (LS, absolut)', value: l2w - STOP_PAD });
+  const l2w = lsToNative != null ? ls2wLow(snapshots) : null;
+  if (l2w != null)                        short.push({ key: 'low2w',   label: '2W-Low (LS, absolut)', value: l2w * lsToNative - STOP_PAD });
   if (tv.low_1m != null && half != null)  short.push({ key: 'l1m',     label: 'L1M − 0,5×ATR',    value: tv.low_1m - half - STOP_PAD });
   if (tv.low_1m != null && atr != null && mult != null)
     short.push({ key: 'chand', label: `Chandelier (low|22 + ${mult}×ATR)`, value: tv.low_1m + atr * mult });

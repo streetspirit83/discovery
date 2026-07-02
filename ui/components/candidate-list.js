@@ -10,9 +10,9 @@ import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
-import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702d';
+import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
-import { computePriceClusters } from '../lib/price-cluster.js?v=20260702g';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -379,7 +379,10 @@ function renderBottom(c) {
   const b = detectBottomSignal(hist);
   if (!b) return shortHistoryCell(hist);
   if (b.isBottom) {
-    return `<span class="bottom-tag" title="Bottom-Stabilisierung (alle 4 Kriterien) · ${b.basis === 'swing-low' ? 'bestätigtes Swing-Low' : 'Kapitulations-Tief'}">B ${fmtPrice(c, b.bottomPrice)}</span>`;
+    // Bottom price is EUR (LS) → convert to native before display conversion.
+    const f = lsToNativeFactor(c);
+    const priceTxt = f != null ? fmtPrice(c, b.bottomPrice * f) : `${fmtNum(b.bottomPrice)} €`;
+    return `<span class="bottom-tag" title="Bottom-Stabilisierung (alle 4 Kriterien) · ${b.basis === 'swing-low' ? 'bestätigtes Swing-Low' : 'Kapitulations-Tief'}">B ${priceTxt}</span>`;
   }
   const st = (v) => (v ? '✓' : '✗');
   const k = b.criteria;
@@ -394,8 +397,9 @@ function pivotCell(c, tf, lvl) {
 function pivotVal(tv, tf, lvl) { return pivotSet(tv)?.[tf]?.[lvl] ?? null; }
 
 // Exit ladders: one level per column, addressed by its trade-setup key.
+// (lsToNativeFactor is declared below in the price-cluster section.)
 function exitLevel(c, side, key) {
-  const ex = exitLevels(c.tv_data, undefined, c.ls_history);
+  const ex = exitLevels(c.tv_data, undefined, c.ls_history, lsToNativeFactor(c));
   return ex?.[side]?.find((x) => x.key === key) ?? null;
 }
 function exitCell(c, side, key) {
@@ -418,27 +422,34 @@ function demarkCell(c, field) {
 
 // ── Price clusters (confluence zones) ────────────────────────────────────────
 
+// LS prices are always EUR; TV levels are native. Factor EUR → native
+// (EUR-native 1 · USD-native via FX · sonst null = LS-Level überspringen).
+function lsToNativeFactor(c) {
+  const nat = nativeCurrency(c);
+  if (nat === 'EUR') return 1;
+  if (nat === 'USD' && fxEurUsd) return fxEurUsd;
+  return null;
+}
+
 // Native-currency reference price: live LS (EUR) converted where possible,
 // else the TV close — cluster sides must be judged in the levels' currency.
 function nativeRefPrice(c) {
   const ls = c.ls_quote?.price;
-  if (ls != null) {
-    const nat = nativeCurrency(c);
-    if (nat === 'EUR') return ls;
-    if (nat === 'USD' && fxEurUsd) return ls * fxEurUsd;
-  }
+  const f = lsToNativeFactor(c);
+  if (ls != null && f != null) return ls * f;
   return c.tv_data?.close_1m ?? c.tv_data?.close ?? null;
 }
 
 function priceClustersFor(c) {
   const bottom = detectBottomSignal(c.ls_history);
   const extraLevels = bottom?.isBottom && bottom.bottomPrice != null
-    ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3 }]
+    ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3, lsPrice: true }]
     : [];
   return computePriceClusters(c.tv_data, {
     lsHistory: c.ls_history,
     extraLevels,
     refPrice: nativeRefPrice(c),
+    lsToNative: lsToNativeFactor(c),
   });
 }
 
