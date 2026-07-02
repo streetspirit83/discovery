@@ -1556,6 +1556,27 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .pv-volstats { display:flex; gap:var(--s-4); font-size:var(--fs-1); color:var(--muted); margin:var(--s-2) 0; }
 .pv-volstats b { color:var(--text); font-variant-numeric:tabular-nums; }
 
+/* Performance tab: 10-day LS band (price segments + volume-% bars) */
+.ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }
+.ls10d__line { fill:none; stroke:var(--muted); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.ls10d__line.ls10d--pos { stroke:var(--pos); }
+.ls10d__line.ls10d--neg { stroke:var(--neg); }
+.ls10d__vol { fill:var(--surface-3); }
+.ls10d__vol.ls10d--pos { fill:var(--pos); opacity:.45; }
+.ls10d__vol.ls10d--neg { fill:var(--neg); opacity:.45; }
+.ls10d__ref { stroke:var(--border); stroke-dasharray:3 3; vector-effect:non-scaling-stroke; }
+
+/* Trade tab: cluster + target head line above the setup box */
+.trade-head { display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-3); }
+.trade-head__target { font-size:var(--fs-2); color:var(--muted); }
+.trade-head__target b { color:var(--pos); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
+.trade-head__cur { margin-left:auto; font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); }
+.trade-val--set { color:var(--text); border-style:solid; font-weight:var(--fw-med); }
+.ph-card--live { border-style:solid; background:var(--surface); }
+.prob-val { margin-left:auto; font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
+.prob-val.pos { color:var(--pos); }
+.prob-val.neg { color:var(--neg); }
+
 /* Trade tab: Long/Short setup mockup box */
 .trade-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
 @media (max-width:479px) { .trade-grid { grid-template-columns:1fr; } }

@@ -7,7 +7,8 @@ import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
 import { sparklineSVG } from '../lib/spark.js?v=20260626e';
 import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
-import { detectBottomSignal } from '../lib/ls-history-signals.js?v=20260702e';
+import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
+import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js';
 
@@ -166,10 +167,9 @@ function lsIntradayHTML(c, disp) {
   const f = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
   const sym = f == null ? '€' : disp.cur === 'EUR' ? '€' : '$';
   const conv = (v) => (v == null || f == null ? v : v * f);
-  const followUp = `<p class="ph-note">10-Tage-Verlauf + Volumen-% (Tagesvolumen / Ø Vol 10T): folgt.</p>`;
   if (!Array.isArray(q?.series) || q.series.length < 2) {
     return `<h4 class="pv-subhead">Intraday (LS · ${sym})</h4>
-      <p class="pv-empty">Kein LS-Tagesverlauf – über das Live-Icon in der Symbolleiste laden.</p>${followUp}`;
+      <p class="pv-empty">Kein LS-Tagesverlauf – über das Live-Icon in der Symbolleiste laden.</p>`;
   }
   const chg = q.change_pct;
   const chgCls = chg == null ? '' : chg >= 0 ? 'pos' : 'neg';
@@ -180,7 +180,67 @@ function lsIntradayHTML(c, disp) {
         <span class="detail-ls__price">${fmtNum(conv(q.price))} ${sym}</span>
         <span class="detail-ls__meta ${chgCls}">${fmtPct(chg)} · ${formatDate(q.checked_at)}</span>
       </div>
-    </div>${followUp}`;
+    </div>`;
+}
+
+/* 10-day LS history band: per-day intraday price segments (coloured by day
+ * direction) with volume-% bars below (day volume ÷ Ø V10d from TV, fallback
+ * median of the history window). Dashed line = 100 % of the reference. */
+function ls10dChartHTML(c, disp) {
+  const hist = c.ls_history;
+  const head = `<h4 class="pv-subhead">10-Tage-Verlauf + Volumen-% (LS)</h4>`;
+  if (!Array.isArray(hist) || hist.length < 2) {
+    const note = Array.isArray(hist) && hist.length
+      ? `Erst ${hist.length}/${MAX_SNAPSHOTS} Snapshot-Tage – wächst werktags um 21:30 UTC.`
+      : 'Keine LS-Historie – nightly Snapshot läuft nur für den Watch-Bucket.';
+    return `${head}<p class="pv-empty">${note}</p>`;
+  }
+  const f = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+  const sym = f == null ? '€' : disp.cur === 'EUR' ? '€' : '$';
+  const conv = (v) => (v == null || f == null ? v : v * f);
+
+  const vols = hist.map((s) => s.volume).filter((v) => v != null && v > 0);
+  const medVol = vols.length ? [...vols].sort((a, b) => a - b)[Math.floor(vols.length / 2)] : null;
+  const volRef = c.tv_data?.avg_vol_10d ?? medVol;
+
+  const W = 300, H = 88, priceH = 56, volTop = 64, volH = 22;
+  let lo = Infinity, hi = -Infinity;
+  for (const s of hist) {
+    for (const v of [s.day_low, s.day_high, s.close, ...(Array.isArray(s.series) ? s.series : [])]) {
+      if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    }
+  }
+  if (!(hi > lo)) return `${head}<p class="pv-empty">Zu wenig Kursdaten in der Historie.</p>`;
+  const y = (v) => 3 + (1 - (v - lo) / (hi - lo)) * (priceH - 6);
+  const dayW = W / hist.length;
+
+  const days = hist.map((s, i) => {
+    const x0 = i * dayW + 1, x1 = (i + 1) * dayW - 1;
+    const ser = Array.isArray(s.series) && s.series.length > 1 ? s.series : [s.close, s.close];
+    const pts = ser.filter((v) => v != null).map((v, j, arr) =>
+      `${(x0 + (j / Math.max(1, arr.length - 1)) * (x1 - x0)).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const dir = s.change_pct == null ? '' : s.change_pct >= 0 ? 'ls10d--pos' : 'ls10d--neg';
+    const volPct = s.volume != null && volRef > 0 ? (s.volume / volRef) * 100 : null;
+    // Bar scale: 200 % of the reference fills the full bar height.
+    const bh = volPct != null ? Math.max(1.5, Math.min(volH, (volPct / 200) * volH)) : 0;
+    const volBar = volPct != null
+      ? `<rect x="${x0.toFixed(1)}" y="${(volTop + volH - bh).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${bh.toFixed(1)}" class="ls10d__vol ${dir}"/>` : '';
+    const tip = `${s.date} · Close ${fmtNum(conv(s.close))} ${sym} · ${fmtPct(s.change_pct)}`
+      + (volPct != null ? ` · Volumen ${volPct.toFixed(0)}% von Ø` : '');
+    return `<g><title>${tip}</title>
+      <polyline points="${pts}" class="ls10d__line ${dir}"/>${volBar}
+      <rect x="${(i * dayW).toFixed(1)}" y="0" width="${dayW.toFixed(1)}" height="${H}" fill="transparent"/>
+    </g>`;
+  }).join('');
+
+  const refY = volTop + volH - (100 / 200) * volH; // 100 %-Linie
+  return `${head}
+    <svg class="ls10d" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" role="img"
+         aria-label="10-Tage-LS-Verlauf mit Volumen-Prozent">
+      <line x1="0" y1="${refY.toFixed(1)}" x2="${W}" y2="${refY.toFixed(1)}" class="ls10d__ref"/>
+      ${days}
+    </svg>
+    <p class="ph-note">Linie = LS-Intraday je Tag · Balken = Tagesvolumen ÷ Ø V10d (${c.tv_data?.avg_vol_10d != null ? 'TV' : 'Median Historie'}) · gestrichelt = 100 % · ${hist.length}/${MAX_SNAPSHOTS} Tage</p>`;
 }
 
 function volStatsHTML(tv) {
@@ -213,6 +273,7 @@ function renderPerformanceTab(c, disp) {
     }
   }
   parts.push(lsIntradayHTML(c, disp));
+  parts.push(ls10dChartHTML(c, disp));
   if (tv) {
     const perf = perfBarsHTML(tv);
     if (perf) parts.push(`<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}`);
@@ -226,11 +287,12 @@ function renderPerformanceTab(c, disp) {
   return parts.join('');
 }
 
-/* ── Tab 2: Trade (UI-Mockup, Berechnung folgt) ───────────────────────────── */
+/* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
 
-function tradeRow(label) {
-  return `<div class="trade-row" title="Platzhalter – Berechnung folgt">
-    <span>${label}</span><span class="trade-val">–</span>
+function tradeRow(label, value, title = '') {
+  const set = value != null && value !== '—';
+  return `<div class="trade-row"${title ? ` title="${title}"` : ''}>
+    <span>${label}</span><span class="trade-val${set ? ' trade-val--set' : ''}">${set ? value : '–'}</span>
   </div>`;
 }
 
@@ -241,36 +303,79 @@ function phCard(title, tag, note) {
   </div>`;
 }
 
-function renderTradeTab() {
+// Breakout/Breakdown card: real percentage + fulfilled criteria once the LS
+// history is long enough, otherwise the fill-level / no-history hint.
+function probCard(title, r, pctKey, codeMap, hist, cls) {
+  if (!r) {
+    const note = Array.isArray(hist) && hist.length
+      ? `Erst ${hist.length}/${MAX_SNAPSHOTS} Snapshot-Tage – Berechnung ab ${MIN_SNAPSHOTS} Tagen (nightly Snapshot, werktags 21:30 UTC).`
+      : 'Keine LS-Historie – nightly Snapshot läuft nur für den Watch-Bucket.';
+    return phCard(title, 'Nächste 10 T', note);
+  }
+  const codes = Object.entries(codeMap).filter(([k]) => r.criteria[k]).map(([, v]) => v).join(' + ') || 'keine Kriterien erfüllt';
+  return `<div class="ph-card ph-card--live">
+    <div class="ph-card__head">${title}<span class="ph-tag">Nächste 10 T</span><span class="prob-val ${cls}">${r[pctKey]}%</span></div>
+    <p>Kriterien: ${codes} · Heuristik, gedeckelt bei 90 %</p>
+  </div>`;
+}
+
+function renderTradeTab(c, disp) {
+  const tv = disp.tv;
+  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  const cl = classifyCluster(tv); // ATRP/MCap skalieren nicht → Cluster währungsneutral
+  const lsF = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+  const ex = exitLevels(tv, cl ?? undefined, c.ls_history, lsF);
+  const exVal = (side, key) => {
+    const l = ex?.[side]?.find((x) => x.key === key);
+    return l != null ? fmtNum(l.value) : null;
+  };
+  const target = tradeTarget(tv, cl ?? undefined);
+  const brk = breakoutEntry(tv);
+  const bottom = detectBottomSignal(c.ls_history);
+  const bottomTxt = bottom?.isBottom && bottom.bottomPrice != null && lsF != null
+    ? `bottom ${fmtNum(bottom.bottomPrice * lsF)}` : null;
+  const bottomTip = bottom == null
+    ? 'Braucht ≥6 Tage LS-Historie'
+    : bottom.isBottom
+      ? (bottom.basis === 'swing-low' ? 'Bestätigtes Swing-Low' : 'Kapitulations-Tief')
+      : `Kriterien: Trend ${bottom.criteria.trendFlattening ? '✓' : '✗'} · Vol@Support ${bottom.criteria.decliningVolumeNearSupport ? '✓' : '✗'} · Candle ${bottom.criteria.candleShift ? '✓' : '✗'} · Range ${bottom.criteria.rangeCompression ? '✓' : '✗'}`;
+  const mult = cl?.atrMult ?? '–';
+  const bo = detectBreakoutSetup(c.ls_history, cl?.avgVol);
+  const bd = detectBreakdownRisk(c.ls_history, cl?.avgVol);
+
   return `
-    <h4 class="pv-subhead">Setup-Box (Platzhalter – Berechnung folgt)</h4>
+    <div class="trade-head">
+      ${cl ? `<span class="cluster-badge cluster-badge--${cl.key}" title="ATRP ${fmtNum(c.tv_data?.atrp, 1)}% · MCap ${formatMarketCap(c.tv_data?.market_cap)} · ATR-Mult ${cl.atrMult} · Vol-Basis ØV${cl.volBasis}">${cl.label}</span>` : ''}
+      ${target != null ? `<span class="trade-head__target">Target <b>${fmtNum(target)}</b> <small>+${cl.gainPct}%</small></span>` : ''}
+      <span class="trade-head__cur">${disp.cur}</span>
+    </div>
     <div class="trade-grid">
       <div class="trade-col trade-col--long">
         <h5 class="trade-col__head">Long Setup</h5>
         <div class="trade-sub">Entry-Trigger</div>
-        ${tradeRow('Pivot R1 (1W)')}
-        ${tradeRow('Pivot R2 / R3')}
-        ${tradeRow('Pivot R1 (1M)')}
-        <div class="trade-sub">Exits &amp; Hard Stops <small>(unter Support −0,02 €)</small></div>
-        ${tradeRow('L3M − 0,5 × ATR')}
-        ${tradeRow('SMA200 − 0,5 × ATR')}
-        ${tradeRow('Chandelier (High|22 − ATR|22 × Mult)')}
+        ${tradeRow('Pivot R1 (1W)', tv.pivot_r1_1w != null ? fmtNum(tv.pivot_r1_1w) : null)}
+        ${tradeRow('R2 / R3 (1W)', tv.pivot_r2_1w != null || tv.pivot_r3_1w != null ? `${fmtNum(tv.pivot_r2_1w)} / ${fmtNum(tv.pivot_r3_1w)}` : null, 'Pivot.M.Classic R2 und R3, Weekly')}
+        ${tradeRow('Pivot R1 (1M)', tv.pivot_r1 != null ? fmtNum(tv.pivot_r1) : null)}
+        <div class="trade-sub">Exits &amp; Hard Stops <small>(unter Support −0,02)</small></div>
+        ${tradeRow('L3M − 0,5 × ATR', exVal('long', 'l3m'))}
+        ${tradeRow('SMA200 − 0,5 × ATR', exVal('long', 'sma200'))}
+        ${tradeRow(`Chandelier (high|22 − ${mult} × ATR)`, exVal('long', 'chand'), 'high|22 ≈ High.1M · ATR|22 ≈ ATR(14)')}
       </div>
       <div class="trade-col trade-col--short">
         <h5 class="trade-col__head">Short Setup</h5>
         <div class="trade-sub">Entry-Trigger</div>
-        ${tradeRow('Breakout: High|20 + 0,01 %')}
-        ${tradeRow('Bottom-Signal (Trend/Vol/Candle/Kompression)')}
+        ${tradeRow('Breakout: high|20 + 0,01 %', brk != null ? fmtNum(brk) : null)}
+        ${tradeRow('Bottom-Signal', bottomTxt, bottomTip)}
         <div class="trade-sub">Exits &amp; Trailing Stops</div>
-        ${tradeRow('Low|10')}
-        ${tradeRow('SMA20-MOM (&lt; SMA20 − 0,5 × ATR)')}
-        ${tradeRow('2W-Low (absolut)')}
-        ${tradeRow('L1M − 0,5 × ATR')}
-        ${tradeRow('Chandelier (Low|22 + ATR|22 × Mult)')}
+        ${tradeRow('low|10 (LS)', exVal('short', 'low10'))}
+        ${tradeRow('SMA20-MOM (SMA20 − 0,5 × ATR)', exVal('short', 'sma20mom'))}
+        ${tradeRow('2W-Low (LS, absolut)', exVal('short', 'low2w'))}
+        ${tradeRow('L1M − 0,5 × ATR', exVal('short', 'l1m'))}
+        ${tradeRow(`Chandelier (low|22 + ${mult} × ATR)`, exVal('short', 'chand'))}
       </div>
     </div>
-    ${phCard('Breakout-Wahrscheinlichkeit', 'Nächste 10 T', 'Platzhalter – Berechnung folgt (docs/BREAKOUT_PROBABILITY_SPEC.md).')}
-    ${phCard('Breakdown-Wahrscheinlichkeit', 'Nächste 10 T', 'Platzhalter – Berechnung folgt (docs/BREAKDOWN_PROBABILITY_SPEC.md).')}
+    ${probCard('Breakout-Wahrscheinlichkeit', bo, 'breakoutProbabilityPct', { extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'Money-Flow', flatTopBullFlag: 'Flat-Top/Flag' }, c.ls_history, 'pos')}
+    ${probCard('Breakdown-Wahrscheinlichkeit', bd, 'breakdownProbabilityPct', { volumeSpikeNoFollowThrough: 'Spike o. Follow-Through', distributionDay: 'Distribution-Day', nearRecentHigh: 'Nähe Hoch' }, c.ls_history, 'neg')}
     ${phCard('Swing-Check', 'TwelveData', 'Platzhalter – Umsetzung folgt (docs/SWING_CHECK_HANDOVER.md).')}
     ${phCard('Analyst Targets', '', 'Platzhalter – Datenquelle folgt.')}
   `;
@@ -481,7 +586,7 @@ export class CandidateDetail {
     const disp = this.displayInfo(c);
     const tabPanels = {
       performance: renderPerformanceTab(c, disp),
-      trade:       renderTradeTab(c),
+      trade:       renderTradeTab(c, disp),
       fundamental: renderFundamentalTab(c, disp),
       meta:        renderMetaTab(c),
     };
@@ -493,7 +598,12 @@ export class CandidateDetail {
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} ${icons.clipboard}</small>` : ''}
           <div class="detail-tags">
-            <span class="tag tag--ph" title="Cluster – folgt">Cluster</span>
+            ${(() => {
+              const cl = classifyCluster(c.tv_data);
+              return cl
+                ? `<span class="cluster-badge cluster-badge--${cl.key}" title="Trade-Cluster: ATRP ${fmtNum(c.tv_data?.atrp, 1)}% · MCap ${formatMarketCap(c.tv_data?.market_cap)} · ATR-Mult ${cl.atrMult} · Gewinnziel +${cl.gainPct}% · Vol-Basis ØV${cl.volBasis}">${cl.label}</span>`
+                : `<span class="tag tag--ph" title="Trade-Cluster braucht TV-Daten (ATRP/MCap)">Cluster</span>`;
+            })()}
             ${c.sector ? `<span class="tag">${c.sector}</span>` : ''}
             ${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}
           </div>
