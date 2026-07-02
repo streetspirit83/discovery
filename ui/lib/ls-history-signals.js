@@ -11,7 +11,12 @@
  * statistically calibrated probability; they are capped at 90.
  */
 
-const MIN_SNAPSHOTS = 5;
+// Minimum history window for meaningful stats (bottom detection needs 6).
+// The nightly snapshot adds one day per weekday — a freshly started history
+// needs about a trading week before the signals switch on.
+export const MIN_SNAPSHOTS = 5;
+export const MIN_SNAPSHOTS_BOTTOM = 6;
+export const MAX_SNAPSHOTS = 10; // rolling window size written by snapshot-ls
 
 function median(arr) {
   if (!arr.length) return null;
@@ -205,7 +210,7 @@ export function detectBreakdownRisk(snapshots, avgVolRef = null) {
  * closes), else the capitulation low (day_low of the highest-volume day).
  */
 export function detectBottomSignal(snapshots) {
-  if (!Array.isArray(snapshots) || snapshots.length < 6) return null;
+  if (!Array.isArray(snapshots) || snapshots.length < MIN_SNAPSHOTS_BOTTOM) return null;
 
   const closes = snapshots.map((s) => s.close ?? null);
   const vols = snapshots.map((s) => s.volume ?? null);

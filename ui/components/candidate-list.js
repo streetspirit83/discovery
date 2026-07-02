@@ -11,7 +11,7 @@ import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702d';
-import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal } from '../lib/ls-history-signals.js?v=20260702d';
+import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -385,6 +385,13 @@ function renderTradeExit(c, side) {
 
 const NO_HISTORY_TIP = '10-Tage-LS-Historie fehlt – nightly Snapshot läuft nur für den Watch-Bucket';
 
+// History attached but still too short for the detectors (they need ≥5 days,
+// bottom ≥6; the nightly snapshot adds one day per weekday). Show the fill
+// level instead of a bare dash so a growing history is visible.
+function shortHistoryCell(hist) {
+  return `<span class="muted-dash" title="Erst ${hist.length} von ${MAX_SNAPSHOTS} Snapshot-Tagen – Signale ab ${MIN_SNAPSHOTS} Tagen (Bottom ab ${MIN_SNAPSHOTS_BOTTOM}) · Snapshot läuft werktags 21:30 UTC">${hist.length}/${MAX_SNAPSHOTS}T</span>`;
+}
+
 function probCriteriaCodes(criteria, map) {
   return Object.entries(map).filter(([k]) => criteria[k]).map(([, code]) => code).join('+') || 'keine Kriterien';
 }
@@ -392,7 +399,10 @@ function probCriteriaCodes(criteria, map) {
 function renderBreakoutProb(c) {
   const cl = classifyCluster(c.tv_data);
   const r = detectBreakoutSetup(c.ls_history, cl?.avgVol);
-  if (!r) return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  if (!r) {
+    if (Array.isArray(c.ls_history) && c.ls_history.length) return shortHistoryCell(c.ls_history);
+    return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  }
   const codes = probCriteriaCodes(r.criteria, {
     extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'MF', flatTopBullFlag: 'Flag',
   });
@@ -406,7 +416,10 @@ function renderBreakoutProb(c) {
 function renderBreakdownProb(c) {
   const cl = classifyCluster(c.tv_data);
   const r = detectBreakdownRisk(c.ls_history, cl?.avgVol);
-  if (!r) return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  if (!r) {
+    if (Array.isArray(c.ls_history) && c.ls_history.length) return shortHistoryCell(c.ls_history);
+    return `<span class="muted-dash" title="${NO_HISTORY_TIP}">—</span>`;
+  }
   const codes = probCriteriaCodes(r.criteria, {
     volumeSpikeNoFollowThrough: 'Spike', distributionDay: 'Dist', nearRecentHigh: 'Hoch',
   });
