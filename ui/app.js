@@ -8,9 +8,9 @@ import { renderSettingsModal, isConfigured, loadSettings } from './components/se
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260627j';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260627j';
-import { triggeredCount } from './lib/alerts.js?v=20260627j';
+import { renderAlertModal } from './components/alert-modal.js?v=20260703a';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260703a';
+import { triggeredCount } from './lib/alerts.js?v=20260703a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260702a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';

@@ -10,13 +10,32 @@
  * to the LS price the push will use. Native TV levels are converted to EUR.
  *
  * Alert shape:
- *   { id, type, threshold, dir, enabled, label, basis, created_at }
- *   basis: { kind:'entry_pct'|'manual'|'preset', pct?, entry?, source? }
+ *   { id, kind, type, threshold, dir, enabled, label, note?, basis, created_at }
+ *   kind: 'watch'|'buy'|'stop' — the single explicit intent the user picks per
+ *         alert; drives `dir` (buy→buy, stop→sell, watch→watch) and the push.
+ *   note: optional free text shown in the list and the push.
+ *   basis: { kind:'entry_pct'|'manual'|'preset'|'level', pct?, entry?, source? }
+ *          (basis.kind = level *source*, distinct from the alert `kind` above).
  */
 
 import { evalAlert, alertDir } from './status-logic.js?v=20260626f';
 
 export const ALERTS_MUTED_KEY = 'discovery_alerts_muted_all';
+
+/* The three intents a user assigns to every alert. `dir` feeds the shared
+   status-logic engine; emoji/label feed the row badge and the push title. */
+export const ALERT_KINDS = {
+  watch: { dir: 'watch', label: 'Watch',     emoji: '🔭' },
+  buy:   { dir: 'buy',   label: 'Buy',       emoji: '🟢' },
+  stop:  { dir: 'sell',  label: 'Stop-Loss', emoji: '⛔' },
+};
+export function kindToDir(kind) { return ALERT_KINDS[kind]?.dir ?? 'watch'; }
+/* Normalise legacy alerts (no `kind`) back to a kind from their dir. */
+export function alertKind(a) {
+  if (a.kind && ALERT_KINDS[a.kind]) return a.kind;
+  const d = alertDir(a);
+  return d === 'sell' ? 'stop' : d === 'buy' ? 'buy' : 'watch';
+}
 
 export function newAlertId() {
   return 'al_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -144,50 +163,63 @@ export function candidateAdvice(c) {
 
 /* ── Builders ────────────────────────────────────────────────────────── */
 
-export function buildManualPriceAlert({ dir, priceEur }) {
-  const above = dir === 'above';
+/* Price alert at an absolute EUR level. `cmp` ('above'|'below') sets the
+   comparison type; `kind` (watch/buy/stop) sets the intent → dir. Used for both
+   the manual price input and the predefined Support/Resistance/Target chips. */
+export function buildManualPriceAlert({ cmp, priceEur, kind = 'watch', note = '', label = 'Manuell', basisKind = 'manual' }) {
+  const above = cmp === 'above';
   return {
     id: newAlertId(),
+    kind,
     type: above ? 'price_above' : 'price_below',
     threshold: priceEur,
-    dir: 'sell',
+    dir: kindToDir(kind),
     enabled: true,
-    label: 'Manuell',
-    basis: { kind: 'manual' },
+    label,
+    note: note || undefined,
+    basis: { kind: basisKind },
     created_at: new Date().toISOString(),
   };
 }
 
 /* +pct → target (price_above) · −pct → stop (price_below), anchored on entry. */
-export function buildEntryPctAlert(c, pct) {
+export function buildEntryPctAlert(c, pct, { kind, note = '' } = {}) {
   const { value: entry, source } = entryBasisEur(c);
   if (entry == null) return null;
   const threshold = +(entry * (1 + pct / 100)).toFixed(4);
   const up = pct >= 0;
+  const k = kind ?? (up ? 'watch' : 'stop'); // sensible default: gain→watch, loss→stop
   return {
     id: newAlertId(),
+    kind: k,
     type: up ? 'price_above' : 'price_below',
     threshold,
-    dir: 'sell',
+    dir: kindToDir(k),
     enabled: true,
     label: `${up ? 'Ziel' : 'Stop'} ${up ? '+' : '−'}${Math.abs(pct)}%`,
+    note: note || undefined,
     basis: { kind: 'entry_pct', pct, entry, source },
     created_at: new Date().toISOString(),
   };
 }
 
 /* Presets. SMA crosses are price-driven (live LS price vs stored SMA level);
-   RSI/MACD are pure TV-snapshot indicators. */
-export function buildPresetAlert(kind) {
+   RSI/MACD are pure TV-snapshot indicators. The user-picked `kind` overrides the
+   preset's natural dir so every alert carries exactly one explicit intent. */
+export function buildPresetAlert(preset, { kind, note = '' } = {}) {
+  const withKind = (k, def) => {
+    const kk = k ?? def;
+    return { kind: kk, dir: kindToDir(kk), note: note || undefined };
+  };
   const base = { id: newAlertId(), enabled: true, basis: { kind: 'preset' }, created_at: new Date().toISOString() };
-  switch (kind) {
-    case 'sma20':  return { ...base, type: 'ma20_below',  dir: 'buy',  label: 'Kurs ≤ SMA20' };
-    case 'sma50':  return { ...base, type: 'ma50_below',  dir: 'buy',  label: 'Kurs ≤ SMA50' };
-    case 'sma200': return { ...base, type: 'ma200_below', dir: 'buy',  label: 'Kurs ≤ SMA200' };
-    case 'rsi_ob': return { ...base, type: 'rsi_above', threshold: 70, dir: 'sell', label: 'RSI ≥ 70 (überkauft)' };
-    case 'rsi_os': return { ...base, type: 'rsi_below', threshold: 30, dir: 'buy',  label: 'RSI ≤ 30 (überverkauft)' };
-    case 'macd_up':return { ...base, type: 'macd_bullish', dir: 'buy',  label: 'MACD bullish' };
-    case 'macd_dn':return { ...base, type: 'macd_bearish', dir: 'sell', label: 'MACD bearish' };
+  switch (preset) {
+    case 'sma20':  return { ...base, type: 'ma20_below',  ...withKind(kind, 'buy'),  label: 'Kurs ≤ SMA20' };
+    case 'sma50':  return { ...base, type: 'ma50_below',  ...withKind(kind, 'buy'),  label: 'Kurs ≤ SMA50' };
+    case 'sma200': return { ...base, type: 'ma200_below', ...withKind(kind, 'buy'),  label: 'Kurs ≤ SMA200' };
+    case 'rsi_ob': return { ...base, type: 'rsi_above', threshold: 70, ...withKind(kind, 'stop'), label: 'RSI ≥ 70 (überkauft)' };
+    case 'rsi_os': return { ...base, type: 'rsi_below', threshold: 30, ...withKind(kind, 'buy'),  label: 'RSI ≤ 30 (überverkauft)' };
+    case 'macd_up':return { ...base, type: 'macd_bullish', ...withKind(kind, 'buy'),  label: 'MACD bullish' };
+    case 'macd_dn':return { ...base, type: 'macd_bearish', ...withKind(kind, 'stop'), label: 'MACD bearish' };
     default: return null;
   }
 }

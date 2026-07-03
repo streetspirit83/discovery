@@ -1246,6 +1246,35 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   text-transform:uppercase; letter-spacing:.03em; margin:.5rem 0 .1rem; }
 .alert-tier:first-child { margin-top:0; }
 
+/* Kind selector (Watch · Buy · Stop-Loss) — one explicit intent per alert */
+.alert-kind { display:flex; gap:var(--s-1); margin-bottom:var(--s-3); }
+.alert-kind__btn {
+  flex:1 1 0; min-width:0; display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  padding:var(--s-2) var(--s-1); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted); font-size:var(--fs-2); font-weight:var(--fw-bold);
+  white-space:nowrap; cursor:pointer;
+}
+.alert-kind__btn.is-active.alert-kind__btn--watch { background:var(--surface-3); border-color:var(--muted); color:var(--text); }
+.alert-kind__btn.is-active.alert-kind__btn--buy   { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.alert-kind__btn.is-active.alert-kind__btn--stop  { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+
+/* Per-alert kind tag in the list */
+.alert-kind-tag { flex-shrink:0; font-size:var(--fs-1); font-weight:var(--fw-bold); padding:1px 6px;
+  border-radius:var(--r-pill); white-space:nowrap; }
+.alert-kind-tag--watch { background:var(--surface-3); color:var(--muted); }
+.alert-kind-tag--buy   { background:var(--pos-weak); color:var(--pos); }
+.alert-kind-tag--stop  { background:var(--neg-weak); color:var(--neg); }
+.alert-note { display:block; font-size:var(--fs-1); color:var(--muted); margin-top:2px; }
+
+/* Predefined level chips + inline manual % */
+.chip-btn--lvl { font-variant-numeric:tabular-nums; }
+.alert-add__inline { display:inline-flex; align-items:center; gap:.3rem; }
+.alert-add__inline .pct-input { width:6.5rem; font-size:var(--fs-2);
+  padding:.4rem .5rem; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); }
+#idt-note { width:100%; font-size:var(--fs-2); padding:.5rem .6rem; border:1px solid var(--border);
+  border-radius:var(--r-1); background:var(--surface); color:var(--text); }
+
 /* Overview modal */
 .alert-modal__bar { display:flex; align-items:center; gap:.75rem;
   padding:.6rem var(--s-4); border-bottom:1px solid var(--border); }
