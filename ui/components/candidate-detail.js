@@ -131,7 +131,6 @@ function renderToolbar(c, disp) {
         ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
         ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
       </div>
-      <span class="detail-toolbar__sep"></span>
       <div class="detail-toolbar__actions">
         ${chipBtn('detail-currency', `<span class="cur-label">${disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur}</span>`, curTip, disp.canSwitch ? (disp.factor !== 1 ? 'is-active' : '') : 'link-chip--mock')}
         ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
@@ -157,6 +156,110 @@ function renderToolbar(c, disp) {
       </div>
     </div>
   `;
+}
+
+/* ── Trade levels (shared by hero panel, ticket and chart) ────────────────── */
+
+// LS (EUR) → display-currency factor; null = unknown rate (skip LS values).
+function lsDisplayFactor(disp) {
+  return disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+}
+
+function tradeLevels(c, disp) {
+  const tv = disp.tv;
+  if (!tv) return null;
+  const cl = classifyCluster(tv);
+  const lsF = lsDisplayFactor(disp);
+  const ex = exitLevels(tv, cl ?? undefined, c.ls_history, lsF);
+  const kurs = (c.ls_quote?.price != null && lsF != null)
+    ? c.ls_quote.price * lsF
+    : (tv.close_1m ?? tv.close ?? null);
+  const target = tradeTarget(tv, cl ?? undefined);
+  const entryL = tv.pivot_r1_1w ?? tv.pivot_r1 ?? null;
+  const stopL = ex?.primaryLong?.value ?? null;
+  // R:R (long): chance per unit of risk — the one number a trader wants first.
+  const rr = (target != null && entryL != null && stopL != null && entryL > stopL)
+    ? (target - entryL) / (entryL - stopL) : null;
+  return { cl, ex, kurs, target, entryL, stopL, rr, brk: breakoutEntry(tv), lsF };
+}
+
+function priceClustersDisp(c, disp) {
+  const tv = disp.tv;
+  if (!tv) return null;
+  const bottom = detectBottomSignal(c.ls_history);
+  const extraLevels = bottom?.isBottom && bottom.bottomPrice != null
+    ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3, lsPrice: true }]
+    : [];
+  const lsF = lsDisplayFactor(disp);
+  const refPrice = (c.ls_quote?.price != null && lsF != null) ? c.ls_quote.price * lsF : null;
+  return computePriceClusters(tv, { lsHistory: c.ls_history, extraLevels, refPrice, lsToNative: lsF });
+}
+
+/* ── Hero panel (Performance tab): price → S/R → target at a glance ───────── */
+
+function heroStation(label, value, kurs, cls = '') {
+  const has = value != null;
+  const delta = has && kurs != null && kurs > 0 ? (value - kurs) / kurs * 100 : null;
+  return `<div class="hero__st ${cls}">
+    <span class="hero__st-lbl">${label}</span>
+    <span class="hero__st-val">${has ? fmtNum(value) : '—'}</span>
+    <span class="hero__st-delta ${delta == null ? '' : delta >= 0 ? 'pos' : 'neg'}">${delta != null ? fmtPct(delta) : '&nbsp;'}</span>
+  </div>`;
+}
+
+function renderHeroPanel(c, disp, pc, tl) {
+  if (!tl || tl.kurs == null) return '';
+  const sym = disp.cur === 'EUR' ? '€' : disp.cur === 'USD' ? '$' : disp.cur;
+  const isLive = c.ls_quote?.price != null && tl.lsF != null;
+  const chg = isLive ? c.ls_quote.change_pct : disp.tv?.change_1d;
+  const sup = pc?.nearestSup?.mid ?? null;
+  const res = pc?.nearestRes?.mid ?? null;
+
+  // Thin proportional track: where the price sits between stop and target.
+  const stations = [
+    ['Stop', tl.stopL, 'hero__st--stop'],
+    ['Support', sup, ''],
+    ['Kurs', tl.kurs, 'hero__st--kurs'],
+    ['Resist', res, ''],
+    ['Target', tl.target, 'hero__st--target'],
+  ];
+  const present = stations.map(([, v]) => v).filter((v) => v != null);
+  let track = '';
+  if (present.length >= 3) {
+    const lo = Math.min(...present), hi = Math.max(...present);
+    if (hi > lo) {
+      const pad = (hi - lo) * 0.04;
+      const pos = (v) => ((v - lo + pad) / (hi - lo + 2 * pad) * 100).toFixed(1);
+      track = `<div class="hero__track">${stations.filter(([, v]) => v != null).map(([lbl, v, cls]) =>
+        `<span class="hero__dot ${cls}" style="left:${pos(v)}%" title="${lbl} ${fmtNum(v)}"></span>`).join('')}</div>`;
+    }
+  }
+
+  // Volume vs the 10d/30d averages (last snapshot day; LS history = EUR-venue volume).
+  const lastSnap = Array.isArray(c.ls_history) && c.ls_history.length ? c.ls_history[c.ls_history.length - 1] : null;
+  const v = lastSnap?.volume ?? null;
+  const r10 = v != null && c.tv_data?.avg_vol_10d > 0 ? v / c.tv_data.avg_vol_10d * 100 : null;
+  const r30 = v != null && c.tv_data?.average_volume_30d_calc > 0 ? v / c.tv_data.average_volume_30d_calc * 100 : null;
+  const spike = (r10 != null && r10 >= 150) || (r30 != null && r30 >= 150);
+  const volRow = (r10 != null || r30 != null)
+    ? `<div class="hero__vol" title="Volumen des letzten Snapshot-Tags (${lastSnap?.date ?? ''}) vs. Ø-Volumen aus TV">
+        <span class="hero__vol-lbl">Vol</span>
+        ${r10 != null ? `<span class="hero__vol-chip ${r10 >= 150 ? 'is-spike' : ''}">${r10.toFixed(0)}% <small>Ø10d</small></span>` : ''}
+        ${r30 != null ? `<span class="hero__vol-chip ${r30 >= 150 ? 'is-spike' : ''}">${r30.toFixed(0)}% <small>Ø30d</small></span>` : ''}
+        ${spike ? '<span class="hero__spike">SPIKE</span>' : ''}
+      </div>` : '';
+
+  return `<div class="hero">
+    <div class="hero__price-row">
+      <span class="hero__price">${fmtNum(tl.kurs)} ${sym}</span>
+      <span class="hero__chg ${chg == null ? '' : chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</span>
+      <span class="hero__src">${isLive ? `LS live${c.ls_quote?.checked_at ? ` · ${formatDate(c.ls_quote.checked_at).slice(-5)}` : ''}` : 'TV Close'}</span>
+      ${tl.rr != null ? `<span class="hero__rr" title="Chance-Risiko (Long): (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(tl.rr, 1)}</b></span>` : ''}
+    </div>
+    <div class="hero__stations">${stations.map(([lbl, v2, cls]) => heroStation(lbl, v2, tl.kurs, cls)).join('')}</div>
+    ${track}
+    ${volRow}
+  </div>`;
 }
 
 /* ── Tab 1: Performance ───────────────────────────────────────────────────── */
@@ -251,29 +354,28 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
-function renderPerformanceTab(c, disp) {
+function renderPerformanceTab(c, disp, pc, tl) {
   const tv = disp.tv;
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
-  if (tv) {
-    // Price clusters (confluence zones) as coloured bands in the trend band.
-    // LS levels are EUR → factor into the display currency; unknown rate for
-    // other native currencies → LS levels are skipped, TV levels still cluster.
-    const bottom = detectBottomSignal(c.ls_history);
-    const extraLevels = bottom?.isBottom && bottom.bottomPrice != null
-      ? [{ price: bottom.bottomPrice, label: 'Bottom (LS)', family: 'ls', w: 3, lsPrice: true }]
-      : [];
-    const lsF = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
-    const refPrice = (c.ls_quote?.price != null && lsF != null) ? c.ls_quote.price * lsF : null;
-    const pc = computePriceClusters(tv, { lsHistory: c.ls_history, extraLevels, refPrice, lsToNative: lsF });
-    const ladder = priceLadderSVG(tv, pc?.clusters ?? null);
-    if (!ladder.includes('pv-empty')) {
-      parts.push(`<h4 class="pv-subhead">Trend-Band (ATH · SMAs · 52W · Pivots · Cluster)</h4>
-        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend(!!pc?.clusters?.length)}</div>`);
-    }
+
+  // 1. Hero: Kurs → Stop/Sup/Res/Target → Volumen-Spikes auf einen Blick.
+  parts.push(renderHeroPanel(c, disp, pc, tl));
+
+  // 2. Interactive 10-day price/volume chart (Lightweight Charts, vendored);
+  //    the SVG band stays as fallback when the lib or the history is missing.
+  const canChart = typeof window !== 'undefined' && window.LightweightCharts
+    && Array.isArray(c.ls_history) && c.ls_history.length >= 2;
+  if (canChart) {
+    parts.push(`<h4 class="pv-subhead">10-Tage-Verlauf + Volumen (LS)</h4>
+      <div id="ls-chart" class="ls-chart"></div>
+      <p class="ph-note">Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen</p>`);
+  } else {
+    parts.push(ls10dChartHTML(c, disp));
   }
+
+  // 3. Heute-Intraday (live), Renditen, Range/Volatilität.
   parts.push(lsIntradayHTML(c, disp));
-  parts.push(ls10dChartHTML(c, disp));
   if (tv) {
     const perf = perfBarsHTML(tv);
     if (perf) parts.push(`<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}`);
@@ -283,18 +385,19 @@ function renderPerformanceTab(c, disp) {
     if (ranges || vol || gauge) {
       parts.push(`<h4 class="pv-subhead">Range &amp; Volatilität (1M–52W)</h4>${ranges}${vol}${gauge}`);
     }
+    // 4. Detail-Level-Leiter auf Abruf (eingeklappt) statt als Einstieg.
+    const ladder = priceLadderSVG(tv, pc?.clusters ?? null);
+    if (!ladder.includes('pv-empty')) {
+      parts.push(`<details class="pv-ladder-details">
+        <summary class="pv-subhead">Trend-Band im Detail (ATH · SMAs · 52W · Pivots · Cluster)</summary>
+        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend(!!pc?.clusters?.length)}</div>
+      </details>`);
+    }
   }
   return parts.join('');
 }
 
 /* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
-
-function tradeRow(label, value, title = '') {
-  const set = value != null && value !== '—';
-  return `<div class="trade-row"${title ? ` title="${title}"` : ''}>
-    <span>${label}</span><span class="trade-val${set ? ' trade-val--set' : ''}">${set ? value : '–'}</span>
-  </div>`;
-}
 
 function phCard(title, tag, note) {
   return `<div class="ph-card">
@@ -303,79 +406,96 @@ function phCard(title, tag, note) {
   </div>`;
 }
 
-// Breakout/Breakdown card: real percentage + fulfilled criteria once the LS
-// history is long enough, otherwise the fill-level / no-history hint.
-function probCard(title, r, pctKey, codeMap, hist, cls) {
-  if (!r) {
-    const note = Array.isArray(hist) && hist.length
-      ? `Erst ${hist.length}/${MAX_SNAPSHOTS} Snapshot-Tage – Berechnung ab ${MIN_SNAPSHOTS} Tagen (nightly Snapshot, werktags 21:30 UTC).`
-      : 'Keine LS-Historie – nightly Snapshot läuft nur für den Watch-Bucket.';
-    return phCard(title, 'Nächste 10 T', note);
-  }
-  const codes = Object.entries(codeMap).filter(([k]) => r.criteria[k]).map(([, v]) => v).join(' + ') || 'keine Kriterien erfüllt';
-  return `<div class="ph-card ph-card--live">
-    <div class="ph-card__head">${title}<span class="ph-tag">Nächste 10 T</span><span class="prob-val ${cls}">${r[pctKey]}%</span></div>
-    <p>Kriterien: ${codes} · Heuristik, gedeckelt bei 90 %</p>
+// One row of the vertical ticket scale: label · price · Δ% vs Kurs.
+function ticketRow(label, value, kurs, cls = '', title = '') {
+  const has = value != null;
+  const delta = has && kurs != null && kurs > 0 && cls !== 'ticket__row--kurs'
+    ? (value - kurs) / kurs * 100 : null;
+  return `<div class="ticket__row ${cls}"${title ? ` title="${title}"` : ''}>
+    <span class="ticket__lbl">${label}</span>
+    <span class="ticket__val">${has ? fmtNum(value) : '—'}</span>
+    <span class="ticket__delta ${delta == null ? '' : delta >= 0 ? 'pos' : 'neg'}">${delta != null ? fmtPct(delta) : ''}</span>
   </div>`;
 }
 
-function renderTradeTab(c, disp) {
+function exitChips(list, skipKey = null) {
+  if (!list?.length) return '';
+  return `<div class="ticket__chips">${list.filter((x) => x.key !== skipKey).map((x) =>
+    `<span class="ticket__chip" title="${x.label}">${x.label.split(' ')[0]} <b>${fmtNum(x.value)}</b></span>`).join('')}</div>`;
+}
+
+// Heuristic probability as a labelled progress bar (mobile-scannable).
+function probBar(label, r, pctKey, codeMap, hist, dir) {
+  if (!r) {
+    const note = Array.isArray(hist) && hist.length
+      ? `${hist.length}/${MAX_SNAPSHOTS}T Historie – ab ${MIN_SNAPSHOTS} Tagen`
+      : 'keine LS-Historie (Watch-Bucket)';
+    return `<div class="prob-row"><span class="prob-row__lbl">${label}</span>
+      <span class="prob-row__note">${note}</span></div>`;
+  }
+  const pct = r[pctKey];
+  const codes = Object.entries(codeMap).filter(([k]) => r.criteria[k]).map(([, v]) => v).join(' + ') || 'keine Kriterien';
+  return `<div class="prob-row" title="Heuristik (max 90%) · Kriterien: ${codes}">
+    <span class="prob-row__lbl">${label}</span>
+    <div class="prob-row__track"><div class="prob-row__fill ${dir}" style="width:${pct}%"></div></div>
+    <span class="prob-row__val ${pct >= 50 ? dir : ''}">${pct}%</span>
+  </div>`;
+}
+
+function renderTradeTab(c, disp, pc, tl, side) {
   const tv = disp.tv;
-  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
-  const cl = classifyCluster(tv); // ATRP/MCap skalieren nicht → Cluster währungsneutral
-  const lsF = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
-  const ex = exitLevels(tv, cl ?? undefined, c.ls_history, lsF);
-  const exVal = (side, key) => {
-    const l = ex?.[side]?.find((x) => x.key === key);
-    return l != null ? fmtNum(l.value) : null;
-  };
-  const target = tradeTarget(tv, cl ?? undefined);
-  const brk = breakoutEntry(tv);
+  if (!tv || !tl) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  const { cl, ex, kurs, target, entryL, stopL, rr, brk, lsF } = tl;
+  const sup = pc?.nearestSup?.mid ?? null;
+  const res = pc?.nearestRes?.mid ?? null;
   const bottom = detectBottomSignal(c.ls_history);
-  const bottomTxt = bottom?.isBottom && bottom.bottomPrice != null && lsF != null
-    ? `bottom ${fmtNum(bottom.bottomPrice * lsF)}` : null;
+  const bottomVal = bottom?.isBottom && bottom.bottomPrice != null && lsF != null ? bottom.bottomPrice * lsF : null;
   const bottomTip = bottom == null
     ? 'Braucht ≥6 Tage LS-Historie'
     : bottom.isBottom
       ? (bottom.basis === 'swing-low' ? 'Bestätigtes Swing-Low' : 'Kapitulations-Tief')
-      : `Kriterien: Trend ${bottom.criteria.trendFlattening ? '✓' : '✗'} · Vol@Support ${bottom.criteria.decliningVolumeNearSupport ? '✓' : '✗'} · Candle ${bottom.criteria.candleShift ? '✓' : '✗'} · Range ${bottom.criteria.rangeCompression ? '✓' : '✗'}`;
-  const mult = cl?.atrMult ?? '–';
+      : `Kein Bottom · Trend ${bottom.criteria.trendFlattening ? '✓' : '✗'} · Vol@Support ${bottom.criteria.decliningVolumeNearSupport ? '✓' : '✗'} · Candle ${bottom.criteria.candleShift ? '✓' : '✗'} · Range ${bottom.criteria.rangeCompression ? '✓' : '✗'}`;
+  const chandS = ex?.short?.find((x) => x.key === 'chand')?.value ?? null;
   const bo = detectBreakoutSetup(c.ls_history, cl?.avgVol);
   const bd = detectBreakdownRisk(c.ls_history, cl?.avgVol);
+
+  // Ticket scale: ordered top→bottom by price side, Kurs highlighted.
+  const ticket = side === 'long'
+    ? [
+      ['Target', target, 'ticket__row--target', `Kurs + ${cl?.gainPct ?? '–'}% (Cluster)`],
+      ['Res-Cluster', res, '', pc?.nearestRes ? `Score ${pc.nearestRes.score} · ${pc.nearestRes.members.map((m) => m.label).join(' · ')}` : ''],
+      ['Entry · Pivot R1|1W', entryL, 'ticket__row--entry', 'Long-Entry-Trigger'],
+      ['KURS', kurs, 'ticket__row--kurs', ''],
+      ['Sup-Cluster', sup, '', pc?.nearestSup ? `Score ${pc.nearestSup.score} · ${pc.nearestSup.members.map((m) => m.label).join(' · ')}` : ''],
+      ['Stop', stopL, 'ticket__row--stop', ex?.primaryLong ? ex.primaryLong.label : ''],
+    ]
+    : [
+      ['Chandelier-Stop', chandS, 'ticket__row--stop', `low|22 + ${cl?.atrMult ?? '–'}×ATR`],
+      ['Entry · Breakout', brk, 'ticket__row--entry', 'high|20 + 0,01 %'],
+      ['KURS', kurs, 'ticket__row--kurs', ''],
+      ['Sup-Cluster', sup, '', pc?.nearestSup ? `Score ${pc.nearestSup.score}` : ''],
+      ['Bottom-Signal', bottomVal, 'ticket__row--target', bottomTip],
+    ];
+
+  const otherExits = side === 'long' ? exitChips(ex?.long, ex?.primaryLong?.key) : exitChips(ex?.short, 'chand');
 
   return `
     <div class="trade-head">
       ${cl ? `<span class="cluster-badge cluster-badge--${cl.key}" title="ATRP ${fmtNum(c.tv_data?.atrp, 1)}% · MCap ${formatMarketCap(c.tv_data?.market_cap)} · ATR-Mult ${cl.atrMult} · Vol-Basis ØV${cl.volBasis}">${cl.label}</span>` : ''}
-      ${target != null ? `<span class="trade-head__target">Target <b>${fmtNum(target)}</b> <small>+${cl.gainPct}%</small></span>` : ''}
+      ${side === 'long' && rr != null ? `<span class="trade-head__target" title="Chance-Risiko: (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(rr, 1)}</b></span>` : ''}
       <span class="trade-head__cur">${disp.cur}</span>
     </div>
-    <div class="trade-grid">
-      <div class="trade-col trade-col--long">
-        <h5 class="trade-col__head">Long Setup</h5>
-        <div class="trade-sub">Entry-Trigger</div>
-        ${tradeRow('Pivot R1 (1W)', tv.pivot_r1_1w != null ? fmtNum(tv.pivot_r1_1w) : null)}
-        ${tradeRow('R2 / R3 (1W)', tv.pivot_r2_1w != null || tv.pivot_r3_1w != null ? `${fmtNum(tv.pivot_r2_1w)} / ${fmtNum(tv.pivot_r3_1w)}` : null, 'Pivot.M.Classic R2 und R3, Weekly')}
-        ${tradeRow('Pivot R1 (1M)', tv.pivot_r1 != null ? fmtNum(tv.pivot_r1) : null)}
-        <div class="trade-sub">Exits &amp; Hard Stops <small>(unter Support −0,02)</small></div>
-        ${tradeRow('L3M − 0,5 × ATR', exVal('long', 'l3m'))}
-        ${tradeRow('SMA200 − 0,5 × ATR', exVal('long', 'sma200'))}
-        ${tradeRow(`Chandelier (high|22 − ${mult} × ATR)`, exVal('long', 'chand'), 'high|22 ≈ High.1M · ATR|22 ≈ ATR(14)')}
-      </div>
-      <div class="trade-col trade-col--short">
-        <h5 class="trade-col__head">Short Setup</h5>
-        <div class="trade-sub">Entry-Trigger</div>
-        ${tradeRow('Breakout: high|20 + 0,01 %', brk != null ? fmtNum(brk) : null)}
-        ${tradeRow('Bottom-Signal', bottomTxt, bottomTip)}
-        <div class="trade-sub">Exits &amp; Trailing Stops</div>
-        ${tradeRow('low|10 (LS)', exVal('short', 'low10'))}
-        ${tradeRow('SMA20-MOM (SMA20 − 0,5 × ATR)', exVal('short', 'sma20mom'))}
-        ${tradeRow('2W-Low (LS, absolut)', exVal('short', 'low2w'))}
-        ${tradeRow('L1M − 0,5 × ATR', exVal('short', 'l1m'))}
-        ${tradeRow(`Chandelier (low|22 + ${mult} × ATR)`, exVal('short', 'chand'))}
-      </div>
+    <div class="tab-bar ticket__seg" role="tablist">
+      <button class="tab-btn${side === 'long' ? ' active' : ''}" data-side="long" role="tab" aria-selected="${side === 'long'}">Long</button>
+      <button class="tab-btn${side === 'short' ? ' active' : ''}" data-side="short" role="tab" aria-selected="${side === 'short'}">Short</button>
     </div>
-    ${probCard('Breakout-Wahrscheinlichkeit', bo, 'breakoutProbabilityPct', { extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'Money-Flow', flatTopBullFlag: 'Flat-Top/Flag' }, c.ls_history, 'pos')}
-    ${probCard('Breakdown-Wahrscheinlichkeit', bd, 'breakdownProbabilityPct', { volumeSpikeNoFollowThrough: 'Spike o. Follow-Through', distributionDay: 'Distribution-Day', nearRecentHigh: 'Nähe Hoch' }, c.ls_history, 'neg')}
+    <div class="ticket">
+      ${ticket.map(([lbl, v, cls, tip]) => ticketRow(lbl, v, kurs, cls, tip)).join('')}
+    </div>
+    ${otherExits ? `<h4 class="pv-subhead">Weitere Exits</h4>${otherExits}` : ''}
+    <h4 class="pv-subhead">Ausbruchs-Signale (nächste ~10 T)</h4>
+    ${probBar('Brk↑', bo, 'breakoutProbabilityPct', { extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'Money-Flow', flatTopBullFlag: 'Flat-Top/Flag' }, c.ls_history, 'pos')}
+    ${probBar('Brk↓', bd, 'breakdownProbabilityPct', { volumeSpikeNoFollowThrough: 'Spike o. Follow-Through', distributionDay: 'Distribution-Day', nearRecentHigh: 'Nähe Hoch' }, c.ls_history, 'neg')}
     ${phCard('Swing-Check', 'TwelveData', 'Platzhalter – Umsetzung folgt (docs/SWING_CHECK_HANDOVER.md).')}
     ${phCard('Analyst Targets', '', 'Platzhalter – Datenquelle folgt.')}
   `;
@@ -531,6 +651,82 @@ export class CandidateDetail {
     this.candidate = null;
     this.activeTab = 'performance';
     this.altCurrency = false; // false = native currency, true = USD↔EUR switched
+    this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
+    this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
+  }
+
+  destroyChart() {
+    try { this._chart?.remove(); } catch { /* already gone */ }
+    this._chart = null;
+  }
+
+  // Interactive 10-day LS chart (Lightweight Charts): area price series from
+  // the per-day intraday snapshots, volume histogram with Ø10d/Ø30d reference
+  // lines, and price lines for Sup/Res clusters + target. Display currency.
+  initLsChart(c, disp, pc, tl) {
+    const el = this.el.querySelector('#ls-chart');
+    if (!el || !window.LightweightCharts) return;
+    const hist = c.ls_history;
+    const lsF = lsDisplayFactor(disp);
+    if (!Array.isArray(hist) || hist.length < 2 || lsF == null) return;
+
+    const css = getComputedStyle(document.documentElement);
+    const col = (n) => css.getPropertyValue(n).trim();
+    const chart = window.LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { color: 'transparent' }, textColor: col('--muted'), fontSize: 11 },
+      grid: { vertLines: { color: col('--surface-3') }, horzLines: { color: col('--surface-3') } },
+      rightPriceScale: { borderColor: col('--border') },
+      timeScale: { borderColor: col('--border'), timeVisible: false },
+      crosshair: { mode: 0 },
+    });
+
+    const area = chart.addAreaSeries({
+      lineColor: col('--accent'), lineWidth: 2,
+      topColor: `${col('--accent')}33`, bottomColor: `${col('--accent')}05`,
+      priceLineVisible: true, lastValueVisible: true,
+    });
+    const points = [];
+    for (const s of hist) {
+      const base = Date.parse(s.date) / 1000;
+      if (!Number.isFinite(base)) continue;
+      const ser = Array.isArray(s.series) && s.series.length > 1 ? s.series : [s.close];
+      ser.forEach((v, j, arr) => {
+        // Spread the intraday points over an 08:00–22:00 trading day.
+        if (v != null) points.push({ time: base + 8 * 3600 + (arr.length > 1 ? j / (arr.length - 1) : 0) * 14 * 3600, value: v * lsF });
+      });
+    }
+    // Defensive: unparsable snapshot dates would leave an empty chart —
+    // fall back to the SVG band instead.
+    if (points.length < 2) {
+      chart.remove();
+      el.outerHTML = ls10dChartHTML(c, disp);
+      return;
+    }
+    area.setData(points);
+
+    const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+    vol.setData(hist.filter((s) => Number.isFinite(Date.parse(s.date))).map((s) => ({
+      time: Date.parse(s.date) / 1000 + 15 * 3600,
+      value: s.volume ?? 0,
+      color: (s.change_pct ?? 0) >= 0 ? `${col('--pos')}77` : `${col('--neg')}77`,
+    })));
+    const v10 = c.tv_data?.avg_vol_10d, v30 = c.tv_data?.average_volume_30d_calc;
+    if (v10 > 0) vol.createPriceLine({ price: v10, color: col('--muted'), lineWidth: 1, lineStyle: 2, title: 'Ø10d' });
+    if (v30 > 0) vol.createPriceLine({ price: v30, color: col('--muted'), lineWidth: 1, lineStyle: 3, title: 'Ø30d' });
+
+    // S/R clusters + target as price lines (all already in display currency).
+    const line = (price, color, title, style = 0, width = 2) => {
+      if (price != null) area.createPriceLine({ price, color, lineWidth: width, lineStyle: style, title });
+    };
+    if (pc?.nearestSup) line(pc.nearestSup.mid, col('--pos'), `Sup ${pc.nearestSup.score}`);
+    if (pc?.nearestRes) line(pc.nearestRes.mid, col('--neg'), `Res ${pc.nearestRes.score}`);
+    if (tl?.target != null) line(tl.target, col('--pos'), 'Target', 2, 1);
+    if (tl?.stopL != null) line(tl.stopL, col('--neg'), 'Stop', 2, 1);
+
+    chart.timeScale().fitContent();
+    this._chart = chart;
   }
 
   // Display-currency context for the current candidate: converted tv_data,
@@ -563,6 +759,7 @@ export class CandidateDetail {
   }
 
   hide() {
+    this.destroyChart();
     this.candidate = null;
     this.onClose?.();
   }
@@ -583,10 +780,13 @@ export class CandidateDetail {
     if (!this.candidate) return;
     const c = this.candidate;
 
+    this.destroyChart();
     const disp = this.displayInfo(c);
+    const pc = priceClustersDisp(c, disp);
+    const tl = tradeLevels(c, disp);
     const tabPanels = {
-      performance: renderPerformanceTab(c, disp),
-      trade:       renderTradeTab(c, disp),
+      performance: renderPerformanceTab(c, disp, pc, tl),
+      trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       meta:        renderMetaTab(c),
     };
@@ -702,6 +902,18 @@ export class CandidateDetail {
     this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((btn) => {
       btn.addEventListener('pointerup', () => this.setTab(btn.dataset.tab));
     });
+
+    // Trade-Ticket: Long | Short segmented control
+    this.el.querySelectorAll('.ticket__seg .tab-btn').forEach((btn) => {
+      btn.addEventListener('pointerup', () => {
+        if (this.tradeSide === btn.dataset.side) return;
+        this.tradeSide = btn.dataset.side;
+        this.render();
+      });
+    });
+
+    // Interactive LS chart (after the container exists in the DOM)
+    this.initLsChart(c, disp, pc, tl);
 
     // Toolbar: edit-toggle + quick actions
     const editBtn = this.el.querySelector('#detail-edit-links');

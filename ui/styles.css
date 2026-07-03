@@ -1521,15 +1521,15 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
 .isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }
 
-/* Sub-header: one row — icon-only links (+ edit toggle) | quick actions */
+/* Sub-header: icon-only links (+ edit toggle) | quick actions. ALL chips must
+   stay visible — when one row is too narrow the actions group wraps onto a
+   second row (never hidden behind horizontal scrolling). */
 .detail-toolbar {
-  display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap;
+  display:flex; align-items:center; gap:var(--s-2); row-gap:var(--s-2); flex-wrap:wrap;
   padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border);
-  overflow-x:auto;
 }
 .detail-toolbar__links, .detail-toolbar__actions { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
 .detail-toolbar__actions { margin-left:auto; }
-.detail-toolbar__sep { width:1px; height:20px; background:var(--border); flex-shrink:0; }
 /* Sub-nav icons: large touch targets, mobile-friendly (44px ≈ Apple/Android
    minimum tap size, well above the styleguide's 32px floor). */
 .detail-toolbar .link-chip { width:44px; height:44px; border-radius:var(--r-2); flex-shrink:0; }
@@ -1555,6 +1555,84 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .detail-ls__meta.neg { color:var(--neg); }
 .pv-volstats { display:flex; gap:var(--s-4); font-size:var(--fs-1); color:var(--muted); margin:var(--s-2) 0; }
 .pv-volstats b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* ── Detail hero panel: price → stop/sup/res/target → volume at a glance ── */
+.hero {
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2);
+  padding:var(--s-3); margin-bottom:var(--s-3);
+  display:flex; flex-direction:column; gap:var(--s-2);
+}
+.hero__price-row { display:flex; align-items:baseline; gap:var(--s-2); flex-wrap:nowrap; min-width:0; }
+.hero__price { font-family:var(--font-mono); font-size:var(--fs-6); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__chg { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.hero__src { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hero__rr { margin-left:auto; font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.hero__rr b { font-size:var(--fs-4); color:var(--accent); font-variant-numeric:tabular-nums; }
+/* 5 stations, ALWAYS one row (§5): equal shrinking columns, stacked values */
+.hero__stations { display:flex; flex-wrap:nowrap; gap:var(--s-1); }
+.hero__st { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; padding:2px; border-radius:var(--r-1); }
+.hero__st-lbl { font-size:11px; color:var(--muted); font-weight:var(--fw-bold); letter-spacing:.02em; white-space:nowrap; }
+.hero__st-val { font-size:var(--fs-2); font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__st-delta { font-size:var(--fs-1); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__st--kurs { background:var(--accent-weak); }
+.hero__st--kurs .hero__st-val { font-weight:var(--fw-bold); color:var(--accent); }
+.hero__st--stop .hero__st-lbl { color:var(--neg); }
+.hero__st--target .hero__st-lbl { color:var(--pos); }
+.hero__track { position:relative; height:8px; background:var(--surface-3); border-radius:var(--r-pill); }
+.hero__dot { position:absolute; top:50%; width:8px; height:8px; border-radius:50%; background:var(--muted); transform:translate(-50%,-50%); }
+.hero__dot.hero__st--kurs { background:var(--accent); width:11px; height:11px; box-shadow:0 0 0 2px var(--surface-2); }
+.hero__dot.hero__st--stop { background:var(--neg); }
+.hero__dot.hero__st--target { background:var(--pos); }
+.hero__vol { display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap; }
+.hero__vol-lbl { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); }
+.hero__vol-chip {
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums; padding:1px 7px;
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-pill); white-space:nowrap;
+}
+.hero__vol-chip small { color:var(--muted); }
+.hero__vol-chip.is-spike { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.hero__spike { font-size:11px; font-weight:var(--fw-bold); color:var(--pos); letter-spacing:.06em; }
+
+/* Interactive LS chart container (Lightweight Charts) */
+.ls-chart { height:240px; width:100%; }
+
+/* Collapsed detail ladder */
+.pv-ladder-details summary { cursor:pointer; list-style:revert; }
+
+/* ── Trade ticket: vertical scale + segmented Long|Short + prob bars ── */
+.ticket__seg { margin:var(--s-2) 0 var(--s-3); }
+.ticket { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.ticket__row {
+  display:grid; grid-template-columns:1fr auto 64px; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-3); border-bottom:1px solid var(--border);
+  background:var(--surface-2); font-size:var(--fs-2);
+}
+.ticket__row:last-child { border-bottom:none; }
+.ticket__lbl { color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ticket__val { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:var(--fw-med); white-space:nowrap; }
+.ticket__delta { text-align:right; font-size:var(--fs-1); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ticket__row--kurs { background:var(--accent-weak); }
+.ticket__row--kurs .ticket__val { font-weight:var(--fw-bold); color:var(--accent); font-size:var(--fs-3); }
+.ticket__row--kurs .ticket__lbl { color:var(--accent); font-weight:var(--fw-bold); }
+.ticket__row--target .ticket__lbl { color:var(--pos); font-weight:var(--fw-bold); }
+.ticket__row--stop .ticket__lbl { color:var(--neg); font-weight:var(--fw-bold); }
+.ticket__row--entry .ticket__lbl { color:var(--text); font-weight:var(--fw-med); }
+.ticket__chips { display:flex; flex-wrap:wrap; gap:var(--s-1); }
+.ticket__chip {
+  font-size:var(--fs-1); padding:2px 8px; border-radius:var(--r-pill);
+  background:var(--surface-3); border:1px solid var(--border); color:var(--muted); white-space:nowrap;
+}
+.ticket__chip b { color:var(--text); font-variant-numeric:tabular-nums; }
+.prob-row { display:grid; grid-template-columns:44px 1fr 48px; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
+.prob-row__lbl { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+.prob-row__track { height:10px; background:var(--surface-3); border-radius:var(--r-pill); overflow:hidden; }
+.prob-row__fill { height:100%; border-radius:var(--r-pill); }
+.prob-row__fill.pos { background:var(--pos); }
+.prob-row__fill.neg { background:var(--neg); }
+.prob-row__val { text-align:right; font-size:var(--fs-2); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.prob-row__val.pos { color:var(--pos); }
+.prob-row__val.neg { color:var(--neg); }
+.prob-row__note { grid-column:2 / 4; font-size:var(--fs-1); color:var(--muted); }
 
 /* Performance tab: 10-day LS band (price segments + volume-% bars) */
 .ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }
