@@ -113,6 +113,17 @@ function chipBtn(id, inner, label, extraClass = '') {
     title="${label}" aria-label="${label}">${inner}</button>`;
 }
 
+// Currency toggle rendered inline next to the price in the Performance hero and
+// the Trade head (class, not id — several instances live in the DOM at once).
+function curToggle(disp, extraClass = '') {
+  const tip = disp.canSwitch
+    ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
+    : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
+  const cls = disp.canSwitch ? (disp.factor !== 1 ? ' is-active' : '') : ' cur-toggle--off';
+  const glyph = disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur;
+  return `<button type="button" class="cur-toggle${cls} ${extraClass}" title="${tip}" aria-label="${tip}">${glyph}</button>`;
+}
+
 function renderToolbar(c) {
   const links = c.links ?? {};
   const scUrl = c.symbol
@@ -249,6 +260,7 @@ function renderHeroPanel(c, disp, pc, tl) {
       <span class="hero__chg ${chg == null ? '' : chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</span>
       <span class="hero__src">${isLive ? `LS live${c.ls_quote?.checked_at ? ` · ${formatDate(c.ls_quote.checked_at).slice(-5)}` : ''}` : 'TV Close'}</span>
       ${tl.rr != null ? `<span class="hero__rr" title="Chance-Risiko (Long): (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(tl.rr, 1)}</b></span>` : ''}
+      ${curToggle(disp, 'hero__cur')}
     </div>
     <div class="hero__stations">${stations.map(([lbl, v2, cls]) => heroStation(lbl, v2, tl.kurs, cls)).join('')}</div>
     ${track}
@@ -339,9 +351,10 @@ function renderPerformanceTab(c, disp, pc, tl) {
   const canChart = typeof window !== 'undefined' && window.LightweightCharts
     && Array.isArray(c.ls_history) && c.ls_history.length >= 2;
   if (canChart) {
-    parts.push(`<h4 class="pv-subhead">10-Tage-Verlauf + Volumen (LS)</h4>
+    const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
+    parts.push(`<h4 class="pv-subhead">10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}</h4>
       <div id="ls-chart" class="ls-chart"></div>
-      <p class="ph-note">Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen</p>`);
+      <p class="ph-note">Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen</p>`);
   } else {
     parts.push(ls10dChartHTML(c, disp));
   }
@@ -455,7 +468,7 @@ function renderTradeTab(c, disp, pc, tl, side) {
     <div class="trade-head">
       ${cl ? `<span class="cluster-badge cluster-badge--${cl.key}" title="ATRP ${fmtNum(c.tv_data?.atrp, 1)}% · MCap ${formatMarketCap(c.tv_data?.market_cap)} · ATR-Mult ${cl.atrMult} · Vol-Basis ØV${cl.volBasis}">${cl.label}</span>` : ''}
       ${side === 'long' && rr != null ? `<span class="trade-head__target" title="Chance-Risiko: (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(rr, 1)}</b></span>` : ''}
-      <span class="trade-head__cur">${disp.cur}</span>
+      ${curToggle(disp, 'trade-head__cur')}
     </div>
     <div class="tab-bar ticket__seg" role="tablist">
       <button class="tab-btn${side === 'long' ? ' active' : ''}" data-side="long" role="tab" aria-selected="${side === 'long'}">Long</button>
@@ -658,24 +671,38 @@ export class CandidateDetail {
       topColor: `${col('--accent')}33`, bottomColor: `${col('--accent')}05`,
       priceLineVisible: true, lastValueVisible: true,
     });
+    // Today's LIVE intraday series (ls_quote.series, EUR) is appended as the
+    // freshest segment. If the nightly snapshot already captured today, the
+    // live series supersedes it (skip that history day below).
+    const q = c.ls_quote;
+    const liveSeries = Array.isArray(q?.series) && q.series.length > 1 ? q.series : null;
+    const liveDay = liveSeries ? String(q.checked_at ?? '').slice(0, 10) : null;
+    const spread = (base, arr, j) => base + 8 * 3600 + (arr.length > 1 ? j / (arr.length - 1) : 0) * 14 * 3600;
+
     const points = [];
     for (const s of hist) {
       const base = Date.parse(s.date) / 1000;
       if (!Number.isFinite(base)) continue;
+      if (liveDay && s.date === liveDay) continue; // live series covers this day
       const ser = Array.isArray(s.series) && s.series.length > 1 ? s.series : [s.close];
-      ser.forEach((v, j, arr) => {
-        // Spread the intraday points over an 08:00–22:00 trading day.
-        if (v != null) points.push({ time: base + 8 * 3600 + (arr.length > 1 ? j / (arr.length - 1) : 0) * 14 * 3600, value: v * lsF });
-      });
+      ser.forEach((v, j, arr) => { if (v != null) points.push({ time: spread(base, arr, j), value: v * lsF }); });
     }
-    // Defensive: unparsable snapshot dates would leave an empty chart —
-    // fall back to the SVG band instead.
-    if (points.length < 2) {
+    if (liveSeries && Number.isFinite(Date.parse(liveDay))) {
+      const base = Date.parse(liveDay) / 1000;
+      liveSeries.forEach((v, j, arr) => { if (v != null) points.push({ time: spread(base, arr, j), value: v * lsF }); });
+    }
+    // Lightweight Charts needs strictly-ascending unique times; sort + dedupe.
+    points.sort((a, b) => a.time - b.time);
+    const clean = [];
+    for (const p of points) if (!clean.length || p.time > clean[clean.length - 1].time) clean.push(p);
+
+    // Defensive: unparsable dates would leave an empty chart — SVG fallback.
+    if (clean.length < 2) {
       chart.remove();
       el.outerHTML = ls10dChartHTML(c, disp);
       return;
     }
-    area.setData(points);
+    area.setData(clean);
 
     const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
@@ -781,13 +808,6 @@ export class CandidateDetail {
           </div>
         </div>
         <div class="detail-header-right">
-          ${(() => {
-            const tip = disp.canSwitch
-              ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
-              : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
-            const cls = disp.canSwitch ? (disp.factor !== 1 ? ' is-active' : '') : ' detail-cur-btn--off';
-            return `<button type="button" class="detail-cur-btn${cls}" id="detail-currency" title="${tip}" aria-label="${tip}">${disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur}</button>`;
-          })()}
           ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
           <button class="icon-btn" id="detail-close" aria-label="Schließen">${icons.xMark}</button>
         </div>
@@ -901,10 +921,13 @@ export class CandidateDetail {
       panel.hidden = !panel.hidden;
       editBtn.classList.toggle('is-active', !panel.hidden);
     });
-    this.el.querySelector('#detail-currency').addEventListener('pointerup', () => {
-      if (!this.displayInfo(c).canSwitch) return;
-      this.altCurrency = !this.altCurrency;
-      this.render();
+    // Currency toggle(s) — one per price-bearing tab (Performance hero, Trade head).
+    this.el.querySelectorAll('.cur-toggle').forEach((btn) => {
+      btn.addEventListener('pointerup', () => {
+        if (!this.displayInfo(c).canSwitch) return;
+        this.altCurrency = !this.altCurrency;
+        this.render();
+      });
     });
     this.el.querySelector('#detail-trigger').addEventListener('pointerup', () => {
       this.onAction?.('openTrigger', c);

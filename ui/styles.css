@@ -1538,17 +1538,21 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .link-chip--mock { opacity:0.45; }
 .detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }
 
-/* Currency toggle, relocated into the header (always visible across tabs) */
-.detail-cur-btn {
+/* Currency toggle — sits inline next to the price in the Performance hero and
+   the Trade head (compact pill, tap to switch native ↔ USD/EUR). */
+.cur-toggle {
   display:inline-flex; align-items:center; justify-content:center;
-  min-width:34px; height:34px; padding:0 var(--s-2); flex-shrink:0;
+  min-width:28px; height:26px; padding:0 var(--s-2); flex-shrink:0;
   background:var(--surface-3); border:1px solid var(--border); color:var(--text);
-  border-radius:var(--r-1); font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1;
+  border-radius:var(--r-1); font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1;
   transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
-.detail-cur-btn:hover { border-color:var(--accent); }
-.detail-cur-btn.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
-.detail-cur-btn--off { opacity:0.45; cursor:default; }
+.cur-toggle:hover { border-color:var(--accent); }
+.cur-toggle.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.cur-toggle--off { opacity:0.45; cursor:default; }
+/* Both R:R and the currency pill anchor right (two margin-left:auto collapse
+   so they sit adjacent at the row's right edge). */
+.hero__cur { margin-left:auto; }
 
 /* Tab bar + panels inside the sheet */
 .detail-tabs { padding:0 var(--s-4); margin-bottom:0; background:var(--sheet-bg); }
@@ -1651,7 +1655,7 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .trade-head { display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-3); }
 .trade-head__target { font-size:var(--fs-2); color:var(--muted); }
 .trade-head__target b { color:var(--pos); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
-.trade-head__cur { margin-left:auto; font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); }
+.trade-head__cur { margin-left:auto; }
 .trade-val--set { color:var(--text); border-style:solid; font-weight:var(--fw-med); }
 .ph-card--live { border-style:solid; background:var(--surface); }
 .prob-val { margin-left:auto; font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
