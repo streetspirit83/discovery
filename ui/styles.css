@@ -1382,7 +1382,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* ════════════════════════════════════════════════════════════════
    DETAIL MODAL — SCORE RING + PRICE VISUALIZATIONS
    ════════════════════════════════════════════════════════════════ */
-.detail-header-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.detail-header-right { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
 
 .score-ring { position:relative; width:52px; height:52px; flex-shrink:0; }
 .score-ring svg { display:block; }
@@ -1521,24 +1521,34 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
 .isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }
 
-/* Sub-header: icon-only links (+ edit toggle) | quick actions. ALL chips must
-   stay visible — when one row is too narrow the actions group wraps onto a
-   second row (never hidden behind horizontal scrolling). */
+/* Sub-header: icon-only links · edit · | · quick actions — ALWAYS one row.
+   Chips are equal flex columns that shrink on narrow phones (down to the
+   32px styleguide floor) so all of them stay visible without scrolling. */
 .detail-toolbar {
-  display:flex; align-items:center; gap:var(--s-2); row-gap:var(--s-2); flex-wrap:wrap;
+  display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap;
   padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border);
 }
-.detail-toolbar__links, .detail-toolbar__actions { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
-.detail-toolbar__actions { margin-left:auto; }
-/* Sub-nav icons: large touch targets, mobile-friendly (44px ≈ Apple/Android
-   minimum tap size, well above the styleguide's 32px floor). */
-.detail-toolbar .link-chip { width:44px; height:44px; border-radius:var(--r-2); flex-shrink:0; }
+/* Large touch targets on roomy screens (capped 44px), shrinking to fit. */
+.detail-toolbar .link-chip {
+  flex:1 1 0; min-width:32px; max-width:44px; height:44px; border-radius:var(--r-2);
+}
 .detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:22px; height:22px; }
+.detail-toolbar__sep { flex:0 0 1px; align-self:stretch; margin:4px 2px; background:var(--border); }
 button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .link-chip--mock { opacity:0.45; }
-/* Currency toggle chip in the detail toolbar: text glyph instead of an icon */
-.link-chip .cur-label { font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1; }
 .detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }
+
+/* Currency toggle, relocated into the header (always visible across tabs) */
+.detail-cur-btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:34px; height:34px; padding:0 var(--s-2); flex-shrink:0;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  border-radius:var(--r-1); font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.detail-cur-btn:hover { border-color:var(--accent); }
+.detail-cur-btn.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.detail-cur-btn--off { opacity:0.45; cursor:default; }
 
 /* Tab bar + panels inside the sheet */
 .detail-tabs { padding:0 var(--s-4); margin-bottom:0; background:var(--sheet-bg); }
@@ -1546,13 +1556,6 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .detail-tabpanes .pv-subhead:first-child { margin-top:0; }
 
 /* Performance tab: LS intraday stat block (value line > meta line, §2) */
-.detail-ls { display:flex; align-items:center; gap:var(--s-3); }
-.detail-ls .id-spark { width:120px; height:32px; flex-shrink:0; }
-.detail-ls__stat { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.detail-ls__price { font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-4); font-variant-numeric:tabular-nums; }
-.detail-ls__meta { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
-.detail-ls__meta.pos { color:var(--pos); }
-.detail-ls__meta.neg { color:var(--neg); }
 .pv-volstats { display:flex; gap:var(--s-4); font-size:var(--fs-1); color:var(--muted); margin:var(--s-2) 0; }
 .pv-volstats b { color:var(--text); font-variant-numeric:tabular-nums; }
 

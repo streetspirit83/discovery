@@ -4,7 +4,6 @@ import {
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260702h';
 import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
-import { sparklineSVG } from '../lib/spark.js?v=20260626e';
 import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
@@ -114,29 +113,24 @@ function chipBtn(id, inner, label, extraClass = '') {
     title="${label}" aria-label="${label}">${inner}</button>`;
 }
 
-function renderToolbar(c, disp) {
+function renderToolbar(c) {
   const links = c.links ?? {};
   const scUrl = c.symbol
     ? `https://www.stockconsultant.com/consultnow/basicplus.cgi?symbol=${encodeURIComponent(c.symbol)}`
     : null;
-  const curTip = disp.canSwitch
-    ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
-    : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
+  // Single row: external links · edit · | · quick actions. All direct flex
+  // children so they shrink to fit one line even on a narrow phone (§5).
   return `
     <div class="detail-toolbar">
-      <div class="detail-toolbar__links">
-        ${chipLink(links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView', 'link-chip--tv')}
-        ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
-        ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
-        ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
-        ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
-      </div>
-      <div class="detail-toolbar__actions">
-        ${chipBtn('detail-currency', `<span class="cur-label">${disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur}</span>`, curTip, disp.canSwitch ? (disp.factor !== 1 ? 'is-active' : '') : 'link-chip--mock')}
-        ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
-        ${chipBtn('detail-ls', icons.activity, 'LS-Echtzeitkurs laden (EUR)')}
-        ${chipBtn('detail-td', icons.candlestick, 'TwelveData Swing-Kurse – folgt (Mockup)', 'link-chip--mock')}
-      </div>
+      ${chipLink(links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView', 'link-chip--tv')}
+      ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
+      ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
+      ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
+      ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
+      <span class="detail-toolbar__sep"></span>
+      ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
+      ${chipBtn('detail-ls', icons.activity, 'LS-Echtzeitkurs laden (EUR)')}
+      ${chipBtn('detail-td', icons.candlestick, 'TwelveData Swing-Kurse – folgt (Mockup)', 'link-chip--mock')}
     </div>
     <div class="detail-links-edit" id="detail-links-edit" hidden>
       <div class="link-url-fields">
@@ -264,28 +258,6 @@ function renderHeroPanel(c, disp, pc, tl) {
 
 /* ── Tab 1: Performance ───────────────────────────────────────────────────── */
 
-function lsIntradayHTML(c, disp) {
-  const q = c.ls_quote;
-  // LS quotes are EUR; convert to the display currency where a rate exists.
-  const f = disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
-  const sym = f == null ? '€' : disp.cur === 'EUR' ? '€' : '$';
-  const conv = (v) => (v == null || f == null ? v : v * f);
-  if (!Array.isArray(q?.series) || q.series.length < 2) {
-    return `<h4 class="pv-subhead">Intraday (LS · ${sym})</h4>
-      <p class="pv-empty">Kein LS-Tagesverlauf – über das Live-Icon in der Symbolleiste laden.</p>`;
-  }
-  const chg = q.change_pct;
-  const chgCls = chg == null ? '' : chg >= 0 ? 'pos' : 'neg';
-  return `<h4 class="pv-subhead">Intraday (LS · ${sym})</h4>
-    <div class="detail-ls" title="Tagesspanne ${fmtNum(conv(q.day_low))}–${fmtNum(conv(q.day_high))}">
-      ${sparklineSVG(q.series, q.prev_close, chg)}
-      <div class="detail-ls__stat">
-        <span class="detail-ls__price">${fmtNum(conv(q.price))} ${sym}</span>
-        <span class="detail-ls__meta ${chgCls}">${fmtPct(chg)} · ${formatDate(q.checked_at)}</span>
-      </div>
-    </div>`;
-}
-
 /* 10-day LS history band: per-day intraday price segments (coloured by day
  * direction) with volume-% bars below (day volume ÷ Ø V10d from TV, fallback
  * median of the history window). Dashed line = 100 % of the reference. */
@@ -374,8 +346,8 @@ function renderPerformanceTab(c, disp, pc, tl) {
     parts.push(ls10dChartHTML(c, disp));
   }
 
-  // 3. Heute-Intraday (live), Renditen, Range/Volatilität.
-  parts.push(lsIntradayHTML(c, disp));
+  // 3. Renditen, Range/Volatilität (der Live-Intraday-Verlauf steckt bereits
+  //    im Chart oben — keine separate Sparkline mehr).
   if (tv) {
     const perf = perfBarsHTML(tv);
     if (perf) parts.push(`<h4 class="pv-subhead">Rendite je Zeitraum</h4>${perf}`);
@@ -809,6 +781,13 @@ export class CandidateDetail {
           </div>
         </div>
         <div class="detail-header-right">
+          ${(() => {
+            const tip = disp.canSwitch
+              ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
+              : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
+            const cls = disp.canSwitch ? (disp.factor !== 1 ? ' is-active' : '') : ' detail-cur-btn--off';
+            return `<button type="button" class="detail-cur-btn${cls}" id="detail-currency" title="${tip}" aria-label="${tip}">${disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur}</button>`;
+          })()}
           ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
           <button class="icon-btn" id="detail-close" aria-label="Schließen">${icons.xMark}</button>
         </div>
@@ -835,7 +814,7 @@ export class CandidateDetail {
         <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} <span class="btn__label">Export</span></button>
       </div>
 
-      ${renderToolbar(c, disp)}
+      ${renderToolbar(c)}
 
       <div class="tab-bar detail-tabs" role="tablist">
         ${TABS.map(({ key, label }) =>
