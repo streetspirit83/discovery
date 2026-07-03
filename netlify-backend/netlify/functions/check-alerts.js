@@ -9,36 +9,65 @@
  * Scope: every candidate (inbox + watch + export) with >=1 enabled alert.
  * Global mute lives in the discovery-config blob (set from the Alert-Overview).
  *
+ * Push format (lib/push-composer.js): kind-based title (⛔ STOP-LOSS / 🟢 BUY /
+ * 🔭 WATCH), explicit trigger line, user note, portfolio Entry|Stück from the
+ * public merkliste blob, ≤2 salience-picked setup sentences (LS-history
+ * detectors + cluster/RSI/volume facts), ISIN line; whole-notification click →
+ * Discovery app, action button → TradingView. One bundled push per ticker.
+ *
  * Schedule: every 20 min, 11-20 UTC Mon-Fri (~13:00-22:40 CEST in summer; one
  * hour earlier in winter — Netlify cron is UTC, no DST).
  */
 
 import { getStore } from '@netlify/blobs';
-import { computeStatus, evaluateAlerts, STATUS_MAP } from './lib/status-logic.js';
+import { computeStatus, evaluateAlerts } from './lib/status-logic.js';
 import { fetchLsPrice, fetchYahooPrice, fetchEurUsd } from './lib/ls-quote.js';
 import { sendNtfy } from './lib/notify.js';
+import { composePush } from './lib/push-composer.js';
 
 const NTFY_TOPIC = process.env.DISC_NTFY_TOPIC || 'disc-alerts-q4w8r2v';
 const SOURCE_BLOBS = ['discovery-inbox', 'discovery-watch', 'discovery-export'];
-const CONFIG_KEY = 'discovery-config';
-const STATE_KEY  = 'discovery-alert-state';
-const TRIG_KEY   = 'discovery-alert-trig';
+const CONFIG_KEY  = 'discovery-config';
+const STATE_KEY   = 'discovery-alert-state';
+const TRIG_KEY    = 'discovery-alert-trig';
+const HISTORY_KEY = 'discovery-ls-history';
 
-const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
+const MERKLISTE_BLOB_URL = 'https://merkliste-app.netlify.app/.netlify/functions/blob';
 
-function alertSummary(a) {
-  switch (a.type) {
-    case 'price_above': return `Kurs ≥ ${fmtEur(a.threshold)}${a.label ? ` · ${a.label}` : ''}`;
-    case 'price_below': return `Kurs ≤ ${fmtEur(a.threshold)}${a.label ? ` · ${a.label}` : ''}`;
-    case 'ma20_below':  return 'Kurs ≤ EMA20';
-    case 'ma50_below':  return 'Kurs ≤ EMA50';
-    case 'ma200_below': return 'Kurs ≤ EMA200';
-    case 'rsi_above':   return `RSI ≥ ${a.threshold}`;
-    case 'rsi_below':   return `RSI ≤ ${a.threshold}`;
-    case 'macd_bullish':return 'MACD bullish';
-    case 'macd_bearish':return 'MACD bearish';
-    default:            return a.label || a.type;
+/* Merkliste portfolio (public GET, no CORS server-side): symbol → entry/shares.
+   Same alias indexing as ui/lib/merkliste-import.js (match by symbol only). */
+async function fetchMerklisteMap() {
+  try {
+    const res = await fetch(MERKLISTE_BLOB_URL);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const up = (v) => String(v ?? '').trim().toUpperCase();
+    const bySym = new Map();
+    for (const t of data?.tickers ?? []) {
+      const entry = t?.user?.entry_price_manual;
+      if (entry == null) continue;
+      const shares = t?.user?.entry_shares ?? null;
+      const s = t?.stamm ?? {};
+      for (const alias of [s.symbol, s.yahoo_symbol, s.twelvedata_symbol]) {
+        const key = up(alias);
+        if (key) bySym.set(key, { entry, shares });
+      }
+    }
+    return bySym;
+  } catch (e) {
+    console.warn(`[disc-alerts] merkliste blob nicht erreichbar: ${e.message}`);
+    return null;
   }
+}
+
+function portfolioFor(c, bySym) {
+  if (!bySym) return null;
+  const up = (v) => String(v ?? '').trim().toUpperCase();
+  for (const alias of [c.symbol, c.yahoo_symbol, c.merkliste_symbol]) {
+    const key = up(alias);
+    if (key && bySym.has(key)) return bySym.get(key);
+  }
+  return null;
 }
 
 const enabled = (a) => a && a.enabled !== false;
@@ -64,12 +93,15 @@ export default async () => {
   console.log(`[disc-alerts] ${candidates.length} Kandidaten mit aktiven Alerts · muted=${muted}`);
   if (!candidates.length) return new Response('no alerts', { status: 200 });
 
-  const [prevStateDoc, prevTrigDoc] = await Promise.all([
-    store.get(STATE_KEY, { type: 'json' }).catch(() => null),
-    store.get(TRIG_KEY,  { type: 'json' }).catch(() => null),
+  const [prevStateDoc, prevTrigDoc, histDoc, mkBySym] = await Promise.all([
+    store.get(STATE_KEY,   { type: 'json' }).catch(() => null),
+    store.get(TRIG_KEY,    { type: 'json' }).catch(() => null),
+    store.get(HISTORY_KEY, { type: 'json' }).catch(() => null),
+    fetchMerklisteMap(),
   ]);
   const prevState = prevStateDoc?.state ?? {};
   const prevTrig  = prevTrigDoc?.triggered ?? {};
+  const lsHistory = histDoc?.history ?? {};
 
   const eurUsd = await fetchEurUsd();
   const toEur = (v, ccy) => (String(ccy).toUpperCase() === 'USD' && eurUsd && v != null) ? +(v / eurUsd).toFixed(4) : v;
@@ -121,16 +153,22 @@ export default async () => {
 
     if (muted || (!statusChanged && !hasNewTrigger)) continue;
 
-    const info  = STATUS_MAP[status.key] || STATUS_MAP.halten;
     const shown = statusChanged ? triggered : newlyTriggered;
-    const title = `${info.emoji} ${c.symbol}: ${info.label}`;
-    const lines = [
-      shown.map(alertSummary).join(' · '),
-      c.name || '',
-      price != null ? `Kurs ${fmtEur(price)}${ls?.source === 'ls' ? ' (LS)' : ' (Yahoo)'}` : 'Kein Kurs',
-    ].filter(Boolean);
-    console.log(`[ALERT] ${title}\n${lines.join('\n')}`);
-    await sendNtfy(NTFY_TOPIC, { title, message: lines.join('\n'), pushColor: info.pushColor });
+    if (!shown.length) continue;
+    // lsToNative: LS/EUR levels → native TV currency (USD via EUR/USD rate,
+    // EUR 1:1, anything else unknown → LS levels skipped in the cluster calc).
+    const lsToNative = String(ccy).toUpperCase() === 'EUR' ? 1
+      : String(ccy).toUpperCase() === 'USD' ? (eurUsd ?? null) : null;
+    const push = composePush({
+      c,
+      shown,
+      q,
+      snapshots: lsHistory[c.id]?.snapshots ?? null,
+      portfolio: portfolioFor(c, mkBySym),
+      lsToNative,
+    });
+    console.log(`[ALERT] ${push.title}\n${push.message}`);
+    await sendNtfy(NTFY_TOPIC, push);
     pushCount++;
   }
 
