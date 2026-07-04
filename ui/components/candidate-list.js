@@ -13,6 +13,7 @@ import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
+import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260704c';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
@@ -305,6 +306,7 @@ function sortValue(c, col) {
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
+    case 'tv_mtfa':                 return computeMtfa(tv)?.score           ?? null;
     case 'tv_sma20':  return tv?.sma20 ?? null;
     case 'tv_sma50':  return tv?.sma50 ?? null;
     case 'tv_sma100': return tv?.sma100 ?? null;
@@ -657,6 +659,7 @@ const VIEWS = {
 // the performance + raw-metric columns folded in for a single analytical deep-dive.
 VIEWS.score = [
   { key:'tv_overall_score',        label:'Score',  title:'Overall Score 0–100', num:true, fmt:c=>renderOverallScore(liveOverallScore(c.tv_data)) },
+  { key:'tv_mtfa',                 label:'MTFA',   title:'Multi-Timeframe-Alignment: stimmen Daily · Weekly · Monthly überein? Drei Punkte (grün bullish / rot bearish / hohl neutral) für die drei Horizonte — voll ausgerichtete Setups (3/3) sind die hochwertigsten Ideen. Sortiert nach Bull−Bear (−3…+3). Tippen für die Ebenen.', num:true, fmt:c=>renderMtfa(computeMtfa(c.tv_data)) },
   { key:'tv_trend_strength_score', label:'Stärke', title:'Trend Strength Score 0–100', num:true, fmt:c=>renderTrendStrengthScore(c.tv_data?.trend_strength_score) },
   { key:'tv_health_score',         label:'Health', title:'Financial Health Score 0–100', num:true, fmt:c=>renderHealthScore(liveHealthScore(c.tv_data)) },
   { key:'tv_cycle_score',          label:'PCHS',   title:'Price Cycle & Historical Position Score 0–100', num:true, fmt:c=>renderCycleScore(c.tv_data?.cycle_score) },
@@ -1318,6 +1321,20 @@ function liveHealthScore(tv) {
     debt_to_equity:                tv.debt_to_equity,
     total_debt_to_ebitda_fy:       tv.total_debt_to_ebitda_fy,
   });
+}
+
+// Multi-Timeframe-Alignment: three dots (Daily · Weekly · Monthly), each green
+// (bull) / red (bear) / hollow (neutral or no data). Tap tooltip spells the
+// three horizons out. Sortable by the signed score (bull − bear, −3..+3).
+function renderMtfa(m) {
+  if (!m) return '<span class="muted-dash">—</span>';
+  const dot = (dir, tf) => {
+    const cls = dir === 'bull' ? 'mtfa-dot--bull' : dir === 'bear' ? 'mtfa-dot--bear' : 'mtfa-dot--neutral';
+    return `<span class="mtfa-dot ${cls}" aria-label="${tf} ${dir ?? 'n/a'}"></span>`;
+  };
+  const word = (d) => d === 'bull' ? 'bullish' : d === 'bear' ? 'bearish' : d === 'neutral' ? 'neutral' : 'keine Daten';
+  const tip = `MTFA ${m.label}${m.aligned ? ' · voll ausgerichtet' : ''} — Daily: ${word(m.daily)} · Weekly: ${word(m.weekly)} · Monthly: ${word(m.monthly)}`;
+  return `<span class="mtfa-cell${m.aligned ? ' mtfa-cell--aligned' : ''}" title="${tip}">${dot(m.daily, 'Daily')}${dot(m.weekly, 'Weekly')}${dot(m.monthly, 'Monthly')}</span>`;
 }
 
 function renderHealthScore(hs) {

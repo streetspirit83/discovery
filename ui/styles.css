@@ -403,6 +403,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .health-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .health-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Multi-Timeframe-Alignment (MTFA): three dots Daily · Weekly · Monthly. */
+.mtfa-cell { display:inline-flex; gap:3px; align-items:center; padding:2px 4px; border-radius:var(--r-1); }
+.mtfa-cell--aligned { background:rgba(52,133,53,.12); }
+.mtfa-dot {
+  width:8px; height:8px; border-radius:50%; display:inline-block;
+  border:1.5px solid var(--muted); box-sizing:border-box;
+}
+.mtfa-dot--bull    { background:var(--pos); border-color:var(--pos); }
+.mtfa-dot--bear    { background:var(--neg); border-color:var(--neg); }
+.mtfa-dot--neutral { background:transparent; }
+
 /* Price Cycle & Historical Position Score badge (0–100) */
 .cycle-score {
   display:inline-block; min-width:26px; text-align:center;
