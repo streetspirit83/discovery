@@ -170,6 +170,53 @@ function lsDisplayFactor(disp) {
   return disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
 }
 
+// Day anchor time on the Lightweight time scale (15:00 within the day window —
+// same offset the volume bars use, so trendlines line up with the daily bars).
+const dayAnchorTime = (dateStr) => Date.parse(dateStr) / 1000 + 15 * 3600;
+
+/**
+ * Auto-trendlines from the 10-day LS snapshot history (TrendSpider-style, but on
+ * our short window): find swing lows / highs (local extrema vs. immediate
+ * neighbours), fit a line through the last two of each, and project it to the
+ * final day. Support = lows, resistance = highs. Returns display-currency line
+ * data (2 points each) or null when there aren't two swings to define a line.
+ *
+ * Honest scope: 10 trading days is a *micro*-trend, not a multi-month channel —
+ * labelled as such in the chart. `field` picks day_low|day_high; `lsF` converts
+ * the EUR snapshot prices to the active display currency.
+ */
+function autoTrendline(hist, field, lsF) {
+  const rows = hist
+    .filter((s) => s[field] != null && Number.isFinite(Date.parse(s.date)))
+    .map((s) => ({ t: dayAnchorTime(s.date), v: s[field] * lsF }));
+  if (rows.length < 3) return null;
+
+  const low = field === 'day_low';
+  const swings = [];
+  for (let i = 1; i < rows.length - 1; i++) {
+    const isSwing = low
+      ? rows[i].v <= rows[i - 1].v && rows[i].v <= rows[i + 1].v
+      : rows[i].v >= rows[i - 1].v && rows[i].v >= rows[i + 1].v;
+    if (isSwing) swings.push(rows[i]);
+  }
+  // Fall back to the two window extremes if we can't find two interior swings.
+  if (swings.length < 2) {
+    const sorted = [...rows].sort((a, b) => (low ? a.v - b.v : b.v - a.v));
+    const two = sorted.slice(0, 2).sort((a, b) => a.t - b.t);
+    if (two.length < 2 || two[0].t === two[1].t) return null;
+    swings.length = 0; swings.push(two[0], two[1]);
+  }
+  const A = swings[swings.length - 2], B = swings[swings.length - 1];
+  if (A.t === B.t) return null;
+  const slope = (B.v - A.v) / (B.t - A.t);
+  const lastT = rows[rows.length - 1].t;
+  // Straight segment through both swings, extended to the final day (unless the
+  // last swing already is the final day).
+  const end = lastT > B.t ? { time: lastT, value: A.v + slope * (lastT - A.t) } : { time: B.t, value: B.v };
+  if (end.time <= A.t) return null;
+  return [{ time: A.t, value: A.v }, end];
+}
+
 function tradeLevels(c, disp) {
   const tv = disp.tv;
   if (!tv) return null;
@@ -732,6 +779,16 @@ export class CandidateDetail {
     line(smaTv.sma200, smaCol, 'SMA200', 0, 1);
     line(smaTv.sma50, smaCol, 'SMA50', 2, 1);
     line(smaTv.sma20, smaCol, 'SMA20', 1, 1);
+
+    // Auto-trendlines from the LS swing points (diagonal, dashed — distinct from
+    // the horizontal SMA/cluster lines). Support green, resistance red.
+    const trend = (data, color) => {
+      if (!data) return;
+      const s = chart.addLineSeries({ color, lineWidth: 1, lineStyle: 2, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
+      s.setData(data);
+    };
+    trend(autoTrendline(hist, 'day_low', lsF), col('--pos'));
+    trend(autoTrendline(hist, 'day_high', lsF), col('--neg'));
 
     chart.timeScale().fitContent();
     this._chart = chart;
