@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260704c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260704e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260704f';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -25,6 +25,7 @@ import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.
 import { icons } from './lib/icons.js?v=20260702a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704f';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -772,8 +773,31 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
+  // Detail toolbar: Swing-Check (TwelveData OHLC → support/resistance zones).
+  // On-demand, US-only (TD Free), persisted on the candidate as swing_analysis.
   if (action === 'tdQuote') {
-    toast('TwelveData Swing-Kurse: noch Mockup – Umsetzung folgt', 'info', 3000);
+    if (!isUsTicker(candidate)) { toast(swingErrorText('not_us'), 'info', 3500); return; }
+    if (!localStorage.getItem('discovery_twelvedata_key')) { toast(swingErrorText('no_key'), 'error', 4000); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._swing_loading = true; rerender();
+    let result;
+    try {
+      result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate() });
+    } catch (err) {
+      result = { error: 'td_error', message: err.message };
+    }
+    candidate._swing_loading = false;
+    if (result?.error) { toast(swingErrorText(result.error), result.error === 'not_us' ? 'info' : 'error', 4000); rerender(); return; }
+    candidate.swing_analysis = result;
+    rerender();
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { swing_analysis: result });
+      } catch (err) {
+        toast(`Swing-Analyse nicht gespeichert: ${err.message}`, 'error');
+      }
+    }
+    toast(`📐 Swing-Zonen aktualisiert (${result.bars} Bars)`, 'success', 2500);
     return;
   }
 

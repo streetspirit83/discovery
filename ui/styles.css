@@ -1514,6 +1514,23 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .pv-foot b { color:var(--text); }
 .pv-foot .pos { color:var(--pos); } .pv-foot .neg { color:var(--neg); }
 .pv-empty { color:var(--muted); font-size:var(--fs-2); }
+
+/* Swing-Analyse (TwelveData) zone ladder */
+.ph-card--swing { padding-bottom:6px; }
+.sw-viz { margin:4px 0; }
+.sw-ladder { max-width:320px; margin:0 auto; display:block; }
+.sw-bar { fill:var(--surface-3); }
+.sw-zone--res { fill:var(--neg); }   /* opacity set inline by touches */
+.sw-zone--sup { fill:var(--pos); }
+.sw-cur { stroke:var(--accent); stroke-width:2.5; }
+.sw-cur-dot { fill:var(--accent); }
+.sw-lbl { font-size:10px; }
+.sw-lbl--res { fill:var(--neg); } .sw-lbl--sup { fill:var(--pos); }
+.sw-lbl--cur { fill:var(--accent); font-weight:700; }
+.sw-stale {
+  margin-left:6px; font-size:var(--fs-1); color:var(--neg);
+  border:1px solid var(--neg); border-radius:var(--r-1); padding:0 5px;
+}
 .pv-muted { color:var(--muted); }
 .pv-subhead {
   font-size:var(--fs-1); text-transform:uppercase; letter-spacing:.04em; color:var(--muted);

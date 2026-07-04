@@ -10,6 +10,7 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js';
+import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704f';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -141,7 +142,7 @@ function renderToolbar(c) {
       <span class="detail-toolbar__sep"></span>
       ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}
       ${chipBtn('detail-ls', icons.activity, 'LS-Echtzeitkurs laden (EUR)')}
-      ${chipBtn('detail-td', icons.candlestick, 'TwelveData Swing-Kurse – folgt (Mockup)', 'link-chip--mock')}
+      ${chipBtn('detail-td', icons.candlestick, 'Swing-Check (TwelveData) – Support/Resistance-Zonen aus echtem OHLC')}
     </div>
     <div class="detail-links-edit" id="detail-links-edit" hidden>
       <div class="link-url-fields">
@@ -438,6 +439,37 @@ function phCard(title, tag, note) {
   </div>`;
 }
 
+// Swing-Analyse card (TwelveData). Shows the zone ladder when computed, else a
+// hint to run the 📐 Swing-Check button in the toolbar. Non-US tickers get a
+// clear "US only" note (TwelveData Free is US-only). Marks a stale result
+// (older than ~1 trading day for daily, ~1 week for weekly).
+function swingAgeStale(a) {
+  const t = Date.parse(a.checked_at);
+  if (!Number.isFinite(t)) return false;
+  const ageH = (Date.now() - t) / 3.6e6;
+  return a.interval === 'weekly' ? ageH > 24 * 7 : ageH > 24;
+}
+function swingCard(c) {
+  const a = c.swing_analysis;
+  const head = (extra = '') => `<div class="ph-card__head">Swing-Analyse<span class="ph-tag">TwelveData</span>${extra}</div>`;
+  if (c._swing_loading) {
+    return `<div class="ph-card">${head()}<p><span class="ls-loading" title="lädt…"></span> Lade OHLC & berechne Zonen …</p></div>`;
+  }
+  if (a && !a.error) {
+    const stale = swingAgeStale(a);
+    const when = a.checked_at ? new Date(a.checked_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="ph-card ph-card--swing">
+      ${head(stale ? '<span class="sw-stale" title="Älter als 1 Handelstag – neu berechnen">veraltet</span>' : '')}
+      <div class="sw-viz">${swingLadderSVG(a)}</div>
+      <p class="pv-muted">Stand ${when} · ${a.bars} Bars (${a.interval}). Zonen gelten bis gebrochen; Kursposition live via LS.</p>
+    </div>`;
+  }
+  const hint = !isUsTicker(c)
+    ? 'Nur US-Titel (TwelveData Free). Für diesen Titel nicht verfügbar.'
+    : '📐 Swing-Check oben in der Leiste laden – berechnet Support/Resistance-Zonen aus ~1 Jahr echtem OHLC.';
+  return `<div class="ph-card">${head()}<p>${hint}</p></div>`;
+}
+
 // One row of the vertical ticket scale: label · price · Δ% vs Kurs.
 function ticketRow(label, value, kurs, cls = '', title = '') {
   const has = value != null;
@@ -528,7 +560,7 @@ function renderTradeTab(c, disp, pc, tl, side) {
     <h4 class="pv-subhead">Ausbruchs-Signale (nächste ~10 T)</h4>
     ${probBar('Brk↑', bo, 'breakoutProbabilityPct', { extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'Money-Flow', flatTopBullFlag: 'Flat-Top/Flag' }, c.ls_history, 'pos')}
     ${probBar('Brk↓', bd, 'breakdownProbabilityPct', { volumeSpikeNoFollowThrough: 'Spike o. Follow-Through', distributionDay: 'Distribution-Day', nearRecentHigh: 'Nähe Hoch' }, c.ls_history, 'neg')}
-    ${phCard('Swing-Check', 'TwelveData', 'Platzhalter – Umsetzung folgt (docs/SWING_CHECK_HANDOVER.md).')}
+    ${swingCard(c)}
     ${phCard('Analyst Targets', '', 'Platzhalter – Datenquelle folgt.')}
   `;
 }
