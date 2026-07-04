@@ -15,9 +15,9 @@
 
 import {
   entryBasisEur, alertSummary, isAlertTriggered, toEur,
-  buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert,
+  buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert, buildClusterAlert,
   ALERT_KINDS, alertKind,
-} from '../lib/alerts.js?v=20260703a';
+} from '../lib/alerts.js?v=20260704e';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { classifyCluster, tradeTarget } from '../lib/trade-setup.js?v=20260702h';
 
@@ -91,6 +91,7 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
   const basis = entryBasisEur(c);
   const refPriceEur = basis.value ?? c.ls_quote?.price ?? null;
   const levels = predefinedLevels(c);
+  const canCluster = !!(c.tv_data && (c.tv_data.close_1m ?? c.tv_data.close) != null);
 
   let kind = 'watch'; // current intent for the next alert added
 
@@ -124,6 +125,15 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
           <div class="alert-add__group">
             <div class="alert-add__presets">
               ${levels.map((l) => `<button class="chip-btn chip-btn--lvl" data-lvl="${l.id}" title="${l.label}: ${fmtEur(l.priceEur)}${l.score != null ? ` · Cluster-Score ${l.score}` : ''}">${l.label} · ${fmtEur(l.priceEur)}</button>`).join('')}
+            </div>
+          </div>` : ''}
+
+          ${canCluster ? `
+          <div class="alert-tier">Dynamische Cluster-Alerts · Level bewegt sich mit den Kursen</div>
+          <div class="alert-add__group">
+            <div class="alert-add__presets">
+              <button class="chip-btn chip-btn--dyn" data-cluster="sup" title="Löst aus, sobald der Kurs das JEWEILS aktuelle Support-Cluster erreicht — beim nächsten TV-Fetch neu berechnet, kein fixer Preis">↧ Support-Cluster (dyn.)</button>
+              <button class="chip-btn chip-btn--dyn" data-cluster="res" title="Löst aus, sobald der Kurs das JEWEILS aktuelle Resistance-Cluster erreicht — beim nächsten TV-Fetch neu berechnet, kein fixer Preis">↥ Resistance-Cluster (dyn.)</button>
             </div>
           </div>` : ''}
 
@@ -228,6 +238,10 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
     const cmp = (refPriceEur != null && lvl.priceEur < refPriceEur) ? 'below' : 'above';
     addAlert(buildManualPriceAlert({ cmp, priceEur: +lvl.priceEur.toFixed(4), kind, note: note(), label: lvl.label, basisKind: 'level' }));
   }));
+
+  // Dynamic cluster-cross chips (recomputed level, no fixed price)
+  sub.querySelectorAll('[data-cluster]').forEach((btn) => btn.addEventListener('pointerup', () =>
+    addAlert(buildClusterAlert({ side: btn.dataset.cluster, kind, note: note() }))));
 
   // %-from-entry presets
   sub.querySelectorAll('[data-pct]').forEach((btn) => btn.addEventListener('pointerup', () =>

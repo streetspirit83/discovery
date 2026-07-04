@@ -403,6 +403,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .health-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .health-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Dynamic cluster-alert chips: dashed border signals a moving (recomputed)
+   level, distinct from the solid static predefined-level chips. */
+.chip-btn--dyn { border-style:dashed; }
+
 /* Multi-Timeframe-Alignment (MTFA): three dots Daily · Weekly · Monthly. */
 .mtfa-cell { display:inline-flex; gap:3px; align-items:center; padding:2px 4px; border-radius:var(--r-1); }
 .mtfa-cell--aligned { background:rgba(52,133,53,.12); }

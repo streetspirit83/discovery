@@ -24,6 +24,7 @@ import { computeStatus, evaluateAlerts } from './lib/status-logic.js';
 import { fetchLsPrice, fetchYahooPrice, fetchEurUsd } from './lib/ls-quote.js';
 import { sendNtfy } from './lib/notify.js';
 import { composePush } from './lib/push-composer.js';
+import { computePriceClusters } from './lib/price-cluster.js';
 
 const NTFY_TOPIC = process.env.DISC_NTFY_TOPIC || 'disc-alerts-q4w8r2v';
 const SOURCE_BLOBS = ['discovery-inbox', 'discovery-watch', 'discovery-export'];
@@ -123,6 +124,15 @@ export default async () => {
     }
 
     const tv = c.tv_data ?? {};
+    // Dynamic cluster levels for cross_below_sup / cross_above_res: compute the
+    // clusters in native currency (LS/EUR levels → native via lsToNative), then
+    // convert the nearest zone midpoints to EUR to compare with the EUR price.
+    const ccyU = String(ccy).toUpperCase();
+    const lsToNative = ccyU === 'EUR' ? 1 : ccyU === 'USD' ? (eurUsd ?? null) : null;
+    const nativeClose = tv.close_1m ?? tv.close;
+    const pc = nativeClose != null
+      ? computePriceClusters(tv, { lsHistory: lsHistory[c.id]?.snapshots ?? null, refPrice: nativeClose, lsToNative })
+      : null;
     const q = {
       price,
       rsi: tv.rsi ?? null,
@@ -132,6 +142,8 @@ export default async () => {
       macd_histogram: (tv.macd != null && tv.macd_signal != null) ? toEur(tv.macd - tv.macd_signal, ccy) : null,
       volume: tv.average_volume ?? null,
       avg_volume: tv.avg_vol_10d ?? tv.average_volume ?? null,
+      sup: pc?.nearestSup ? toEur(pc.nearestSup.mid, ccy) : null,
+      res: pc?.nearestRes ? toEur(pc.nearestRes.mid, ccy) : null,
     };
 
     const activeAlerts = c.alerts.filter(enabled);
@@ -155,17 +167,13 @@ export default async () => {
 
     const shown = statusChanged ? triggered : newlyTriggered;
     if (!shown.length) continue;
-    // lsToNative: LS/EUR levels → native TV currency (USD via EUR/USD rate,
-    // EUR 1:1, anything else unknown → LS levels skipped in the cluster calc).
-    const lsToNative = String(ccy).toUpperCase() === 'EUR' ? 1
-      : String(ccy).toUpperCase() === 'USD' ? (eurUsd ?? null) : null;
     const push = composePush({
       c,
       shown,
       q,
       snapshots: lsHistory[c.id]?.snapshots ?? null,
       portfolio: portfolioFor(c, mkBySym),
-      lsToNative,
+      lsToNative, // reused from the cluster computation above
     });
     console.log(`[ALERT] ${push.title}\n${push.message}`);
     await sendNtfy(NTFY_TOPIC, push);

@@ -18,7 +18,8 @@
  *          (basis.kind = level *source*, distinct from the alert `kind` above).
  */
 
-import { evalAlert, alertDir } from './status-logic.js?v=20260626f';
+import { evalAlert, alertDir } from './status-logic.js?v=20260704e';
+import { computePriceClusters } from './price-cluster.js?v=20260702h';
 
 export const ALERTS_MUTED_KEY = 'discovery_alerts_muted_all';
 
@@ -65,11 +66,35 @@ export function entryBasisEur(c) {
   return { value: null, source: null };
 }
 
+/* EUR per 1 EUR = 1; USD stocks convert LS(EUR) levels to native via the rate.
+   null when the rate is unknown for a USD stock → LS levels skipped in clusters. */
+function lsToNativeFactor(ccy) {
+  const u = String(ccy).toUpperCase();
+  if (u === 'EUR') return 1;
+  if (u === 'USD') return eurUsdRate() ?? null;
+  return null;
+}
+
+/* Nearest support/resistance cluster levels in EUR (for the dynamic cross_below_sup
+   / cross_above_res alerts). Clusters are computed in native currency, then the
+   zone midpoints are converted to EUR to compare with the EUR live price. */
+export function clusterLevelsEur(c) {
+  const tv = c.tv_data ?? {};
+  const nativeClose = tv.close_1m ?? tv.close;
+  if (nativeClose == null) return { sup: null, res: null };
+  const pc = computePriceClusters(tv, { lsHistory: c.ls_history, refPrice: nativeClose, lsToNative: lsToNativeFactor(c.currency) });
+  return {
+    sup: pc?.nearestSup ? toEur(pc.nearestSup.mid, c.currency) : null,
+    res: pc?.nearestRes ? toEur(pc.nearestRes.mid, c.currency) : null,
+  };
+}
+
 /* Live quote (EUR) for evaluating alerts — LS price primary, TV indicators. */
 export function candidateQuoteEur(c) {
   const tv = c.tv_data ?? {};
   const price = c.ls_quote?.price ?? toEur(tv.close_1m ?? tv.close, c.currency);
   const macd = tv.macd, sig = tv.macd_signal;
+  const { sup, res } = clusterLevelsEur(c);
   return {
     price,
     rsi: tv.rsi ?? null,
@@ -79,6 +104,7 @@ export function candidateQuoteEur(c) {
     macd_histogram: (macd != null && sig != null) ? +(macd - sig).toFixed(4) : null,
     volume: tv.average_volume ?? null,
     avg_volume: tv.avg_vol_10d ?? tv.average_volume ?? null,
+    sup, res, // dynamic cluster levels (EUR)
   };
 }
 
@@ -97,6 +123,8 @@ export function alertSummary(a) {
     case 'ma20_below':  return `Kurs ≤ SMA20`;
     case 'ma50_below':  return `Kurs ≤ SMA50`;
     case 'ma200_below': return `Kurs ≤ SMA200`;
+    case 'cross_below_sup': return `Kurs ≤ Support-Cluster (dynamisch)`;
+    case 'cross_above_res': return `Kurs ≥ Resistance-Cluster (dynamisch)`;
     case 'rsi_above':   return `RSI ≥ ${a.threshold}`;
     case 'rsi_below':   return `RSI ≤ ${a.threshold}`;
     case 'macd_bullish':return `MACD dreht bullish`;
@@ -178,6 +206,25 @@ export function buildManualPriceAlert({ cmp, priceEur, kind = 'watch', note = ''
     label,
     note: note || undefined,
     basis: { kind: basisKind },
+    created_at: new Date().toISOString(),
+  };
+}
+
+/* Dynamic cluster alert: fires when the live price crosses the CURRENT nearest
+   support (below) or resistance (above) confluence zone — recomputed on every
+   evaluation, so the trigger level moves with the clusters (TrendSpider-style).
+   No stored threshold; the level lives in q.sup / q.res. */
+export function buildClusterAlert({ side, kind = 'watch', note = '' }) {
+  const above = side === 'res';
+  return {
+    id: newAlertId(),
+    kind,
+    type: above ? 'cross_above_res' : 'cross_below_sup',
+    dir: kindToDir(kind),
+    enabled: true,
+    label: above ? 'Resistance-Cluster' : 'Support-Cluster',
+    note: note || undefined,
+    basis: { kind: 'cluster', side },
     created_at: new Date().toISOString(),
   };
 }

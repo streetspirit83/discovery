@@ -3,16 +3,16 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260704c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260704d';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260704e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260703a';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260703a';
-import { triggeredCount } from './lib/alerts.js?v=20260703a';
+import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260704e';
+import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260702a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260704e';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260702d';

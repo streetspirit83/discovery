@@ -15,7 +15,7 @@ import { icons } from '../lib/icons.js?v=20260702a';
 import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends,
-} from '../lib/dashboard-metrics.js?v=20260627b';
+} from '../lib/dashboard-metrics.js?v=20260704e';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist' };
 const COLLAPSED = 3;

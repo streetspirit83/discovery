@@ -15,6 +15,9 @@ export const ALERT_NO_THRESHOLD = new Set([
   "macd_bullish", "macd_bearish",
   "reversal_up_short", "reversal_down_short",
   "reversal_up_long", "reversal_down_long",
+  // Dynamic cluster alerts: the level (q.sup / q.res) is recomputed from the
+  // current price clusters on every evaluation, so there is no stored threshold.
+  "cross_below_sup", "cross_above_res",
 ]);
 
 export const ALERT_DEFAULT_DIR = {
@@ -22,6 +25,7 @@ export const ALERT_DEFAULT_DIR = {
   rsi_below:           "buy",   rsi_above:           "sell",
   ma20_below:          "buy",   ma50_below:          "buy",   ma200_below: "buy",
   ma_below_pct:        "buy",   ma_above_pct:        "sell",
+  cross_below_sup:     "buy",   cross_above_res:     "sell",
   macd_bullish:        "buy",   macd_bearish:        "sell",
   reversal_up_short:   "buy",   reversal_down_short: "sell",
   reversal_up_long:    "buy",   reversal_down_long:  "sell",
@@ -56,6 +60,8 @@ export function evalAlert(alert, q) {
     case "ma200_below":  return q.price != null && q.ma200 != null && q.price <= q.ma200;
     case "macd_bullish": return q.macd_histogram != null && q.macd_histogram > 0;
     case "macd_bearish": return q.macd_histogram != null && q.macd_histogram < 0;
+    case "cross_below_sup": return q.price != null && q.sup != null && q.price <= q.sup;
+    case "cross_above_res": return q.price != null && q.res != null && q.price >= q.res;
     case "ma_below_pct": { const mv = alert.ma ? q[alert.ma] : null; return mv != null && q.price != null && alert.threshold != null && q.price <= +(mv * (1 - alert.threshold / 100)).toFixed(4); }
     case "ma_above_pct": { const mv = alert.ma ? q[alert.ma] : null; return mv != null && q.price != null && alert.threshold != null && q.price >= +(mv * (1 + alert.threshold / 100)).toFixed(4); }
     case "reversal_up_short":

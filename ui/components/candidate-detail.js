@@ -3,7 +3,7 @@ import {
   scoreRingSVG, priceLadderSVG, priceLadderLegend,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260702h';
-import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260627b';
+import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260704e';
 import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
