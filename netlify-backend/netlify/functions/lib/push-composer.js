@@ -8,7 +8,10 @@
  *   Line 3: Entry 165,20 € | 12 Stk. (+13,4 %)   ← only for portfolio tickers
  *   Line 4: ≤2 auto-derived setup sentences (salience-picked, see below)
  *   Line 5: ISIN: US67066G1040
- *   click → Discovery app · action button → TradingView chart
+ *   actions: 🔍 Discovery (deep link to the detail sheet, #c=<id>) · 📈 TV-Chart.
+ *   No `click` header — a bare tap opens the message in the ntfy app so its
+ *   text (ISIN) can be copied; the ISIN itself copies with one tap in the
+ *   detail sheet that the Discovery button opens.
  *
  * Salience: every observation (volume spike, breakout/breakdown/bottom
  * detectors, cluster proximity, day move vs ATR, RSI extreme, 52W proximity)
@@ -246,13 +249,21 @@ export function composePush({ c, shown, q, snapshots = null, portfolio = null, l
   const tvUrl = c.exchange
     ? `https://www.tradingview.com/symbols/${c.exchange}-${c.symbol}/`
     : `https://www.tradingview.com/symbols/${c.symbol}/`;
+  // Deep link straight to this candidate's detail sheet (app.js reads `#c=<id>`).
+  const discoveryUrl = `${DISCOVERY_URL}#c=${encodeURIComponent(c.id)}`;
 
+  // No `click`: a bare tap opens the notification in the ntfy app, where the
+  // message text (incl. the ISIN line) can be long-pressed to copy. Navigation
+  // moves to explicit action buttons — 🔍 Discovery opens the detail sheet,
+  // where a single tap copies just the ISIN for the Trade-Republic app.
   return {
     title,
     message: lines.join('\n'),
     priority: top.priority,
-    click: DISCOVERY_URL,
-    actions: [{ action: 'view', label: '📈 TV-Chart', url: tvUrl }],
+    actions: [
+      { action: 'view', label: '🔍 Discovery', url: discoveryUrl },
+      { action: 'view', label: '📈 TV-Chart', url: tvUrl },
+    ],
   };
 }
 

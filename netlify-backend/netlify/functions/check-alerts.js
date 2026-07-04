@@ -12,8 +12,8 @@
  * Push format (lib/push-composer.js): kind-based title (⛔ STOP-LOSS / 🟢 BUY /
  * 🔭 WATCH), explicit trigger line, user note, portfolio Entry|Stück from the
  * public merkliste blob, ≤2 salience-picked setup sentences (LS-history
- * detectors + cluster/RSI/volume facts), ISIN line; whole-notification click →
- * Discovery app, action button → TradingView. One bundled push per ticker.
+ * detectors + cluster/RSI/volume facts), ISIN line; action buttons 🔍 Discovery
+ * (deep link to the detail sheet) + 📈 TV-Chart. One bundled push per ticker.
  *
  * Schedule: every 20 min, 11-20 UTC Mon-Fri (~13:00-22:40 CEST in summer; one
  * hour earlier in winter — Netlify cron is UTC, no DST).

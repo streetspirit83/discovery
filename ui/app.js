@@ -708,6 +708,40 @@ async function switchBlob(blobType) {
   renderFilterbar();
 }
 
+/** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
+function candidateIdFromHash() {
+  const m = /[#&]c=([^&]+)/.exec(location.hash || '');
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/**
+ * Open a candidate's detail sheet by id, switching to whichever bucket holds
+ * it (search order: current bucket first, then the alert-scanned buckets).
+ * Used by the ntfy push deep link. Toasts when the candidate is gone (e.g.
+ * dismissed between push and tap).
+ */
+async function openCandidateById(id) {
+  if (!id) return false;
+  const order = [currentBlobType, 'watch', 'inbox', 'export'].filter((b, i, a) => a.indexOf(b) === i);
+  for (const bucket of order) {
+    const blob = await ensureBlob(bucket).catch(() => null);
+    if (blob?.candidates?.some((c) => c.id === id)) {
+      if (bucket !== currentBlobType) await switchBlob(bucket);
+      const cand = allBlobs[bucket]?.candidates?.find((c) => c.id === id);
+      if (cand) {
+        candidateDetail.show(cand);
+        openDetailSheet();
+        // Clear the hash (no reload, no hashchange) so tapping the same push
+        // again re-triggers the deep link.
+        history.replaceState(null, '', location.pathname + location.search);
+        return true;
+      }
+    }
+  }
+  toast('Kandidat nicht mehr im Workspace', 'info', 3500);
+  return false;
+}
+
 /** Insert a candidate clone into a target blob's in-memory copy (mock mode). */
 async function mockInsert(blobType, candidate) {
   const target = await ensureBlob(blobType);
@@ -1260,6 +1294,14 @@ async function init() {
   // On load: pull merkliste "Einstand"/shares only. LS quotes are fetched
   // on demand (LS-Kurs button) — no automatic LS fetch on load.
   loadMerklisteEntries(true);
+
+  // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
+  // sheet on load, and on later hash changes (second push while app is open).
+  if (candidateIdFromHash()) openCandidateById(candidateIdFromHash());
+  window.addEventListener('hashchange', () => {
+    const id = candidateIdFromHash();
+    if (id) openCandidateById(id);
+  });
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
   document.getElementById('scrim').addEventListener('pointerup', () => {
