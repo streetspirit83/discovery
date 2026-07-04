@@ -724,6 +724,15 @@ export class CandidateDetail {
     if (tl?.target != null) line(tl.target, col('--pos'), 'Target', 2, 1);
     if (tl?.stopL != null) line(tl.stopL, col('--neg'), 'Stop', 2, 1);
 
+    // SMA 20/50/200 (TV daily values, already display currency via disp.tv) —
+    // dark-blue ink, told apart by dash pattern: 200 solid, 50 dashed, 20
+    // dotted. True blue-900 ink vanishes on the dark theme → lighter ink there.
+    const smaCol = document.documentElement.dataset.theme === 'dark' ? '#6b8afd' : '#1e40af';
+    const smaTv = disp?.tv ?? {};
+    line(smaTv.sma200, smaCol, 'SMA200', 0, 1);
+    line(smaTv.sma50, smaCol, 'SMA50', 2, 1);
+    line(smaTv.sma20, smaCol, 'SMA20', 1, 1);
+
     chart.timeScale().fitContent();
     this._chart = chart;
   }

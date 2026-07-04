@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260702h';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260702m';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260704a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
