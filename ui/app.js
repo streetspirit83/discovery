@@ -556,6 +556,9 @@ function initSheetSwipe(el, { onPrev, onNext } = {}) {
 
   el.addEventListener('touchstart', (e) => {
     if (!el.classList.contains('is-open') || e.touches.length !== 1) return;
+    // Don't hijack gestures that start inside the interactive Lightweight chart —
+    // let it pan/zoom (horizontal drag would otherwise trigger prev/next).
+    if (e.target.closest?.('.ls-chart')) { dragging = false; return; }
     startX = e.touches[0].clientX; startY = e.touches[0].clientY;
     dx = 0; dragging = true; decided = false; horizontal = false;
     el.style.transition = 'none';
