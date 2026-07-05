@@ -1523,6 +1523,14 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   font-size:var(--fs-1); font-weight:var(--fw-bold); padding:3px 9px; border-radius:calc(var(--r-1) - 1px);
 }
 .chart-horizon .seg-btn.active { background:var(--sheet-bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.12); }
+/* 1J-candle load prompt / spinner placeholder (same height as the chart) */
+.chart-loading {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  min-height:160px; color:var(--muted); font-size:var(--fs-2);
+  border:1px dashed var(--border); border-radius:var(--r-1); text-align:center;
+}
+.chart-loading--btn { width:100%; background:transparent; cursor:pointer; font-weight:var(--fw-bold); color:var(--accent); }
+.chart-loading--btn:hover { background:var(--surface-3); }
 
 /* Swing-Analyse (TwelveData) zone ladder */
 .ph-card--swing { padding-bottom:6px; }

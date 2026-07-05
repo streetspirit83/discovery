@@ -417,22 +417,36 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
   //    intraday area, OR — when a Swing-Check has fetched them — 1-year TD daily
   //    candles (both converted to the display currency). Toggle when both exist;
   //    the SVG band stays as fallback when the lib/data is missing.
-  const { canLs, canTd, active } = resolveChartHorizon(c, disp, horizon);
-  if (active) {
-    const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
-    const toggle = (canLs && canTd) ? `<div class="chart-horizon" role="tablist">
-      <button class="seg-btn${active === '10T' ? ' active' : ''}" data-horizon="10T" role="tab" aria-selected="${active === '10T'}">10T LS</button>
-      <button class="seg-btn${active === '1J' ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${active === '1J'}">1J TD</button>
-    </div>` : '';
-    const head = active === '1J'
-      ? '1 Jahr Tageskerzen (TwelveData)'
-      : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
-    const note = active === '1J'
+  const { canLs, canTd } = resolveChartHorizon(c, disp, horizon);
+  const usCap = isUsTicker(c);
+  const tdReachable = canTd || usCap;           // 1J shown (data) or loadable (US)
+  // Show 1J when explicitly picked, or when there's no LS chart to fall back to.
+  const want1J = tdReachable && (horizon === '1J' || !canLs);
+  const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
+
+  if (want1J || canLs) {
+    const btns = [];
+    if (canLs) btns.push(`<button class="seg-btn${!want1J ? ' active' : ''}" data-horizon="10T" role="tab" aria-selected="${!want1J}">10T LS</button>`);
+    // "⤓" hints the candles are fetched on demand (US-only, TwelveData).
+    if (tdReachable) btns.push(`<button class="seg-btn${want1J ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${want1J}">1J TD${canTd ? '' : ' ⤓'}</button>`);
+    const toggle = btns.length >= 2 || (btns.length === 1 && !canLs)
+      ? `<div class="chart-horizon" role="tablist">${btns.join('')}</div>` : '';
+
+    const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
+    const note = want1J
       ? `Kerzen = TD-Tages-OHLC (${disp.cur}) · Balken = Volumen · durchgezogen = Swing-Zonen (Sup/Res) · blau = SMAs · Pinch/Ziehen zum Zoomen`
       : `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
-    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>
-      <div id="ls-chart" class="ls-chart"></div>
-      <p class="ph-note">${note}</p>`);
+
+    let body;
+    if (want1J && !canTd) {
+      // 1J picked but candles not fetched yet (US ticker) → load prompt / spinner.
+      body = c._swing_loading
+        ? `<div class="ls-chart chart-loading"><span class="ls-loading"></span> Lade Tageskerzen (TwelveData) …</div>`
+        : `<button class="ls-chart chart-loading chart-loading--btn" id="td-load">📊 1 Jahr Tageskerzen laden (TwelveData)</button>`;
+    } else {
+      body = `<div id="ls-chart" class="ls-chart"></div>`;
+    }
+    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}<p class="ph-note">${note}</p>`);
   } else {
     parts.push(ls10dChartHTML(c, disp));
   }
@@ -1121,14 +1135,20 @@ export class CandidateDetail {
     // Interactive price chart — LS-intraday (10T) or TD candles (1J) per horizon.
     this.initChart(c, disp, pc, tl);
 
-    // Performance chart horizon toggle (10T LS ⟷ 1J TD candles)
+    // Performance chart horizon toggle (10T LS ⟷ 1J TD candles). Picking 1J
+    // when the candles aren't fetched yet runs the Swing-Check on demand.
+    const tdLoaded = () => Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
+    const pick1J = () => { this.chartHorizon = '1J'; if (tdLoaded()) this.render(); else this.onAction?.('tdQuote', c); };
     this.el.querySelectorAll('.chart-horizon [data-horizon]').forEach((btn) => {
       btn.addEventListener('pointerup', () => {
-        if (this.chartHorizon === btn.dataset.horizon) return;
-        this.chartHorizon = btn.dataset.horizon;
+        const h = btn.dataset.horizon;
+        if (h === '1J') { pick1J(); return; }
+        if (this.chartHorizon === h) return;
+        this.chartHorizon = h;
         this.render();
       });
     });
+    this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
 
     // Toolbar: edit-toggle + quick actions
     const editBtn = this.el.querySelector('#detail-edit-links');
