@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260704c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260704h';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260704i';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -25,7 +25,7 @@ import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.
 import { icons } from './lib/icons.js?v=20260702a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
-import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704g';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>

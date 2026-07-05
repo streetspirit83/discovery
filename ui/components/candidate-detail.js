@@ -10,7 +10,7 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704g';
+import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';

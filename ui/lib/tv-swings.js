@@ -20,10 +20,26 @@ import { normalizeExchange } from './exchange-map.js';
 const US_EXCHANGES = new Set(['NASDAQ', 'NYSE', 'AMEX']);
 export const MIN_BARS = 20; // need enough history for pivots + ATR
 
-/** US-Ticker? (TwelveData Free liefert nur US-Werte). */
+/**
+ * US-Ticker? (TwelveData Free liefert nur US-Werte). The exchange field arrives
+ * in many spellings (NASDAQ / NasdaqGS / NMS / NYQ / ARCA …), so a strict
+ * NASDAQ|NYSE|AMEX match misses real US names. Fall back to the two reliable
+ * currency/ISIN signals: US equities trade in USD and (incl. NYSE/NASDAQ-listed
+ * ADRs) carry a US ISIN. Known non-US venues are excluded first so a European
+ * ticker never slips through on a stray USD field.
+ */
+const US_EXCHANGE_HINTS = /NASDAQ|NYSE|AMEX|ARCA|BATS|^NMS$|^NGM$|^NCM$|^NYQ$|^PCX$|^ASE$/;
+const NON_US_EXCHANGES = new Set(['XETR', 'EURONEXT', 'MIL', 'BME', 'VIE', 'LSE', 'SIX', 'OMXSTO', 'OMXCOP', 'OSL', 'OMXHEX']);
 export function isUsTicker(candidate) {
-  const ex = normalizeExchange(candidate?.exchange || '');
-  return US_EXCHANGES.has(ex);
+  if (!candidate) return false;
+  const ex = normalizeExchange(candidate.exchange || '');
+  if (US_EXCHANGES.has(ex) || US_EXCHANGE_HINTS.test(ex)) return true;
+  if (NON_US_EXCHANGES.has(ex)) return false;
+  const cur = String(candidate.currency || '').toUpperCase();
+  if (cur === 'USD') return true;
+  if (cur && cur !== 'USD') return false;
+  // Last resort: a US ISIN (US-domiciled security / US-issued ADR).
+  return /^US[0-9A-Z]{9}[0-9]$/.test(String(candidate.isin || '').trim().toUpperCase());
 }
 
 /* ── Pure computation ─────────────────────────────────────────────────── */
