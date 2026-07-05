@@ -10,7 +10,7 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704f';
+import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704g';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -169,6 +169,25 @@ function renderToolbar(c) {
 // LS (EUR) → display-currency factor; null = unknown rate (skip LS values).
 function lsDisplayFactor(disp) {
   return disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
+}
+
+// TD (USD) → display-currency factor. TwelveData is US-only, so native is USD:
+// display USD → 1, display EUR → 1/fx (fx = USD per EUR). null = unknown rate.
+function tdDisplayFactor(disp) {
+  if (disp.cur === 'USD') return 1;
+  if (disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
+  return null;
+}
+
+// Which Performance-chart horizon can/should render: 10T LS-Intraday vs. 1J
+// TD daily candles. `active` honours the requested horizon when available,
+// else falls back to whatever data exists (null = neither → SVG fallback).
+function resolveChartHorizon(c, disp, horizon) {
+  const lw = typeof window !== 'undefined' && window.LightweightCharts;
+  const canLs = !!(lw && Array.isArray(c.ls_history) && c.ls_history.length >= 2);
+  const canTd = !!(lw && Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2 && tdDisplayFactor(disp) != null);
+  const active = (horizon === '1J' && canTd) ? '1J' : (canLs ? '10T' : (canTd ? '1J' : null));
+  return { canLs, canTd, active };
 }
 
 // Day anchor time on the Lightweight time scale (15:00 within the day window —
@@ -386,7 +405,7 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
-function renderPerformanceTab(c, disp, pc, tl) {
+function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
   const tv = disp.tv;
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
@@ -394,15 +413,26 @@ function renderPerformanceTab(c, disp, pc, tl) {
   // 1. Hero: Kurs → Stop/Sup/Res/Target → Volumen-Spikes auf einen Blick.
   parts.push(renderHeroPanel(c, disp, pc, tl));
 
-  // 2. Interactive 10-day price/volume chart (Lightweight Charts, vendored);
-  //    the SVG band stays as fallback when the lib or the history is missing.
-  const canChart = typeof window !== 'undefined' && window.LightweightCharts
-    && Array.isArray(c.ls_history) && c.ls_history.length >= 2;
-  if (canChart) {
+  // 2. Interactive price/volume chart (Lightweight Charts, vendored): 10-day LS
+  //    intraday area, OR — when a Swing-Check has fetched them — 1-year TD daily
+  //    candles (both converted to the display currency). Toggle when both exist;
+  //    the SVG band stays as fallback when the lib/data is missing.
+  const { canLs, canTd, active } = resolveChartHorizon(c, disp, horizon);
+  if (active) {
     const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
-    parts.push(`<h4 class="pv-subhead">10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}</h4>
+    const toggle = (canLs && canTd) ? `<div class="chart-horizon" role="tablist">
+      <button class="seg-btn${active === '10T' ? ' active' : ''}" data-horizon="10T" role="tab" aria-selected="${active === '10T'}">10T LS</button>
+      <button class="seg-btn${active === '1J' ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${active === '1J'}">1J TD</button>
+    </div>` : '';
+    const head = active === '1J'
+      ? '1 Jahr Tageskerzen (TwelveData)'
+      : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
+    const note = active === '1J'
+      ? `Kerzen = TD-Tages-OHLC (${disp.cur}) · Balken = Volumen · durchgezogen = Swing-Zonen (Sup/Res) · blau = SMAs · Pinch/Ziehen zum Zoomen`
+      : `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
+    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>
       <div id="ls-chart" class="ls-chart"></div>
-      <p class="ph-note">Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen</p>`);
+      <p class="ph-note">${note}</p>`);
   } else {
     parts.push(ls10dChartHTML(c, disp));
   }
@@ -716,6 +746,7 @@ export class CandidateDetail {
     this.activeTab = 'performance';
     this.altCurrency = false; // false = native currency, true = USD↔EUR switched
     this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
+    this.chartHorizon = '10T'; // Performance chart: '10T' LS-Intraday | '1J' TD-Tageskerzen
     this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
   }
 
@@ -826,6 +857,81 @@ export class CandidateDetail {
     this._chart = chart;
   }
 
+  // Dispatch the Performance chart to LS-intraday (10T) or TD daily candles (1J)
+  // per the resolved horizon.
+  initChart(c, disp, pc, tl) {
+    const { active } = resolveChartHorizon(c, disp, this.chartHorizon);
+    if (active === '1J') this.initTdChart(c, disp);
+    else if (active === '10T') this.initLsChart(c, disp, pc, tl);
+  }
+
+  // 1-year TwelveData daily candlestick chart, converted to the display currency
+  // (USD native → ×1 / ÷fx), with volume, the swing support/resistance zones as
+  // price lines, the TV SMAs, and the live LS price as a marker line.
+  initTdChart(c, disp) {
+    const el = this.el.querySelector('#ls-chart');
+    const a = c.swing_analysis;
+    const f = tdDisplayFactor(disp);
+    if (!el || !window.LightweightCharts || !Array.isArray(a?.ohlc) || a.ohlc.length < 2 || f == null) return;
+
+    const css = getComputedStyle(document.documentElement);
+    const col = (n) => css.getPropertyValue(n).trim();
+    const chart = window.LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { color: 'transparent' }, textColor: col('--muted'), fontSize: 11 },
+      grid: { vertLines: { color: col('--surface-3') }, horzLines: { color: col('--surface-3') } },
+      rightPriceScale: { borderColor: col('--border') },
+      timeScale: { borderColor: col('--border'), timeVisible: false },
+      crosshair: { mode: 0 },
+    });
+
+    // Candles need strictly-ascending unique daily times ('YYYY-MM-DD').
+    const seen = new Set();
+    const candles = [];
+    for (const b of a.ohlc) {
+      if (!b.date || seen.has(b.date) || b.o == null || b.h == null || b.l == null || b.c == null) continue;
+      seen.add(b.date);
+      candles.push({ time: b.date, open: b.o * f, high: b.h * f, low: b.l * f, close: b.c * f });
+    }
+    if (candles.length < 2) { chart.remove(); return; }
+    const candle = chart.addCandlestickSeries({
+      upColor: col('--pos'), downColor: col('--neg'), borderVisible: false,
+      wickUpColor: col('--pos'), wickDownColor: col('--neg'),
+    });
+    candle.setData(candles);
+
+    const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    vol.setData(a.ohlc.filter((b) => b.date && seen.has(b.date)).map((b) => ({
+      time: b.date, value: b.v ?? 0,
+      color: (b.c ?? 0) >= (b.o ?? 0) ? `${col('--pos')}77` : `${col('--neg')}77`,
+    })));
+
+    // Swing zones (USD → display) as price lines; opacity by touches is not
+    // available on price lines, so width marks the stronger (more-tested) zones.
+    const zoneLine = (z, color) => candle.createPriceLine({
+      price: z.mid * f, color, lineWidth: z.touches >= 3 ? 2 : 1, lineStyle: 0,
+      title: `${color === col('--pos') ? 'S' : 'R'} ${z.touches}×`,
+    });
+    (a.support ?? []).forEach((z) => zoneLine(z, col('--pos')));
+    (a.resistance ?? []).forEach((z) => zoneLine(z, col('--neg')));
+
+    // TV SMAs (already display currency via disp.tv).
+    const smaCol = document.documentElement.dataset.theme === 'dark' ? '#6b8afd' : '#1e40af';
+    const smaTv = disp?.tv ?? {};
+    const sma = (price, title, style) => { if (price != null) candle.createPriceLine({ price, color: smaCol, lineWidth: 1, lineStyle: style, title }); };
+    sma(smaTv.sma200, 'SMA200', 0); sma(smaTv.sma50, 'SMA50', 2); sma(smaTv.sma20, 'SMA20', 1);
+
+    // Live LS price (EUR → display) as a distinct marker line.
+    const lsF = lsDisplayFactor(disp);
+    if (c.ls_quote?.price != null && lsF != null) {
+      candle.createPriceLine({ price: c.ls_quote.price * lsF, color: col('--accent'), lineWidth: 2, lineStyle: 0, title: 'LS live' });
+    }
+
+    chart.timeScale().fitContent();
+    this._chart = chart;
+  }
+
   // Display-currency context for the current candidate: converted tv_data,
   // active currency code and the EUR/USD rate (USD per 1 EUR).
   displayInfo(c) {
@@ -850,7 +956,10 @@ export class CandidateDetail {
   }
 
   show(candidate) {
-    if (this.candidate?.id !== candidate.id) this.activeTab = 'performance'; // Tab 1 onload
+    if (this.candidate?.id !== candidate.id) {
+      this.activeTab = 'performance'; // Tab 1 onload
+      this.chartHorizon = '10T';      // reset chart horizon per candidate
+    }
     this.candidate = candidate;
     this.render();
   }
@@ -882,7 +991,7 @@ export class CandidateDetail {
     const pc = priceClustersDisp(c, disp);
     const tl = tradeLevels(c, disp);
     const tabPanels = {
-      performance: renderPerformanceTab(c, disp, pc, tl),
+      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       meta:        renderMetaTab(c),
@@ -1009,8 +1118,17 @@ export class CandidateDetail {
       });
     });
 
-    // Interactive LS chart (after the container exists in the DOM)
-    this.initLsChart(c, disp, pc, tl);
+    // Interactive price chart — LS-intraday (10T) or TD candles (1J) per horizon.
+    this.initChart(c, disp, pc, tl);
+
+    // Performance chart horizon toggle (10T LS ⟷ 1J TD candles)
+    this.el.querySelectorAll('.chart-horizon [data-horizon]').forEach((btn) => {
+      btn.addEventListener('pointerup', () => {
+        if (this.chartHorizon === btn.dataset.horizon) return;
+        this.chartHorizon = btn.dataset.horizon;
+        this.render();
+      });
+    });
 
     // Toolbar: edit-toggle + quick actions
     const editBtn = this.el.querySelector('#detail-edit-links');

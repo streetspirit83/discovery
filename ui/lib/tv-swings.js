@@ -180,6 +180,9 @@ export async function fetchSwingAnalysis(candidate, { interval = '1day', outputs
   const refPrice = (lsEur != null && eurUsd) ? lsEur * eurUsd : lastClose; // EUR→USD, else USD close
   const analysis = analyzeBars(bars, refPrice, { interval: interval === '1week' ? 'weekly' : 'daily' });
   analysis.ref_source = (lsEur != null && eurUsd) ? 'ls' : 'td_close';
+  // Keep a capped compact OHLCV series (USD) so the detail chart can draw daily
+  // candles without re-hitting TD. Short keys keep the blob small (~180 bars).
+  analysis.ohlc = bars.slice(-180).map((b) => ({ date: b.date, o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume }));
   return analysis;
 }
 
