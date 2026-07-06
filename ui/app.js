@@ -3,13 +3,13 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260704c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260704i';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260704k';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260704e';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260704e';
@@ -979,6 +979,18 @@ async function handleAction(action, candidate, extras = {}) {
       onSaveAlerts: persistAlerts,
       onSaved: () => candidateList.renderRows(),
       toast,
+    });
+    return;
+  }
+
+  // Tap on the detail chart → open the Trigger editor with the tapped price
+  // (EUR) pre-filled into the manual-price field.
+  if (action === 'chartAlert') {
+    openTriggerEditor(candidate, {
+      onSaveAlerts: persistAlerts,
+      onSaved: () => candidateList.renderRows(),
+      toast,
+      prefillPriceEur: extras.priceEur,
     });
     return;
   }

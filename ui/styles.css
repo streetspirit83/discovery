@@ -407,6 +407,12 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    level, distinct from the solid static predefined-level chips. */
 .chip-btn--dyn { border-style:dashed; }
 
+/* Trigger editor: briefly highlight the manual-price group when the level was
+   pre-filled from a chart tap. */
+.alert-add__group.is-prefilled { animation: prefillPulse 1.6s ease-out 1; border-radius:var(--r-1); }
+@keyframes prefillPulse { 0%,40% { box-shadow:0 0 0 2px var(--accent) inset; } 100% { box-shadow:none; } }
+@media (prefers-reduced-motion: reduce) { .alert-add__group.is-prefilled { animation:none; } }
+
 /* Multi-Timeframe-Alignment (MTFA): three dots Daily · Weekly · Monthly. */
 .mtfa-cell { display:inline-flex; gap:3px; align-items:center; padding:2px 4px; border-radius:var(--r-1); }
 .mtfa-cell--aligned { background:rgba(52,133,53,.12); }

@@ -75,6 +75,9 @@ function predefinedLevels(c) {
   const res = pc?.nearestRes ? { native: pc.nearestRes.mid, score: pc.nearestRes.score } : (nearestAbove != null ? { native: nearestAbove } : null);
   if (sup) out.push({ id: 'sup', label: 'Support', kind: 'buy', priceEur: toEur(sup.native, c.currency), score: sup.score });
   if (res) out.push({ id: 'res', label: 'Resistance', kind: 'watch', priceEur: toEur(res.native, c.currency), score: res.score });
+  // Explicit monthly classic pivots S1 / S2 as their own support levels.
+  if (tv.pivot_s1 != null) out.push({ id: 's1', label: 'S1', kind: 'buy', priceEur: toEur(tv.pivot_s1, c.currency) });
+  if (tv.pivot_s2 != null) out.push({ id: 's2', label: 'S2', kind: 'buy', priceEur: toEur(tv.pivot_s2, c.currency) });
   const cl = classifyCluster(tv);
   const tgt = tradeTarget(tv, cl ?? undefined);
   if (tgt != null) out.push({ id: 'tgt', label: `Target +${cl?.gainPct ?? ''}%`, kind: 'watch', priceEur: toEur(tgt, c.currency) });
@@ -83,9 +86,11 @@ function predefinedLevels(c) {
 
 /**
  * @param {object} c candidate (mutated: c.alerts)
- * @param {object} opts { onSaveAlerts, onSaved, toast }
+ * @param {object} opts { onSaveAlerts, onSaved, toast, prefillPriceEur }
+ *   prefillPriceEur: a price (EUR) tapped on the detail chart — pre-filled into
+ *   the manual-price field with the direction set from the current price.
  */
-export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
+export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPriceEur = null } = {}) {
   if (!c) return;
   if (!Array.isArray(c.alerts)) c.alerts = [];
   const basis = entryBasisEur(c);
@@ -285,6 +290,20 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast } = {}) {
   sub.querySelector('#idt-close').addEventListener('pointerup', close);
   sub.querySelector('#idt-done').addEventListener('pointerup', close);
   sub.addEventListener('pointerup', (e) => { if (e.target === sub) close(); });
+
+  // Chart-tapped level: pre-fill the manual price + direction (≥ if above the
+  // current price, ≤ if below), then highlight it so the user just picks the
+  // kind and taps ＋.
+  if (prefillPriceEur != null && Number.isFinite(prefillPriceEur)) {
+    const priceEl = sub.querySelector('#idt-price');
+    const dirEl = sub.querySelector('#idt-dir');
+    priceEl.value = prefillPriceEur.toFixed(2);
+    if (dirEl && refPriceEur != null) dirEl.value = prefillPriceEur >= refPriceEur ? 'above' : 'below';
+    const group = priceEl.closest('.alert-add__group');
+    group?.classList.add('is-prefilled');
+    group?.scrollIntoView({ block: 'center' });
+    priceEl.focus();
+  }
 
   renderList();
 }
