@@ -61,10 +61,35 @@
     @keyframes toastIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
     .btn-sm { padding: .28rem .65rem; font-size: .78rem; }
     .empty-hint { color: var(--muted); font-size: .85rem; margin-top: 2rem; text-align: center; }
+    /* Sektor-Rotation tab */
+    .rot-block { margin-bottom: 1.1rem; }
+    .rot-h { font-size: .88rem; font-weight: 600; margin: 0 0 .45rem; display: flex; flex-direction: column; gap: .1rem; }
+    .rot-hint { font-size: .68rem; font-weight: 400; color: var(--muted); }
+    .rot-quad, .rot-bump { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .rot-quad-lbl { font-size: 9px; font-weight: 600; opacity: .75; }
+    .rot-lbl { font-size: 9px; fill: var(--text); paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; }
+    .rot-lbl.is-sel { font-weight: 700; }
+    .rot-sec { cursor: pointer; }
+    .rot-bump-head { font-size: 9px; fill: var(--muted); }
+    .rot-bump-lbl { font-size: 8.5px; fill: var(--muted); }
+    .rot-bump-lbl.is-sel { fill: var(--accent); font-weight: 700; }
+    .rot-sub { font-size: .72rem; font-weight: 600; margin: .5rem 0 .25rem; }
+    .rot-sub.up { color: var(--pos); }
+    .rot-sub.down { color: var(--neg); }
+    .rot-row { display: flex; align-items: center; gap: .45rem; width: 100%; padding: .32rem .4rem; background: none; border: none; border-radius: var(--radius-sm); cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+    .rot-row:hover, .rot-row.is-sel { background: var(--accent-weak); }
+    .rot-row__badge { flex: none; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+    .rot-row__badge.up { color: var(--pos); background: #22c55e14; }
+    .rot-row__badge.down { color: var(--neg); background: #fca5a514; }
+    .rot-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; font-weight: 500; }
+    .rot-cells { display: flex; gap: 2px; flex: none; }
+    .rot-cell { font-size: .64rem; padding: 1px 4px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+    .rot-row__go { flex: none; color: var(--muted); font-size: .85rem; padding: 0 .2rem; }
+    .rot-empty { color: var(--muted); font-size: .82rem; text-align: center; padding: .8rem 0; }
   </style>
 </head>
 <body>
 <div id="app"></div>
-<script type="module" src="app.js?v=20260702d"></script>
+<script type="module" src="app.js?v=20260707b"></script>
 </body>
 </html>

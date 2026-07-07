@@ -8,7 +8,7 @@
 
 import { icons } from '../lib/icons.js?v=20260702a';
 
-const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260701b';
+const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260707b';
 
 const DEFAULT_INDICATORS = [
   { label: 'DAX',    value: null, change: null, perf1m: null },

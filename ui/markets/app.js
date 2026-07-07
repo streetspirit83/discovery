@@ -2,6 +2,7 @@ import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
 import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
 import { loadStorageClient } from '../lib/storage-client.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
+import { renderRotation } from './rotation.js?v=20260707b';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
 const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
@@ -257,6 +258,7 @@ function render() {
       <div class="mkt-tabs">
         <button class="mkt-tab${tab === 'countries' ? ' active' : ''}" id="tab-countries">Länder</button>
         <button class="mkt-tab${tab === 'sectors' ? ' active' : ''}" id="tab-sectors">Sektoren</button>
+        <button class="mkt-tab${tab === 'rotation' ? ' active' : ''}" id="tab-rotation">Rotation</button>
       </div>
       <div id="mkt-content"></div>
     </div>`;
@@ -276,6 +278,7 @@ function render() {
   });
   document.getElementById('tab-countries').addEventListener('click', () => { tab = 'countries'; sortKey = 'pm'; sortDir = 'desc'; drill = null; renderContent(); });
   document.getElementById('tab-sectors').addEventListener('click', () => { tab = 'sectors'; sortKey = 'pm'; sortDir = 'desc'; drill = null; renderContent(); });
+  document.getElementById('tab-rotation').addEventListener('click', () => { tab = 'rotation'; drill = null; renderContent(); });
 
   renderContent();
 }
@@ -297,7 +300,57 @@ function renderContent() {
   }
 
   if (tab === 'countries') renderCountries(el);
+  else if (tab === 'rotation') renderRotationTab(el);
   else renderSectors(el);
+}
+
+function renderRotationTab(el) {
+  const aggs = Object.keys(sectorMap).map((sec) => {
+    const a = sectorAgg(sec, sectorFilter);
+    const mcap = a.rows.reduce((s, { d }) => s + (d[7] ?? 0), 0);
+    return { sector: sec, mcap, ...a };
+  }).filter((r) => r.n > 0);
+
+  const mktOptions = MARKETS.map((m) =>
+    `<option value="${m.slug}"${sectorFilter === m.slug ? ' selected' : ''}>${m.label}</option>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="mkt-sector-bar">
+      <label for="rot-filter" style="color:var(--muted)">Markt:</label>
+      <select class="filter-select" id="rot-filter" style="width:auto">
+        <option value="">Alle Märkte</option>
+        ${mktOptions}
+      </select>
+    </div>
+    <div id="rot-root"></div>
+    <div id="drill-slot"></div>`;
+
+  document.getElementById('rot-filter').addEventListener('change', (e) => {
+    sectorFilter = e.target.value;
+    drill = null;
+    renderRotationTab(el);
+  });
+
+  renderRotation(document.getElementById('rot-root'), {
+    aggs,
+    // "→" in the Brüche list → the same sector drill-down as on the Sektoren tab.
+    onDrill: (sector) => {
+      const mktLabel = sectorFilter
+        ? MARKETS.find((m) => m.slug === sectorFilter)?.label ?? sectorFilter
+        : 'Alle Märkte';
+      const a = sectorAgg(sector, sectorFilter);
+      drill = {
+        rootType: 'sector', rootKey: sector, baseTitle: `${sector} — ${mktLabel}`,
+        baseRows: a.rows, marketSlug: sectorFilter || null, hierarchy: ['industry'], path: [],
+      };
+      openDrillState();
+      renderDrill();
+      document.getElementById('drill-slot')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+  });
+
+  if (drill?.rootType === 'sector') renderDrill();
 }
 
 function renderCountries(el) {
