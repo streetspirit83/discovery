@@ -153,7 +153,11 @@ export function historyTails(filterKey) {
 /* ── Quadrant chart (SVG) ───────────────────────────────────────────────── */
 
 function quadrantSVG(model, selected, tails = {}) {
-  const W = 340, H = 300, pad = 14;
+  // Dense mode (industry level, >30 groups): heads only — horizon trails,
+  // history tails and mid-points are drawn just for the labelled set, so the
+  // full field stays comparable without turning into spaghetti.
+  const dense = model.sectors.length > 30;
+  const W = 340, H = dense ? 320 : 300, pad = 14;
   const pts = model.sectors.flatMap((s) => s.points.flat())
     .concat(model.sectors.flatMap((s) => (tails[s.sector] ?? []).flat()));
   const range = Math.max(1, ...pts.map(Math.abs)) * 1.1;
@@ -162,21 +166,24 @@ function quadrantSVG(model, selected, tails = {}) {
   const cx = sx(0), cy = sy(0);
   const maxMcap = Math.max(...model.sectors.map((s) => s.mcap));
 
-  // Labels: selected sector + the strongest divergers (they carry the story).
+  // Labels: selected group + the strongest divergers (they carry the story).
   const labelled = new Set(selected ? [selected] : []);
   const byBreak = [...model.sectors].sort((a, b) => Math.abs(b.breakScore) - Math.abs(a.breakScore));
-  for (const s of byBreak.slice(0, 4)) labelled.add(s.sector);
+  for (const s of byBreak.slice(0, dense ? 6 : 4)) labelled.add(s.sector);
 
   const trails = [...model.sectors]
     .sort((a, b) => (a.sector === selected) - (b.sector === selected))  // selected paints last (on top)
     .map((s) => {
       const sel = s.sector === selected;
+      const full = !dense || labelled.has(s.sector);   // full trail vs. head-only
       const color = QUAD_META[s.quad].color;
       const p = s.points.map(([x, y]) => [sx(x), sy(y)]);
-      const rHead = 3.5 + 5.5 * Math.sqrt(s.mcap / maxMcap);
+      const rHead = dense
+        ? 2.2 + 4.2 * Math.sqrt(s.mcap / maxMcap)
+        : 3.5 + 5.5 * Math.sqrt(s.mcap / maxMcap);
       const line = p.map((q) => q.join(',')).join(' ');
       // dotted day-over-day history tail (previous days' head points → live head)
-      const hist = tails[s.sector] ?? [];
+      const hist = full ? (tails[s.sector] ?? []) : [];
       const tailLine = hist.length
         ? `<polyline points="${[...hist.map(([x, y]) => `${sx(x)},${sy(y)}`), p[2].join(',')].join(' ')}"
              fill="none" stroke="${color}" stroke-width="${sel ? 1.6 : 1}" stroke-dasharray="1.5 3"
@@ -185,12 +192,15 @@ function quadrantSVG(model, selected, tails = {}) {
       const label = labelled.has(s.sector)
         ? `<text class="rot-lbl${sel ? ' is-sel' : ''}" x="${p[2][0]}" y="${p[2][1] - rHead - 3}" text-anchor="middle">${esc(shortName(s.sector))}</text>`
         : '';
+      const trailParts = full
+        ? `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="${sel ? 2.2 : 1.3}" opacity="${sel ? 0.9 : 0.38}"/>
+        <circle cx="${p[0][0]}" cy="${p[0][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>
+        <circle cx="${p[1][0]}" cy="${p[1][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>`
+        : '';
       return `<g class="rot-sec${sel ? ' is-sel' : ''}" data-sector="${esc(s.sector)}">
         ${tailLine}
-        <polyline points="${line}" fill="none" stroke="${color}" stroke-width="${sel ? 2.2 : 1.3}" opacity="${sel ? 0.9 : 0.38}"/>
-        <circle cx="${p[0][0]}" cy="${p[0][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>
-        <circle cx="${p[1][0]}" cy="${p[1][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>
-        <circle class="rot-head" cx="${p[2][0]}" cy="${p[2][1]}" r="${rHead}" fill="${color}" opacity="${sel ? 0.95 : 0.7}" stroke="var(--bg)" stroke-width="1"/>
+        ${trailParts}
+        <circle class="rot-head" cx="${p[2][0]}" cy="${p[2][1]}" r="${rHead}" fill="${color}" opacity="${sel ? 0.95 : dense ? 0.6 : 0.7}" stroke="var(--bg)" stroke-width="1"/>
         ${label}
       </g>`;
     }).join('');
@@ -261,9 +271,9 @@ const truncate = (s, max) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
 /* ── "Harte Brüche" list ────────────────────────────────────────────────── */
 
-function breaksHtml(model, selected) {
-  const up = model.sectors.filter((s) => s.breakScore >= 2).sort((a, b) => b.breakScore - a.breakScore).slice(0, 6);
-  const down = model.sectors.filter((s) => s.breakScore <= -2).sort((a, b) => a.breakScore - b.breakScore).slice(0, 6);
+function breaksHtml(model, selected, limit = 6) {
+  const up = model.sectors.filter((s) => s.breakScore >= 2).sort((a, b) => b.breakScore - a.breakScore).slice(0, limit);
+  const down = model.sectors.filter((s) => s.breakScore <= -2).sort((a, b) => a.breakScore - b.breakScore).slice(0, limit);
   if (!up.length && !down.length) {
     return '<p class="rot-empty">Keine harten Divergenzen — Lang- und Kurzfrist-Ranking laufen aktuell parallel.</p>';
   }
@@ -295,21 +305,23 @@ export function renderRotation(el, { aggs, filterKey = '', onDrill } = {}) {
 
   const html = () => {
     if (!model.sectors.length) {
-      return '<p class="rot-empty">Zu wenige Sektoren mit vollständigen 1W/1M/3M/6M-Daten.</p>';
+      return '<p class="rot-empty">Zu wenige Gruppen mit vollständigen 1W/1M/3M/6M-Daten.</p>';
     }
+    const dense = model.sectors.length > 30;
+    const denseHint = dense ? ` · ${model.sectors.length} Gruppen: Pfade nur für Auswahl & Top-Diverger` : '';
     return `
       <section class="rot-block">
-        <h3 class="rot-h">Rotations-Quadrant <span class="rot-hint">Pfad 6M→3M→1M→1W · x: rel. Stärke lang · y: rel. Momentum kurz (%-Pkt./Monat vs. Markt)${tailDays ? ` · gepunktet: echte Historie (${tailDays} Tag${tailDays === 1 ? '' : 'e'})` : ''}</span></h3>
+        <h3 class="rot-h">Rotations-Quadrant <span class="rot-hint">Pfad 6M→3M→1M→1W · x: rel. Stärke lang · y: rel. Momentum kurz (%-Pkt./Monat vs. Markt)${tailDays ? ` · gepunktet: echte Historie (${tailDays} Tag${tailDays === 1 ? '' : 'e'})` : ''}${denseHint}</span></h3>
         ${quadrantSVG(model, selected, tails)}
       </section>
       <section class="rot-block">
         <h3 class="rot-h">Harte Brüche <span class="rot-hint">Rangdifferenz Langfrist (Ø6M/3M) vs. Kurzfrist (Ø1M/1W)</span></h3>
-        ${breaksHtml(model, selected)}
+        ${breaksHtml(model, selected, dense ? 8 : 6)}
       </section>
-      <section class="rot-block">
+      ${dense ? '' : `<section class="rot-block">
         <h3 class="rot-h">Rang-Bänder <span class="rot-hint">Platzierung je Zeitfenster · Top/Bottom 5 farbig</span></h3>
         ${bumpSVG(model, selected)}
-      </section>`;
+      </section>`}`;
   };
 
   const paint = () => { el.innerHTML = html(); };

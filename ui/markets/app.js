@@ -2,7 +2,7 @@ import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
 import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
 import { loadStorageClient } from '../lib/storage-client.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
-import { renderRotation } from './rotation.js?v=20260707c';
+import { renderRotation } from './rotation.js?v=20260707d';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
 const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
@@ -33,6 +33,8 @@ let backendUrl = null, secret = null;
 let marketData = {};    // slug → { label, rows: [{s, d}] }
 let countryAggs = [];   // [{slug, label, n, pw, pm, pq, ph, py, rows}]
 let sectorMap = {};     // sectorName → { marketSlug → [{s,d}] }
+let industryMap = {};   // industryName → { marketSlug → [{s,d}] }
+let rotLevel = 'sector'; // rotation tab granularity: 'sector' | 'industry'
 let tab = 'countries';
 let sortKey = 'pm', sortDir = 'desc';
 let sectorFilter = '';  // '' = all markets, else a market slug
@@ -120,15 +122,29 @@ function computeAggregates() {
   });
 
   sectorMap = {};
+  industryMap = {};
   for (const m of MARKETS) {
     for (const row of marketData[m.slug]?.rows ?? []) {
       const sec = row.d[1];
-      if (!sec) continue;
-      if (!sectorMap[sec]) sectorMap[sec] = {};
-      if (!sectorMap[sec][m.slug]) sectorMap[sec][m.slug] = [];
-      sectorMap[sec][m.slug].push(row);
+      if (sec) {
+        if (!sectorMap[sec]) sectorMap[sec] = {};
+        if (!sectorMap[sec][m.slug]) sectorMap[sec][m.slug] = [];
+        sectorMap[sec][m.slug].push(row);
+      }
+      const ind = row.d[8];
+      if (ind) {
+        if (!industryMap[ind]) industryMap[ind] = {};
+        if (!industryMap[ind][m.slug]) industryMap[ind][m.slug] = [];
+        industryMap[ind][m.slug].push(row);
+      }
     }
   }
+}
+
+function industryAgg(industry, filterSlug) {
+  const data = industryMap[industry] ?? {};
+  const rows = filterSlug ? (data[filterSlug] ?? []) : Object.values(data).flat();
+  return { rows, ...mkAgg(rows) };
 }
 
 function sectorAgg(sector, filterSlug) {
@@ -304,12 +320,17 @@ function renderContent() {
   else renderSectors(el);
 }
 
+// Industries with fewer stocks than this are noise (single-name "groups").
+const ROT_MIN_STOCKS = 3;
+
 function renderRotationTab(el) {
-  const aggs = Object.keys(sectorMap).map((sec) => {
-    const a = sectorAgg(sec, sectorFilter);
+  const industry = rotLevel === 'industry';
+  const names = Object.keys(industry ? industryMap : sectorMap);
+  const aggs = names.map((name) => {
+    const a = industry ? industryAgg(name, sectorFilter) : sectorAgg(name, sectorFilter);
     const mcap = a.rows.reduce((s, { d }) => s + (d[7] ?? 0), 0);
-    return { sector: sec, mcap, ...a };
-  }).filter((r) => r.n > 0);
+    return { sector: name, mcap, ...a };
+  }).filter((r) => (industry ? r.n >= ROT_MIN_STOCKS : r.n > 0));
 
   const mktOptions = MARKETS.map((m) =>
     `<option value="${m.slug}"${sectorFilter === m.slug ? ' selected' : ''}>${m.label}</option>`
@@ -322,6 +343,10 @@ function renderRotationTab(el) {
         <option value="">Alle Märkte</option>
         ${mktOptions}
       </select>
+      <div class="rot-level">
+        <button class="rot-level__btn${industry ? '' : ' is-active'}" data-level="sector">Sektoren</button>
+        <button class="rot-level__btn${industry ? ' is-active' : ''}" data-level="industry">Industrien</button>
+      </div>
     </div>
     <div id="rot-root"></div>
     <div id="drill-slot"></div>`;
@@ -331,19 +356,28 @@ function renderRotationTab(el) {
     drill = null;
     renderRotationTab(el);
   });
+  el.querySelectorAll('.rot-level__btn').forEach((b) => b.addEventListener('click', () => {
+    rotLevel = b.dataset.level;
+    drill = null;
+    renderRotationTab(el);
+  }));
 
   renderRotation(document.getElementById('rot-root'), {
     aggs,
-    filterKey: sectorFilter,
-    // "→" in the Brüche list → the same sector drill-down as on the Sektoren tab.
-    onDrill: (sector) => {
+    // Separate snapshot namespaces per level so tails don't mix.
+    filterKey: (industry ? 'ind:' : '') + (sectorFilter || ''),
+    // "→" in the Brüche list → drill-down (sector: industries → tickers;
+    // industry: straight to the ticker list).
+    onDrill: (name) => {
       const mktLabel = sectorFilter
         ? MARKETS.find((m) => m.slug === sectorFilter)?.label ?? sectorFilter
         : 'Alle Märkte';
-      const a = sectorAgg(sector, sectorFilter);
+      const a = industry ? industryAgg(name, sectorFilter) : sectorAgg(name, sectorFilter);
       drill = {
-        rootType: 'sector', rootKey: sector, baseTitle: `${sector} — ${mktLabel}`,
-        baseRows: a.rows, marketSlug: sectorFilter || null, hierarchy: ['industry'], path: [],
+        rootType: industry ? 'industry' : 'sector', rootKey: name,
+        baseTitle: `${name} — ${mktLabel}`,
+        baseRows: a.rows, marketSlug: sectorFilter || null,
+        hierarchy: industry ? [] : ['industry'], path: [],
       };
       openDrillState();
       renderDrill();
@@ -351,7 +385,7 @@ function renderRotationTab(el) {
     },
   });
 
-  if (drill?.rootType === 'sector') renderDrill();
+  if (drill) renderDrill();
 }
 
 function renderCountries(el) {
