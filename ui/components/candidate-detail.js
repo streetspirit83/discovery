@@ -434,8 +434,8 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
 
     const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
     const note = want1J
-      ? `Kerzen = TD-Tages-OHLC (${disp.cur}) · Balken = Volumen · durchgezogen = Swing-Zonen (Sup/Res) · blau = SMAs · Pinch/Ziehen zum Zoomen · <b>Tippen setzt Alert-Level</b>`
-      : `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen · <b>Tippen setzt Alert-Level</b>`;
+      ? `Kerzen = TD-Tages-OHLC (${disp.cur}) · Balken = Volumen · durchgezogen = Swing-Zonen (Sup/Res) · blau = SMAs · Pinch/Ziehen zum Zoomen`
+      : `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
 
     let body;
     if (want1J && !canTd) {
@@ -444,9 +444,16 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
         ? `<div class="ls-chart chart-loading"><span class="ls-loading"></span> Lade Tageskerzen (TwelveData) …</div>`
         : `<button class="ls-chart chart-loading chart-loading--btn" id="td-load">📊 1 Jahr Tageskerzen laden (TwelveData)</button>`;
     } else {
-      body = `<div id="ls-chart" class="ls-chart"></div>`;
+      // Real chart → add the "Level" bar below it: the readout follows the
+      // pointer over the chart, the ＋-button sets an alert at that level.
+      body = `<div id="ls-chart" class="ls-chart"></div>
+        <div class="chart-level" id="chart-level">
+          <span class="chart-level__lbl">Level</span>
+          <span class="chart-level__price" id="chart-level-price">—</span>
+          <button class="btn btn-sm btn-primary" id="chart-level-add" disabled>＋ Alert setzen</button>
+        </div>`;
     }
-    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}<p class="ph-note">${note}</p>`);
+    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}<p class="ph-note">${note} · <b>über den Chart ziehen → Level unten setzen</b></p>`);
   } else {
     parts.push(ls10dChartHTML(c, disp));
   }
@@ -867,35 +874,41 @@ export class CandidateDetail {
     trend(autoTrendline(hist, 'day_low', lsF), col('--pos'));
     trend(autoTrendline(hist, 'day_high', lsF), col('--neg'));
 
-    this.wireChartClickAlert(el, area, disp);
+    this.wireChartLevelReadout(el, area, disp);
     chart.timeScale().fitContent();
     this._chart = chart;
   }
 
-  // Tap a price on the chart → prefill that level (converted to EUR) into the
-  // Trigger editor's manual-price field. Lightweight preventDefaults pointer
-  // events (for its own pan/zoom), which suppresses native clicks — so detect
-  // the tap ourselves via pointerdown/up in the capture phase: a near-stationary
-  // release is a tap (a pan moves further and is left to the chart).
+  // Move over the chart → live-update the price readout in the "Level" bar
+  // below it (no tap in the chart opens anything, so pan/zoom stays free). The
+  // ＋-button in that bar opens the Trigger editor with the shown level.
   // `series.coordinateToPrice(y)` maps the container-relative y to a price; the
-  // chart runs in display currency → divide by the EUR→display factor.
-  wireChartClickAlert(el, series, disp) {
+  // chart runs in display currency → divide by the EUR→display factor for EUR.
+  wireChartLevelReadout(el, series, disp) {
     const lsF = lsDisplayFactor(disp);
     if (!el || lsF == null) return;
-    let sx = null, sy = null, st = 0;
-    el.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; st = Date.now(); }, true);
-    el.addEventListener('pointerup', (e) => {
-      if (sx == null) return;
-      const moved = Math.hypot(e.clientX - sx, e.clientY - sy);
-      const dt = Date.now() - st;
-      sx = null;
-      if (moved > 8 || dt > 600) return; // pan/drag or long-press → not a tap
+    const priceEl = this.el.querySelector('#chart-level-price');
+    const addBtn = this.el.querySelector('#chart-level-add');
+    const sym = disp.cur === 'EUR' ? '€' : disp.cur === 'USD' ? '$' : disp.cur;
+    const setLevel = (dispPrice) => {
+      if (dispPrice == null || !Number.isFinite(dispPrice) || dispPrice <= 0) return;
+      this._chartLevelEur = +(dispPrice / lsF).toFixed(4);
+      if (priceEl) priceEl.textContent = `${fmtNum(dispPrice, 2)} ${sym}`;
+      if (addBtn) addBtn.disabled = false;
+    };
+    // Seed with the live price so the bar is meaningful before any move.
+    const seedEur = this.candidate?.ls_quote?.price ?? null;
+    if (seedEur != null) setLevel(seedEur * lsF);
+    else { const close = disp.tv?.close_1m ?? disp.tv?.close; if (close != null) setLevel(close); }
+
+    el.addEventListener('pointermove', (e) => {
       const rect = el.getBoundingClientRect();
-      let priceDisp;
-      try { priceDisp = series.coordinateToPrice(e.clientY - rect.top); } catch { return; }
-      if (priceDisp == null || !Number.isFinite(priceDisp) || priceDisp <= 0) return;
-      this.onAction?.('chartAlert', this.candidate, { priceEur: +(priceDisp / lsF).toFixed(4) });
+      let d; try { d = series.coordinateToPrice(e.clientY - rect.top); } catch { return; }
+      setLevel(d);
     }, true);
+    addBtn?.addEventListener('pointerup', () => {
+      if (this._chartLevelEur != null) this.onAction?.('chartAlert', this.candidate, { priceEur: this._chartLevelEur });
+    });
   }
 
   // Dispatch the Performance chart to LS-intraday (10T) or TD daily candles (1J)
@@ -969,7 +982,7 @@ export class CandidateDetail {
       candle.createPriceLine({ price: c.ls_quote.price * lsF, color: col('--accent'), lineWidth: 2, lineStyle: 0, title: 'LS live' });
     }
 
-    this.wireChartClickAlert(el, candle, disp);
+    this.wireChartLevelReadout(el, candle, disp);
     chart.timeScale().fitContent();
     this._chart = chart;
   }
