@@ -4,7 +4,7 @@ import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';

@@ -51,6 +51,11 @@ function snapshotRecord(tv) {
     mom:            computeMomentumCheck(tv)?.total ?? null,
     rsi:            tv.rsi ?? null,
     macd_hist:      macdHist(tv),
+    close:          tv.close  ?? null,
+    sma20:          tv.sma20  ?? null,
+    sma50:          tv.sma50  ?? null,
+    sma100:         tv.sma100 ?? null,
+    sma200:         tv.sma200 ?? null,
   };
 }
 

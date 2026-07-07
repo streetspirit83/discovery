@@ -191,6 +191,74 @@ export function rsiExtremes(candidates) {
   };
 }
 
+/* ── SMA crosses (price × SMA and SMA × SMA, vs. previous day) ────────────────
+ * Price crosses work from day one: the previous close is taken from the snapshot
+ * or derived from today's 1D change; the SMA line itself drifts so slowly that
+ * falling back to today's value barely moves it. SMA×SMA crosses need yesterday's
+ * SMAs in the snapshot, so they appear from the second enrichment day onward. */
+
+const SMA_PERIODS = [20, 50, 100, 200];
+const SMA_PAIRS = [[20, 50], [50, 100], [50, 200], [100, 200]];
+
+// Ranking weight: heavier lines first (Golden/Death > Kurs×200 > … > Kurs×20).
+const PRICE_WEIGHT = { 200: 90, 100: 70, 50: 60, 20: 30 };
+const PAIR_WEIGHT  = { '50x200': 100, '100x200': 80, '50x100': 50, '20x50': 40 };
+
+export function smaCrosses(candidates) {
+  const bullish = [], bearish = [];
+  for (const c of candidates ?? []) {
+    const tv = c?.tv_data;
+    if (!tv || tv.close == null) continue;
+    const snap = Array.isArray(tv.snapshot) ? tv.snapshot : [];
+    const today = (tv.fetched_at ?? '').slice(0, 10);
+    const prevRec = snap.find((s) => dayOf(s) !== today) ?? null;
+    const prevClose = prevRec?.close ??
+      (tv.change_1d != null ? tv.close / (1 + tv.change_1d / 100) : null);
+
+    const crosses = [];
+    for (const p of SMA_PERIODS) {
+      const sma = tv['sma' + p];
+      if (sma == null || prevClose == null) continue;
+      const prevSma = prevRec?.['sma' + p] ?? sma;
+      const now = tv.close - sma, before = prevClose - prevSma;
+      const dist = ((tv.close - sma) / sma) * 100;
+      if (before <= 0 && now > 0)
+        crosses.push({ dir: 1, label: `Kurs↑SMA${p}`, weight: PRICE_WEIGHT[p], dist });
+      else if (before >= 0 && now < 0)
+        crosses.push({ dir: -1, label: `Kurs↓SMA${p}`, weight: PRICE_WEIGHT[p], dist });
+    }
+    for (const [f, s] of SMA_PAIRS) {
+      const fv = tv['sma' + f], sv = tv['sma' + s];
+      const pf = prevRec?.['sma' + f], ps = prevRec?.['sma' + s];
+      if (fv == null || sv == null || pf == null || ps == null) continue;
+      const now = fv - sv, before = pf - ps;
+      const weight = PAIR_WEIGHT[`${f}x${s}`];
+      const golden = f === 50 && s === 200;
+      const dist = ((fv - sv) / sv) * 100;
+      if (before <= 0 && now > 0)
+        crosses.push({ dir: 1, label: golden ? 'Golden Cross' : `SMA${f}↑SMA${s}`, weight, dist });
+      else if (before >= 0 && now < 0)
+        crosses.push({ dir: -1, label: golden ? 'Death Cross' : `SMA${f}↓SMA${s}`, weight, dist });
+    }
+
+    // One row per candidate & direction: heaviest cross is the headline,
+    // further same-day crosses are only counted (`more`).
+    for (const dir of [1, -1]) {
+      const hits = crosses
+        .filter((x) => x.dir === dir)
+        .sort((a, b) => b.weight - a.weight || Math.abs(b.dist) - Math.abs(a.dist));
+      if (!hits.length) continue;
+      (dir > 0 ? bullish : bearish).push({
+        c, tv, symbol: c.symbol, exchange: c.exchange,
+        label: hits[0].label, dist: hits[0].dist, weight: hits[0].weight,
+        more: hits.length - 1,
+      });
+    }
+  }
+  const rank = (a, b) => b.weight - a.weight || Math.abs(b.dist) - Math.abs(a.dist);
+  return { bullish: bullish.sort(rank), bearish: bearish.sort(rank) };
+}
+
 /* ── Trends: positive / negative across 1W·1M·3M, ranked by avg monthly growth */
 
 export function trends(candidates) {

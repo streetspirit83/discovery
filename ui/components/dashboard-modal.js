@@ -14,8 +14,8 @@
 import { icons } from '../lib/icons.js?v=20260702a';
 import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
-  macdFlips, rsiExtremes, trends,
-} from '../lib/dashboard-metrics.js?v=20260704e';
+  macdFlips, rsiExtremes, trends, smaCrosses,
+} from '../lib/dashboard-metrics.js?v=20260707a';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist' };
 const COLLAPSED = 3;
@@ -120,6 +120,25 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       group('MACD bearish gedreht', 'down', macd.bearish, () => icons.trendingDown);
   }
 
+  function smaBody() {
+    const { bullish, bearish } = smaCrosses(candidates);
+    if (!bullish.length && !bearish.length)
+      return empty('Keine frischen SMA-Kreuzungen (Kurs × SMA ab sofort, SMA × SMA ab dem 2. Datentag).');
+    // Stacked block (symbol on top, cross label as the smaller second line) —
+    // the labels are too wide to share one line with symbol + % on phones.
+    const row = (r, dir) => `<button class="dash-row dash-row--${dir === 'pos' ? 'up' : 'down'}" data-id="${esc(r.c.id)}">
+      <span class="dash-cross-stack">
+        <span class="dash-row__sym">${symHtml(r)}</span>
+        <span class="dash-cross">${esc(r.label)}${r.more ? ` +${r.more}` : ''}</span>
+      </span>
+      <span class="dash-num ${dir}">${fmtPct(r.dist)}</span>
+    </button>`;
+    const parts = [];
+    if (bullish.length) parts.push(`<div class="dash-sub dash-sub--pos">Bullish</div>` + section('sma.up', bullish, (r) => row(r, 'pos')));
+    if (bearish.length) parts.push(`<div class="dash-sub dash-sub--neg">Bearish</div>` + section('sma.down', bearish, (r) => row(r, 'neg')));
+    return parts.join('<div class="dash-sep"></div>');
+  }
+
   function trendsBody() {
     const { clean, broken } = trends(candidates);
     if (!clean.length && !broken.length) return empty('Keine durchgehend gerichteten Trends (1W·1M·3M).');
@@ -175,6 +194,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       ${card('zap', 'Momentum · Δ vs. Vortag', dynamicsBody(momMovers(candidates), (r) => r.mom, (r) => r.dMom, 'mom'))}
       ${card('gauge', 'PCHS / Zyklus · Δ vs. Vortag', dynamicsBody(pchsMovers(candidates), (r) => r.pchs, (r) => r.dPchs, 'pchs'))}
       ${card('activity', 'Signale & Extreme', signalsBody())}
+      ${card('arrowUpDown', 'SMA-Kreuzungen · Δ vs. Vortag', smaBody())}
       ${card('sparkles', 'Trends · 1W·1M·3M gerichtet · ØGr/M', trendsBody())}
     `;
   }

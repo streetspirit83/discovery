@@ -3,12 +3,12 @@ import {
   scoreRingSVG, priceLadderSVG, priceLadderLegend,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260702h';
-import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260704e';
+import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260702d';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
 

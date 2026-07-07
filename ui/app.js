@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260704c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260704l';
+import { CandidateList } from './components/candidate-list.js?v=20260707a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260707a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -12,10 +12,10 @@ import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260702a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260704e';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260707a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260702d';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707a';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
