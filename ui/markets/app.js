@@ -2,7 +2,7 @@ import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
 import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
 import { loadStorageClient } from '../lib/storage-client.js?v=20260702d';
 import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
-import { renderRotation } from './rotation.js?v=20260707b';
+import { renderRotation } from './rotation.js?v=20260707c';
 
 // ─── Column layout sent to the TradingView scanner ─────────────────────────────
 const COLUMNS = ['description', 'sector', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M', 'Perf.Y', 'market_cap_basic', 'industry'];
@@ -334,6 +334,7 @@ function renderRotationTab(el) {
 
   renderRotation(document.getElementById('rot-root'), {
     aggs,
+    filterKey: sectorFilter,
     // "→" in the Brüche list → the same sector drill-down as on the Sektoren tab.
     onDrill: (sector) => {
       const mktLabel = sectorFilter

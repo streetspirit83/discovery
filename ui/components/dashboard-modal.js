@@ -16,6 +16,7 @@ import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends, smaCrosses,
 } from '../lib/dashboard-metrics.js?v=20260707a';
+import { scoreboard, HORIZONS, HORIZON_LABELS } from '../lib/signal-tracker.js?v=20260707c';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist' };
 const COLLAPSED = 3;
@@ -139,6 +140,29 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     return parts.join('<div class="dash-sep"></div>');
   }
 
+  function scoreboardBody() {
+    const rows = scoreboard(candidates);
+    if (!rows.length) {
+      return empty('Noch keine Signale protokolliert — jeder „TV Daten“-Lauf sammelt SMA-Kreuzungen, MACD-Flips und RSI-Extreme; ausgewertet wird nach 1W/2W/4W.');
+    }
+    const pctCls = (win) => (win >= 60 ? 'pos' : win <= 40 ? 'neg' : '');
+    const horizonHtml = (r) => HORIZONS.map((h) => {
+      const s = r.horizons[h];
+      if (!s) return `<span class="dash-sb-h"><i>${HORIZON_LABELS[h]}</i> –</span>`;
+      return `<span class="dash-sb-h"><i>${HORIZON_LABELS[h]}</i> <b class="${pctCls(s.win)}">${s.win}%</b> ${s.avg >= 0 ? '+' : '−'}${Math.abs(s.avg).toFixed(1)}</span>`;
+    }).join('');
+    // Stacked block: signal type + sample size on top, per-horizon hit rates below.
+    const row = (r) => `<div class="dash-row dash-row--sb">
+      <span class="dash-cross-stack">
+        <span class="dash-row__sym"><span class="dash-sym">${esc(r.t)}</span>
+          <span class="dash-ex">${r.dir > 0 ? '▲' : '▼'} ${r.n} Signal${r.n === 1 ? '' : 'e'}${r.evaluated ? '' : ' · Auswertung folgt'}</span></span>
+        <span class="dash-sb-line">${horizonHtml(r)}</span>
+      </span>
+    </div>`;
+    return section('sb', rows, row) +
+      hint('Trefferquote = Anteil Signale, die in Signalrichtung liefen · Ø = mittlere Rendite in Signalrichtung (%).');
+  }
+
   function trendsBody() {
     const { clean, broken } = trends(candidates);
     if (!clean.length && !broken.length) return empty('Keine durchgehend gerichteten Trends (1W·1M·3M).');
@@ -195,6 +219,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       ${card('gauge', 'PCHS / Zyklus · Δ vs. Vortag', dynamicsBody(pchsMovers(candidates), (r) => r.pchs, (r) => r.dPchs, 'pchs'))}
       ${card('activity', 'Signale & Extreme', signalsBody())}
       ${card('arrowUpDown', 'SMA-Kreuzungen · Δ vs. Vortag', smaBody())}
+      ${card('check', 'Signal-Scoreboard · Trefferquoten', scoreboardBody())}
       ${card('sparkles', 'Trends · 1W·1M·3M gerichtet · ØGr/M', trendsBody())}
     `;
   }

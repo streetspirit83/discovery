@@ -97,11 +97,65 @@ export function computeRotationModel(aggs) {
   return { sectors, bench, skipped };
 }
 
+/* ── Stage 2: per-day snapshots in localStorage → real history tails ────────
+ * Every rotation render upserts today's sector aggregates (per market filter).
+ * Older days are replayed as head points (excess 1M vs 1W, each day against
+ * its own cap-weighted benchmark) and drawn as a dotted tail behind the live
+ * head — over time the horizon trail grows a true day-over-day RRG tail. */
+
+const SNAP_KEY = 'discovery_rotation_snaps_v1';
+const SNAP_DAYS = 45;   // days kept per filter
+const TAIL_DAYS = 10;   // previous days drawn in the quadrant
+
+function loadSnaps() {
+  try { return JSON.parse(localStorage.getItem(SNAP_KEY)) ?? {}; } catch { return {}; }
+}
+
+export function upsertRotationSnapshot(filterKey, aggs) {
+  const day = new Date().toISOString().slice(0, 10);
+  const sectors = {};
+  for (const a of aggs ?? []) {
+    if (a.pw == null || a.pm == null || (a.mcap ?? 0) <= 0) continue;
+    sectors[a.sector] = { pw: a.pw, pm: a.pm, mcap: a.mcap };
+  }
+  if (!Object.keys(sectors).length) return;
+  const all = loadSnaps();
+  const key = filterKey || '';
+  const list = all[key] ?? [];
+  const rec = { d: day, sectors };
+  if (list[0]?.d === day) list[0] = rec; else list.unshift(rec);
+  all[key] = list.slice(0, SNAP_DAYS);
+  try { localStorage.setItem(SNAP_KEY, JSON.stringify(all)); } catch { /* quota */ }
+}
+
+/* sector → [[x,y] oldest→newest] head points of stored previous days. */
+export function historyTails(filterKey) {
+  const today = new Date().toISOString().slice(0, 10);
+  const W_M = 12 / 52;
+  const days = (loadSnaps()[filterKey || ''] ?? [])
+    .filter((r) => r.d !== today).slice(0, TAIL_DAYS).reverse();
+  const tails = {};
+  for (const rec of days) {
+    const entries = Object.entries(rec.sectors ?? {}).filter(([, v]) => v.pm != null && v.pw != null && v.mcap > 0);
+    const tot = entries.reduce((s, [, v]) => s + v.mcap, 0);
+    if (tot <= 0 || entries.length < 2) continue;
+    const benchPm = entries.reduce((s, [, v]) => s + v.pm * v.mcap, 0) / tot;
+    const benchPw = entries.reduce((s, [, v]) => s + v.pw * v.mcap, 0) / tot;
+    for (const [sec, v] of entries) {
+      const x = monthlyRate(v.pm, 1) - monthlyRate(benchPm, 1);
+      const y = monthlyRate(v.pw, W_M) - monthlyRate(benchPw, W_M);
+      (tails[sec] ??= []).push([x, y]);
+    }
+  }
+  return tails;
+}
+
 /* ── Quadrant chart (SVG) ───────────────────────────────────────────────── */
 
-function quadrantSVG(model, selected) {
+function quadrantSVG(model, selected, tails = {}) {
   const W = 340, H = 300, pad = 14;
-  const pts = model.sectors.flatMap((s) => s.points.flat());
+  const pts = model.sectors.flatMap((s) => s.points.flat())
+    .concat(model.sectors.flatMap((s) => (tails[s.sector] ?? []).flat()));
   const range = Math.max(1, ...pts.map(Math.abs)) * 1.1;
   const sx = (v) => pad + ((Math.max(-range, Math.min(range, v)) + range) / (2 * range)) * (W - 2 * pad);
   const sy = (v) => pad + ((range - Math.max(-range, Math.min(range, v))) / (2 * range)) * (H - 2 * pad);
@@ -121,10 +175,18 @@ function quadrantSVG(model, selected) {
       const p = s.points.map(([x, y]) => [sx(x), sy(y)]);
       const rHead = 3.5 + 5.5 * Math.sqrt(s.mcap / maxMcap);
       const line = p.map((q) => q.join(',')).join(' ');
+      // dotted day-over-day history tail (previous days' head points → live head)
+      const hist = tails[s.sector] ?? [];
+      const tailLine = hist.length
+        ? `<polyline points="${[...hist.map(([x, y]) => `${sx(x)},${sy(y)}`), p[2].join(',')].join(' ')}"
+             fill="none" stroke="${color}" stroke-width="${sel ? 1.6 : 1}" stroke-dasharray="1.5 3"
+             opacity="${sel ? 0.85 : 0.35}" stroke-linecap="round"/>`
+        : '';
       const label = labelled.has(s.sector)
         ? `<text class="rot-lbl${sel ? ' is-sel' : ''}" x="${p[2][0]}" y="${p[2][1] - rHead - 3}" text-anchor="middle">${esc(shortName(s.sector))}</text>`
         : '';
       return `<g class="rot-sec${sel ? ' is-sel' : ''}" data-sector="${esc(s.sector)}">
+        ${tailLine}
         <polyline points="${line}" fill="none" stroke="${color}" stroke-width="${sel ? 2.2 : 1.3}" opacity="${sel ? 0.9 : 0.38}"/>
         <circle cx="${p[0][0]}" cy="${p[0][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>
         <circle cx="${p[1][0]}" cy="${p[1][1]}" r="2" fill="${color}" opacity="${sel ? 0.8 : 0.4}"/>
@@ -224,8 +286,11 @@ function breaksHtml(model, selected) {
  * selection state and re-renders on tap. onDrill(sector) opens the existing
  * sector drill-down (wired by markets/app.js).
  */
-export function renderRotation(el, { aggs, onDrill } = {}) {
+export function renderRotation(el, { aggs, filterKey = '', onDrill } = {}) {
   const model = computeRotationModel(aggs);
+  upsertRotationSnapshot(filterKey, aggs);
+  const tails = historyTails(filterKey);
+  const tailDays = Math.max(0, ...Object.values(tails).map((t) => t.length));
   let selected = null;
 
   const html = () => {
@@ -234,8 +299,8 @@ export function renderRotation(el, { aggs, onDrill } = {}) {
     }
     return `
       <section class="rot-block">
-        <h3 class="rot-h">Rotations-Quadrant <span class="rot-hint">Pfad 6M→3M→1M→1W · x: rel. Stärke lang · y: rel. Momentum kurz (%-Pkt./Monat vs. Markt)</span></h3>
-        ${quadrantSVG(model, selected)}
+        <h3 class="rot-h">Rotations-Quadrant <span class="rot-hint">Pfad 6M→3M→1M→1W · x: rel. Stärke lang · y: rel. Momentum kurz (%-Pkt./Monat vs. Markt)${tailDays ? ` · gepunktet: echte Historie (${tailDays} Tag${tailDays === 1 ? '' : 'e'})` : ''}</span></h3>
+        ${quadrantSVG(model, selected, tails)}
       </section>
       <section class="rot-block">
         <h3 class="rot-h">Harte Brüche <span class="rot-hint">Rangdifferenz Langfrist (Ø6M/3M) vs. Kurzfrist (Ø1M/1W)</span></h3>

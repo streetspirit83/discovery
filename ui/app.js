@@ -11,11 +11,12 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260707b';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260707a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260707c';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260707c';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707a';
+import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -1177,9 +1178,23 @@ async function handleBulkAction(action, ids) {
       bulkUpdates.push({ candidate_id: candidateId, updates });
     }
 
+    // Feedback loop: record today's signals + evaluate matured ones, and let
+    // the touched signal_logs ride the same bulk save (no extra request).
+    const tracked = trackSignals(targets);
+    for (const id of tracked.changedIds) {
+      const c = targets.find((x) => x.id === id);
+      if (!c) continue;
+      const u = bulkUpdates.find((b) => b.candidate_id === id);
+      if (u) u.updates.signal_log = c.signal_log;
+      else bulkUpdates.push({ candidate_id: id, updates: { signal_log: c.signal_log } });
+    }
+
     // Re-render immediately — data is already in memory
     candidateList.renderRows();
-    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert`, 'success');
+    const sigNote = tracked.recorded || tracked.evaluated
+      ? ` · ${tracked.recorded} Signale erfasst${tracked.evaluated ? `, ${tracked.evaluated} ausgewertet` : ''}`
+      : '';
+    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert${sigNote}`, 'success');
 
     // Persist to backend best-effort
     try {
