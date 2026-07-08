@@ -495,8 +495,10 @@ function profileHTML(c) {
   }
   const p = c.company_profile;
   if (!p?.description) return '';
-  const src = p.source === 'yahoo' ? 'Yahoo Finance' : 'TradingView';
-  const site = p.website ? ` · <a href="${escProfile(p.website)}" target="_blank" rel="noopener">Website</a>` : '';
+  const src = String(p.source ?? '').startsWith('wikipedia') ? 'Wikipedia'
+    : p.source === 'yahoo' ? 'Yahoo Finance' : 'TradingView';
+  const link = p.url ?? p.website;
+  const site = link ? ` · <a href="${escProfile(link)}" target="_blank" rel="noopener">${p.url ? 'Artikel' : 'Website'}</a>` : '';
   return `<div class="id-profile">
     <p class="id-profile__text" id="profile-text">${escProfile(p.description)}</p>
     <div class="id-profile__foot">

@@ -1,46 +1,86 @@
 /**
  * company-profile.js — Firmenprofil (Business Description) für das Detail-Modal.
  *
- * Quellen-Kaskade über den vorhandenen scrape-proxy (beide Hosts sind bereits
- * allowlisted, kein Backend-Deploy nötig):
- *   1. TradingView scanner: symbols-Scan mit der Spalte `business_description`
- *      (deckt alle Märkte ab, gleiche Infrastruktur wie das TV-Enrichment).
- *   2. Yahoo quoteSummary `assetProfile.longBusinessSummary` (crumb-frei
- *      versucht — Yahoo verlangt den Crumb je nach Region/IP; wenn 401/403
- *      kommt, bleibt es beim TV-Ergebnis bzw. "kein Profil").
+ * v2: Wikipedia als Quelle (de → en Fallback) — die REST-API ist CORS-offen
+ * (Access-Control-Allow-Origin: *), läuft also DIREKT aus dem Browser, ganz
+ * ohne scrape-proxy, Key oder Limit. Titel-Suche via opensearch (origin=*),
+ * dann /api/rest_v1/page/summary/{title} → `extract` (erster Artikelabsatz).
  *
- * Ergebnis wird 30 Tage in localStorage gecacht (Profiltexte ändern sich
- * praktisch nie) — pro Kandidat genau ein Netz-Roundtrip.
+ * v1-Historie: TradingView kennt keine business_description-Spalte (HTTP 400)
+ * und Yahoo quoteSummary verlangt Cookie+Crumb (401) — beide entfernt.
+ *
+ * Treffer werden 30 Tage, Fehlversuche 3 Tage in localStorage gecacht.
  */
 
-import { EXCHANGE_TO_MARKET, TV_PREFIX_MAP } from './tv-enrichment.js?v=20260707e';
 import { normalizeExchange } from './exchange-map.js';
 
-const CACHE_PREFIX = 'discovery_profile_';
-const CACHE_TTL = 30 * 864e5;
+const CACHE_PREFIX = 'discovery_profile2_';
+const TTL_HIT = 30 * 864e5;
+const TTL_MISS = 3 * 864e5;
 
-async function proxyFetch(backendUrl, secret, { url, method = 'GET', body = null }) {
-  const proxyUrl = `${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`;
-  const res = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
-    body: JSON.stringify({
-      url, method,
-      headers: method === 'POST' ? { 'Content-Type': 'application/json' } : {},
-      ...(body != null ? { body } : {}),
-    }),
-  });
-  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-  const wrapper = await res.json();
-  if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
-  if (wrapper.status !== 200) throw new Error(`Upstream HTTP ${wrapper.status}`);
-  return wrapper.body;
+// v1-Caches (inkl. 30 Tage gecachter Fehlversuche) einmalig wegräumen.
+try {
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith('discovery_profile_')) localStorage.removeItem(k);
+  }
+} catch { /* ignore */ }
+
+/* Firmenname → Suchbegriff: Rechtsform-Suffixe stören die Artikelsuche. */
+const LEGAL_SUFFIX = /\b(incorporated|inc|corporation|corp|company|co|limited|ltd|plc|ag|se|sa|nv|oyj|ab|asa|spa|kgaa|holdings?|group|adr|the)\.?\b/gi;
+const cleanName = (s) => String(s ?? '')
+  .replace(LEGAL_SUFFIX, ' ')
+  .replace(/[.,()]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+/* Sanity-Filter: der Extract muss nach einem Unternehmensartikel klingen —
+ * sonst war der Treffer z. B. ein gleichnamiger Begriff/Ort. */
+const COMPANYISH = /unternehmen|konzern|hersteller|anbieter|gesellschaft|holding|bank|betreiber|entwickler|produzent|dienstleister|company|corporation|manufacturer|provider|operator|firm|maker|retailer|producer|developer|conglomerate|enterprise/i;
+
+async function wikiJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fromWikipedia(candidate) {
+  const name = cleanName(candidate.name) || String(candidate.symbol ?? '');
+  if (!name) return null;
+  for (const lang of ['de', 'en']) {
+    let titles = [];
+    try {
+      const os = await wikiJson(
+        `https://${lang}.wikipedia.org/w/api.php?action=opensearch&limit=3&format=json&origin=*&search=${encodeURIComponent(name)}`);
+      titles = Array.isArray(os?.[1]) ? os[1] : [];
+    } catch (err) {
+      console.warn(`[profile] ${lang}.wikipedia opensearch:`, err.message);
+      continue;
+    }
+    for (const title of titles.slice(0, 3)) {
+      try {
+        const s = await wikiJson(
+          `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(String(title).replace(/ /g, '_'))}`);
+        if (s?.type === 'disambiguation') continue;
+        const text = String(s?.extract ?? '').trim();
+        if (text.length > 80 && COMPANYISH.test(text)) {
+          return {
+            description: text,
+            url: s.content_urls?.desktop?.page ?? null,
+            source: `wikipedia-${lang}`,
+          };
+        }
+      } catch { /* nächster Titel */ }
+    }
+  }
+  return null;
 }
 
 function cacheGet(key) {
   try {
     const raw = JSON.parse(localStorage.getItem(key));
-    if (raw && Date.now() - (raw.at ?? 0) < CACHE_TTL) return raw.profile;
+    if (!raw) return undefined;
+    const ttl = raw.profile ? TTL_HIT : TTL_MISS;
+    if (Date.now() - (raw.at ?? 0) < ttl) return raw.profile;
   } catch { /* ignore */ }
   return undefined;
 }
@@ -48,58 +88,20 @@ function cacheSet(key, profile) {
   try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), profile })); } catch { /* quota */ }
 }
 
-async function fromTradingView(candidate, auth) {
-  const exch = normalizeExchange(candidate.exchange);
-  const market = EXCHANGE_TO_MARKET[exch];
-  const prefix = TV_PREFIX_MAP[exch];
-  if (!market || !prefix) return null;
-  const body = JSON.stringify({
-    symbols: { tickers: [`${prefix}:${candidate.symbol}`] },
-    columns: ['business_description', 'web_site_url'],
-  });
-  const text = await proxyFetch(auth.backendUrl, auth.secret, {
-    url: `https://scanner.tradingview.com/${market}/scan`, method: 'POST', body,
-  });
-  const d = JSON.parse(text)?.data?.[0]?.d;
-  const description = typeof d?.[0] === 'string' && d[0].trim().length > 40 ? d[0].trim() : null;
-  if (!description) return null;
-  return { description, website: d?.[1] || null, source: 'tv' };
-}
-
-async function fromYahoo(candidate, auth) {
-  const exch = normalizeExchange(candidate.exchange);
-  const ySym = candidate.yahoo_symbol
-    ?? (['NASDAQ', 'NYSE', 'AMEX'].includes(exch) ? candidate.symbol : null);
-  if (!ySym) return null;
-  const text = await proxyFetch(auth.backendUrl, auth.secret, {
-    url: `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ySym)}?modules=assetProfile`,
-  });
-  const ap = JSON.parse(text)?.quoteSummary?.result?.[0]?.assetProfile;
-  const description = typeof ap?.longBusinessSummary === 'string' && ap.longBusinessSummary.trim().length > 40
-    ? ap.longBusinessSummary.trim() : null;
-  if (!description) return null;
-  return { description, website: ap.website || null, source: 'yahoo' };
-}
-
 /**
- * @returns {Promise<{description, website, source, fetched_at}|null>} null = keine Quelle lieferte.
+ * @returns {Promise<{description, url, source, fetched_at}|null>} null = keine Quelle lieferte.
  */
-export async function fetchCompanyProfile(candidate, auth) {
-  if (!candidate?.symbol || !auth?.backendUrl || !auth?.secret) return null;
+export async function fetchCompanyProfile(candidate) {
+  if (!candidate?.symbol) return null;
   const key = `${CACHE_PREFIX}${normalizeExchange(candidate.exchange)}:${candidate.symbol}`;
   const cached = cacheGet(key);
   if (cached !== undefined) return cached;
 
   let profile = null;
-  for (const src of [fromTradingView, fromYahoo]) {
-    try {
-      profile = await src(candidate, auth);
-      if (profile) break;
-    } catch (err) {
-      console.warn(`[profile] ${src.name} fehlgeschlagen:`, err.message);
-    }
-  }
+  try { profile = await fromWikipedia(candidate); }
+  catch (err) { console.warn('[profile] Wikipedia fehlgeschlagen:', err.message); }
+
   if (profile) profile.fetched_at = new Date().toISOString();
-  cacheSet(key, profile);   // auch null cachen → kein Re-Hammering toter Quellen
+  cacheSet(key, profile);
   return profile;
 }
