@@ -1380,6 +1380,18 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .dash-sb-h b { font-weight:var(--fw-bold); }
 .dash-sb-h b.pos { color:var(--pos); }
 .dash-sb-h b.neg { color:var(--neg); }
+/* Firmenprofil unter dem Detail-Chart */
+.id-profile { margin:8px 0 2px; }
+.id-profile--loading { font-size:var(--fs-1); color:var(--muted); display:flex; align-items:center; gap:6px; }
+.id-profile__text {
+  margin:0; font-size:var(--fs-2); line-height:var(--lh); color:var(--text);
+  display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden;
+}
+.id-profile__text.is-open { display:block; -webkit-line-clamp:unset; overflow:visible; }
+.id-profile__foot { display:flex; align-items:center; gap:10px; margin-top:3px; }
+.id-profile__more { background:none; border:none; padding:0; color:var(--accent); font-size:var(--fs-1); cursor:pointer; font-family:inherit; }
+.id-profile__src { font-size:var(--fs-1); color:var(--muted); margin-left:auto; }
+.id-profile__src a { color:var(--muted); }
 .dash-sep { height:1px; background:var(--border); margin:4px 8px; }
 .dash-empty { padding:14px 10px; color:var(--muted); font-size:var(--fs-2); text-align:center; line-height:var(--lh); }
 

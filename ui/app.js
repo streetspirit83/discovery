@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260707a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260707a';
+import { CandidateList } from './components/candidate-list.js?v=20260707e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260707e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -15,8 +15,9 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20260707d';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260707c';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707a';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
+import { fetchCompanyProfile } from './lib/company-profile.js?v=20260707e';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -774,6 +775,24 @@ async function handleAction(action, candidate, extras = {}) {
   if (action === 'lsQuote') {
     await runLsQuoteForSelection([candidate.id]);
     if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  // Detail sheet: Firmenprofil lazy nachladen (TV business_description → Yahoo
+  // Fallback, localStorage-Cache). {error:true} verhindert Re-Fire pro Render.
+  if (action === 'loadProfile') {
+    if (candidate._profile_loading || candidate.company_profile) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (useMock || !backendUrl || !secret) { candidate.company_profile = { error: true }; return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._profile_loading = true; rerender();
+    let profile = null;
+    try { profile = await fetchCompanyProfile(candidate, { backendUrl, secret }); }
+    catch (err) { console.warn('[profile] fetch fehlgeschlagen:', err.message); }
+    candidate._profile_loading = false;
+    candidate.company_profile = profile ?? { error: true };
+    rerender();
     return;
   }
 

@@ -71,7 +71,7 @@ function upsertSnapshot(history, rec) {
   return hist.slice(0, SNAPSHOT_MAX);
 }
 
-const EXCHANGE_TO_MARKET = {
+export const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
   NYSE:     'america',
   AMEX:     'america',
@@ -88,7 +88,7 @@ const EXCHANGE_TO_MARKET = {
   OMXHEX:   'finland',
 };
 
-const TV_PREFIX_MAP = {
+export const TV_PREFIX_MAP = {
   NASDAQ:   'NASDAQ',
   NYSE:     'NYSE',
   AMEX:     'AMEX',

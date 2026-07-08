@@ -8,7 +8,7 @@ import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707e';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
 
@@ -433,9 +433,7 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
       ? `<div class="chart-horizon" role="tablist">${btns.join('')}</div>` : '';
 
     const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
-    const note = want1J
-      ? `Kerzen = TD-Tages-OHLC (${disp.cur}) · Balken = Volumen · durchgezogen = Swing-Zonen (Sup/Res) · blau = SMAs · Pinch/Ziehen zum Zoomen`
-      : `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
+    const note = `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
 
     let body;
     if (want1J && !canTd) {
@@ -453,9 +451,15 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
           <button class="btn btn-sm btn-primary" id="chart-level-add" disabled>＋ Alert setzen</button>
         </div>`;
     }
-    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}<p class="ph-note">${note} · <b>über den Chart ziehen → Level unten setzen</b></p>`);
+    // Unter dem TD-Chart ersetzt das Firmenprofil die frühere Legende; unter dem
+    // LS-Chart bleibt die Legende, das Profil folgt nur wenn es keine TD-Ansicht
+    // gibt (sonst hätten Nicht-US-Titel nirgends ein Profil).
+    const tail = want1J
+      ? profileHTML(c)
+      : `<p class="ph-note">${note} · <b>über den Chart ziehen → Level unten setzen</b></p>${tdReachable ? '' : profileHTML(c)}`;
+    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}${tail}`);
   } else {
-    parts.push(ls10dChartHTML(c, disp));
+    parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
   }
 
   // 3. Renditen, Range/Volatilität (der Live-Intraday-Verlauf steckt bereits
@@ -479,6 +483,27 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
     }
   }
   return parts.join('');
+}
+
+/* ── Firmenprofil unter dem Chart (TV business_description / Yahoo) ────────── */
+
+const escProfile = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+
+function profileHTML(c) {
+  if (c._profile_loading) {
+    return `<p class="id-profile id-profile--loading"><span class="ls-loading"></span> Lade Firmenprofil …</p>`;
+  }
+  const p = c.company_profile;
+  if (!p?.description) return '';
+  const src = p.source === 'yahoo' ? 'Yahoo Finance' : 'TradingView';
+  const site = p.website ? ` · <a href="${escProfile(p.website)}" target="_blank" rel="noopener">Website</a>` : '';
+  return `<div class="id-profile">
+    <p class="id-profile__text" id="profile-text">${escProfile(p.description)}</p>
+    <div class="id-profile__foot">
+      <button class="id-profile__more" id="profile-more">mehr</button>
+      <span class="id-profile__src">Profil: ${src}${site}</span>
+    </div>
+  </div>`;
 }
 
 /* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
@@ -1190,6 +1215,19 @@ export class CandidateDetail {
       });
     });
     this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
+
+    // Firmenprofil: lazy fetch beim ersten Render (app.js cached in localStorage),
+    // danach "mehr/weniger"-Toggle; Button verschwindet wenn nichts geklemmt ist.
+    if (!c.company_profile && !c._profile_loading) this.onAction?.('loadProfile', c);
+    const pText = this.el.querySelector('#profile-text');
+    if (pText) {
+      const moreBtn = this.el.querySelector('#profile-more');
+      if (pText.scrollHeight <= pText.clientHeight + 2) moreBtn.style.display = 'none';
+      moreBtn?.addEventListener('pointerup', () => {
+        const open = pText.classList.toggle('is-open');
+        moreBtn.textContent = open ? 'weniger' : 'mehr';
+      });
+    }
 
     // Toolbar: edit-toggle + quick actions
     const editBtn = this.el.querySelector('#detail-edit-links');
