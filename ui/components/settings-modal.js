@@ -8,6 +8,7 @@ const KEYS = {
   claudeKey: 'discovery_claude_key',
   githubPat: 'discovery_github_pat',
   twelveDataKey: 'discovery_twelvedata_key',
+  roicKey: 'discovery_roic_key',
   fxEurUsd: 'discovery_fx_eurusd',
 };
 
@@ -18,6 +19,7 @@ export function loadSettings() {
     claudeKey: localStorage.getItem(KEYS.claudeKey) ?? '',
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
     twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
+    roicKey: localStorage.getItem(KEYS.roicKey) ?? '',
     fxEurUsd: localStorage.getItem(KEYS.fxEurUsd) ?? '',
   };
 }
@@ -86,6 +88,13 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-roic-key">ROIC.ai API Key <small>(optional)</small></label>
+          <input type="password" id="set-roic-key" placeholder="roic.ai → API"
+            value="${settings.roicKey}" autocomplete="off">
+          <small>Firmenprofil im Detail (Beschreibung, CEO, Mitarbeiter; Lookup auch per ISIN). Ohne Key springt Wikipedia ein.</small>
+        </div>
+
+        <div class="form-group">
           <label for="set-fx-eurusd">EUR/USD Kurs <small>(optional, manuell)</small></label>
           <input type="text" inputmode="decimal" id="set-fx-eurusd" placeholder="z.B. 1.16"
             value="${settings.fxEurUsd}" autocomplete="off">
@@ -115,6 +124,7 @@ export function renderSettingsModal(onSave) {
       claudeKey: overlay.querySelector('#set-claude-key').value.trim(),
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
       twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
+      roicKey: overlay.querySelector('#set-roic-key').value.trim(),
       fxEurUsd: overlay.querySelector('#set-fx-eurusd').value.trim(),
     };
     saveSettings(newSettings);

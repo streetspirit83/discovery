@@ -1388,6 +1388,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden;
 }
 .id-profile__text.is-open { display:block; -webkit-line-clamp:unset; overflow:visible; }
+.id-profile__facts { margin:4px 0 0; font-size:var(--fs-1); color:var(--muted); }
 .id-profile__foot { display:flex; align-items:center; gap:10px; margin-top:3px; }
 .id-profile__more { background:none; border:none; padding:0; color:var(--accent); font-size:var(--fs-1); cursor:pointer; font-family:inherit; }
 .id-profile__src { font-size:var(--fs-1); color:var(--muted); margin-left:auto; }

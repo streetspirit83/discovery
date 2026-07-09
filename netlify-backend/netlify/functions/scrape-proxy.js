@@ -25,6 +25,7 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/query1\.finance\.yahoo\.com\//,
   /^https:\/\/query2\.finance\.yahoo\.com\//,
   /^https:\/\/scanner\.tradingview\.com\//,
+  /^https:\/\/api\.roic\.ai\//,
   /^https:\/\/www\.ls-tc\.de\//,
   /^https:\/\/merkliste-app\.netlify\.app\//,
 ];

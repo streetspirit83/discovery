@@ -496,11 +496,22 @@ function profileHTML(c) {
   const p = c.company_profile;
   if (!p?.description) return '';
   const src = String(p.source ?? '').startsWith('wikipedia') ? 'Wikipedia'
-    : p.source === 'yahoo' ? 'Yahoo Finance' : 'TradingView';
+    : p.source === 'roic' ? 'ROIC.ai' : 'Quelle';
   const link = p.url ?? p.website;
   const site = link ? ` · <a href="${escProfile(link)}" target="_blank" rel="noopener">${p.url ? 'Artikel' : 'Website'}</a>` : '';
+  const f = p.facts ?? {};
+  const facts = [
+    f.ceo ? `CEO ${f.ceo}` : null,
+    f.employees ? `${Number(f.employees).toLocaleString('de-DE')} MA` : null,
+    f.ipo_date ? `IPO ${String(f.ipo_date).slice(0, 4)}` : null,
+    f.industry ?? null,
+    f.country ?? null,
+  ].filter(Boolean);
+  const factsLine = facts.length
+    ? `<p class="id-profile__facts">${facts.map(escProfile).join(' · ')}</p>` : '';
   return `<div class="id-profile">
     <p class="id-profile__text" id="profile-text">${escProfile(p.description)}</p>
+    ${factsLine}
     <div class="id-profile__foot">
       <button class="id-profile__more" id="profile-more">mehr</button>
       <span class="id-profile__src">Profil: ${src}${site}</span>
