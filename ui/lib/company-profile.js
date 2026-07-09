@@ -59,25 +59,28 @@ function roicRateLimited() {
 
 /* ── Quelle 1: ROIC.ai ────────────────────────────────────────────────────── */
 
-async function fromRoic(candidate, auth) {
+/* Gemeinsamer ROIC-GET: Key + Backoff prüfen, Direkt-Fetch (falls CORS offen),
+ * bei echten Netz-/CORS-Fehlern über den scrape-proxy. HTTP-Fehler (401/429/…)
+ * werden NICHT über den Proxy wiederholt — das würde dieselbe Antwort nur
+ * doppelt vom Rate-Limit abbuchen. Wirft bei fehlendem Key. */
+function roicIdent(candidate) {
+  return isISIN(candidate.isin) ? String(candidate.isin).toUpperCase() : candidate.symbol;
+}
+
+async function roicGet(path, auth) {
   const key = localStorage.getItem('discovery_roic_key');
-  if (!key) return null;
+  if (!key) { const e = new Error('Kein ROIC.ai API Key (Settings)'); e.noKey = true; throw e; }
   if (Date.now() < +(localStorage.getItem(ROIC_BACKOFF_KEY) ?? 0)) {
     const e = new Error('ROIC im 429-Backoff — übersprungen');
     e.transient = true;
     throw e;
   }
-  const ident = isISIN(candidate.isin) ? String(candidate.isin).toUpperCase() : candidate.symbol;
-  const url = `https://api.roic.ai/v2/company/profile/${encodeURIComponent(ident)}?apikey=${encodeURIComponent(key)}`;
-
+  const url = `https://api.roic.ai${path}${path.includes('?') ? '&' : '?'}apikey=${encodeURIComponent(key)}`;
   let text;
   let res = null;
   try {
     res = await fetch(url);                       // direkt, falls CORS offen
   } catch (err) {
-    // Nur echte Netz-/CORS-Fehler (fetch wirft) → über den scrape-proxy.
-    // HTTP-Fehler (401/429/…) kommen NICHT hierher — ein Proxy-Retry würde
-    // dieselbe Antwort nur doppelt vom Rate-Limit abbuchen.
     if (!auth?.backendUrl || !auth?.secret) throw err;
     text = await proxyFetch(auth, url);
   }
@@ -86,6 +89,12 @@ async function fromRoic(candidate, auth) {
     if (!res.ok) throw new Error(`ROIC HTTP ${res.status}`);
     text = await res.text();
   }
+  return text;
+}
+
+async function fromRoic(candidate, auth) {
+  if (!localStorage.getItem('discovery_roic_key')) return null;   // ohne Key still zu Wikipedia
+  const text = await roicGet(`/v2/company/profile/${encodeURIComponent(roicIdent(candidate))}`, auth);
 
   const raw = JSON.parse(text);
   const d = Array.isArray(raw) ? raw[0] : raw;
@@ -199,4 +208,50 @@ export async function fetchCompanyProfile(candidate, auth) {
   // Öffnen-Versuch soll ROIC nach dem Rate-Limit-Fenster erneut probieren.
   if (profile || !transient) cacheSet(key, profile);
   return profile;
+}
+
+/* ── Company News (ROIC.ai /v2/company/news) ──────────────────────────────────
+ * On-demand vom News-Tab; 30 min localStorage-Cache (force=true umgeht ihn).
+ * Feldnamen defensiv gemappt (title/headline, url/link, date/published_at, …),
+ * bis das echte Antwortformat verifiziert ist. */
+
+const NEWS_CACHE_PREFIX = 'discovery_news1_';
+const NEWS_TTL = 30 * 60e3;
+
+function mapNewsItem(x) {
+  if (!x || typeof x !== 'object') return null;
+  const title = x.title ?? x.headline ?? null;
+  if (!title) return null;
+  const text = x.text ?? x.summary ?? x.description ?? x.content ?? null;
+  return {
+    title: String(title),
+    url: x.url ?? x.link ?? x.article_url ?? null,
+    date: x.date ?? x.published_at ?? x.published ?? x.datetime ?? x.created_at ?? null,
+    source: x.source ?? x.site ?? x.publisher ?? x.provider ?? null,
+    text: text ? String(text).slice(0, 400) : null,
+  };
+}
+
+/**
+ * @returns {Promise<{items:Array, fetched_at:string}>} wirft bei Fehlern
+ * (kein Key, 429-Backoff, HTTP-Fehler) — der Aufrufer zeigt die Meldung an.
+ */
+export async function fetchCompanyNews(candidate, auth, { force = false } = {}) {
+  if (!candidate?.symbol) throw new Error('Kein Symbol');
+  const key = `${NEWS_CACHE_PREFIX}${normalizeExchange(candidate.exchange)}:${candidate.symbol}`;
+  if (!force) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(key));
+      if (raw && Date.now() - (raw.at ?? 0) < NEWS_TTL) return raw.news;
+    } catch { /* ignore */ }
+  }
+  const text = await roicGet(`/v2/company/news/${encodeURIComponent(roicIdent(candidate))}`, auth);
+  const raw = JSON.parse(text);
+  const arr = Array.isArray(raw) ? raw
+    : Array.isArray(raw?.data) ? raw.data
+    : Array.isArray(raw?.news) ? raw.news
+    : Array.isArray(raw?.items) ? raw.items : [];
+  const news = { items: arr.map(mapNewsItem).filter(Boolean).slice(0, 20), fetched_at: new Date().toISOString() };
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), news })); } catch { /* quota */ }
+  return news;
 }

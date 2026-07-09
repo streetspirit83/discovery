@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260707e';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260708b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260708d';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -17,7 +17,7 @@ import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
-import { fetchCompanyProfile } from './lib/company-profile.js?v=20260708c';
+import { fetchCompanyProfile, fetchCompanyNews } from './lib/company-profile.js?v=20260708d';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -778,10 +778,10 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
-  // Detail sheet: Firmenprofil lazy nachladen (ROIC.ai mit Key, sonst
-  // Wikipedia de→en; beide browserseitig). {error:true} verhindert Re-Fire.
+  // Detail sheet: Firmenprofil auf Knopfdruck laden (ROIC.ai mit Key, sonst
+  // Wikipedia de→en; beide browserseitig). Fehlversuch → Button erlaubt Retry.
   if (action === 'loadProfile') {
-    if (candidate._profile_loading || candidate.company_profile) return;
+    if (candidate._profile_loading || candidate.company_profile?.description) return;
     const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
     candidate._profile_loading = true; rerender();
     let profile = null;
@@ -793,6 +793,27 @@ async function handleAction(action, candidate, extras = {}) {
     } catch (err) { console.warn('[profile] fetch fehlgeschlagen:', err.message); }
     candidate._profile_loading = false;
     candidate.company_profile = profile ?? { error: true };
+    rerender();
+    return;
+  }
+
+  // Detail sheet: News-Tab (ROIC.ai, 30-min-Cache; force = Aktualisieren-Button).
+  if (action === 'loadNews') {
+    if (candidate._news_loading) return;
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._news_loading = true; rerender();
+    let news;
+    try {
+      news = await fetchCompanyNews(candidate, {
+        backendUrl: localStorage.getItem('discovery_backend_url'),
+        secret:     localStorage.getItem('discovery_secret'),
+      }, { force: extras?.force === true });
+    } catch (err) {
+      console.warn('[news] fetch fehlgeschlagen:', err.message);
+      news = { error: true, message: err.message };
+    }
+    candidate._news_loading = false;
+    candidate.company_news = news;
     rerender();
     return;
   }

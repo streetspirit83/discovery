@@ -20,6 +20,7 @@ const TABS = [
   { key: 'performance', label: 'Performance' },
   { key: 'trade',       label: 'Trade' },
   { key: 'fundamental', label: 'Fundamental' },
+  { key: 'news',        label: 'News' },
   { key: 'meta',        label: 'Meta' },
 ];
 
@@ -494,7 +495,11 @@ function profileHTML(c) {
     return `<p class="id-profile id-profile--loading"><span class="ls-loading"></span> Lade Firmenprofil …</p>`;
   }
   const p = c.company_profile;
-  if (!p?.description) return '';
+  if (!p?.description) {
+    // Manueller Abruf (spart ROIC-Rate-Limit): Button statt Auto-Fetch;
+    // nach einem Fehlversuch bleibt er als "erneut versuchen" stehen.
+    return `<div class="id-profile"><button class="btn btn-sm btn-secondary" id="profile-load">📇 Firmenprofil laden${p?.error ? ' (erneut versuchen)' : ''}</button></div>`;
+  }
   const src = String(p.source ?? '').startsWith('wikipedia') ? 'Wikipedia'
     : p.source === 'roic' ? 'ROIC.ai' : 'Quelle';
   const link = p.url ?? p.website;
@@ -517,6 +522,43 @@ function profileHTML(c) {
       <span class="id-profile__src">Profil: ${src}${site}</span>
     </div>
   </div>`;
+}
+
+/* ── Tab: News (ROIC.ai /v2/company/news, on-demand beim Tab-Öffnen) ───────── */
+
+function renderNewsTab(c) {
+  if (c._news_loading) {
+    return `<p class="id-profile--loading"><span class="ls-loading"></span> Lade News (ROIC.ai) …</p>`;
+  }
+  const n = c.company_news;
+  if (!n || n.error) {
+    return `<div class="news-empty">
+      <button class="btn btn-sm btn-secondary" id="news-load">📰 News laden (ROIC.ai)${n?.error ? ' — erneut' : ''}</button>
+      ${n?.error && n.message ? `<p class="pv-muted">Letzter Versuch: ${escProfile(n.message)}</p>` : ''}
+    </div>`;
+  }
+  if (!n.items?.length) {
+    return `<p class="pv-muted">Keine News gefunden.</p>
+      <button class="btn btn-sm btn-secondary" id="news-load">Aktualisieren</button>`;
+  }
+  const fmtDay = (d) => {
+    const t = new Date(d);
+    return Number.isNaN(+t) ? '' : t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
+  const rows = n.items.map((it) => `<article class="news-item">
+    <div class="news-item__meta">${fmtDay(it.date)}${it.source ? ` · ${escProfile(it.source)}` : ''}</div>
+    <div class="news-item__title">${it.url
+      ? `<a href="${escProfile(it.url)}" target="_blank" rel="noopener">${escProfile(it.title)}</a>`
+      : escProfile(it.title)}</div>
+    ${it.text ? `<p class="news-item__text">${escProfile(it.text)}</p>` : ''}
+  </article>`).join('');
+  const when = n.fetched_at
+    ? new Date(n.fetched_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+  return `${rows}
+    <div class="news-foot">
+      <span class="pv-muted">Quelle: ROIC.ai${when ? ` · Stand ${when}` : ''}</span>
+      <button class="btn btn-sm btn-secondary" id="news-load" data-force="1">Aktualisieren</button>
+    </div>`;
 }
 
 /* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
@@ -1087,6 +1129,7 @@ export class CandidateDetail {
       performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
+      news:        renderNewsTab(c),
       meta:        renderMetaTab(c),
     };
 
@@ -1197,9 +1240,18 @@ export class CandidateDetail {
     this.el.querySelector('#detail-prev')?.addEventListener('pointerup', () => this.navigate(-1));
     this.el.querySelector('#detail-next')?.addEventListener('pointerup', () => this.navigate(1));
 
-    // Tabs
+    // Tabs — News-Tab lädt beim ersten Öffnen automatisch (einmal pro Cache-TTL).
     this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((btn) => {
-      btn.addEventListener('pointerup', () => this.setTab(btn.dataset.tab));
+      btn.addEventListener('pointerup', () => {
+        this.setTab(btn.dataset.tab);
+        if (btn.dataset.tab === 'news' && !c.company_news && !c._news_loading) {
+          this.onAction?.('loadNews', c);
+        }
+      });
+    });
+    // News: manuelles Laden / Aktualisieren (data-force umgeht den Cache).
+    this.el.querySelector('#news-load')?.addEventListener('pointerup', (e) => {
+      this.onAction?.('loadNews', c, { force: e.currentTarget.dataset.force === '1' });
     });
 
     // Trade-Ticket: Long | Short segmented control
@@ -1229,9 +1281,9 @@ export class CandidateDetail {
     });
     this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
 
-    // Firmenprofil: lazy fetch beim ersten Render (app.js cached in localStorage),
-    // danach "mehr/weniger"-Toggle; Button verschwindet wenn nichts geklemmt ist.
-    if (!c.company_profile && !c._profile_loading) this.onAction?.('loadProfile', c);
+    // Firmenprofil: manueller Abruf per Button (app.js cached in localStorage),
+    // danach "mehr/weniger"-Toggle; Toggle verschwindet wenn nichts geklemmt ist.
+    this.el.querySelector('#profile-load')?.addEventListener('pointerup', () => this.onAction?.('loadProfile', c));
     const pText = this.el.querySelector('#profile-text');
     if (pText) {
       const moreBtn = this.el.querySelector('#profile-more');
