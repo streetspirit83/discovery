@@ -41,8 +41,20 @@ async function proxyFetch({ backendUrl, secret }, url) {
   if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
   const wrapper = await res.json();
   if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
+  if (wrapper.status === 429) throw roicRateLimited();
   if (wrapper.status !== 200) throw new Error(`ROIC HTTP ${wrapper.status}`);
   return wrapper.body;
+}
+
+/* 429 = transient (Rate-Limit, 5 req/min im Free-Plan): 2 min Backoff setzen
+ * und das Ergebnis NICHT als Miss cachen, damit der nächste Versuch nach dem
+ * Fenster wieder bei ROIC landet. */
+const ROIC_BACKOFF_KEY = 'discovery_roic_backoff_until';
+function roicRateLimited() {
+  try { localStorage.setItem(ROIC_BACKOFF_KEY, String(Date.now() + 120e3)); } catch { /* ignore */ }
+  const e = new Error('ROIC HTTP 429 (Rate-Limit) — eigenen Account-Key prüfen, nicht den Doku-Beispiel-Key');
+  e.transient = true;
+  return e;
 }
 
 /* ── Quelle 1: ROIC.ai ────────────────────────────────────────────────────── */
@@ -50,18 +62,29 @@ async function proxyFetch({ backendUrl, secret }, url) {
 async function fromRoic(candidate, auth) {
   const key = localStorage.getItem('discovery_roic_key');
   if (!key) return null;
+  if (Date.now() < +(localStorage.getItem(ROIC_BACKOFF_KEY) ?? 0)) {
+    const e = new Error('ROIC im 429-Backoff — übersprungen');
+    e.transient = true;
+    throw e;
+  }
   const ident = isISIN(candidate.isin) ? String(candidate.isin).toUpperCase() : candidate.symbol;
   const url = `https://api.roic.ai/v2/company/profile/${encodeURIComponent(ident)}?apikey=${encodeURIComponent(key)}`;
 
   let text;
+  let res = null;
   try {
-    const res = await fetch(url);                 // direkt, falls CORS offen
-    if (!res.ok) throw new Error(`ROIC HTTP ${res.status}`);
-    text = await res.text();
+    res = await fetch(url);                       // direkt, falls CORS offen
   } catch (err) {
-    // CORS/Netzwerk → über den scrape-proxy (Domain ist allowlisted).
+    // Nur echte Netz-/CORS-Fehler (fetch wirft) → über den scrape-proxy.
+    // HTTP-Fehler (401/429/…) kommen NICHT hierher — ein Proxy-Retry würde
+    // dieselbe Antwort nur doppelt vom Rate-Limit abbuchen.
     if (!auth?.backendUrl || !auth?.secret) throw err;
     text = await proxyFetch(auth, url);
+  }
+  if (res) {
+    if (res.status === 429) throw roicRateLimited();
+    if (!res.ok) throw new Error(`ROIC HTTP ${res.status}`);
+    text = await res.text();
   }
 
   const raw = JSON.parse(text);
@@ -161,15 +184,19 @@ export async function fetchCompanyProfile(candidate, auth) {
   if (cached !== undefined) return cached;
 
   let profile = null;
+  let transient = false;
   for (const src of [fromRoic, fromWikipedia]) {
     try {
       profile = await src(candidate, auth);
       if (profile) break;
     } catch (err) {
+      if (err?.transient) transient = true;
       console.warn(`[profile] ${src.name}:`, err.message);
     }
   }
   if (profile) profile.fetched_at = new Date().toISOString();
-  cacheSet(key, profile);
+  // Transiente Fehler (429/Backoff) ohne Ergebnis nicht cachen — der nächste
+  // Öffnen-Versuch soll ROIC nach dem Rate-Limit-Fenster erneut probieren.
+  if (profile || !transient) cacheSet(key, profile);
   return profile;
 }

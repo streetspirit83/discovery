@@ -17,7 +17,7 @@ import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
-import { fetchCompanyProfile } from './lib/company-profile.js?v=20260708b';
+import { fetchCompanyProfile } from './lib/company-profile.js?v=20260708c';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
