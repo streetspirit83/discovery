@@ -256,6 +256,12 @@ function tradeLevels(c, disp) {
   return { cl, ex, kurs, target, entryL, stopL, rr, brk: breakoutEntry(tv), lsF };
 }
 
+// Merkliste-Einstand (EUR) in Display-Währung; null wenn nicht im Portfolio.
+function mkEntryDisp(c, disp) {
+  const lsF = lsDisplayFactor(disp);
+  return (c.mk_entry != null && lsF != null) ? c.mk_entry * lsF : null;
+}
+
 function priceClustersDisp(c, disp) {
   const tv = disp.tv;
   if (!tv) return null;
@@ -691,7 +697,23 @@ function renderTradeTab(c, disp, pc, tl, side) {
       <button class="tab-btn${side === 'short' ? ' active' : ''}" data-side="short" role="tab" aria-selected="${side === 'short'}">Short</button>
     </div>
     <div class="ticket">
-      ${ticket.map(([lbl, v, cls, tip]) => ticketRow(lbl, v, kurs, cls, tip)).join('')}
+      ${(() => {
+        const rows = ticket.map(([lbl, v, cls, tip]) => ticketRow(lbl, v, kurs, cls, tip));
+        // Portfolio-Einstand direkt unter KURS, mit echtem P/L (Kurs vs. Einstand)
+        // statt der üblichen Δ-Lesart (Level vs. Kurs).
+        const mkE = mkEntryDisp(c, disp);
+        if (mkE != null) {
+          const pl = kurs != null && mkE > 0 ? ((kurs - mkE) / mkE) * 100 : null;
+          const mkRow = `<div class="ticket__row ticket__row--mk" title="Einstand aus dem Merkliste-Portfolio (EUR → Anzeigewährung)${c.mk_shares ? ` · ${c.mk_shares} Stk` : ''} · Δ = P/L des Kurses vs. Einstand">
+            <span class="ticket__lbl">★ Einstand</span>
+            <span class="ticket__val">${fmtNum(mkE)}</span>
+            <span class="ticket__delta ${pl == null ? '' : pl >= 0 ? 'pos' : 'neg'}">${pl != null ? fmtPct(pl) : ''}</span>
+          </div>`;
+          const kursIdx = ticket.findIndex(([, , cls]) => cls === 'ticket__row--kurs');
+          rows.splice((kursIdx < 0 ? rows.length : kursIdx + 1), 0, mkRow);
+        }
+        return rows.join('');
+      })()}
     </div>
     ${otherExits ? `<h4 class="pv-subhead">Weitere Exits</h4>${otherExits}` : ''}
     <h4 class="pv-subhead">Ausbruchs-Signale (nächste ~10 T)</h4>
@@ -990,6 +1012,12 @@ export class CandidateDetail {
     if (tl?.target != null) line(tl.target, col('--pos'), 'Target', 2, 1);
     if (tl?.stopL != null) line(tl.stopL, col('--neg'), 'Stop', 2, 1);
 
+    // Portfolio-Einstand (Merkliste, EUR → Anzeige) — violett, klar getrennt
+    // von Sup/Res (grün/rot) und den SMAs (blau).
+    const mkE = mkEntryDisp(c, disp);
+    const mkCol = document.documentElement.dataset.theme === 'dark' ? '#c084fc' : '#9333ea';
+    if (mkE != null) line(mkE, mkCol, '★ Einstand', 0, 2);
+
     // SMA 20/50/200 (TV daily values, already display currency via disp.tv) —
     // dark-blue ink, told apart by dash pattern: 200 solid, 50 dashed, 20
     // dotted. True blue-900 ink vanishes on the dark theme → lighter ink there.
@@ -1117,6 +1145,13 @@ export class CandidateDetail {
       candle.createPriceLine({ price: c.ls_quote.price * lsF, color: col('--accent'), lineWidth: 2, lineStyle: 0, title: 'LS live' });
     }
 
+    // Portfolio-Einstand (Merkliste) — violett wie im LS-Chart.
+    const mkE = mkEntryDisp(c, disp);
+    if (mkE != null) {
+      const mkCol = document.documentElement.dataset.theme === 'dark' ? '#c084fc' : '#9333ea';
+      candle.createPriceLine({ price: mkE, color: mkCol, lineWidth: 2, lineStyle: 0, title: '★ Einstand' });
+    }
+
     this.wireChartLevelReadout(el, candle, disp);
     chart.timeScale().fitContent();
     this._chart = chart;
@@ -1191,7 +1226,11 @@ export class CandidateDetail {
     this.el.innerHTML = `
       <div class="sheet__header">
         <div class="detail-title">
-          <h2>${c.symbol} <span class="exchange-tag">${c.exchange}</span></h2>
+          <h2>${c.symbol}
+            ${c.mk_entry != null
+              ? `<span class="detail-star is-active" title="Im Portfolio (Merkliste) · Einstand ${fmtNum(c.mk_entry)} €${c.mk_shares ? ` · ${c.mk_shares} Stk` : ''}">${icons.starFilled}</span>`
+              : `<button class="detail-star${c.in_portfolio ? ' is-active' : ''}" id="detail-star" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button>`}
+            <span class="exchange-tag">${c.exchange}</span></h2>
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} ${icons.clipboard}</small>` : ''}
           <div class="detail-tags">
@@ -1335,6 +1374,9 @@ export class CandidateDetail {
       });
     });
     this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
+
+    // Portfolio-Stern (nur manueller Marker ist toggelbar; Merkliste-Match ist fix).
+    this.el.querySelector('#detail-star')?.addEventListener('pointerup', () => this.onAction?.('toggleStar', c));
 
     // Firmenprofil: manueller Abruf per Button (app.js cached in localStorage),
     // danach "mehr/weniger"-Toggle; Toggle verschwindet wenn nichts geklemmt ist.

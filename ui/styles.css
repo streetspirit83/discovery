@@ -1405,6 +1405,13 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .news-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
 .news-empty { display:flex; flex-direction:column; gap:6px; align-items:flex-start; padding:6px 0; }
+/* Portfolio-Stern im Detail-Header + Einstand-Zeile im Trade-Ticket */
+.detail-star { background:none; border:none; padding:0 2px; cursor:pointer; color:var(--muted); vertical-align:-2px; display:inline-flex; }
+.detail-star.is-active { color:#f59e0b; }
+.detail-star svg { width:18px; height:18px; }
+span.detail-star { cursor:default; }
+.ticket__row--mk .ticket__lbl { color:#9333ea; font-weight:var(--fw-bold); }
+[data-theme="dark"] .ticket__row--mk .ticket__lbl { color:#c084fc; }
 /* Detail-Tabs: 5 Tabs müssen ohne Overflow auf 390px passen */
 .detail-tabs .tab-btn { padding:8px 9px; font-size:var(--fs-2); }
 /* Fundamental-Tab: Health-Kopf, Meter-Zeilen, Stat-Kacheln */

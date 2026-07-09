@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260707e';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260708e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260709a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -961,6 +961,7 @@ async function handleAction(action, candidate, extras = {}) {
       }
     }
     candidateList.renderRows();
+    if (candidateDetail?.candidate?.id === candidate.id) candidateDetail.render();
     return;
   }
 
