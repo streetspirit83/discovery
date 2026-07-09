@@ -215,8 +215,23 @@ export async function fetchCompanyProfile(candidate, auth) {
  * Feldnamen defensiv gemappt (title/headline, url/link, date/published_at, …),
  * bis das echte Antwortformat verifiziert ist. */
 
-const NEWS_CACHE_PREFIX = 'discovery_news1_';
+const NEWS_CACHE_PREFIX = 'discovery_news2_';
 const NEWS_TTL = 30 * 60e3;
+
+/* Datum → ISO normalisieren: ISO-Strings, 'YYYY-MM-DD HH:MM:SS' (Space statt
+ * T), Epoch in Sekunden oder Millisekunden (Zahl oder String). */
+function parseNewsDate(d) {
+  if (d == null) return null;
+  if (typeof d === 'number') {
+    const t = new Date(d > 1e12 ? d : d * 1000);
+    return Number.isNaN(+t) ? null : t.toISOString();
+  }
+  const s = String(d).trim();
+  if (/^\d{13}$/.test(s)) return new Date(+s).toISOString();
+  if (/^\d{10}$/.test(s)) return new Date(+s * 1000).toISOString();
+  const t = new Date(/^\d{4}-\d{2}-\d{2} /.test(s) ? s.replace(' ', 'T') : s);
+  return Number.isNaN(+t) ? null : t.toISOString();
+}
 
 function mapNewsItem(x) {
   if (!x || typeof x !== 'object') return null;
@@ -226,7 +241,8 @@ function mapNewsItem(x) {
   return {
     title: String(title),
     url: x.url ?? x.link ?? x.article_url ?? null,
-    date: x.date ?? x.published_at ?? x.published ?? x.datetime ?? x.created_at ?? null,
+    date: parseNewsDate(x.date ?? x.publishedDate ?? x.published_date ?? x.published_at
+      ?? x.published ?? x.datetime ?? x.pub_date ?? x.time ?? x.created_at ?? null),
     source: x.source ?? x.site ?? x.publisher ?? x.provider ?? null,
     text: text ? String(text).slice(0, 400) : null,
   };

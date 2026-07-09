@@ -1405,6 +1405,35 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .news-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
 .news-empty { display:flex; flex-direction:column; gap:6px; align-items:flex-start; padding:6px 0; }
+/* Detail-Tabs: 5 Tabs müssen ohne Overflow auf 390px passen */
+.detail-tabs .tab-btn { padding:8px 9px; font-size:var(--fs-2); }
+/* Fundamental-Tab: Health-Kopf, Meter-Zeilen, Stat-Kacheln */
+.fund-head { display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+.fund-head__info { min-width:0; }
+.fund-head__title { font-weight:var(--fw-bold); font-size:var(--fs-3); }
+.fund-head__label { font-weight:var(--fw-reg, 400); color:var(--muted); }
+.fund-head__meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:3px 0; }
+.fund-earn { font-size:var(--fs-1); color:var(--muted); }
+.fund-head__sub { font-size:var(--fs-1); color:var(--muted); }
+.fm-row { display:flex; align-items:center; gap:8px; padding:3px 0; }
+.fm-label { flex:0 0 96px; font-size:var(--fs-1); color:var(--muted); }
+.fm-bar { position:relative; flex:1; height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
+.fm-bar--signed::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--border); }
+.fm-bar i { position:absolute; top:0; bottom:0; border-radius:4px; opacity:.8; }
+.fm-bar i.pos { background:var(--pos); }
+.fm-bar i.neg { background:var(--neg); }
+.fm-bar i.mid { background:#d97706; }
+.fm-val { flex:0 0 64px; text-align:right; font-size:var(--fs-2); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fm-val.pos { color:var(--pos); }
+.fm-val.neg { color:var(--neg); }
+.fm-val.mid { color:#d97706; }
+.fund-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.fund-stat { display:flex; flex-direction:column; gap:1px; align-items:center; padding:7px 4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); text-align:center; }
+.fund-stat b { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
+.fund-stat b.pos { color:var(--pos); }
+.fund-stat b.neg { color:var(--neg); }
+.fund-stat b.mid { color:#d97706; }
+.fund-stat span { font-size:var(--fs-1); color:var(--muted); }
 .dash-sep { height:1px; background:var(--border); margin:4px 8px; }
 .dash-empty { padding:14px 10px; color:var(--muted); font-size:var(--fs-2); text-align:center; line-height:var(--lh); }
 

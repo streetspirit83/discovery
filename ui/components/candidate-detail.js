@@ -3,7 +3,7 @@ import {
   scoreRingSVG, priceLadderSVG, priceLadderLegend,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260702h';
-import { liveOverallScore } from '../lib/dashboard-metrics.js?v=20260707a';
+import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { icons } from '../lib/icons.js?v=20260702a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
@@ -17,9 +17,9 @@ const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
 const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-a857-11eb-bfd7-56b7773a2529';
 
 const TABS = [
-  { key: 'performance', label: 'Performance' },
+  { key: 'performance', label: 'Perf.' },
   { key: 'trade',       label: 'Trade' },
-  { key: 'fundamental', label: 'Fundamental' },
+  { key: 'fundamental', label: 'Fund.' },
   { key: 'news',        label: 'News' },
   { key: 'meta',        label: 'Meta' },
 ];
@@ -541,9 +541,15 @@ function renderNewsTab(c) {
     return `<p class="pv-muted">Keine News gefunden.</p>
       <button class="btn btn-sm btn-secondary" id="news-load">Aktualisieren</button>`;
   }
-  const fmtDay = (d) => {
-    const t = new Date(d);
-    return Number.isNaN(+t) ? '' : t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const fmtDay = (iso) => {
+    if (!iso) return '';
+    const t = new Date(iso);
+    if (Number.isNaN(+t)) return '';
+    const day = t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    // Uhrzeit nur anzeigen, wenn die Quelle eine mitliefert (nicht 00:00).
+    return (t.getHours() || t.getMinutes())
+      ? `${day} ${t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+      : day;
   };
   const rows = n.items.map((it) => `<article class="news-item">
     <div class="news-item__meta">${fmtDay(it.date)}${it.source ? ` · ${escProfile(it.source)}` : ''}</div>
@@ -705,32 +711,81 @@ function kv(label, value, cls = '') {
 function renderFundamentalTab(c, disp) {
   const tv = disp?.tv ?? c.tv_data;
   if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+
+  const hs = liveHealthScore(tv);
   const ratingClass = tvRatingClass(tv.rating);
+  const fmtSigned = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%`;
+
+  // Signierter Meter (Wachstum): Nulllinie in der Mitte, Balken nach rechts/links.
+  const meter = (label, v, max = 50) => {
+    if (v == null) return '';
+    const w = (Math.min(Math.abs(v), max) / max) * 50;
+    const dir = v >= 0 ? 'pos' : 'neg';
+    return `<div class="fm-row">
+      <span class="fm-label">${label}</span>
+      <span class="fm-bar fm-bar--signed"><i class="${dir}" style="${v >= 0 ? `left:50%` : `right:50%`};width:${w.toFixed(1)}%"></i></span>
+      <b class="fm-val ${dir}">${fmtSigned(v)}</b>
+    </div>`;
+  };
+  // Absoluter Meter (Margen): 0 → max, Farbe nach Güte.
+  const meterAbs = (label, v, { max = 50, good = 15 } = {}) => {
+    if (v == null) return '';
+    const cls = v < 0 ? 'neg' : v >= good ? 'pos' : 'mid';
+    const w = (Math.min(Math.max(v, 0), max) / max) * 100;
+    return `<div class="fm-row">
+      <span class="fm-label">${label}</span>
+      <span class="fm-bar"><i class="${cls}" style="left:0;width:${w.toFixed(1)}%"></i></span>
+      <b class="fm-val ${cls}">${v.toFixed(1)}%</b>
+    </div>`;
+  };
+  const stat = (v, label, cls = '') =>
+    `<div class="fund-stat"><b class="${cls}">${v ?? '—'}</b><span>${label}</span></div>`;
+  const band = (v, bands) => {           // [posMax, neutralMax, midMax] aufsteigend
+    if (v == null) return '';
+    return v < bands[0] ? 'pos' : v <= bands[1] ? '' : v <= bands[2] ? 'mid' : 'neg';
+  };
+  const roeCls = (v) => (v == null ? '' : v < 0 ? 'neg' : v >= 15 ? 'pos' : 'mid');
+
+  const meters = (rows) => rows.filter(Boolean).join('');
+  const growth = meters([
+    meter('Umsatz YoY', tv.total_revenue_yoy_growth_ttm),
+    meter('EBITDA YoY', tv.ebitda_yoy_growth_ttm),
+    meter('FCF YoY', tv.free_cash_flow_yoy_growth_ttm, 100),
+    meter('EPS YoY (dil.)', tv.earnings_per_share_diluted_yoy_growth_ttm, 100),
+  ]);
+  const margins = meters([
+    meterAbs('Brutto-Marge', tv.gross_margin, { max: 80, good: 40 }),
+    meterAbs('OP-Marge', tv.operating_margin, { max: 50, good: 15 }),
+    meterAbs('Netto-Marge', tv.after_tax_margin, { max: 40, good: 10 }),
+    meterAbs('FCF-Marge', tv.free_cash_flow_margin_ttm, { max: 40, good: 10 }),
+  ]);
+
   return `
-    <div class="tv-data-grid">
-      ${kv('Rating', `<span class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</span>`)}
-      ${kv('Stand', formatDate(tv.fetched_at) || '—')}
+    <div class="fund-head">
+      ${scoreRingSVG(hs?.total ?? null, hs?.labelCode ?? null)}
+      <div class="fund-head__info">
+        <div class="fund-head__title">Financial Health${hs?.label ? ` · <span class="fund-head__label">${hs.label}</span>` : ''}</div>
+        <div class="fund-head__meta">
+          <span class="tv-rating tv-rating--${ratingClass}">${tvRatingLabel(tv.rating)}${tv.rating != null ? ` (${tv.rating.toFixed(2)})` : ''}</span>
+          ${tv.earnings_next_date ? `<span class="fund-earn" title="Nächste Earnings">📅 ${formatDate(new Date(tv.earnings_next_date * 1000).toISOString())}</span>` : ''}
+        </div>
+        <div class="fund-head__sub">MCap ${formatMarketCap(tv.market_cap)} · Beta ${tv.beta != null ? tv.beta.toFixed(2) : '—'} · Stand ${formatDate(tv.fetched_at) || '—'}</div>
+      </div>
     </div>
-    <h4 class="pv-subhead">Markt</h4>
-    <div class="tv-data-grid">
-      ${kv('Kurs', fmtNum(tv.close))}
-      ${kv('Market Cap', formatMarketCap(tv.market_cap))}
-      ${kv('Beta', tv.beta != null ? tv.beta.toFixed(2) : '—')}
-      ${kv('Nächste Earnings', tv.earnings_next_date ? formatDate(new Date(tv.earnings_next_date * 1000).toISOString()) : '—')}
-    </div>
-    <h4 class="pv-subhead">Kennzahlen</h4>
-    <div class="tv-data-grid">
-      ${kv('KGV (TTM)', tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : '—')}
-      ${kv('ROE', pctVal(tv.return_on_equity))}
-      ${kv('Dividende', tv.dividend_yield != null ? `${tv.dividend_yield.toFixed(2)}%` : '—')}
-      ${kv('Debt/Equity', ratioVal(tv.debt_to_equity))}
-    </div>
-    <h4 class="pv-subhead">Wachstum</h4>
-    <div class="tv-data-grid">
-      ${kv('Umsatz YoY', pctVal(tv.total_revenue_yoy_growth_ttm), growthCls(tv.total_revenue_yoy_growth_ttm))}
-      ${kv('OP-Marge', pctVal(tv.operating_margin))}
-      ${kv('EBITDA YoY', pctVal(tv.ebitda_yoy_growth_ttm), growthCls(tv.ebitda_yoy_growth_ttm))}
-      ${kv('EV/EBITDA', ratioVal(tv.enterprise_value_ebitda_ttm))}
+
+    ${growth ? `<h4 class="pv-subhead">Wachstum YoY (TTM)</h4>${growth}` : ''}
+    ${margins ? `<h4 class="pv-subhead">Profitabilität</h4>${margins}` : ''}
+
+    <h4 class="pv-subhead">Bewertung &amp; Rendite</h4>
+    <div class="fund-stats">
+      ${stat(tv.pe_ttm != null ? tv.pe_ttm.toFixed(1) : null, 'KGV TTM', band(tv.pe_ttm, [15, 30, 50]))}
+      ${stat(tv.enterprise_value_ebitda_ttm != null ? tv.enterprise_value_ebitda_ttm.toFixed(1) : null, 'EV/EBITDA', band(tv.enterprise_value_ebitda_ttm, [10, 18, 25]))}
+      ${stat(tv.price_free_cash_flow_ttm != null ? tv.price_free_cash_flow_ttm.toFixed(1) : null, 'P/FCF', band(tv.price_free_cash_flow_ttm, [15, 30, 50]))}
+      ${stat(tv.dividend_yield != null ? tv.dividend_yield.toFixed(2) + '%' : null, 'Dividende')}
+      ${stat(tv.return_on_equity != null ? tv.return_on_equity.toFixed(1) + '%' : null, 'ROE', roeCls(tv.return_on_equity))}
+      ${stat(tv.return_on_invested_capital != null ? tv.return_on_invested_capital.toFixed(1) + '%' : null, 'ROIC', roeCls(tv.return_on_invested_capital))}
+      ${stat(ratioVal(tv.debt_to_equity), 'Debt/Eq', band(tv.debt_to_equity, [0.5, 1.5, 3]))}
+      ${stat(ratioVal(tv.total_debt_to_ebitda_fy), 'Debt/EBITDA', band(tv.total_debt_to_ebitda_fy, [2, 4, 6]))}
     </div>
   `;
 }

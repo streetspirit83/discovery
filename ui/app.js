@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260707e';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260708d';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260708e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -17,7 +17,7 @@ import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
-import { fetchCompanyProfile, fetchCompanyNews } from './lib/company-profile.js?v=20260708d';
+import { fetchCompanyProfile, fetchCompanyNews } from './lib/company-profile.js?v=20260708e';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
