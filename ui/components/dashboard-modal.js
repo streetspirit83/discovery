@@ -16,7 +16,7 @@ import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends, smaCrosses,
 } from '../lib/dashboard-metrics.js?v=20260707a';
-import { scoreboard, HORIZONS, HORIZON_LABELS } from '../lib/signal-tracker.js?v=20260707c';
+import { scoreboard, HORIZONS, HORIZON_LABELS } from '../lib/signal-tracker.js?v=20260709b';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist' };
 const COLLAPSED = 3;
@@ -146,21 +146,22 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       return empty('Noch keine Signale protokolliert — jeder „TV Daten“-Lauf sammelt SMA-Kreuzungen, MACD-Flips und RSI-Extreme; ausgewertet wird nach 1W/2W/4W.');
     }
     const pctCls = (win) => (win >= 60 ? 'pos' : win <= 40 ? 'neg' : '');
-    const horizonHtml = (r) => HORIZONS.map((h) => {
-      const s = r.horizons[h];
-      if (!s) return `<span class="dash-sb-h"><i>${HORIZON_LABELS[h]}</i> –</span>`;
-      return `<span class="dash-sb-h"><i>${HORIZON_LABELS[h]}</i> <b class="${pctCls(s.win)}">${s.win}%</b> ${s.avg >= 0 ? '+' : '−'}${Math.abs(s.avg).toFixed(1)}</span>`;
-    }).join('');
+    const cell = (label, s) => (s
+      ? `<span class="dash-sb-h"><i>${label}</i> <b class="${pctCls(s.win)}">${s.win}%</b> ${s.avg >= 0 ? '+' : '−'}${Math.abs(s.avg).toFixed(1)}</span>`
+      : `<span class="dash-sb-h"><i>${label}</i> –</span>`);
+    // Live (offene Signale zum aktuellen Kurs) zuerst — sofort aussagekräftig,
+    // die fixen Horizonte reifen dahinter nach.
+    const horizonHtml = (r) => cell('Live', r.live) + HORIZONS.map((h) => cell(HORIZON_LABELS[h], r.horizons[h])).join('');
     // Stacked block: signal type + sample size on top, per-horizon hit rates below.
     const row = (r) => `<div class="dash-row dash-row--sb">
       <span class="dash-cross-stack">
         <span class="dash-row__sym"><span class="dash-sym">${esc(r.t)}</span>
-          <span class="dash-ex">${r.dir > 0 ? '▲' : '▼'} ${r.n} Signal${r.n === 1 ? '' : 'e'}${r.evaluated ? '' : ' · Auswertung folgt'}</span></span>
+          <span class="dash-ex">${r.dir > 0 ? '▲' : '▼'} ${r.n} Signal${r.n === 1 ? '' : 'e'}</span></span>
         <span class="dash-sb-line">${horizonHtml(r)}</span>
       </span>
     </div>`;
     return section('sb', rows, row) +
-      hint('Trefferquote = Anteil Signale, die in Signalrichtung liefen · Ø = mittlere Rendite in Signalrichtung (%).');
+      hint('Live = offene Signale zum aktuellen Kurs · 1W/2W/4W = fixierte Auswertung · Trefferquote in Signalrichtung, Ø-Rendite (%).');
   }
 
   function trendsBody() {

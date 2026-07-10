@@ -60,11 +60,24 @@ function applyTheme() {
   } catch {}
 }
 
-function weightedAvg(rows, pidx) {
+/* Winsorizing: Einzelaktien-Extremwerte (Squeeze +300%, Crash −90%) dominieren
+ * sonst den cap-gewichteten Gruppenschnitt und zerstören Sektor-/Industrie-
+ * Vergleich & Rotation. Ab 5 Werten wird jede Perf-Spalte auf das 10.–90.
+ * Perzentil der Gruppe gekappt (die Aktie zählt weiter, nur nicht unbegrenzt). */
+function winsorBounds(rows, pidx) {
+  const vals = rows.map(({ d }) => d[pidx]).filter((v) => v != null).sort((a, b) => a - b);
+  if (vals.length < 5) return null;
+  const q = (p) => vals[Math.min(vals.length - 1, Math.max(0, Math.round(p * (vals.length - 1))))];
+  return { lo: q(0.10), hi: q(0.90) };
+}
+
+function weightedAvg(rows, pidx, bounds = winsorBounds(rows, pidx)) {
   let sw = 0, swp = 0;
   for (const { d } of rows) {
-    const w = d[7] ?? 0, p = d[pidx];
+    const w = d[7] ?? 0;
+    let p = d[pidx];
     if (p == null || w <= 0) continue;
+    if (bounds) p = Math.min(bounds.hi, Math.max(bounds.lo, p));
     sw += w; swp += p * w;
   }
   return sw > 0 ? swp / sw : null;

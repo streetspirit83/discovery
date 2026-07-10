@@ -155,15 +155,26 @@ export default async () => {
     const prevTrigSet = new Set(prevTrig[c.id] ?? []);
     const newlyTriggered = triggered.filter((a) => !prevTrigSet.has(a.id));
 
+    // "Gesehen"-Buchführung: ein Trigger gilt erst als gesehen, wenn sein Push
+    // tatsächlich raus ist. Vorher wurde newTrig bei JEDEM Lauf voll geschrieben —
+    // Trigger, die während Mute feuerten, deren ntfy-Send fehlschlug oder die beim
+    // ersten Deploy schon aktiv waren, wurden dadurch stumm geschluckt und nie
+    // nachgeholt ("Web zeigt Alert, ntfy pusht nicht").
+    const stillSeen = triggered.filter((a) => prevTrigSet.has(a.id)).map((a) => a.id);
+    newTrig[c.id]  = stillSeen;
     newState[c.id] = status.key;
-    newTrig[c.id]  = triggered.map((a) => a.id);
 
     const statusChanged = prevKey !== status.key && status.key !== 'halten';
     const hasNewTrigger = newlyTriggered.length > 0;
 
     console.log(`[eval] ${c.symbol}: px=${price != null ? price.toFixed(2) : '—'} → ${status.key} (prev ${prevKey}) new=${newlyTriggered.map((a) => a.type).join(',') || '—'}`);
 
-    if (muted || (!statusChanged && !hasNewTrigger)) continue;
+    if (muted || (!statusChanged && !hasNewTrigger)) {
+      // Mute: Statuswechsel ebenfalls nicht festschreiben, damit er nach dem
+      // Unmute noch als Wechsel erkannt und gepusht wird.
+      if (muted && statusChanged) newState[c.id] = prevKey;
+      continue;
+    }
 
     const shown = statusChanged ? triggered : newlyTriggered;
     if (!shown.length) continue;
@@ -176,8 +187,15 @@ export default async () => {
       lsToNative, // reused from the cluster computation above
     });
     console.log(`[ALERT] ${push.title}\n${push.message}`);
-    await sendNtfy(NTFY_TOPIC, push);
-    pushCount++;
+    const sent = await sendNtfy(NTFY_TOPIC, push).catch((e) => { console.error(`[ntfy] ${e.message}`); return false; });
+    if (sent) {
+      newTrig[c.id] = triggered.map((a) => a.id);   // jetzt gesehen
+      pushCount++;
+    } else {
+      // Fehlgeschlagen → Zustand nicht festschreiben, nächster Lauf pusht erneut.
+      newState[c.id] = prevKey;
+      console.warn(`[disc-alerts] ntfy fehlgeschlagen für ${c.symbol} — Retry im nächsten Lauf`);
+    }
   }
 
   const now = Date.now();
@@ -191,6 +209,8 @@ export default async () => {
   });
 };
 
+// 7-20 UTC deckt auch den Handelsvormittag ab (9-22 CEST im Sommer,
+// 8-21 CET im Winter) — vorher begann der Check erst um 13:00 CEST.
 export const config = {
-  schedule: '*/20 11-20 * * 1-5',
+  schedule: '*/20 7-20 * * 1-5',
 };

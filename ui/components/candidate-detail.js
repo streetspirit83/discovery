@@ -185,7 +185,10 @@ function tdDisplayFactor(disp) {
 // else falls back to whatever data exists (null = neither → SVG fallback).
 function resolveChartHorizon(c, disp, horizon) {
   const lw = typeof window !== 'undefined' && window.LightweightCharts;
-  const canLs = !!(lw && Array.isArray(c.ls_history) && c.ls_history.length >= 2);
+  // LS-Chart schon ab 1 Snapshot-Tag ODER einer frischen Intraday-Serie —
+  // vorher blieb der Chart leer, bis 2 Nacht-Snapshots existierten.
+  const liveOk = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
+  const canLs = !!(lw && (liveOk || (Array.isArray(c.ls_history) && c.ls_history.length >= 1)));
   const canTd = !!(lw && Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2 && tdDisplayFactor(disp) != null);
   const active = (horizon === '1J' && canTd) ? '1J' : (canLs ? '10T' : (canTd ? '1J' : null));
   return { canLs, canTd, active };
@@ -939,9 +942,19 @@ export class CandidateDetail {
   initLsChart(c, disp, pc, tl) {
     const el = this.el.querySelector('#ls-chart');
     if (!el || !window.LightweightCharts) return;
-    const hist = c.ls_history;
     const lsF = lsDisplayFactor(disp);
-    if (!Array.isArray(hist) || hist.length < 2 || lsF == null) return;
+    if (lsF == null) return;
+    // Historie darf leer sein — die Live-Intraday-Serie allein trägt den Chart.
+    // Dedupe nach Datum, damit doppelte Snapshot-Tage nicht doppelt gezeichnet
+    // werden; bei Duplikaten gewinnt der Eintrag mit Intraday-Serie (reicher).
+    const hasSeries = (s) => Array.isArray(s?.series) && s.series.length > 1;
+    const byDate = new Map();
+    for (const s of (Array.isArray(c.ls_history) ? c.ls_history : [])) {
+      if (!s?.date) continue;
+      const prev = byDate.get(s.date);
+      if (!prev || hasSeries(s) || !hasSeries(prev)) byDate.set(s.date, s);
+    }
+    const hist = [...byDate.values()];
 
     const css = getComputedStyle(document.documentElement);
     const col = (n) => css.getPropertyValue(n).trim();
@@ -971,7 +984,9 @@ export class CandidateDetail {
     for (const s of hist) {
       const base = Date.parse(s.date) / 1000;
       if (!Number.isFinite(base)) continue;
-      if (liveDay && s.date === liveDay) continue; // live series covers this day
+      // Live-Serie ist für ihren Tag (und alles danach) maßgeblich — Snapshots
+      // desselben Tages würden sonst doppelt über die Live-Kurve gezeichnet.
+      if (liveDay && s.date >= liveDay) continue;
       const ser = Array.isArray(s.series) && s.series.length > 1 ? s.series : [s.close];
       ser.forEach((v, j, arr) => { if (v != null) points.push({ time: spread(base, arr, j), value: v * lsF }); });
     }

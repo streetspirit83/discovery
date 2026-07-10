@@ -13,6 +13,7 @@ import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
+import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260704c';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -219,6 +220,7 @@ function renderSourceBadges(sources) {
 
 function sortValue(c, col) {
   const tv = c.tv_data;
+  if (col === 'trade_lstrend') return lsTrend(c)?.ratePct ?? null;
   // Trade view pivot columns: trade_piv_<lvl><tf>, e.g. trade_piv_r1w / trade_piv_s3m
   if (col.startsWith('trade_piv_')) {
     const m = col.slice(10);
@@ -561,6 +563,7 @@ const PIVOT_COLS = [['w', '1W'], ['m', '1M']].flatMap(([tf, tfLbl], tfIdx) =>
 const VIEWS = {
   trade: [
     { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
+    { key:'trade_lstrend', label:'LS-Tr', title:'LS-10T-Trend: Steigung der Regressionsgeraden durch die Tages-Schlusskurse in %/Tag (gleiches Fenster wie der 10T-Chart) · ↗ = Kurs hat die Trendlinie nach oben gekreuzt, ↘ = nach unten', num:true, fmt:renderLsTrend },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     SETUP_COL,
     // Price cluster: nearest support zone — LS live price — nearest resistance zone
@@ -691,7 +694,7 @@ export class CandidateList {
     this.onSelectionChange = onSelectionChange;
     this.onAfterRender     = onAfterRender;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '', lsTrend: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -854,10 +857,15 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
+      if (fTrend) {
+        const t = lsTrend(c);
+        if (fTrend === 'pos'     && !(t && t.ratePct > 0)) return false;
+        if (fTrend === 'crossUp' && !t?.crossedUp)         return false;
+      }
       if (tr === 'no'        && c.tr_check?.tradable !== false) return false; // nur „nicht handelbar"
       if (tr === 'yes'       && c.tr_check?.tradable !== true)  return false;
       if (tr === 'unchecked' && c.tr_check?.tradable != null)   return false;
@@ -1394,6 +1402,16 @@ function lsChgCell(c) {
   const q = c.ls_quote;
   if (!q || q.change_pct == null) return '<span class="muted-dash">—</span>';
   return `<span class="${posNegClass(q.change_pct)}${q._fetching ? ' is-fetching' : ''}">${fmtPct(q.change_pct)}</span>`;
+}
+
+// LS-10T-Trendrate (%/Tag, Regressionsgerade) + Kreuzungs-Marker ↗/↘.
+function renderLsTrend(c) {
+  const t = lsTrend(c);
+  if (!t) return '<span class="muted-dash" title="Braucht ≥4 Tage LS-Historie">—</span>';
+  const cross = t.crossedUp ? ' <b title="Kurs hat die Trendlinie nach oben gekreuzt">↗</b>'
+    : t.crossedDown ? ' <b title="Kurs hat die Trendlinie nach unten gekreuzt">↘</b>' : '';
+  const sign = t.ratePct > 0 ? '+' : '';
+  return `<span class="${posNegClass(t.ratePct)}" title="Regressions-Steigung über ${t.days} LS-Tage · Kurs ${t.above ? 'über' : 'unter'} der Linie">${sign}${t.ratePct.toFixed(2)}%/T${cross}</span>`;
 }
 
 // Merkliste cost basis ("Einstand") — the manual entry price from the merkliste

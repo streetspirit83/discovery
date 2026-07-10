@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260707e';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260709a';
+import { CandidateList } from './components/candidate-list.js?v=20260709b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260709b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -11,12 +11,12 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260707d';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260707c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260709b';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260709b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
-import { trackSignals } from './lib/signal-tracker.js?v=20260707c';
+import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
 import { fetchCompanyProfile, fetchCompanyNews } from './lib/company-profile.js?v=20260708e';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
@@ -57,7 +57,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', fLsTrend: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -442,6 +442,11 @@ function renderFilterbar() {
       <option value="no"${uiState.fTr === 'no' ? ' selected' : ''}>✗ nicht handelbar</option>
       <option value="yes"${uiState.fTr === 'yes' ? ' selected' : ''}>✓ handelbar</option>
       <option value="unchecked"${uiState.fTr === 'unchecked' ? ' selected' : ''}>? ungeprüft</option>
+    </select>
+    <select class="filter-select" id="filter-lstrend" title="Filter nach LS-10T-Trend (Regressionsgerade durch die Tages-Schlusskurse)">
+      <option value="">LS-Trend</option>
+      <option value="pos"${uiState.fLsTrend === 'pos' ? ' selected' : ''}>↗ Trend positiv</option>
+      <option value="crossUp"${uiState.fLsTrend === 'crossUp' ? ' selected' : ''}>⤴ Kurs kreuzt Trend</option>
     </select>`;
 
   fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
@@ -486,6 +491,12 @@ function renderFilterbar() {
     uiState.fTr = e.target.value;
     saveUiState();
     candidateList.setFilter('tr', uiState.fTr);
+  });
+
+  fb.querySelector('#filter-lstrend').addEventListener('change', (e) => {
+    uiState.fLsTrend = e.target.value;
+    saveUiState();
+    candidateList.setFilter('lsTrend', uiState.fLsTrend);
   });
 
   renderSelectedPill();
@@ -1373,6 +1384,7 @@ async function init() {
     score:   uiState.fScore  ?? '',
     tr:      uiState.fTr     ?? '',
     alerts:  uiState.fAlerts ?? '',
+    lsTrend: uiState.fLsTrend ?? '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,

@@ -116,30 +116,35 @@ export function trackSignals(candidates) {
 export function scoreboard(candidates) {
   const byType = new Map();
   for (const c of candidates ?? []) {
+    const close = c?.tv_data?.close ?? null;
     for (const e of c?.signal_log ?? []) {
-      if (!byType.has(e.t)) byType.set(e.t, { t: e.t, dir: e.dir, n: 0, samples: { 7: [], 14: [], 28: [] } });
+      if (!byType.has(e.t)) byType.set(e.t, { t: e.t, dir: e.dir, n: 0, live: [], samples: { 7: [], 14: [], 28: [] } });
       const g = byType.get(e.t);
       g.n++;
+      // Live: aktueller Verlauf aller noch nicht voll ausgereiften Signale in
+      // Signalrichtung — macht das Scoreboard vom ersten Tag an aussagekräftig.
+      if (close != null && e.p > 0 && !e.o?.[28]) {
+        g.live.push(e.dir * ((close - e.p) / e.p) * 100);
+      }
       for (const h of HORIZONS) {
         const r = e.o?.[h]?.r;
         if (r != null) g.samples[h].push(e.dir * r);
       }
     }
   }
+  const agg = (s) => (s.length ? {
+    n: s.length,
+    win: Math.round((s.filter((v) => v > 0).length / s.length) * 100),
+    avg: +(s.reduce((a, b) => a + b, 0) / s.length).toFixed(1),
+  } : null);
   const rows = [...byType.values()].map((g) => {
     const horizons = {};
     let evaluated = 0;
     for (const h of HORIZONS) {
-      const s = g.samples[h];
-      if (!s.length) { horizons[h] = null; continue; }
-      evaluated += s.length;
-      horizons[h] = {
-        n: s.length,
-        win: Math.round((s.filter((v) => v > 0).length / s.length) * 100),
-        avg: +(s.reduce((a, b) => a + b, 0) / s.length).toFixed(1),
-      };
+      horizons[h] = agg(g.samples[h]);
+      evaluated += g.samples[h].length;
     }
-    return { t: g.t, dir: g.dir, n: g.n, evaluated, horizons };
+    return { t: g.t, dir: g.dir, n: g.n, evaluated, live: agg(g.live), horizons };
   });
   return rows.sort((a, b) => b.evaluated - a.evaluated || b.n - a.n);
 }
