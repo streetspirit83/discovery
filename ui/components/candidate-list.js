@@ -14,6 +14,7 @@ import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } fro
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
+import { trendScore } from '../lib/trend-radar.js?v=20260709c';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260704c';
 
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
@@ -221,6 +222,7 @@ function renderSourceBadges(sources) {
 function sortValue(c, col) {
   const tv = c.tv_data;
   if (col === 'trade_lstrend') return lsTrend(c)?.ratePct ?? null;
+  if (col === 'trade_trendscore') return trendScore(c)?.score ?? null;
   // Trade view pivot columns: trade_piv_<lvl><tf>, e.g. trade_piv_r1w / trade_piv_s3m
   if (col.startsWith('trade_piv_')) {
     const m = col.slice(10);
@@ -564,6 +566,7 @@ const VIEWS = {
   trade: [
     { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
     { key:'trade_lstrend', label:'LS-Tr', title:'LS-10T-Trend: Steigung der Regressionsgeraden durch die Tages-Schlusskurse in %/Tag (gleiches Fenster wie der 10T-Chart) · ↗ = Kurs hat die Trendlinie nach oben gekreuzt, ↘ = nach unten', num:true, fmt:renderLsTrend },
+    { key:'trade_trendscore', label:'TrdR', title:'Trend-Radar-Score 0–100 (kurzfristig ≤1M): LS-Regression 30% · Richtungs-Alignment Δ1T/PerfW/Perf1M 20% · SMA-Stack (Kurs>20>50) 15% · Beschleunigung 15% · Volumen 10% · frischer Kreuzungs-Trigger 10% · ⚡ = heute frisch gedreht', num:true, fmt:renderTrendRadarScore },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     SETUP_COL,
     // Price cluster: nearest support zone — LS live price — nearest resistance zone
@@ -1412,6 +1415,14 @@ function renderLsTrend(c) {
     : t.crossedDown ? ' <b title="Kurs hat die Trendlinie nach unten gekreuzt">↘</b>' : '';
   const sign = t.ratePct > 0 ? '+' : '';
   return `<span class="${posNegClass(t.ratePct)}" title="Regressions-Steigung über ${t.days} LS-Tage · Kurs ${t.above ? 'über' : 'unter'} der Linie">${sign}${t.ratePct.toFixed(2)}%/T${cross}</span>`;
+}
+
+// Trend-Radar-Score 0–100 (kurzfristig), ⚡ = frischer Kreuzungs-Trigger heute.
+function renderTrendRadarScore(c) {
+  const t = trendScore(c);
+  if (!t) return '<span class="muted-dash" title="Braucht TV-Daten">—</span>';
+  const cls = t.score >= 70 ? ' pos' : t.score < 40 ? ' neg' : '';
+  return `<span class="${cls}" title="${t.badges.join(' · ') || 'keine aktiven Komponenten'}">${t.score}${t.fresh ? ' ⚡' : ''}</span>`;
 }
 
 // Merkliste cost basis ("Einstand") — the manual entry price from the merkliste
