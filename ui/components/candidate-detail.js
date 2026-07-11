@@ -11,6 +11,8 @@ import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707e';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
+import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260711a';
+import { transcriptLlmText } from '../lib/company-profile.js?v=20260711a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -415,7 +417,7 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
-function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
+function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   const tv = disp.tv;
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
@@ -461,11 +463,19 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T') {
           <button class="btn btn-sm btn-primary" id="chart-level-add" disabled>＋ Alert setzen</button>
         </div>`;
     }
-    // Unter dem TD-Chart ersetzt das Firmenprofil die frühere Legende; unter dem
-    // LS-Chart bleibt die Legende, das Profil folgt nur wenn es keine TD-Ansicht
-    // gibt (sonst hätten Nicht-US-Titel nirgends ein Profil).
+    // Unter dem TD-Chart: Zoom-Presets + Indikator-Toggle, dann das Firmenprofil
+    // (ersetzt die frühere Legende); unter dem LS-Chart bleibt die Legende, das
+    // Profil folgt nur wenn es keine TD-Ansicht gibt.
+    const zoomRow = (want1J && canTd)
+      ? `<div class="chart-zoom" role="toolbar" aria-label="Chart-Zoom">
+          ${['1M', '3M', '6M', 'ALL'].map((z) =>
+            `<button class="seg-btn${(ui.zoom ?? 'ALL') === z ? ' active' : ''}" data-zoom="${z}">${z}</button>`).join('')}
+          <button class="seg-btn chart-zoom__ind${ui.showInd ? ' active' : ''}" id="chart-ind"
+            title="Indikatoren ein-/ausblenden: Bollinger (20,2) · Supertrend (10,3) · CCI 20 (untere Skala)">ƒ Ind.</button>
+        </div>`
+      : '';
     const tail = want1J
-      ? profileHTML(c)
+      ? `${zoomRow}${profileHTML(c)}`
       : `<p class="ph-note">${note} · <b>über den Chart ziehen → Level unten setzen</b></p>${tdReachable ? '' : profileHTML(c)}`;
     parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}${tail}`);
   } else {
@@ -812,7 +822,36 @@ function renderFundamentalTab(c, disp) {
       ${stat(ratioVal(tv.debt_to_equity), 'Debt/Eq', band(tv.debt_to_equity, [0.5, 1.5, 3]))}
       ${stat(ratioVal(tv.total_debt_to_ebitda_fy), 'Debt/EBITDA', band(tv.total_debt_to_ebitda_fy, [2, 4, 6]))}
     </div>
+
+    <h4 class="pv-subhead">Earnings Call</h4>
+    ${transcriptHTML(c)}
   `;
+}
+
+/* Earnings-Call-Transcript (ROIC): Headline + Datum, Copy-Button kopiert
+ * Analyse-Prompt + Volltext für den LLM. Manueller Abruf (Rate-Limit). */
+function transcriptHTML(c) {
+  if (c._transcript_loading) {
+    return `<p class="id-profile--loading"><span class="ls-loading"></span> Lade Transcript (ROIC.ai) …</p>`;
+  }
+  const tr = c.company_transcript;
+  if (!tr || tr.error) {
+    return `<div class="news-empty">
+      <button class="btn btn-sm btn-secondary" id="transcript-load">🎙 Letztes Transcript laden (ROIC)${tr?.error ? ' — erneut' : ''}</button>
+      ${tr?.error && tr.message ? `<p class="pv-muted">Letzter Versuch: ${escProfile(tr.message)}</p>` : ''}
+    </div>`;
+  }
+  const day = tr.date ? new Date(tr.date) : null;
+  const dayStr = day && !Number.isNaN(+day)
+    ? day.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : (tr.date ?? '');
+  return `<div class="tr-call">
+    <div class="tr-call__head"><b>${escProfile(tr.title)}</b>${dayStr ? ` <span class="pv-muted">· ${dayStr}</span>` : ''}</div>
+    <div class="tr-call__actions">
+      <button class="btn btn-sm btn-primary" id="transcript-copy">📋 Für LLM kopieren</button>
+      <span class="pv-muted">${Math.round(tr.text.length / 1000)}k Zeichen · Prompt: CFO-Guidance, Q&amp;A, Ausweichmanöver</span>
+    </div>
+  </div>`;
 }
 
 /* ── Tab 4: Meta (Quellen + Merkliste-Mapping) ────────────────────────────── */
@@ -928,6 +967,8 @@ export class CandidateDetail {
     this.altCurrency = false; // false = native currency, true = USD↔EUR switched
     this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
     this.chartHorizon = '10T'; // Performance chart: '10T' LS-Intraday | '1J' TD-Tageskerzen
+    this.chartZoom = 'ALL';    // TD-Chart Zoom-Preset (1M/3M/6M/ALL)
+    this.showInd = localStorage.getItem('discovery_chart_ind') === '1'; // BB/Supertrend/CCI
     this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
   }
 
@@ -1120,10 +1161,12 @@ export class CandidateDetail {
     // Candles need strictly-ascending unique daily times ('YYYY-MM-DD').
     const seen = new Set();
     const candles = [];
+    const bars = [];   // Roh-Bars parallel zu candles (für Indikator-Berechnung)
     for (const b of a.ohlc) {
       if (!b.date || seen.has(b.date) || b.o == null || b.h == null || b.l == null || b.c == null) continue;
       seen.add(b.date);
       candles.push({ time: b.date, open: b.o * f, high: b.h * f, low: b.l * f, close: b.c * f });
+      bars.push(b);
     }
     if (candles.length < 2) { chart.remove(); return; }
     const candle = chart.addCandlestickSeries({
@@ -1167,8 +1210,56 @@ export class CandidateDetail {
       candle.createPriceLine({ price: mkE, color: mkCol, lineWidth: 2, lineStyle: 0, title: '★ Einstand' });
     }
 
+    // Optionale Indikatoren (ƒ Ind.-Toggle): Bollinger + Supertrend als Overlays,
+    // CCI 20 auf eigener unterer Skala. Whitespace-Punkte ({time}) für Warmup.
+    if (this.showInd && bars.length >= 21) {
+      const ws = (b) => ({ time: b.date });
+      const lineSeries = (opts) => chart.addLineSeries({
+        lineWidth: 1, lastValueVisible: false, priceLineVisible: false,
+        crosshairMarkerVisible: false, ...opts,
+      });
+      const bb = bollinger(bars);
+      const bbCol = document.documentElement.dataset.theme === 'dark' ? '#94a3b8' : '#64748b';
+      const bbData = (k) => bars.map((b, i) => (bb[i] ? { time: b.date, value: bb[i][k] * f } : ws(b)));
+      lineSeries({ color: bbCol, lineStyle: 2, title: 'BB↑' }).setData(bbData('upper'));
+      lineSeries({ color: bbCol, lineStyle: 1 }).setData(bbData('mid'));
+      lineSeries({ color: bbCol, lineStyle: 2, title: 'BB↓' }).setData(bbData('lower'));
+
+      const st = supertrend(bars);
+      const stData = (up) => bars.map((b, i) => (st[i] && st[i].up === up ? { time: b.date, value: st[i].value * f } : ws(b)));
+      lineSeries({ color: col('--pos'), lineWidth: 2, title: 'ST' }).setData(stData(true));
+      lineSeries({ color: col('--neg'), lineWidth: 2 }).setData(stData(false));
+
+      const cciVals = cci(bars);
+      const cciSeries = lineSeries({ color: '#a855f7', priceScaleId: 'cci', title: 'CCI20' });
+      chart.priceScale('cci').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      cciSeries.setData(bars.map((b, i) => (cciVals[i] != null ? { time: b.date, value: cciVals[i] } : ws(b))));
+      cciSeries.createPriceLine({ price: 100, color: '#a855f766', lineWidth: 1, lineStyle: 2, title: '' });
+      cciSeries.createPriceLine({ price: -100, color: '#a855f766', lineWidth: 1, lineStyle: 2, title: '' });
+    }
+
     this.wireChartLevelReadout(el, candle, disp);
+
+    // Zoom-Presets unter dem Chart (1M/3M/6M/ALL, Handelstage).
+    const applyZoom = (z) => {
+      this.chartZoom = z;
+      const ts = chart.timeScale();
+      const days = { '1M': 22, '3M': 66, '6M': 132 }[z];
+      if (!days || candles.length <= days) ts.fitContent();
+      else ts.setVisibleRange({ from: candles[candles.length - days].time, to: candles[candles.length - 1].time });
+      this.el.querySelectorAll('.chart-zoom [data-zoom]').forEach((b) =>
+        b.classList.toggle('active', b.dataset.zoom === z));
+    };
+    this.el.querySelectorAll('.chart-zoom [data-zoom]').forEach((btn) =>
+      btn.addEventListener('pointerup', () => applyZoom(btn.dataset.zoom)));
+    this.el.querySelector('#chart-ind')?.addEventListener('pointerup', () => {
+      this.showInd = !this.showInd;
+      try { localStorage.setItem('discovery_chart_ind', this.showInd ? '1' : '0'); } catch { /* ignore */ }
+      this.render();
+    });
+
     chart.timeScale().fitContent();
+    if (this.chartZoom && this.chartZoom !== 'ALL') applyZoom(this.chartZoom);
     this._chart = chart;
   }
 
@@ -1231,7 +1322,7 @@ export class CandidateDetail {
     const pc = priceClustersDisp(c, disp);
     const tl = tradeLevels(c, disp);
     const tabPanels = {
-      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon),
+      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { zoom: this.chartZoom, showInd: this.showInd }),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       news:        renderNewsTab(c),
@@ -1389,6 +1480,23 @@ export class CandidateDetail {
       });
     });
     this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
+
+    // Earnings-Call-Transcript: Laden + LLM-Copy (Prompt + Volltext).
+    this.el.querySelector('#transcript-load')?.addEventListener('pointerup', () => this.onAction?.('loadTranscript', c));
+    this.el.querySelector('#transcript-copy')?.addEventListener('pointerup', async (e) => {
+      const btn = e.currentTarget;
+      const text = transcriptLlmText(c, c.company_transcript);
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; } catch { /* fallback */ }
+      if (!ok) {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        ok = document.execCommand('copy'); ta.remove();
+      }
+      btn.textContent = ok ? '✓ kopiert' : '✗ Kopieren fehlgeschlagen';
+      setTimeout(() => { btn.textContent = '📋 Für LLM kopieren'; }, 2000);
+    });
 
     // Portfolio-Stern (nur manueller Marker ist toggelbar; Merkliste-Match ist fix).
     this.el.querySelector('#detail-star')?.addEventListener('pointerup', () => this.onAction?.('toggleStar', c));

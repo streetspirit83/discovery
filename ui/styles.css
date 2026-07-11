@@ -1405,6 +1405,14 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 .news-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
 .news-empty { display:flex; flex-direction:column; gap:6px; align-items:flex-start; padding:6px 0; }
+/* TD-Chart: Zoom-Presets + Indikator-Toggle · Earnings-Call-Sektion */
+.chart-zoom { display:flex; gap:4px; align-items:center; margin:6px 0 2px; }
+.chart-zoom .seg-btn { padding:3px 10px; font-size:var(--fs-1); }
+.chart-zoom__ind { margin-left:auto; }
+.tr-call { padding:8px 0 2px; }
+.tr-call__head { font-size:var(--fs-2); line-height:var(--lh); }
+.tr-call__actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+.tr-call__actions .pv-muted { font-size:var(--fs-1); }
 /* Portfolio-Stern im Detail-Header + Einstand-Zeile im Trade-Ticket */
 .detail-star { background:none; border:none; padding:0 2px; cursor:pointer; color:var(--muted); vertical-align:-2px; display:inline-flex; }
 .detail-star.is-active { color:#f59e0b; }

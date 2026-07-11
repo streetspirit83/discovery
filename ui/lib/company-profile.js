@@ -166,6 +166,74 @@ async function fromWikipedia(candidate) {
   return null;
 }
 
+/* ── Earnings-Call-Transcript (ROIC.ai "Get Latest Transcript") ───────────────
+ * Pfad defensiv: mehrere plausible Endpoint-Varianten werden bei 404 der Reihe
+ * nach probiert (Doku nennt nur "Get Latest Transcript"); Felder defensiv
+ * gemappt. 7-Tage-Cache (Transcripts ändern sich quartalsweise). */
+
+const TRANSCRIPT_CACHE_PREFIX = 'discovery_transcript1_';
+const TRANSCRIPT_TTL = 7 * 864e5;
+
+function mapTranscript(raw) {
+  const d = Array.isArray(raw) ? raw[0] : (raw?.data?.[0] ?? raw?.transcripts?.[0] ?? raw);
+  if (!d || typeof d !== 'object') return null;
+  const text = d.content ?? d.transcript ?? d.text ?? d.body ?? null;
+  if (typeof text !== 'string' || text.trim().length < 200) return null;
+  const q = d.quarter ?? d.period ?? null;
+  const y = d.year ?? d.fiscal_year ?? null;
+  return {
+    title: d.title ?? (q && y ? `Q${String(q).replace(/^Q/i, '')} ${y} Earnings Call` : 'Earnings Call'),
+    date: d.date ?? d.published_at ?? d.publishedDate ?? null,
+    text: text.trim(),
+  };
+}
+
+export async function fetchLatestTranscript(candidate, auth) {
+  if (!candidate?.symbol) throw new Error('Kein Symbol');
+  const key = `${TRANSCRIPT_CACHE_PREFIX}${normalizeExchange(candidate.exchange)}:${candidate.symbol}`;
+  try {
+    const raw = JSON.parse(localStorage.getItem(key));
+    if (raw && Date.now() - (raw.at ?? 0) < TRANSCRIPT_TTL && raw.tr) return raw.tr;
+  } catch { /* ignore */ }
+
+  const ident = encodeURIComponent(roicIdent(candidate));
+  const paths = [
+    `/v2/company/transcripts/latest/${ident}`,
+    `/v2/company/transcripts/${ident}?limit=1`,
+    `/v2/company/transcript/${ident}`,
+  ];
+  let lastErr = null;
+  for (const path of paths) {
+    try {
+      const text = await roicGet(path, auth);
+      const tr = mapTranscript(JSON.parse(text));
+      if (tr) {
+        try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), tr })); } catch { /* quota */ }
+        return tr;
+      }
+      lastErr = new Error('Antwort ohne Transcript-Text');
+    } catch (err) {
+      lastErr = err;
+      if (!/HTTP 404/.test(err.message)) throw err;   // nur bei 404 nächste Pfad-Variante
+    }
+  }
+  throw lastErr ?? new Error('Kein Transcript');
+}
+
+/* Analyse-Prompt für den LLM-Copy-Button (Guidance vom Nutzer). */
+export function transcriptLlmText(candidate, tr) {
+  return `You are analysing an earnings call transcript for ${candidate.name ?? candidate.symbol} (${candidate.symbol}). Focus:
+
+1. Skip the safe-harbor disclaimer. Boilerplate.
+2. Skim the CFO section for next-quarter guidance and any change in capex, buybacks, or margin commentary.
+3. Read the Q&A in full. This is where analysts push on what management didn't volunteer. The question itself often tells you what the smart money is worried about.
+4. Watch the dodges. When an exec answers a different question than the one asked, mark it. Repeat dodges across two or three quarters on the same topic = a thread to pull.
+
+Transcript — ${tr.title}${tr.date ? ` (${tr.date})` : ''}:
+---
+${tr.text}`;
+}
+
 /* ── Cache + Export ───────────────────────────────────────────────────────── */
 
 function cacheGet(key) {

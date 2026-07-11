@@ -3,7 +3,7 @@
  */
 
 import { CandidateList } from './components/candidate-list.js?v=20260709c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260709b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260711a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -17,7 +17,7 @@ import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
-import { fetchCompanyProfile, fetchCompanyNews } from './lib/company-profile.js?v=20260708e';
+import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260711a';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -723,6 +723,45 @@ async function switchBlob(blobType) {
   candidateList.setData(allBlobs[blobType].candidates);
   renderBotnav();
   renderFilterbar();
+  if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
+}
+
+// ── Auto-TR-Check für neue Inbox-Kandidaten ─────────────────────────────────────
+// Neuzugänge (state=new, noch kein tr_check) werden automatisch auf LS-Handel-
+// barkeit geprüft; explizit NICHT handelbare wandern ins Archiv. Bewusst kein
+// hartes Löschen: die Adapter würden gelöschte Kandidaten beim nächsten Lauf
+// re-importieren — das Archiv hält den Dedup. Unklare Ergebnisse bleiben liegen.
+let autoTrRunning = false;
+async function autoTrCheckNewInbox() {
+  if (useMock || autoTrRunning || currentBlobType !== 'inbox' || !storageClient) return;
+  const blob = allBlobs.inbox;
+  const targets = (blob?.candidates ?? []).filter((c) => c.workspace_state === 'new' && c.tr_check == null);
+  if (!targets.length) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  autoTrRunning = true;
+  try {
+    await runTrCheckForSelection(targets.map((c) => c.id));
+    const out = targets.filter((c) => c.tr_check?.tradable === false);
+    let moved = 0;
+    for (const c of out) {
+      try {
+        await storageClient.moveCandidate(c.id, 'inbox', 'archive');
+        blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
+        moved++;
+      } catch (err) {
+        console.warn(`[autoTR] Archiv-Move fehlgeschlagen (${c.symbol}):`, err.message);
+      }
+    }
+    if (moved) {
+      allBlobs.archive = null;   // beim nächsten Öffnen frisch laden
+      candidateList.setData(blob.candidates);
+      toast(`🧹 Auto-TR-Check: ${moved} neue ohne LS-Handel → Archiv`, 'success', 5000);
+    }
+  } finally {
+    autoTrRunning = false;
+  }
 }
 
 /** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
@@ -825,6 +864,25 @@ async function handleAction(action, candidate, extras = {}) {
     }
     candidate._news_loading = false;
     candidate.company_news = news;
+    rerender();
+    return;
+  }
+
+  // Fund-Tab: letztes Earnings-Call-Transcript (ROIC), 7-Tage-Cache.
+  if (action === 'loadTranscript') {
+    if (candidate._transcript_loading) return;
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._transcript_loading = true; rerender();
+    try {
+      candidate.company_transcript = await fetchLatestTranscript(candidate, {
+        backendUrl: localStorage.getItem('discovery_backend_url'),
+        secret:     localStorage.getItem('discovery_secret'),
+      });
+    } catch (err) {
+      console.warn('[transcript] fetch fehlgeschlagen:', err.message);
+      candidate.company_transcript = { error: true, message: err.message };
+    }
+    candidate._transcript_loading = false;
     rerender();
     return;
   }
