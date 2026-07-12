@@ -2,17 +2,18 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712b';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260712b';
-import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712b';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712c';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260712c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260712c';
+import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260712b';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260712b';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260712c';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260712c';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
@@ -24,7 +25,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260712b';
+import { icons } from './lib/icons.js?v=20260712c';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
@@ -57,12 +58,18 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', fLsTrend: '', fDup: '', currency: 'USD' };
+  // Dropdown-Filter (fCap/fSector/fScore/fTr/fLsTrend) sind Mehrfachauswahl →
+  // Arrays. fBroker/fAlerts/fDup bleiben Toggles (String).
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
   // Migrate persisted view modes from the old 3-view layout
   if (!['standard', 'trade', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  // Migrate the multi-select filters from the old single-value strings to arrays.
+  const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  s.fCap = toArr(s.fCap); s.fSector = toArr(s.fSector); s.fScore = toArr(s.fScore);
+  s.fTr = toArr(s.fTr); s.fLsTrend = toArr(s.fLsTrend);
   return s;
 })();
 function saveUiState() {
@@ -413,44 +420,65 @@ function renderFilterbar() {
   const fb = document.getElementById('filterbar');
   const sectors = candidateList ? candidateList.getSectors() : [];
 
+  // Toggles bleiben Buttons; die Dropdowns sind jetzt Mehrfachauswahl-Popover.
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
     ${(currentBlobType === 'inbox' || currentBlobType === 'archive')
       ? `<button class="filter-star filter-dup${uiState.fDup === 'yes' ? ' is-active' : ''}" id="dup-toggle" aria-pressed="${uiState.fDup === 'yes'}" title="Nur Werte, die bereits in einem anderen Bucket liegen (Dubletten) – wählt sie direkt für Bulk-Aktionen aus">⧉</button>`
       : ''}
     <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
-    <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>
-    <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
-      <option value="">Score</option>
-      <option value="80"${uiState.fScore === '80' ? ' selected' : ''}>Score ≥ 80</option>
-      <option value="70"${uiState.fScore === '70' ? ' selected' : ''}>Score 70–79</option>
-      <option value="60"${uiState.fScore === '60' ? ' selected' : ''}>Score 60–69</option>
-      <option value="40"${uiState.fScore === '40' ? ' selected' : ''}>Score 40–59</option>
-      <option value="0"${uiState.fScore === '0' ? ' selected' : ''}>Score &lt; 40</option>
-    </select>
-    <select class="filter-select" id="filter-sector" title="Filter nach Sektor">
-      <option value="">Sectors</option>
-      <option value="__no_sector__"${uiState.fSector === '__no_sector__' ? ' selected' : ''}>— Ohne Sektor</option>
-      ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
-    </select>
-    <select class="filter-select" id="filter-cap" title="Filter nach Marktkapitalisierung">
-      <option value="">Size</option>
-      <option value="micro"${uiState.fCap === 'micro' ? ' selected' : ''}>Micro</option>
-      <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
-      <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
-      <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
-    </select>
-    <select class="filter-select" id="filter-tr" title="Filter nach Trade-Republic-Handelbarkeit">
-      <option value="">TR</option>
-      <option value="no"${uiState.fTr === 'no' ? ' selected' : ''}>✗ nicht handelbar</option>
-      <option value="yes"${uiState.fTr === 'yes' ? ' selected' : ''}>✓ handelbar</option>
-      <option value="unchecked"${uiState.fTr === 'unchecked' ? ' selected' : ''}>? ungeprüft</option>
-    </select>
-    <select class="filter-select" id="filter-lstrend" title="Filter nach LS-10T-Trend (Regressionsgerade durch die Tages-Schlusskurse)">
-      <option value="">LS-Trend</option>
-      <option value="pos"${uiState.fLsTrend === 'pos' ? ' selected' : ''}>↗ Trend positiv</option>
-      <option value="crossUp"${uiState.fLsTrend === 'crossUp' ? ' selected' : ''}>⤴ Kurs kreuzt Trend</option>
-    </select>`;
+    <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>`;
+
+  // Multi-Select-Buttons in der bisherigen Reihenfolge anhängen.
+  const mkFilter = (cfg) => fb.appendChild(filterMultiSelect(cfg));
+  mkFilter({
+    id: 'filter-score', label: 'Score', title: 'Filter nach Overall-Score (Mehrfachauswahl)',
+    options: [
+      { value: '80', label: 'Score ≥ 80' },
+      { value: '70', label: 'Score 70–79' },
+      { value: '60', label: 'Score 60–69' },
+      { value: '40', label: 'Score 40–59' },
+      { value: '0',  label: 'Score < 40' },
+    ],
+    selected: uiState.fScore,
+    onChange: (v) => { uiState.fScore = v; saveUiState(); candidateList.setFilter('score', v); },
+  });
+  mkFilter({
+    id: 'filter-sector', label: 'Sectors', title: 'Filter nach Sektor (Mehrfachauswahl)',
+    options: [{ value: '__no_sector__', label: '— Ohne Sektor' }, ...sectors.map((s) => ({ value: s, label: s }))],
+    selected: uiState.fSector,
+    onChange: (v) => { uiState.fSector = v; saveUiState(); candidateList.setFilter('sector', v); },
+  });
+  mkFilter({
+    id: 'filter-cap', label: 'Size', title: 'Filter nach Marktkapitalisierung (Mehrfachauswahl)',
+    options: [
+      { value: 'micro', label: 'Micro' },
+      { value: 'small', label: 'Small' },
+      { value: 'mid',   label: 'Mid' },
+      { value: 'large', label: 'Large' },
+    ],
+    selected: uiState.fCap,
+    onChange: (v) => { uiState.fCap = v; saveUiState(); candidateList.setFilter('capSize', v); },
+  });
+  mkFilter({
+    id: 'filter-tr', label: 'TR', title: 'Filter nach Trade-Republic-Handelbarkeit (Mehrfachauswahl)',
+    options: [
+      { value: 'no',        label: '✗ nicht handelbar' },
+      { value: 'yes',       label: '✓ handelbar' },
+      { value: 'unchecked', label: '? ungeprüft' },
+    ],
+    selected: uiState.fTr,
+    onChange: (v) => { uiState.fTr = v; saveUiState(); candidateList.setFilter('tr', v); },
+  });
+  mkFilter({
+    id: 'filter-lstrend', label: 'LS-Trend', title: 'Filter nach LS-10T-Trend (Regressionsgerade durch die Tages-Schlusskurse; Mehrfachauswahl)',
+    options: [
+      { value: 'pos',     label: '↗ Trend positiv' },
+      { value: 'crossUp', label: '⤴ Kurs kreuzt Trend' },
+    ],
+    selected: uiState.fLsTrend,
+    onChange: (v) => { uiState.fLsTrend = v; saveUiState(); candidateList.setFilter('lsTrend', v); },
+  });
 
   fb.querySelector('#dup-toggle')?.addEventListener('click', () => {
     const on = uiState.fDup !== 'yes';
@@ -480,36 +508,6 @@ function renderFilterbar() {
     const btn = fb.querySelector('#alerts-toggle');
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', String(on));
-  });
-
-  fb.querySelector('#filter-score').addEventListener('change', (e) => {
-    uiState.fScore = e.target.value;
-    saveUiState();
-    candidateList.setFilter('score', uiState.fScore);
-  });
-
-  fb.querySelector('#filter-sector').addEventListener('change', (e) => {
-    uiState.fSector = e.target.value;
-    saveUiState();
-    candidateList.setFilter('sector', uiState.fSector);
-  });
-
-  fb.querySelector('#filter-cap').addEventListener('change', (e) => {
-    uiState.fCap = e.target.value;
-    saveUiState();
-    candidateList.setFilter('capSize', uiState.fCap);
-  });
-
-  fb.querySelector('#filter-tr').addEventListener('change', (e) => {
-    uiState.fTr = e.target.value;
-    saveUiState();
-    candidateList.setFilter('tr', uiState.fTr);
-  });
-
-  fb.querySelector('#filter-lstrend').addEventListener('change', (e) => {
-    uiState.fLsTrend = e.target.value;
-    saveUiState();
-    candidateList.setFilter('lsTrend', uiState.fLsTrend);
   });
 
   renderSelectedPill();
@@ -1480,13 +1478,14 @@ async function init() {
   uiState.fDup = '';   // Dubletten-Filter ist transient (bucket-abhängig, dupMap lädt async)
   candidateList.filters = {
     state:   '',
-    sector:  uiState.fSector ?? '',
-    capSize: uiState.fCap    ?? '',
+    sector:  uiState.fSector ?? [],
+    capSize: uiState.fCap    ?? [],
     broker:  uiState.fBroker ?? '',
-    score:   uiState.fScore  ?? '',
-    tr:      uiState.fTr     ?? '',
+    score:   uiState.fScore  ?? [],
+    tr:      uiState.fTr     ?? [],
     alerts:  uiState.fAlerts ?? '',
-    lsTrend: uiState.fLsTrend ?? '',
+    lsTrend: uiState.fLsTrend ?? [],
+    dup:     '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,

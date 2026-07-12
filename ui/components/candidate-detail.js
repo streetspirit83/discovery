@@ -4,7 +4,7 @@ import {
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260702h';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
-import { icons } from '../lib/icons.js?v=20260712b';
+import { icons } from '../lib/icons.js?v=20260712c';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';

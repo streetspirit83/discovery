@@ -12,9 +12,9 @@
  * `lib/news-feed.js` an.
  */
 
-import { icons } from '../lib/icons.js?v=20260712b';
-import { topSectors, portfolioCandidates, portfolioSubSectors, demoMarketNews, demoPortfolioNews } from '../lib/news-feed.js?v=20260712b';
-import { loadNewsSources, addNewsSource, removeNewsSource } from '../lib/news-sources.js?v=20260712b';
+import { icons } from '../lib/icons.js?v=20260712c';
+import { topSectors, portfolioCandidates, portfolioSubSectors, demoMarketNews, demoPortfolioNews } from '../lib/news-feed.js?v=20260712c';
+import { loadNewsSources, addNewsSource, removeNewsSource } from '../lib/news-sources.js?v=20260712c';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 

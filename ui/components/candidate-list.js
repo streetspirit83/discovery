@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260712b';
+import { icons } from '../lib/icons.js?v=20260712c';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -700,7 +700,9 @@ export class CandidateList {
     this.onSelectionChange = onSelectionChange;
     this.onAfterRender     = onAfterRender;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '', lsTrend: '', dup: '' };
+    // Mehrfachauswahl-Filter (sector/capSize/score/tr/lsTrend) sind Arrays;
+    // Toggles (broker/alerts/dup) und state bleiben String.
+    this.filters           = { state: '', sector: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -750,7 +752,7 @@ export class CandidateList {
     this.showSelectedOnly = false;
     // When a filter is active, auto-select the visible rows so bulk actions
     // (e.g. delete all „nicht handelbar") can be applied immediately.
-    const anyActive = Object.values(this.filters).some((v) => v !== '' && v != null);
+    const anyActive = Object.values(this.filters).some((v) => (Array.isArray(v) ? v.length > 0 : v !== '' && v != null));
     if (anyActive) for (const c of this.getFiltered()) this.selected.add(c.id);
     this.renderRows();
     this.renderBulkBar();
@@ -873,33 +875,37 @@ export class CandidateList {
 
   getFiltered() {
     const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup } = this.filters;
+    // Dropdown-Filter sind Mehrfachauswahl (Arrays): OR innerhalb eines
+    // Filters, AND über die Filter hinweg. Strings (Alt-Zustand) werden als
+    // Ein-Element-Auswahl behandelt.
+    const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+    const fSector = asArr(sector), fCap = asArr(capSize), fScore = asArr(score), fTr = asArr(tr), fTrendV = asArr(fTrend);
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (dup === 'yes' && !this.dupMap?.has(dupKey(c)))        return false; // nur Dubletten
       if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
-      if (fTrend) {
+      if (fTrendV.length) {
         const t = lsTrend(c);
-        if (fTrend === 'pos'     && !(t && t.ratePct > 0)) return false;
-        if (fTrend === 'crossUp' && !t?.crossedUp)         return false;
+        if (!fTrendV.some((v) => (v === 'pos' && t && t.ratePct > 0) || (v === 'crossUp' && t?.crossedUp))) return false;
       }
-      if (tr === 'no'        && c.tr_check?.tradable !== false) return false; // nur „nicht handelbar"
-      if (tr === 'yes'       && c.tr_check?.tradable !== true)  return false;
-      if (tr === 'unchecked' && c.tr_check?.tradable != null)   return false;
+      if (fTr.length) {
+        const tv = c.tr_check?.tradable;
+        if (!fTr.some((v) => (v === 'no' && tv === false) || (v === 'yes' && tv === true) || (v === 'unchecked' && tv == null))) return false;
+      }
       if (state   && c.workspace_state !== state)               return false;
-      if (sector === '__no_sector__' && c.sector)               return false;
-      if (sector && sector !== '__no_sector__' && c.sector !== sector) return false;
-      if (capSize && capSizeFromMC(c.tv_data?.market_cap) !== capSize) return false;
+      if (fSector.length && !fSector.some((v) => (v === '__no_sector__' ? !c.sector : c.sector === v))) return false;
+      if (fCap.length && !fCap.includes(capSizeFromMC(c.tv_data?.market_cap))) return false;
       if (broker === 'broker' && !c.broker_armed)               return false;
       if (broker === 'star'   && !c.in_portfolio)               return false;
       if (broker === 'none'   && c.broker_armed)                return false;
-      if (score) {
+      if (fScore.length) {
         const s = liveOverallScore(c.tv_data)?.total;
         if (s == null) return false;
-        if (score === '80' && s < 80)             return false;
-        if (score === '70' && (s < 70 || s > 79)) return false;
-        if (score === '60' && (s < 60 || s > 69)) return false;
-        if (score === '40' && (s < 40 || s > 59)) return false;
-        if (score === '0'  && s >= 40)            return false;
+        if (!fScore.some((v) => (v === '80' && s >= 80)
+          || (v === '70' && s >= 70 && s <= 79)
+          || (v === '60' && s >= 60 && s <= 69)
+          || (v === '40' && s >= 40 && s <= 59)
+          || (v === '0'  && s < 40))) return false;
       }
       return true;
     });

@@ -150,6 +150,31 @@ svg { display:block; }
   max-width:104px; text-overflow:ellipsis;
 }
 .filter-select--active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+/* Multi-Select-Filter-Button: sieht aus wie .filter-select, öffnet ein
+   Checkbox-Popover (filter-multiselect.js). Label + Chevron in einer Zeile. */
+.fms-btn {
+  flex-shrink:0; display:inline-flex; align-items:center; gap:var(--s-1);
+  cursor:pointer; white-space:nowrap;
+  /* Etwas breiter als .filter-select, damit der „· N"-Zähler nicht abgeschnitten
+     wird; die Filterbar scrollt horizontal, Platz ist also unkritisch. */
+  max-width:150px;
+}
+.fms-btn__text { overflow:hidden; text-overflow:ellipsis; }
+.fms-btn svg { flex:none; opacity:.7; }
+/* Popover (am <body>, position:fixed) mit den Checkbox-Optionen. */
+.fms-pop {
+  position:fixed; z-index:35; min-width:160px; max-width:min(280px,92vw);
+  max-height:60vh; overflow-y:auto; padding:var(--s-1);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2);
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.fms-opt {
+  display:flex; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-2); border-radius:var(--r-1); cursor:pointer;
+  font-size:var(--fs-2); color:var(--text); white-space:nowrap;
+}
+.fms-opt:hover { background:var(--surface-3); }
+.fms-opt input { flex:none; width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
 /* ★ portfolio toggle, moved into the filterbar left of the Score dropdown */
 .filter-star {
   height:32px; min-width:32px; padding:0 var(--s-2); flex-shrink:0;
