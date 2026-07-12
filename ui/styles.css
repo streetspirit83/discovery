@@ -158,6 +158,10 @@ svg { display:block; }
   border-radius:var(--r-pill); font-size:14px; line-height:1; cursor:pointer;
 }
 .filter-star.is-active { background:var(--accent-weak); border-color:var(--accent); color:#f5a623; }
+/* Dubletten-Filter: amber, passend zum row-dup-Marker. */
+.filter-dup { font-size:15px; }
+.filter-dup.is-active { background:#f59e0b26; border-color:#f59e0b; color:#b45309; }
+[data-theme="dark"] .filter-dup.is-active { background:#f59e0b33; border-color:#f59e0b; color:#fbbf24; }
 .pill--reset {
   display:inline-flex; align-items:center; gap:var(--s-1);
   background:var(--accent-weak); border-color:var(--accent); color:var(--accent);

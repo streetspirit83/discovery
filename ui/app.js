@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260711b';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260711b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
@@ -57,7 +57,7 @@ const L = {
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', fLsTrend: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '', fBroker: '', fScore: '', fTr: '', fAlerts: '', fLsTrend: '', fDup: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -415,6 +415,9 @@ function renderFilterbar() {
 
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
+    ${(currentBlobType === 'inbox' || currentBlobType === 'archive')
+      ? `<button class="filter-star filter-dup${uiState.fDup === 'yes' ? ' is-active' : ''}" id="dup-toggle" aria-pressed="${uiState.fDup === 'yes'}" title="Nur Werte, die bereits in einem anderen Bucket liegen (Dubletten) – wählt sie direkt für Bulk-Aktionen aus">⧉</button>`
+      : ''}
     <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
     <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>
     <select class="filter-select" id="filter-score" title="Filter nach Overall-Score">
@@ -448,6 +451,16 @@ function renderFilterbar() {
       <option value="pos"${uiState.fLsTrend === 'pos' ? ' selected' : ''}>↗ Trend positiv</option>
       <option value="crossUp"${uiState.fLsTrend === 'crossUp' ? ' selected' : ''}>⤴ Kurs kreuzt Trend</option>
     </select>`;
+
+  fb.querySelector('#dup-toggle')?.addEventListener('click', () => {
+    const on = uiState.fDup !== 'yes';
+    uiState.fDup = on ? 'yes' : '';
+    saveUiState();
+    candidateList.setFilter('dup', uiState.fDup);
+    const btn = fb.querySelector('#dup-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
 
   fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
     const on = uiState.fBroker !== 'star';
@@ -709,6 +722,12 @@ async function ensureBlob(blobType) {
 async function switchBlob(blobType) {
   currentBlobType = blobType;
   uiState.bucket = blobType;
+  // Dubletten-Filter gilt nur in Inbox/Archiv — beim Verlassen zurücksetzen,
+  // sonst filtert er (mit dann leerer dupMap) alle Zeilen weg.
+  if (blobType !== 'inbox' && blobType !== 'archive' && uiState.fDup) {
+    uiState.fDup = '';
+    candidateList.filters.dup = '';
+  }
   saveUiState();
   await ensureBlob(blobType);
   // Carry merkliste entry prices onto this bucket's candidates before first render.
@@ -1458,6 +1477,7 @@ async function init() {
   // Apply saved filters directly (before setData so first render uses them)
   // State filter removed — state pills were removed from filterbar
   uiState.fState = '';
+  uiState.fDup = '';   // Dubletten-Filter ist transient (bucket-abhängig, dupMap lädt async)
   candidateList.filters = {
     state:   '',
     sector:  uiState.fSector ?? '',

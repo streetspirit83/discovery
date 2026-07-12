@@ -700,7 +700,7 @@ export class CandidateList {
     this.onSelectionChange = onSelectionChange;
     this.onAfterRender     = onAfterRender;
     this.candidates        = [];
-    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '', lsTrend: '' };
+    this.filters           = { state: '', sector: '', capSize: '', broker: '', score: '', tr: '', alerts: '', lsTrend: '', dup: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -872,9 +872,10 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup } = this.filters;
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
+      if (dup === 'yes' && !this.dupMap?.has(dupKey(c)))        return false; // nur Dubletten
       if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
       if (fTrend) {
         const t = lsTrend(c);
