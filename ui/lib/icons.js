@@ -43,4 +43,8 @@ export const icons = {
   stethoscope:   svg('<path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>'),
   chevronLeft:   svg('<path d="m15 18-6-6 6-6"/>'),
   chevronRight:  svg('<path d="m9 18 6-6-6-6"/>'),
+  // News tab (Markets modal)
+  newspaper:     svg('<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>'),
+  rss:           svg('<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>'),
+  plus:          svg('<path d="M5 12h14"/><path d="M12 5v14"/>'),
 };

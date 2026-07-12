@@ -2,11 +2,13 @@
  * Markets modal.
  *
  * Shows the live market indices (DAX / NASDAQ / NIKKEI / VIX) — moved out of the
- * Intra-Day modal — and embeds the Markets sub-page below in an iframe.
+ * Intra-Day modal — and two tabs below: "Märkte" (embedded Markets sub-page in
+ * an iframe) and "News" (news-panel.js: Märkte / Portfolio / Quellen).
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-import { icons } from '../lib/icons.js?v=20260702a';
+import { icons } from '../lib/icons.js?v=20260712b';
+import { renderNewsPanel } from './news-panel.js?v=20260712b';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260709b';
 
@@ -43,7 +45,7 @@ function indicatorChip(i) {
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
 }
 
-export function renderMarketsModal({ indicators, onFetchIndicators } = {}) {
+export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCandidates } = {}) {
   if (document.getElementById('markets-modal-overlay')) return;
   let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
 
@@ -61,10 +63,36 @@ export function renderMarketsModal({ indicators, onFetchIndicators } = {}) {
       </div>
       <div class="modal-body">
         <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>
-        <iframe class="markets-frame" src="${MARKETS_URL}" title="Markets" loading="lazy"></iframe>
+        <div class="tab-bar mk-tabs" role="tablist">
+          <button class="tab-btn active" data-mktab="markets" role="tab" aria-selected="true">Märkte</button>
+          <button class="tab-btn" data-mktab="news" role="tab" aria-selected="false">News</button>
+        </div>
+        <div class="mk-tabpanes">
+          <div class="tab-panel active" data-mkpane="markets" role="tabpanel">
+            <iframe class="markets-frame" src="${MARKETS_URL}" title="Markets" loading="lazy"></iframe>
+          </div>
+          <div class="tab-panel" data-mkpane="news" role="tabpanel"></div>
+        </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+
+  // Tab switch; the news panel is rendered lazily on first activation.
+  let newsMounted = false;
+  overlay.querySelectorAll('[data-mktab]').forEach((btn) => {
+    btn.addEventListener('pointerup', () => {
+      overlay.querySelectorAll('[data-mktab]').forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+      overlay.querySelectorAll('[data-mkpane]').forEach((p) => p.classList.toggle('active', p.dataset.mkpane === btn.dataset.mktab));
+      if (btn.dataset.mktab === 'news' && !newsMounted) {
+        newsMounted = true;
+        renderNewsPanel(overlay.querySelector('[data-mkpane="news"]'), { getWatchCandidates });
+      }
+    });
+  });
 
   const close = () => {
     overlay.remove();

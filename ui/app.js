@@ -2,17 +2,17 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260711b';
-import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260712b';
+import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260709b';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260709c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260712b';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260712b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
@@ -24,7 +24,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260702a';
+import { icons } from './lib/icons.js?v=20260712b';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
@@ -1587,6 +1587,8 @@ async function init() {
         if (useMock || !backendUrl || !secret) return null;
         return fetchMarketIndicators({ backendUrl, secret });
       },
+      // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
+      getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
     });
   });
 

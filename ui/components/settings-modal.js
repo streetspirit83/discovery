@@ -9,6 +9,8 @@ const KEYS = {
   githubPat: 'discovery_github_pat',
   twelveDataKey: 'discovery_twelvedata_key',
   roicKey: 'discovery_roic_key',
+  marketauxKey: 'discovery_marketaux_key',
+  rapidApiKey: 'discovery_rapidapi_key',
   fxEurUsd: 'discovery_fx_eurusd',
 };
 
@@ -20,6 +22,8 @@ export function loadSettings() {
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
     twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
     roicKey: localStorage.getItem(KEYS.roicKey) ?? '',
+    marketauxKey: localStorage.getItem(KEYS.marketauxKey) ?? '',
+    rapidApiKey: localStorage.getItem(KEYS.rapidApiKey) ?? '',
     fxEurUsd: localStorage.getItem(KEYS.fxEurUsd) ?? '',
   };
 }
@@ -95,6 +99,20 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-marketaux-key">Marketaux API Key <small>(optional)</small></label>
+          <input type="password" id="set-marketaux-key" placeholder="marketaux.com → API Token"
+            value="${settings.marketauxKey}" autocomplete="off">
+          <small>Markt-News im News-Tab (Märkte). Free-Tier ohne Kreditkarte (100 Requests/Tag).</small>
+        </div>
+
+        <div class="form-group">
+          <label for="set-rapidapi-key">RapidAPI Key <small>(optional, TradingView Data)</small></label>
+          <input type="password" id="set-rapidapi-key" placeholder="rapidapi.com → tradingview-data1"
+            value="${settings.rapidApiKey}" autocomplete="off">
+          <small>TradingView-News im News-Tab. Free-Tier des tradingview-data1-Endpoints auf RapidAPI.</small>
+        </div>
+
+        <div class="form-group">
           <label for="set-fx-eurusd">EUR/USD Kurs <small>(optional, manuell)</small></label>
           <input type="text" inputmode="decimal" id="set-fx-eurusd" placeholder="z.B. 1.16"
             value="${settings.fxEurUsd}" autocomplete="off">
@@ -125,6 +143,8 @@ export function renderSettingsModal(onSave) {
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
       twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
       roicKey: overlay.querySelector('#set-roic-key').value.trim(),
+      marketauxKey: overlay.querySelector('#set-marketaux-key').value.trim(),
+      rapidApiKey: overlay.querySelector('#set-rapidapi-key').value.trim(),
       fxEurUsd: overlay.querySelector('#set-fx-eurusd').value.trim(),
     };
     saveSettings(newSettings);
