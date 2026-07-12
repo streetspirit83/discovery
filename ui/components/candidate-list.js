@@ -17,6 +17,9 @@ import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
 import { trendScore } from '../lib/trend-radar.js?v=20260709c';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260704c';
 
+/** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
+export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
+
 // ── Currency display (USD/EUR switch in subbar) ─────────────────────────────
 let displayCurrency = 'USD';
 let fxEurUsd = null; // USD per 1 EUR
@@ -702,6 +705,7 @@ export class CandidateList {
     this.selected          = new Set();
     this.showSelectedOnly  = false;
     this.viewMode          = 'standard';
+    this.dupMap            = null;   // "EXCH:SYMBOL" → Bucket-Name (Dup-Marker)
 
     this.thead     = document.getElementById('candidate-thead');
     this.tbody     = document.getElementById('candidate-tbody');
@@ -730,6 +734,14 @@ export class CandidateList {
     this.showSelectedOnly = false;
     this.renderRows();
     this.renderBulkBar();
+  }
+
+  /** Dup-Marker (nur Inbox/Archiv): Map "EXCH:SYMBOL" → Bucket-Name, in dem der
+   *  Wert bereits liegt. null blendet die Marker aus. */
+  setDupMap(map) {
+    if (map == null && this.dupMap == null) return;
+    this.dupMap = map;
+    this.renderRows();
   }
 
   setFilter(key, value) {
@@ -1108,7 +1120,9 @@ export class CandidateList {
       }
 
       const tr = document.createElement('tr');
-      tr.className = `candidate-row state-${c.workspace_state}${isSelected ? ' is-selected' : ''}`;
+      const dupBucket = this.dupMap?.get(dupKey(c));
+      tr.className = `candidate-row state-${c.workspace_state}${isSelected ? ' is-selected' : ''}${dupBucket ? ' row-dup' : ''}`;
+      if (dupBucket) tr.title = `Bereits in ${dupBucket}`;
       tr.dataset.id = c.id;
       tr.setAttribute('tabindex', '0');
       tr.setAttribute('role', 'button');

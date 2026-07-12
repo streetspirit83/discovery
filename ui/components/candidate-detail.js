@@ -12,7 +12,7 @@ import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707e';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260711a';
-import { transcriptLlmText } from '../lib/company-profile.js?v=20260711a';
+import { transcriptLlmText } from '../lib/company-profile.js?v=20260711b';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';

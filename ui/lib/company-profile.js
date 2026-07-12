@@ -167,11 +167,12 @@ async function fromWikipedia(candidate) {
 }
 
 /* ── Earnings-Call-Transcript (ROIC.ai "Get Latest Transcript") ───────────────
- * Pfad defensiv: mehrere plausible Endpoint-Varianten werden bei 404 der Reihe
- * nach probiert (Doku nennt nur "Get Latest Transcript"); Felder defensiv
- * gemappt. 7-Tage-Cache (Transcripts ändern sich quartalsweise). */
+ * Endpoint lt. Doku (www.roic.ai/api/docs/earnings-calls/latest):
+ * GET /v2/company/earnings-calls/latest/{identifier} →
+ * { symbol, year, quarter, date, content }. Felder trotzdem defensiv gemappt.
+ * 7-Tage-Cache (Transcripts ändern sich quartalsweise). */
 
-const TRANSCRIPT_CACHE_PREFIX = 'discovery_transcript1_';
+const TRANSCRIPT_CACHE_PREFIX = 'discovery_transcript2_';
 const TRANSCRIPT_TTL = 7 * 864e5;
 
 function mapTranscript(raw) {
@@ -197,27 +198,11 @@ export async function fetchLatestTranscript(candidate, auth) {
   } catch { /* ignore */ }
 
   const ident = encodeURIComponent(roicIdent(candidate));
-  const paths = [
-    `/v2/company/transcripts/latest/${ident}`,
-    `/v2/company/transcripts/${ident}?limit=1`,
-    `/v2/company/transcript/${ident}`,
-  ];
-  let lastErr = null;
-  for (const path of paths) {
-    try {
-      const text = await roicGet(path, auth);
-      const tr = mapTranscript(JSON.parse(text));
-      if (tr) {
-        try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), tr })); } catch { /* quota */ }
-        return tr;
-      }
-      lastErr = new Error('Antwort ohne Transcript-Text');
-    } catch (err) {
-      lastErr = err;
-      if (!/HTTP 404/.test(err.message)) throw err;   // nur bei 404 nächste Pfad-Variante
-    }
-  }
-  throw lastErr ?? new Error('Kein Transcript');
+  const text = await roicGet(`/v2/company/earnings-calls/latest/${ident}`, auth);
+  const tr = mapTranscript(JSON.parse(text));
+  if (!tr) throw new Error('Antwort ohne Transcript-Text');
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), tr })); } catch { /* quota */ }
+  return tr;
 }
 
 /* Analyse-Prompt für den LLM-Copy-Button (Guidance vom Nutzer). */

@@ -2,8 +2,8 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260709c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260711a';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260711b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260711b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260708b';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -17,7 +17,7 @@ import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
-import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260711a';
+import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260711b';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
@@ -723,14 +723,39 @@ async function switchBlob(blobType) {
   candidateList.setData(allBlobs[blobType].candidates);
   renderBotnav();
   renderFilterbar();
+  refreshDupMarkers();                               // fire & forget
   if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
+}
+
+// ── Dup-Marker für Inbox/Archiv ─────────────────────────────────────────────────
+// Werte, die bereits in einem anderen Bucket liegen, bekommen eine eigene
+// Zeilen-Hintergrundfarbe. Gilt nur für die Inbox- und Archiv-Ansicht.
+const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
+async function refreshDupMarkers() {
+  if (currentBlobType !== 'inbox' && currentBlobType !== 'archive') {
+    candidateList.setDupMap(null);
+    return;
+  }
+  const shown  = currentBlobType;
+  const others = ['inbox', 'archive', 'export', 'watch'].filter((b) => b !== shown);
+  const map = new Map();
+  for (const b of others) {
+    const blob = await ensureBlob(b).catch(() => null);
+    for (const c of blob?.candidates ?? []) {
+      const k = dupKey(c);
+      if (!map.has(k)) map.set(k, BUCKET_LABELS[b]);
+    }
+  }
+  // Der Nutzer kann während der Blob-Loads den Bucket gewechselt haben.
+  if (currentBlobType === shown) candidateList.setDupMap(map);
 }
 
 // ── Auto-TR-Check für neue Inbox-Kandidaten ─────────────────────────────────────
 // Neuzugänge (state=new, noch kein tr_check) werden automatisch auf LS-Handel-
-// barkeit geprüft; explizit NICHT handelbare wandern ins Archiv. Bewusst kein
-// hartes Löschen: die Adapter würden gelöschte Kandidaten beim nächsten Lauf
-// re-importieren — das Archiv hält den Dedup. Unklare Ergebnisse bleiben liegen.
+// barkeit geprüft; explizit NICHT handelbare werden gelöscht (das Archiv bleibt
+// dem Wieder-auf-Watch-Setzen vorbehalten). Adapter können Gelöschte beim
+// nächsten Lauf re-importieren — der Check greift dann erneut und löscht wieder.
+// Unklare Ergebnisse bleiben liegen.
 let autoTrRunning = false;
 async function autoTrCheckNewInbox() {
   if (useMock || autoTrRunning || currentBlobType !== 'inbox' || !storageClient) return;
@@ -744,20 +769,19 @@ async function autoTrCheckNewInbox() {
   try {
     await runTrCheckForSelection(targets.map((c) => c.id));
     const out = targets.filter((c) => c.tr_check?.tradable === false);
-    let moved = 0;
+    let removed = 0;
     for (const c of out) {
       try {
-        await storageClient.moveCandidate(c.id, 'inbox', 'archive');
+        await storageClient.deleteCandidate('inbox', c.id);
         blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
-        moved++;
+        removed++;
       } catch (err) {
-        console.warn(`[autoTR] Archiv-Move fehlgeschlagen (${c.symbol}):`, err.message);
+        console.warn(`[autoTR] Löschen fehlgeschlagen (${c.symbol}):`, err.message);
       }
     }
-    if (moved) {
-      allBlobs.archive = null;   // beim nächsten Öffnen frisch laden
+    if (removed) {
       candidateList.setData(blob.candidates);
-      toast(`🧹 Auto-TR-Check: ${moved} neue ohne LS-Handel → Archiv`, 'success', 5000);
+      toast(`🧹 Auto-TR-Check: ${removed} neue ohne LS-Handel gelöscht`, 'success', 5000);
     }
   } finally {
     autoTrRunning = false;
