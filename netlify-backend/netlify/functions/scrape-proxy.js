@@ -28,6 +28,11 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/api\.roic\.ai\//,
   /^https:\/\/www\.ls-tc\.de\//,
   /^https:\/\/merkliste-app\.netlify\.app\//,
+  // News-Tab (Markets-Modal): Marketaux + TradingView Data API (RapidAPI)
+  // + Google-Alert-Feeds (Atom). Pfad-Anker bei Google hält die Freigabe eng.
+  /^https:\/\/api\.marketaux\.com\//,
+  /^https:\/\/tradingview-data1\.p\.rapidapi\.com\//,
+  /^https:\/\/www\.google\.com\/alerts\/feeds\//,
 ];
 
 function isAllowed(url) {

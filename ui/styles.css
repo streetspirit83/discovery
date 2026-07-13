@@ -1960,6 +1960,11 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .news-hint svg { flex:none; }
 .news-item__tag { border:1px solid var(--border); border-radius:var(--r-pill); padding:0 var(--s-2); }
 .news-src-count { margin-bottom:var(--s-2); }
+/* Live-Feed: Refresh rechts in der Chip-Zeile + Statuszeile (Stand/Fehler) */
+.news-spacer { flex:1; }
+.news-refresh { width:28px; height:28px; flex:none; }
+.news-status { margin-bottom:var(--s-2); }
+.news-status__err { color:var(--warn); }
 
 /* Sub-tab Quellen: add form + source list */
 .news-src-form { display:flex; gap:var(--s-2); margin-bottom:var(--s-3); }

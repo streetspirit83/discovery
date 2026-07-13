@@ -8,7 +8,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20260712c';
-import { renderNewsPanel } from './news-panel.js?v=20260712c';
+import { renderNewsPanel } from './news-panel.js?v=20260713a';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260709b';
 
