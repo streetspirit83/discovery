@@ -4,19 +4,21 @@
  * Live-Quellen (Item-Form wie `company-profile.js`:
  * `{ title, url, date, source, text, symbols?, industry? }`):
  * - Marketaux `/v1/news/all` (Key `discovery_marketaux_key`; Free-Tier:
- *   3 Artikel/Request, 100 Requests/Tag → 30-min-Cache, max. 2 Requests)
- * - TradingView Data API `/api/news` via RapidAPI (`discovery_rapidapi_key`;
- *   Response-Form aus dem Repo tradingview-api-integration-skill,
- *   references/examples/06-news.md)
- * - ROIC.ai Company-News je ★-Wert (bestehendes `fetchCompanyNews`, eigener
- *   30-min-Cache + 429-Backoff)
- * - RSS-/Google-Alert-Feeds aus `news-sources.js` (Atom + RSS 2.0)
+ *   3 Artikel/Request, 100 Requests/Tag → 30-min-Cache, max. 2 Requests).
+ *   Fokus Markt/Indizes: `entity_types=index` bzw. `index,etf` beim
+ *   Sektor-Request — KEINE Einzelaktien-News in diesem Stream.
+ * - TradingView Data API via RapidAPI (`discovery_rapidapi_key`; Response-
+ *   Form aus dem Repo tradingview-api-integration-skill, references/
+ *   examples/06-news.md): `/api/news/index` + `/api/news/economic` ohne
+ *   symbol-Param → Markt-/Makro-Stream statt Einzelwert-News.
+ * - RSS-/Google-Alert-Feeds aus `news-sources.js` (Atom + RSS 2.0) für den
+ *   Portfolio-Sub-Tab; Items werden per Symbol-/Namens-Match den ★-Werten
+ *   zugeordnet. (ROIC-Company-News bewusst NICHT hier — nur im Detail-Sheet.)
  *
  * Alle HTTP-Zugriffe: erst direkt (falls CORS offen), dann über den
  * scrape-proxy (Hosts müssen dort in ALLOWED_DOMAINS stehen).
  */
 
-import { fetchCompanyNews } from './company-profile.js?v=20260711b';
 import { loadNewsSources } from './news-sources.js?v=20260712c';
 
 const CACHE_TTL = 30 * 60e3;
@@ -82,7 +84,6 @@ export const sectorToIndustry = (sector) => SECTOR_TO_INDUSTRY[sector] ?? null;
 export const hasMarketauxKey = () => !!localStorage.getItem('discovery_marketaux_key');
 export const hasRapidApiKey  = () => !!localStorage.getItem('discovery_rapidapi_key');
 export const hasMarketNewsKeys = () => hasMarketauxKey() || hasRapidApiKey();
-export const hasRoicKey = () => !!localStorage.getItem('discovery_roic_key');
 
 /* ── HTTP: direkt → scrape-proxy ─────────────────────────────────────────── */
 
@@ -148,7 +149,7 @@ function dedupSort(items) {
 
 /* ── Quelle: Marketaux ───────────────────────────────────────────────────── */
 
-async function marketauxNews({ industries } = {}) {
+async function marketauxNews({ industries, entityTypes = 'index' } = {}) {
   const key = localStorage.getItem('discovery_marketaux_key');
   const params = new URLSearchParams({
     api_token: key,
@@ -156,6 +157,8 @@ async function marketauxNews({ industries } = {}) {
     filter_entities: 'true',
     group_similar: 'true',
     limit: '3',                                   // Free-Tier-Maximum pro Request
+    // Markt-/Index-Fokus: keine Einzelaktien-News in diesem Stream.
+    entity_types: entityTypes,
   });
   if (industries?.length) params.set('industries', industries.join(','));
   const text = await getText(`https://api.marketaux.com/v1/news/all?${params}`);
@@ -174,10 +177,12 @@ async function marketauxNews({ industries } = {}) {
 
 /* ── Quelle: TradingView Data API (RapidAPI) ─────────────────────────────── */
 
-async function tvNews() {
+/** Markt-/Makro-Streams (`index`, `economic`) — ohne symbol-Param, damit der
+ *  Feed Markt-News liefert und keine Einzelwert-News. */
+async function tvNews(category) {
   const key = localStorage.getItem('discovery_rapidapi_key');
   const text = await getText(
-    'https://tradingview-data1.p.rapidapi.com/api/news?lang=en&market=stock&market_country=US',
+    `https://tradingview-data1.p.rapidapi.com/api/news/${category}?lang=en&market_country=US`,
     { 'x-rapidapi-host': 'tradingview-data1.p.rapidapi.com', 'x-rapidapi-key': key },
   );
   const raw = JSON.parse(text);
@@ -201,7 +206,7 @@ async function tvNews() {
  * @returns {Promise<{items:Array, errors:Array<{source:string,message:string}>, fetched_at:string}>}
  */
 export async function fetchMarketNews({ sectors = [], force = false } = {}) {
-  const cacheKey = 'discovery_newsfeed_markets';
+  const cacheKey = 'discovery_newsfeed_markets2';  // v2: Markt-/Index-Fokus
   if (!force) {
     const hit = cacheGet(cacheKey);
     if (hit) return { ...hit, cached: true };
@@ -210,10 +215,14 @@ export async function fetchMarketNews({ sectors = [], force = false } = {}) {
   const jobs = [];
   if (hasMarketauxKey()) {
     jobs.push(['Marketaux', marketauxNews()]);
-    // Zweiter Request nur, wenn ein Sektor-Fokus existiert (Budget: 100/Tag).
-    if (industries.length) jobs.push(['Marketaux (Sektoren)', marketauxNews({ industries })]);
+    // Zweiter Request nur, wenn ein Sektor-Fokus existiert (Budget: 100/Tag);
+    // Sektor-News über Index-/ETF-Entities statt Einzelaktien.
+    if (industries.length) jobs.push(['Marketaux (Sektoren)', marketauxNews({ industries, entityTypes: 'index,etf' })]);
   }
-  if (hasRapidApiKey()) jobs.push(['TradingView', tvNews()]);
+  if (hasRapidApiKey()) {
+    jobs.push(['TradingView (Index)', tvNews('index')]);
+    jobs.push(['TradingView (Makro)', tvNews('economic')]);
+  }
 
   const errors = [];
   const collected = [];
@@ -282,36 +291,45 @@ async function customSourceNews(src, force) {
   return items;
 }
 
-/* ── Portfolio-Feed: ROIC je ★-Wert + eigene Feeds ───────────────────────── */
+/* ── Portfolio-Feed: eigene RSS-/Google-Alert-Feeds ──────────────────────── */
+/* ROIC-Company-News bewusst nicht hier — die bleiben im Detail-Sheet. */
 
-const MAX_PORTFOLIO_SYMBOLS = 6;                  // ROIC Free-Tier: 5 Req/min
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Feed-Items per Symbol-/Firmennamen-Match den ★-Werten zuordnen, damit die
+ *  Symbol-/Sub-Sektor-Chips auch über RSS/Google Alerts filtern können. */
+function tagPortfolioSymbols(items, candidates) {
+  const matchers = portfolioCandidates(candidates)
+    .filter((c) => c.symbol)
+    .map((c) => {
+      const parts = [];
+      if (String(c.symbol).length >= 3) parts.push(escapeRe(c.symbol));
+      const firstWord = String(c.name ?? '').split(/\s+/)[0];
+      if (firstWord.length >= 4) parts.push(escapeRe(firstWord));
+      return parts.length ? { c, re: new RegExp(`\\b(${parts.join('|')})\\b`, 'i') } : null;
+    })
+    .filter(Boolean);
+  if (!matchers.length) return items;
+  return items.map((it) => {
+    const hay = `${it.title ?? ''} ${it.text ?? ''}`;
+    const hits = matchers.filter((m) => m.re.test(hay));
+    if (!hits.length) return it;
+    return {
+      ...it,
+      symbols: [...new Set([...(it.symbols ?? []), ...hits.map((h) => h.c.symbol)])],
+      sub_sector: it.sub_sector ?? hits.find((h) => h.c.sub_sector)?.c.sub_sector ?? null,
+    };
+  });
+}
 
 /**
  * @param {{ candidates?: Array, force?: boolean }} opts  candidates = Watch-Bucket
  * @returns {Promise<{items:Array, errors:Array<{source:string,message:string}>, fetched_at:string}>}
  */
 export async function fetchPortfolioNews({ candidates = [], force = false } = {}) {
-  const port = portfolioCandidates(candidates).slice(0, MAX_PORTFOLIO_SYMBOLS);
   const errors = [];
   const collected = [];
 
-  // ROIC sequentiell (Rate-Limit); fetchCompanyNews cached selbst 30 min.
-  if (hasRoicKey()) {
-    const auth = proxyAuth();
-    for (const c of port) {
-      try {
-        const news = await fetchCompanyNews(c, auth, { force });
-        for (const it of news?.items ?? []) {
-          collected.push({ ...it, symbols: [c.symbol], industry: null, sub_sector: c.sub_sector ?? null });
-        }
-      } catch (err) {
-        errors.push({ source: `ROIC ${c.symbol}`, message: err.message });
-        if (err.transient) break;                 // 429-Backoff: Rest überspringen
-      }
-    }
-  }
-
-  // Eigene RSS-/Google-Alert-Quellen parallel.
   const sources = loadNewsSources();
   const results = await Promise.allSettled(sources.map((s) => customSourceNews(s, force)));
   results.forEach((r, i) => {
@@ -319,7 +337,11 @@ export async function fetchPortfolioNews({ candidates = [], force = false } = {}
     else errors.push({ source: sources[i].label, message: r.reason?.message ?? String(r.reason) });
   });
 
-  return { items: dedupSort(collected), errors, fetched_at: new Date().toISOString() };
+  return {
+    items: dedupSort(tagPortfolioSymbols(collected, candidates)),
+    errors,
+    fetched_at: new Date().toISOString(),
+  };
 }
 
 /* ── Demo-Daten (Fallback ohne Keys) ─────────────────────────────────────── */
@@ -337,12 +359,12 @@ export function demoMarketNews(sectors = []) {
   ];
 }
 
-/** Demo-Items für den Portfolio-Sub-Tab (bis ROIC-Key/Feeds da sind). */
+/** Demo-Items für den Portfolio-Sub-Tab (bis eigene Feeds angelegt sind). */
 export function demoPortfolioNews(symbols = []) {
   const [a, b] = [symbols[0] ?? 'AAPL', symbols[1] ?? 'ENPH'];
   return [
-    { title: `Demo: ${a} übertrifft Erwartungen im Quartalsbericht`, source: 'ROIC.ai', date: demoDate(3), url: null, symbols: [a], text: 'Beispiel-Schlagzeile für Portfolio-News der mit ★ markierten Werte.' },
-    { title: `Demo: Analysten heben Kursziel für ${b} an`, source: 'ROIC.ai', date: demoDate(8), url: null, symbols: [b], text: null },
-    { title: 'Demo: Google-Alert-Treffer aus eigener Quelle', source: 'Google Alert', date: demoDate(12), url: null, symbols: [], text: 'RSS-/Google-Alert-Quellen lassen sich im Sub-Tab „Quellen" pflegen.' },
+    { title: `Demo: Google-Alert-Treffer zu ${a}`, source: 'Google Alert', date: demoDate(3), url: null, symbols: [a], text: 'Beispiel-Schlagzeile aus einer eigenen Quelle; Treffer werden per Symbol/Name den ★-Werten zugeordnet.' },
+    { title: `Demo: Branchendienst meldet Auftrag für ${b}`, source: 'RSS-Feed', date: demoDate(8), url: null, symbols: [b], text: null },
+    { title: 'Demo: Weiterer Treffer ohne Symbol-Zuordnung', source: 'Google Alert', date: demoDate(12), url: null, symbols: [], text: 'RSS-/Google-Alert-Quellen lassen sich im Sub-Tab „Quellen" pflegen.' },
   ];
 }
