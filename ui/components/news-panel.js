@@ -2,10 +2,12 @@
  * News-Panel – Inhalt des News-Tabs im Markets-Modal.
  *
  * Drei Sub-Tabs:
- * - Märkte:    Live-Markt-News (Marketaux + TradingView Data API) mit Fokus
- *              auf die 4 häufigsten Sektoren im Watchlist-Bucket.
- * - Portfolio: Live-News zu den ★-Werten (ROIC.ai) plus eigene RSS-/
- *              Google-Alert-Quellen; Chips filtern nach Symbol/Sub-Sektor.
+ * - Märkte:    Live-Markt-/Index-News (Marketaux + TradingView Data API,
+ *              keine Einzelaktien-News) mit Fokus auf die 4 häufigsten
+ *              Sektoren im Watchlist-Bucket.
+ * - Portfolio: Eigene RSS-/Google-Alert-Quellen; Treffer werden per Symbol/
+ *              Name den ★-Werten zugeordnet, Chips filtern nach Symbol/
+ *              Sub-Sektor. (ROIC-Firmen-News: nur im Detail-Sheet.)
  * - Quellen:   Pflege der eigenen RSS-/Google-Alert-Feeds (localStorage).
  *
  * Ohne Keys zeigen Märkte/Portfolio Demo-Daten mit Hinweis; die Fetcher
@@ -15,9 +17,9 @@
 import { icons } from '../lib/icons.js?v=20260712c';
 import {
   topSectors, portfolioCandidates, portfolioSubSectors, sectorToIndustry,
-  fetchMarketNews, fetchPortfolioNews, hasMarketNewsKeys, hasRoicKey,
+  fetchMarketNews, fetchPortfolioNews, hasMarketNewsKeys,
   demoMarketNews, demoPortfolioNews,
-} from '../lib/news-feed.js?v=20260713a';
+} from '../lib/news-feed.js?v=20260713b';
 import { loadNewsSources, addNewsSource, removeNewsSource } from '../lib/news-sources.js?v=20260712c';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -119,12 +121,12 @@ function renderPortfolioPane(pane, state) {
   const symbols = port.map((c) => c.symbol).filter(Boolean);
   const subSectors = portfolioSubSectors(state.watch);
   const nSources = loadNewsSources().length;
-  const live = hasRoicKey() || nSources > 0;
+  const live = nSources > 0;
   const items = (live ? (state.portfolio?.items ?? []) : demoPortfolioNews(symbols))
     .filter((it) => matchesPortfolio(it, state.portfolioFilter, state.watch));
   pane.innerHTML = `
-    ${port.length ? '' : hint('Keine Werte mit ★ markiert – der Portfolio-Feed folgt den Stern-Werten im Watch-Bucket.')}
-    ${live ? '' : hint('Demo-Daten – für Live-News ROIC.ai-Key in den Einstellungen hinterlegen; eigene Feeds im Sub-Tab „Quellen".')}
+    ${port.length ? '' : hint('Keine Werte mit ★ markiert – die Symbol-Chips folgen den Stern-Werten im Watch-Bucket.')}
+    ${live ? '' : hint('Demo-Daten – eigene RSS-/Google-Alert-Feeds im Sub-Tab „Quellen" anlegen; Treffer werden per Symbol/Name den ★-Werten zugeordnet. (Firmen-News je Wert: Detail-Sheet → News-Tab.)')}
     <div class="news-chips">
       ${chip('all', 'Alle', state.portfolioFilter === 'all')}
       ${symbols.map((s) => chip(s, `★ ${s}`, state.portfolioFilter === s)).join('')}
@@ -224,7 +226,7 @@ export function renderNewsPanel(container, { getWatchCandidates } = {}) {
   }
 
   async function loadPortfolio(force = false) {
-    if ((!hasRoicKey() && !loadNewsSources().length) || state.portfolioLoading) return;
+    if (!loadNewsSources().length || state.portfolioLoading) return;
     state.portfolioLoading = true;
     renderActive();
     try {
