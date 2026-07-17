@@ -1286,7 +1286,42 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    ════════════════════════════════════════════════════════════════ */
 .col-name-data { display:none; }
 @media (min-width:768px) { .col-name-data { display:table-cell; } }
-@media (max-width:767px) { .topbar__search { max-width:none; } }
+
+/* ── Mobile-Politur (≤767px) ──────────────────────────────────────────────
+   1) Größere Basis-Schrift: Token-Leiter eine Stufe hoch. Die Tabelle setzt
+      ihre Schrift explizit (15px) und bleibt davon unberührt (Tabelle „as-is").
+   2) Größere Touch-Ziele (≥40–44px) für Kopf-/Filter-/Zeilen-Buttons.
+   3) Filter-/View-Switch-Feintuning: horizontale Scroll-Leisten bekommen einen
+      Rand-Fade als „mehr rechts"-Hinweis, versteckte Scrollbar, Momentum. */
+@media (max-width:767px) {
+  .topbar__search { max-width:none; }
+
+  /* 1) Basis-Schrift eine Stufe größer (Tabelle bleibt bei ihren 15px). */
+  :root {
+    --fs-1:15px; --fs-2:16px; --fs-3:17px; --fs-4:19px; --fs-5:21px; --fs-6:24px;
+  }
+
+  /* 2) Touch-Ziele. */
+  .seg-btn { min-height:40px; padding:var(--s-2) var(--s-3); }
+  .filter-star { height:40px; min-width:40px; }
+  .filter-select, .fms-btn { height:40px; }
+  .pill { min-height:40px; display:inline-flex; align-items:center; }
+  .btn { min-height:44px; }
+  .act-btn, .btn-icon { width:40px; height:40px; }
+  .tab-btn { min-height:44px; }
+
+  /* 3) Scroll-Leisten (Subbar = View-Switch, Filterbar): Rand-Fade + Momentum.
+     Der Fade rechts signalisiert, dass es seitlich weitergeht. */
+  .subbar, .filterbar {
+    -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    scroll-snap-type:x proximity;
+    -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 24px), transparent);
+            mask-image:linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .subbar::-webkit-scrollbar, .filterbar::-webkit-scrollbar { display:none; }
+  .seg-btn, .filter-star, .filter-select, .fms-btn, .pill { scroll-snap-align:start; }
+}
+
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
 
 /* ── Alerts: editor + overview ─────────────────────────────────────────── */
