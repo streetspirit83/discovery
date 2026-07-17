@@ -86,6 +86,12 @@ svg { display:block; }
    ════════════════════════════════════════════════════════════════ */
 #app {
   display:grid;
+  /* Eine Spalte, die exakt die Viewport-Breite füllt (minmax(0,1fr)) — NICHT
+     die implizite auto-Spalte, die sich sonst auf die Breite des breitesten
+     Inhalts (Tabelle ~650px) aufbläht und damit alle Reihen (Topbar, Subbar,
+     Botnav) über den Bildschirm hinausschiebt. Das schnitt auf dem Handy das
+     Monitor-Icon ab; jetzt füllt die Botnav genau die Breite → alle 5 Slots. */
+  grid-template-columns:minmax(0,1fr);
   grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) 1fr var(--h-botnav);
   height:100dvh;
 }
@@ -1286,7 +1292,39 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    ════════════════════════════════════════════════════════════════ */
 .col-name-data { display:none; }
 @media (min-width:768px) { .col-name-data { display:table-cell; } }
-@media (max-width:767px) { .topbar__search { max-width:none; } }
+
+/* ── Detail-Sheet: Kopf scrollt weg, Icons+Tabs bleiben oben kleben ────────
+   Der Sheet-Kopf (Symbol/ISIN/Tags) ist nicht mehr sticky, sondern scrollt
+   beim Runterscrollen aus dem Bild. Stattdessen klebt die Menü-Leiste
+   (Toolbar-Icons + Tabs) am oberen Rand — überall, nicht nur mobil. */
+.sheet--detail .sheet__header { position:static; }
+.detail-sticky {
+  position:sticky; top:0; z-index:3; background:var(--sheet-bg);
+  box-shadow:0 1px 0 var(--border);
+}
+
+/* ── Mobile-Shell (≤767px) ────────────────────────────────────────────────
+   1) Topbar horizontal scrollbar: Suchfeld bleibt nutzbar breit, alle Aktions-
+      Icons sind per Seitwärts-Scrollen erreichbar (vorher rechts abgeschnitten).
+   2) Beim Runterscrollen in der Tabelle klappen Topbar + Subbar ein (die
+      obersten zwei Leisten), die Filterbar bleibt. Scroll hoch → wieder da. */
+@media (max-width:767px) {
+  .topbar__search { max-width:none; flex:0 0 55vw; }
+  .topbar {
+    overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+    scroll-behavior:smooth;
+  }
+  .topbar::-webkit-scrollbar { display:none; }
+  .topbar__actions { flex:0 0 auto; }
+
+  #app { transition:grid-template-rows var(--t-fast) var(--ease); }
+  #app.is-compact {
+    grid-template-rows:0 0 var(--h-filterbar) 1fr var(--h-botnav);
+  }
+  #app.is-compact .topbar,
+  #app.is-compact .subbar { overflow:hidden; border-bottom:none; pointer-events:none; }
+}
+
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
 
 /* ── Alerts: editor + overview ─────────────────────────────────────────── */

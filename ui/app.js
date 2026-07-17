@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260717a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260717a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260717a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260717d';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -1577,6 +1577,24 @@ async function init() {
     if (e.key === 'Escape') { searchEl.value = ''; applySearch(); searchEl.blur(); }
   });
   searchClear.addEventListener('pointerup', () => { searchEl.value = ''; applySearch(); searchEl.focus(); });
+
+  // ── Beim Runterscrollen in der Tabelle Topbar+Subbar einklappen (mobil),
+  // beim Hochscrollen wieder zeigen. CSS (#app.is-compact) macht das nur
+  // ≤767px sichtbar; hier nur die Klasse anhand der Scroll-Richtung togglen.
+  const contentEl = document.getElementById('content');
+  const appEl = document.getElementById('app');
+  let lastScrollY = 0, scrollTicking = false;
+  contentEl.addEventListener('scroll', () => {
+    if (scrollTicking) return;
+    scrollTicking = true;
+    requestAnimationFrame(() => {
+      const y = contentEl.scrollTop;
+      if (y > lastScrollY && y > 56) appEl.classList.add('is-compact');
+      else if (y < lastScrollY - 4 || y <= 8) appEl.classList.remove('is-compact');
+      lastScrollY = y;
+      scrollTicking = false;
+    });
+  }, { passive: true });
 
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
     renderSettingsModal(async () => {

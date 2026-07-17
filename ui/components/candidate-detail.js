@@ -1377,12 +1377,14 @@ export class CandidateDetail {
         <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} <span class="btn__label">Export</span></button>
       </div>
 
-      ${renderToolbar(c)}
+      <div class="detail-sticky">
+        ${renderToolbar(c)}
 
-      <div class="tab-bar detail-tabs" role="tablist">
-        ${TABS.map(({ key, label }) =>
-          `<button class="tab-btn${this.activeTab === key ? ' active' : ''}" data-tab="${key}"
-            role="tab" aria-selected="${this.activeTab === key}">${label}</button>`).join('')}
+        <div class="tab-bar detail-tabs" role="tablist">
+          ${TABS.map(({ key, label }) =>
+            `<button class="tab-btn${this.activeTab === key ? ' active' : ''}" data-tab="${key}"
+              role="tab" aria-selected="${this.activeTab === key}">${label}</button>`).join('')}
+        </div>
       </div>
       <div class="detail-tabpanes">
         ${TABS.map(({ key }) =>
