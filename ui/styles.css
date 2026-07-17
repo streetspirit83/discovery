@@ -62,6 +62,13 @@
    ════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
 html, body { height:100%; }
+/* Kein horizontaler Seiten-Scroll: die geschlossenen Sheets (position:fixed,
+   translateX(100%)) und breite Panels (Subbar/Tabelle) dürfen das Layout-
+   Viewport nicht aufblähen — sonst verankert sich das rechts andockende
+   Detail-Sheet an einer zu breiten Fläche und rutscht auf dem Handy fast aus
+   dem Bild. `clip` verhindert das, ohne (anders als `hidden`) einen Scroll-
+   Container zu erzeugen, der position:sticky in der Tabelle stören würde. */
+html, body { overflow-x:clip; }
 body {
   font-family:var(--font-ui); background:var(--bg); color:var(--text);
   font-size:var(--fs-4); line-height:var(--lh);
