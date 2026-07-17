@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260712c';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260712c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260712c';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260717a';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260717a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260717a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -12,8 +12,8 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260713b';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260712c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260717a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260717a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
@@ -25,7 +25,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260712c';
+import { icons } from './lib/icons.js?v=20260717a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
@@ -361,6 +361,7 @@ function toggleTheme() {
 
 // ── Shell rendering ────────────────────────────────────────────────────────────
 function renderTopbar() {
+  document.getElementById('topbar-search-icon').innerHTML = icons.search;
   document.getElementById('btn-refresh').innerHTML  = L.refresh;
   document.getElementById('btn-run').innerHTML      = L.zap;
   document.getElementById('btn-screener').innerHTML = L.scope;
@@ -1486,6 +1487,7 @@ async function init() {
     alerts:  uiState.fAlerts ?? '',
     lsTrend: uiState.fLsTrend ?? [],
     dup:     '',
+    search:  '',
   };
 
   // Currency display: saved preference + best available EUR/USD rate,
@@ -1557,6 +1559,24 @@ async function init() {
   document.getElementById('btn-theme').addEventListener('pointerup', toggleTheme);
 
   document.getElementById('btn-export').addEventListener('pointerup', handleExport);
+
+  // ── Topbar-Suche (ersetzt den Discovery-Titel): filtert den aktiven Bucket
+  // über Symbol/Name/ISIN/Sektor/Industrie/Börse/Quellen/Health/Notizen.
+  const searchEl = document.getElementById('global-search');
+  const searchClear = document.getElementById('global-search-clear');
+  const applySearch = () => {
+    searchClear.hidden = !searchEl.value;
+    candidateList.setSearch(searchEl.value);
+  };
+  let searchTimer = null;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(applySearch, 150);
+  });
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { searchEl.value = ''; applySearch(); searchEl.blur(); }
+  });
+  searchClear.addEventListener('pointerup', () => { searchEl.value = ''; applySearch(); searchEl.focus(); });
 
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
     renderSettingsModal(async () => {

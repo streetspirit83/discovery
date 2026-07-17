@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260712c';
+import { icons } from '../lib/icons.js?v=20260717a';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -222,6 +222,28 @@ function renderSourceBadges(sources) {
     }).join(' ');
 }
 
+/* Breite Volltext-Suche (Topbar): ein Haystack je Kandidat über Identität
+ * (Symbol/Name/ISIN/Börse), Einordnung (Sektor/Industrie/Währung/Status),
+ * Signal-Quellen, Financial-Health-Label (z. B. „Solide", „Fragil") sowie
+ * Notizen und AI-These. Mehrere Suchbegriffe = UND-Verknüpfung. */
+function searchHaystack(c) {
+  const h = liveHealthScore(c.tv_data);
+  return [
+    c.symbol, c.name, c.isin, c.exchange, normalizeExchange(c.exchange),
+    c.sector, c.sub_sector, nativeCurrency(c), c.workspace_state,
+    ...(c.sources ?? []).flatMap((s) => [s?.adapter, s?.signal_type]),
+    h?.label, h?.labelCode,
+    c.notes, c.enrichment?.thesis_short,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function matchesSearch(c, query) {
+  const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const hay = searchHaystack(c);
+  return terms.every((t) => hay.includes(t));
+}
+
 function sortValue(c, col) {
   const tv = c.tv_data;
   if (col === 'trade_lstrend') return lsTrend(c)?.ratePct ?? null;
@@ -332,6 +354,7 @@ function sortValue(c, col) {
     case 'tv_ebitdagrowth':return tv?.ebitda_yoy_growth_fy ?? null;
     case 'tv_ebitda': return tv?.ebitda ?? null;
     case 'tv_grossmargin': return tv?.gross_margin ?? null;
+    case 'tv_roic':        return tv?.return_on_invested_capital ?? null;
     case 'tv_grossgrowth': return tv?.gross_profit_yoy_growth_fy ?? null;
     case 'tv_mom1m':  return tv?.mom_1m ?? null;
     case 'tv_vol':    return tv?.volatility ?? null;
@@ -658,6 +681,7 @@ const VIEWS = {
     { key:'tv_ebitdagrowth',label:'EBITDA%',title:'EBITDA YoY Wachstum',          num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.ebitda_yoy_growth_fy)}">${c.tv_data?.ebitda_yoy_growth_fy!=null?fmtNum(c.tv_data.ebitda_yoy_growth_fy,1)+'%':'—'}</span>` },
     { key:'tv_ebitda',      label:'EBITDA', title:'EBITDA',                        num:true,  fmt:c=>fmtMCap(c.tv_data?.ebitda) },
     { key:'tv_grossmargin', label:'GM%',    title:'Bruttomarge',                   num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_margin)}">${c.tv_data?.gross_margin!=null?fmtNum(c.tv_data.gross_margin,1)+'%':'—'}</span>` },
+    { key:'tv_roic',        label:'ROIC',   title:'Return on Invested Capital (FY)', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.return_on_invested_capital)}">${c.tv_data?.return_on_invested_capital!=null?fmtNum(c.tv_data.return_on_invested_capital,1)+'%':'—'}</span>` },
     { key:'tv_grossgrowth', label:'Gross%', title:'Bruttogewinn YoY Wachstum',    num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_profit_yoy_growth_fy)}">${c.tv_data?.gross_profit_yoy_growth_fy!=null?fmtNum(c.tv_data.gross_profit_yoy_growth_fy,1)+'%':'—'}</span>` },
     { key:'tv_mcap',        label:'MCap',   title:'Marktkapitalisierung',          num:true,  fmt:c=>fmtMCap(c.tv_data?.market_cap) },
     { key:'tv_analysts',    label:'Analysten', title:'Anzahl Analysten mit Empfehlung', num:true, fmt:c=>fmtNum(c.tv_data?.recommendation_total,0) },
@@ -702,7 +726,7 @@ export class CandidateList {
     this.candidates        = [];
     // Mehrfachauswahl-Filter (sector/capSize/score/tr/lsTrend) sind Arrays;
     // Toggles (broker/alerts/dup) und state bleiben String.
-    this.filters           = { state: '', sector: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '' };
+    this.filters           = { state: '', sector: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -744,6 +768,14 @@ export class CandidateList {
     if (map == null && this.dupMap == null) return;
     this.dupMap = map;
     this.renderRows();
+  }
+
+  /** Topbar-Suche: filtert nur die Zeilen — ohne das Auto-Select-Verhalten
+   *  von setFilter(), damit Tippen nicht die Auswahl umbaut. */
+  setSearch(value) {
+    this.filters.search = String(value ?? '').trim();
+    this.renderRows();
+    this.renderBulkBar();
   }
 
   setFilter(key, value) {
@@ -874,7 +906,7 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search } = this.filters;
     // Dropdown-Filter sind Mehrfachauswahl (Arrays): OR innerhalb eines
     // Filters, AND über die Filter hinweg. Strings (Alt-Zustand) werden als
     // Ein-Element-Auswahl behandelt.
@@ -882,6 +914,7 @@ export class CandidateList {
     const fSector = asArr(sector), fCap = asArr(capSize), fScore = asArr(score), fTr = asArr(tr), fTrendV = asArr(fTrend);
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
+      if (search && !matchesSearch(c, search))                  return false; // Topbar-Suche
       if (dup === 'yes' && !this.dupMap?.has(dupKey(c)))        return false; // nur Dubletten
       if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
       if (fTrendV.length) {

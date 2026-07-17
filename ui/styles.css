@@ -89,7 +89,27 @@ svg { display:block; }
   padding:0 var(--s-4); background:var(--surface-2);
   border-bottom:1px solid var(--border); z-index:var(--z-topbar);
 }
-.topbar__title { font-size:var(--fs-6); font-weight:var(--fw-bold); color:var(--accent); flex:1; }
+/* Topbar-Suche (ersetzt den Discovery-Titel): schlanke Pille links, nimmt den
+   Platz vor den Icon-Buttons ein und schrumpft auf schmalen Screens. */
+.topbar__search {
+  flex:1; min-width:0; max-width:320px;
+  display:flex; align-items:center; gap:var(--s-1);
+  height:32px; padding:0 var(--s-2);
+  background:var(--surface-3); border:1px solid var(--border);
+  border-radius:var(--r-pill);
+}
+.topbar__search:focus-within { border-color:var(--accent); }
+.topbar__search-icon { display:flex; color:var(--muted); flex:none; }
+.topbar__search input {
+  flex:1; min-width:0; border:none; background:none; outline:none;
+  color:var(--text); font-size:var(--fs-2); font-family:var(--font-ui);
+}
+.topbar__search input::-webkit-search-cancel-button { display:none; }
+.topbar__search-clear {
+  flex:none; border:none; background:none; color:var(--muted);
+  font-size:var(--fs-4); line-height:1; cursor:pointer; padding:0 2px;
+}
+.topbar__search-clear:hover { color:var(--text); }
 .topbar__actions { display:flex; align-items:center; gap:var(--s-1); }
 
 .icon-btn {
@@ -1259,7 +1279,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
    ════════════════════════════════════════════════════════════════ */
 .col-name-data { display:none; }
 @media (min-width:768px) { .col-name-data { display:table-cell; } }
-@media (max-width:767px) { .topbar__title { font-size:var(--fs-5); } }
+@media (max-width:767px) { .topbar__search { max-width:none; } }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
 
 /* ── Alerts: editor + overview ─────────────────────────────────────────── */

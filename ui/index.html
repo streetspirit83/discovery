@@ -7,12 +7,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260713b">
+  <link rel="stylesheet" href="styles.css?v=20260717a">
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <span class="topbar__title">Discovery</span>
+    <div class="topbar__search" role="search">
+      <span class="topbar__search-icon" id="topbar-search-icon" aria-hidden="true"></span>
+      <input type="search" id="global-search" placeholder="Suchen…" autocomplete="off" spellcheck="false"
+        aria-label="Aktiven Bucket durchsuchen: Symbol, Name, ISIN, Sektor, Industrie, Börse, Quelle, Health, Notizen">
+      <button class="topbar__search-clear" id="global-search-clear" aria-label="Suche leeren" hidden>×</button>
+    </div>
     <div class="topbar__actions">
       <button class="icon-btn" id="btn-refresh" aria-label="Aktualisieren"></button>
       <button class="icon-btn" id="btn-run" aria-label="Adapter ausführen" aria-haspopup="dialog"></button>
@@ -79,6 +84,6 @@
 <!-- TradingView Lightweight Charts (vendored, Apache-2.0) — interactive
      price/volume chart in the detail sheet; the SVG band is the fallback. -->
 <script src="vendor/lightweight-charts-4.2.0.standalone.js"></script>
-<script type="module" src="app.js?v=20260713b"></script>
+<script type="module" src="app.js?v=20260717a"></script>
 </body>
 </html>

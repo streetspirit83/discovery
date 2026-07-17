@@ -14,7 +14,7 @@
  * liegen in `lib/news-feed.js` (30-min-Cache, Refresh erzwingt neu).
  */
 
-import { icons } from '../lib/icons.js?v=20260712c';
+import { icons } from '../lib/icons.js?v=20260717a';
 import {
   topSectors, portfolioCandidates, portfolioSubSectors, sectorToIndustry,
   fetchMarketNews, fetchPortfolioNews, hasMarketNewsKeys,
