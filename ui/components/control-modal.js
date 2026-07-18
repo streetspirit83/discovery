@@ -13,7 +13,7 @@
 
 import { icons } from '../lib/icons.js?v=20260718a';
 import { filterMultiSelect } from './filter-multiselect.js?v=20260718a';
-import { liveOverallScore, liveHealthScore, capSizeFromMC } from './candidate-list.js?v=20260718c';
+import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260719a';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
 
 const DIV_BUCKETS = [
@@ -42,12 +42,12 @@ const OGRM_BUCKETS = [
   { value: '3to8',  label: '3–8 %' },
   { value: 'gt8',   label: 'über 8 %' },
 ];
-// ØV10d / ØV30d – durchschnittliches Handelsvolumen (Liquidität, Stück/Tag).
-const VOL_BUCKETS = [
-  { value: 'lt100k',   label: '< 100K' },
-  { value: '100kto1m', label: '100K–1M' },
-  { value: '1mto10m',  label: '1M–10M' },
-  { value: 'gt10m',    label: '> 10M' },
+// V/Ø10d / V/Ø30d – aktuelles Volumen ÷ Ø-Volumen in % (Volumen-Impuls).
+const VOLR_BUCKETS = [
+  { value: 'lt50',     label: '< 50 %' },
+  { value: '50to100',  label: '50–100 %' },
+  { value: '100to150', label: '100–150 %' },
+  { value: 'gt150',    label: '≥ 150 % (Spike)' },
 ];
 const HEALTH_OPTIONS = [
   { value: 'STRONG', label: 'Safe Allocation (≥75)' },
@@ -66,7 +66,7 @@ const divBucket = (d) => (d == null || d <= 0 ? 'none' : d < 2 ? 'lt2' : d <= 4 
 const growthBucket = (g) => (g < 0 ? 'neg' : g < 10 ? '0to10' : g < 30 ? '10to30' : 'gt30');
 const chgBucket = (v) => (v < 0 ? 'neg' : v < 5 ? '0to5' : v < 15 ? '5to15' : 'gt15');
 const ogrmBucket = (v) => (v < 0 ? 'neg' : v < 3 ? '0to3' : v < 8 ? '3to8' : 'gt8');
-const volBucket = (v) => (v < 1e5 ? 'lt100k' : v < 1e6 ? '100kto1m' : v < 1e7 ? '1mto10m' : 'gt10m');
+const volrBucket = (v) => (v < 50 ? 'lt50' : v < 100 ? '50to100' : v < 150 ? '100to150' : 'gt150');
 
 /** Prüft einen Kandidaten gegen die eingestellten Kriterien (AND über alle). */
 export function matchesCriteria(c, crit) {
@@ -101,12 +101,12 @@ export function matchesCriteria(c, crit) {
     if (v == null || !crit.ogrm.includes(ogrmBucket(v))) return false;
   }
   if (crit.vol10d.length) {
-    const v = tv?.avg_vol_10d;
-    if (v == null || !crit.vol10d.includes(volBucket(v))) return false;
+    const v = volRatioPct(c, 10);
+    if (v == null || !crit.vol10d.includes(volrBucket(v))) return false;
   }
   if (crit.vol30d.length) {
-    const v = tv?.average_volume_30d_calc;
-    if (v == null || !crit.vol30d.includes(volBucket(v))) return false;
+    const v = volRatioPct(c, 30);
+    if (v == null || !crit.vol30d.includes(volrBucket(v))) return false;
   }
   return true;
 }
@@ -221,11 +221,11 @@ export function renderControlModal({ candidates = [], bucket = '', onApply } = {
     mk({ id: 'ctl-ogrm', label: 'ØGr/M', title: 'Ø monatliche Growth Rate der letzten 6 Monate (Mehrfachauswahl)',
       options: OGRM_BUCKETS, selected: crit.ogrm,
       onChange: (v) => { crit.ogrm = v; renderHits(); } });
-    mk({ id: 'ctl-vol10d', label: 'ØV10d', title: 'Ø Volumen 10 Tage — Liquidität (Mehrfachauswahl)',
-      options: VOL_BUCKETS, selected: crit.vol10d,
+    mk({ id: 'ctl-vol10d', label: 'V/Ø10d', title: 'Aktuelles Volumen ÷ Ø10d in % — Volumen-Impuls (Mehrfachauswahl)',
+      options: VOLR_BUCKETS, selected: crit.vol10d,
       onChange: (v) => { crit.vol10d = v; renderHits(); } });
-    mk({ id: 'ctl-vol30d', label: 'ØV30d', title: 'Ø Volumen 30 Tage — Liquidität (Mehrfachauswahl)',
-      options: VOL_BUCKETS, selected: crit.vol30d,
+    mk({ id: 'ctl-vol30d', label: 'V/Ø30d', title: 'Aktuelles Volumen ÷ Ø30d in % — Volumen-Impuls (Mehrfachauswahl)',
+      options: VOLR_BUCKETS, selected: crit.vol30d,
       onChange: (v) => { crit.vol30d = v; renderHits(); } });
   };
   buildDrops();

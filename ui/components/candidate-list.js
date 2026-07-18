@@ -181,6 +181,25 @@ export function capSizeFromMC(mc) {
   if (mc < 50e9)  return 'mid';
   return 'large';
 }
+
+// Aktuelles Volumen = Volumen des letzten LS-History-Snapshots (EUR-Venue),
+// dieselbe Quelle wie die Vol-Chips im Detail-Sheet.
+function currentVolume(c) {
+  const h = c.ls_history;
+  const last = Array.isArray(h) && h.length ? h[h.length - 1] : null;
+  return last?.volume ?? null;
+}
+/** Aktuelles Volumen ÷ Ø-Volumen (10 oder 30 Tage) in % — null, wenn Daten fehlen. */
+export function volRatioPct(c, days) {
+  const v = currentVolume(c);
+  const avg = days === 30 ? c.tv_data?.average_volume_30d_calc : c.tv_data?.avg_vol_10d;
+  return v != null && avg > 0 ? (v / avg) * 100 : null;
+}
+function volRatioCell(c, days) {
+  const r = volRatioPct(c, days);
+  if (r == null) return '—';
+  return `<span class="${r >= 150 ? 'vol-spike' : r >= 100 ? 'pos' : ''}">${r.toFixed(0)}%</span>`;
+}
 function tvRatingClass(r) {
   if (r == null) return 'neutral';
   if (r > 0.5)   return 'strong-buy';
@@ -362,6 +381,8 @@ function sortValue(c, col) {
     case 'tv_beta3y': return tv?.beta_3_year ?? null;
     case 'tv_vol10d': return tv?.avg_vol_10d ?? null;
     case 'tv_vol30d': return tv?.average_volume_30d_calc ?? null;
+    case 'trade_volr10': return volRatioPct(c, 10);
+    case 'trade_volr30': return volRatioPct(c, 30);
     case 'tv_rating1m':return tv?.recommend_all_1m ?? null;
     case 'tv_mcap':   return tv?.market_cap ?? null;
     case 'star':      return c.in_portfolio ? 1 : 0;
@@ -595,10 +616,10 @@ const VIEWS = {
     { key:'trade_trendscore', label:'TrdR', title:'Trend-Radar-Score 0–100 (kurzfristig ≤1M): LS-Regression 30% · Richtungs-Alignment Δ1T/PerfW/Perf1M 20% · SMA-Stack (Kurs>20>50) 15% · Beschleunigung 15% · Volumen 10% · frischer Kreuzungs-Trigger 10% · ⚡ = heute frisch gedreht', num:true, fmt:renderTrendRadarScore },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     SETUP_COL,
-    // Ø-Volumen (Liquidität) — aus dem Detail-Sheet (Ø10d/Ø30d-Referenz) hierher
-    // übernommen; Volumen-Basis der Cluster-Klassifizierung.
-    { key:'tv_vol10d',  label:'ØV10d',  title:'Ø Volumen 10 Tage (Liquidität; Volumen-Basis der Cluster)', num:true, groupStart:true, fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
-    { key:'tv_vol30d',  label:'ØV30d',  title:'Ø Volumen 30 Tage (Liquidität)', num:true, fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
+    // Aktuelles Volumen (letzter LS-Snapshot) im Verhältnis zum Ø-Volumen in %
+    // (wie die Vol-Chips im Detail-Sheet). ≥150% = Spike, ≥100% = überdurchschn.
+    { key:'trade_volr10', label:'V/Ø10d', title:'Aktuelles Volumen (letzter LS-Snapshot) ÷ Ø-Volumen 10 Tage, in % — ≥150% = Volumen-Spike', num:true, groupStart:true, fmt:c=>volRatioCell(c,10) },
+    { key:'trade_volr30', label:'V/Ø30d', title:'Aktuelles Volumen (letzter LS-Snapshot) ÷ Ø-Volumen 30 Tage, in % — ≥150% = Volumen-Spike', num:true, fmt:c=>volRatioCell(c,30) },
     // Price cluster: nearest support zone — LS live price — nearest resistance zone
     { key:'trade_sup_cl', label:'Sup-Cl', title:'Nächstes Support-Cluster unter dem Kurs: Konfluenz-Zone aus allen Leveln (Extremes, SMAs, Pivots 1W/1M, Demark, Donchian, BB, LS-Tiefs) · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, groupStart:true, fmt:c=>renderClusterCell(c,'sup') },
     { key:'ls_price', label:'LS', title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) · „LS-Kurs“-Button in der Subbar', num:true, fmt:c=>lsPriceCell(c) },

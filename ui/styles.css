@@ -279,6 +279,8 @@ svg { display:block; }
 th.num .sort-btn { flex-direction:row-reverse; }
 .pos { color:var(--pos); }
 .neg { color:var(--neg); }
+/* Volumen-Spike (aktuelles Vol ≥150% des Ø): hervorgehoben wie im Detail-Sheet. */
+.vol-spike { color:var(--warn); font-weight:var(--fw-bold); }
 /* Compat aliases */
 .tv-pos { color:var(--pos); }
 .tv-neg { color:var(--neg); }
