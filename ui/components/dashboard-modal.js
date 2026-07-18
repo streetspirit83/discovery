@@ -11,7 +11,7 @@
  * it when the sheet closes (X or swipe).
  */
 
-import { icons } from '../lib/icons.js?v=20260717a';
+import { icons } from '../lib/icons.js?v=20260718a';
 import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends, smaCrosses,

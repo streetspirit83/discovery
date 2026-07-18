@@ -1,0 +1,199 @@
+/**
+ * Kontroll-Modal – kriterienbasierte Multi-Selektion für Bulk-Aktionen.
+ *
+ * Öffnet sich über den Button in der Subbar. Kriterien auf den AKTIVEN Bucket:
+ * - Overall-Score als Dual-Range-Slider (min–max) + „auch ohne Score"
+ * - Sektoren, Financial Stability (Health-Label), Größenklassen (MCap),
+ *   Dividendenhöhe, Wachstum 6M (perf_6m) je als Multi-Select-Dropdown
+ *   (dieselbe filterMultiSelect-Komponente wie in der Filterbar)
+ *
+ * Live-Trefferzähler; „Auswählen" setzt die Tabellen-Selektion auf die
+ * Treffer → die Bulk-Bar mit allen Aktionen (Löschen/Export/…) erscheint.
+ */
+
+import { icons } from '../lib/icons.js?v=20260718a';
+import { filterMultiSelect } from './filter-multiselect.js?v=20260718a';
+import { liveOverallScore, liveHealthScore, capSizeFromMC } from './candidate-list.js?v=20260718a';
+
+const DIV_BUCKETS = [
+  { value: 'none',  label: 'Keine Dividende' },
+  { value: 'lt2',   label: 'bis 2 %' },
+  { value: '2to4',  label: '2–4 %' },
+  { value: 'gt4',   label: 'über 4 %' },
+];
+const GROWTH_BUCKETS = [
+  { value: 'neg',    label: 'negativ' },
+  { value: '0to10',  label: '0–10 %' },
+  { value: '10to30', label: '10–30 %' },
+  { value: 'gt30',   label: 'über 30 %' },
+];
+const HEALTH_OPTIONS = [
+  { value: 'STRONG', label: 'Safe Allocation (≥75)' },
+  { value: 'SOUND',  label: 'Solide (55–74)' },
+  { value: 'MIXED',  label: 'Gemischt (35–54)' },
+  { value: 'WEAK',   label: 'Fragil (<35)' },
+];
+const CAP_OPTIONS = [
+  { value: 'micro', label: 'Micro (<300M)' },
+  { value: 'small', label: 'Small (300M–2B)' },
+  { value: 'mid',   label: 'Mid (2–50B)' },
+  { value: 'large', label: 'Large (>50B)' },
+];
+
+const divBucket = (d) => (d == null || d <= 0 ? 'none' : d < 2 ? 'lt2' : d <= 4 ? '2to4' : 'gt4');
+const growthBucket = (g) => (g < 0 ? 'neg' : g < 10 ? '0to10' : g < 30 ? '10to30' : 'gt30');
+
+/** Prüft einen Kandidaten gegen die eingestellten Kriterien (AND über alle). */
+export function matchesCriteria(c, crit) {
+  const tv = c.tv_data;
+  const score = liveOverallScore(tv)?.total ?? null;
+  if (score == null) {
+    if (!crit.includeNoScore) return false;
+  } else if (score < crit.scoreMin || score > crit.scoreMax) {
+    return false;
+  }
+  if (crit.sectors.length && !crit.sectors.includes(c.sector)) return false;
+  if (crit.health.length) {
+    const lc = liveHealthScore(tv)?.labelCode ?? null;
+    if (!lc || !crit.health.includes(lc)) return false;
+  }
+  if (crit.caps.length && !crit.caps.includes(capSizeFromMC(tv?.market_cap))) return false;
+  if (crit.div.length && !crit.div.includes(divBucket(tv?.dividend_yield))) return false;
+  if (crit.growth.length) {
+    const g = tv?.perf_6m;
+    if (g == null || !crit.growth.includes(growthBucket(g))) return false;
+  }
+  return true;
+}
+
+const defaultCriteria = () => ({
+  scoreMin: 0, scoreMax: 100, includeNoScore: true,
+  sectors: [], health: [], caps: [], div: [], growth: [],
+});
+
+/**
+ * @param {{ candidates: Array, bucket: string, onApply: (ids: string[]) => void }} opts
+ */
+export function renderControlModal({ candidates = [], bucket = '', onApply } = {}) {
+  if (document.getElementById('control-modal-overlay')) return;
+  const crit = defaultCriteria();
+  const sectors = [...new Set(candidates.map((c) => c.sector).filter(Boolean))].sort();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'control-modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal control-modal" role="dialog" aria-modal="true" aria-label="Kontroll-Center">
+      <div class="modal-header">
+        <h2>${icons.sliders} Kontrolle <span class="ctl-bucket">${bucket}</span></h2>
+        <button class="icon-btn" id="ctl-close" aria-label="Schließen">${icons.xMark}</button>
+      </div>
+      <div class="modal-body">
+        <div class="ctl-row">
+          <span class="ctl-label">Score</span>
+          <div class="ctl-range" id="ctl-range">
+            <div class="ctl-range__track"></div>
+            <div class="ctl-range__fill" id="ctl-range-fill"></div>
+            <input type="range" id="ctl-score-min" min="0" max="100" step="5" value="0" aria-label="Score Minimum">
+            <input type="range" id="ctl-score-max" min="0" max="100" step="5" value="100" aria-label="Score Maximum">
+          </div>
+          <span class="ctl-range__val" id="ctl-score-val">0–100</span>
+        </div>
+        <label class="ctl-noscore">
+          <input type="checkbox" id="ctl-noscore" checked> Kandidaten ohne Score einbeziehen
+        </label>
+        <div class="ctl-drops" id="ctl-drops"></div>
+        <div class="ctl-hits" id="ctl-hits"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="ctl-reset">Zurücksetzen</button>
+        <button class="btn btn-primary" id="ctl-apply"></button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const $ = (id) => overlay.querySelector(`#${id}`);
+  const minEl = $('ctl-score-min');
+  const maxEl = $('ctl-score-max');
+
+  const matched = () => candidates.filter((c) => matchesCriteria(c, crit));
+
+  const renderHits = () => {
+    const n = matched().length;
+    $('ctl-hits').innerHTML = `<b>${n}</b> von ${candidates.length} Kandidaten matchen die Kriterien`;
+    const apply = $('ctl-apply');
+    apply.textContent = n ? `${n} auswählen` : 'Auswählen';
+    apply.disabled = !n;
+  };
+
+  const renderRange = () => {
+    $('ctl-score-val').textContent = `${crit.scoreMin}–${crit.scoreMax}`;
+    const fill = $('ctl-range-fill');
+    fill.style.left = `${crit.scoreMin}%`;
+    fill.style.width = `${crit.scoreMax - crit.scoreMin}%`;
+  };
+
+  // Dual-Slider: Min darf Max nicht überholen (und umgekehrt).
+  minEl.addEventListener('input', () => {
+    crit.scoreMin = Math.min(+minEl.value, crit.scoreMax);
+    minEl.value = crit.scoreMin;
+    renderRange(); renderHits();
+  });
+  maxEl.addEventListener('input', () => {
+    crit.scoreMax = Math.max(+maxEl.value, crit.scoreMin);
+    maxEl.value = crit.scoreMax;
+    renderRange(); renderHits();
+  });
+  $('ctl-noscore').addEventListener('change', (e) => { crit.includeNoScore = e.target.checked; renderHits(); });
+
+  // Multi-Select-Dropdowns (Filterbar-Komponente wiederverwendet).
+  const buildDrops = () => {
+    const host = $('ctl-drops');
+    host.innerHTML = '';
+    const mk = (cfg) => host.appendChild(filterMultiSelect(cfg));
+    mk({ id: 'ctl-sectors', label: 'Sektoren', title: 'Nach Sektor filtern (Mehrfachauswahl)',
+      options: sectors.map((s) => ({ value: s, label: s })), selected: crit.sectors,
+      onChange: (v) => { crit.sectors = v; renderHits(); } });
+    mk({ id: 'ctl-health', label: 'Health', title: 'Financial Stability (Health-Label, Mehrfachauswahl)',
+      options: HEALTH_OPTIONS, selected: crit.health,
+      onChange: (v) => { crit.health = v; renderHits(); } });
+    mk({ id: 'ctl-caps', label: 'Größe', title: 'Größenklasse nach Marktkapitalisierung (Mehrfachauswahl)',
+      options: CAP_OPTIONS, selected: crit.caps,
+      onChange: (v) => { crit.caps = v; renderHits(); } });
+    mk({ id: 'ctl-div', label: 'Dividende', title: 'Dividendenrendite (Mehrfachauswahl)',
+      options: DIV_BUCKETS, selected: crit.div,
+      onChange: (v) => { crit.div = v; renderHits(); } });
+    mk({ id: 'ctl-growth', label: 'Wachstum 6M', title: 'Kursentwicklung der letzten 6 Monate (perf_6m, Mehrfachauswahl)',
+      options: GROWTH_BUCKETS, selected: crit.growth,
+      onChange: (v) => { crit.growth = v; renderHits(); } });
+  };
+  buildDrops();
+
+  $('ctl-reset').addEventListener('pointerup', () => {
+    Object.assign(crit, defaultCriteria());
+    minEl.value = 0; maxEl.value = 100;
+    $('ctl-noscore').checked = true;
+    buildDrops(); renderRange(); renderHits();
+  });
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  // Escape: erst das offene Multi-Select-Popover schließen (macht dessen
+  // eigener Listener), das Modal nur schließen, wenn keins offen ist.
+  const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.fms-pop')) close(); };
+  document.addEventListener('keydown', onKey);
+  $('ctl-close').addEventListener('pointerup', close);
+  overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) close(); });
+
+  $('ctl-apply').addEventListener('pointerup', () => {
+    const ids = matched().map((c) => c.id);
+    if (!ids.length) return;
+    close();
+    onApply?.(ids);
+  });
+
+  renderRange();
+  renderHits();
+}

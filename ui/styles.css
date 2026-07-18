@@ -196,7 +196,9 @@ svg { display:block; }
 .fms-btn svg { flex:none; opacity:.7; }
 /* Popover (am <body>, position:fixed) mit den Checkbox-Optionen. */
 .fms-pop {
-  position:fixed; z-index:35; min-width:160px; max-width:min(280px,92vw);
+  /* Über allem, auch über Modals (z-index 100) — das Kontroll-Modal nutzt
+     dieselben Multi-Select-Buttons. */
+  position:fixed; z-index:110; min-width:160px; max-width:min(280px,92vw);
   max-height:60vh; overflow-y:auto; padding:var(--s-1);
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2);
   box-shadow:0 8px 24px rgba(0,0,0,.18);
@@ -2045,3 +2047,45 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .news-src-item__icon { display:flex; color:var(--muted); flex:none; }
 .news-src-item__label { font-size:var(--fs-2); font-weight:var(--fw-med); white-space:nowrap; }
 .news-src-item__url { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:var(--fs-1); }
+
+/* ── Kontroll-Modal: Kriterien-Auswahl für Bulk-Aktionen ─────────────────── */
+.control-modal { width:min(560px,100%); }
+.control-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-5); }
+.ctl-bucket { font-size:var(--fs-2); color:var(--muted); font-weight:var(--fw-reg); }
+.ctl-row { display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-2); }
+.ctl-label { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; min-width:44px; }
+.ctl-range__val { font-size:var(--fs-3); font-variant-numeric:tabular-nums; min-width:58px; text-align:right; }
+.ctl-noscore { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); color:var(--muted); margin-bottom:var(--s-4); cursor:pointer; }
+.ctl-noscore input { accent-color:var(--accent); width:16px; height:16px; }
+.ctl-drops { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-bottom:var(--s-4); }
+.ctl-drops .fms-btn { max-width:none; }
+.ctl-hits { font-size:var(--fs-2); color:var(--muted); padding:var(--s-2) var(--s-3); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-1); }
+.ctl-hits b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Dual-Range-Slider: zwei überlagerte native Slider; nur die Daumen fangen
+   Pointer-Events, Track + Füllung sind eigene Elemente darunter. */
+.ctl-range { position:relative; flex:1; height:32px; min-width:0; }
+.ctl-range__track {
+  position:absolute; top:50%; left:0; right:0; height:4px; transform:translateY(-50%);
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-pill);
+}
+.ctl-range__fill {
+  position:absolute; top:50%; height:6px; transform:translateY(-50%);
+  background:var(--accent); border-radius:var(--r-pill);
+}
+.ctl-range input[type="range"] {
+  position:absolute; inset:0; width:100%; height:32px; margin:0;
+  -webkit-appearance:none; appearance:none; background:none; pointer-events:none;
+}
+.ctl-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; pointer-events:auto; cursor:pointer;
+  width:22px; height:22px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--surface);
+  box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+.ctl-range input[type="range"]::-moz-range-thumb {
+  pointer-events:auto; cursor:pointer; width:18px; height:18px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--surface);
+  box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+.ctl-range input[type="range"]::-moz-range-track { background:none; }

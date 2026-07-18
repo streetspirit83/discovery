@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260717a';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260717a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260717d';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260718a';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260718a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260718a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -12,9 +12,10 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260717a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260717a';
-import { loadStorageClient } from './lib/storage-client.js?v=20260702d';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260718a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
+import { renderControlModal } from './components/control-modal.js?v=20260718a';
+import { loadStorageClient } from './lib/storage-client.js?v=20260718a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
@@ -25,7 +26,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260717a';
+import { icons } from './lib/icons.js?v=20260718a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
@@ -413,6 +414,21 @@ function renderSubbar() {
     alertBtn.dataset.wired = '1';
     document.getElementById('subnav-alert-icon').innerHTML = L.bell;
     alertBtn.addEventListener('pointerup', openAlertModal);
+  }
+
+  // Kontroll-Center: Kandidaten des aktiven Buckets nach Kriterien auswählen
+  // (Score-Slider + Multi-Selects) → Selektion setzen → Bulk-Bar erscheint.
+  const controlBtn = document.getElementById('subnav-control');
+  if (controlBtn && !controlBtn.dataset.wired) {
+    controlBtn.dataset.wired = '1';
+    document.getElementById('subnav-control-icon').innerHTML = icons.sliders;
+    controlBtn.addEventListener('pointerup', () => {
+      renderControlModal({
+        candidates: allBlobs[currentBlobType]?.candidates ?? [],
+        bucket: currentBlobType,
+        onApply: (ids) => candidateList.setSelection(ids),
+      });
+    });
   }
   updateAlertBadge();
 }
@@ -1189,22 +1205,35 @@ async function handleBulkAction(action, ids) {
 
   if (action === 'delete') {
     if (!confirm(`${targets.length} Kandidat(en) endgültig aus „${currentBlobType}" löschen?`)) return;
-    for (const c of targets) {
-      if (!useMock) {
-        try {
-          if (currentBlobType === 'inbox') {
-            await storageClient.moveCandidate(c.id, 'inbox', 'archive');
-            allBlobs.archive = null;
-          } else {
-            await storageClient.deleteCandidate(currentBlobType, c.id);
+    const ids = targets.map((c) => c.id);
+    if (!useMock) {
+      // Ein Bulk-Roundtrip (ein Blob-Read+Write) statt N sequentieller Einzel-
+      // Ops; Fallback auf die Einzel-Ops, solange das Backend die Bulk-Op noch
+      // nicht kennt (Deploy-Versatz Pages vs. Netlify).
+      try {
+        if (currentBlobType === 'inbox') {
+          await storageClient.moveCandidates(ids, 'inbox', 'archive');
+          allBlobs.archive = null;
+        } else {
+          await storageClient.deleteCandidates(currentBlobType, ids);
+        }
+      } catch {
+        for (const c of targets) {
+          try {
+            if (currentBlobType === 'inbox') {
+              await storageClient.moveCandidate(c.id, 'inbox', 'archive');
+              allBlobs.archive = null;
+            } else {
+              await storageClient.deleteCandidate(currentBlobType, c.id);
+            }
+          } catch (err) {
+            toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
           }
-        } catch (err) {
-          toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
-          continue;
         }
       }
-      blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
     }
+    const idSet = new Set(ids);
+    blob.candidates = blob.candidates.filter((x) => !idSet.has(x.id));
     candidateList.setData(blob.candidates);
     candidateDetail.hide();
     toast(`🗑 ${targets.length} Kandidat(en) gelöscht`, 'info');
@@ -1224,20 +1253,27 @@ async function handleBulkAction(action, ids) {
       toast('Bereits im Export-Bucket', 'info', 2000);
       return;
     }
-    for (const c of targets) {
-      if (!useMock) {
-        try {
-          await storageClient.moveCandidate(c.id, currentBlobType, 'export');
-          allBlobs.export = null;
-        } catch (err) {
-          toast(`Export fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
-          continue;
+    const ids = targets.map((c) => c.id);
+    if (!useMock) {
+      try {
+        await storageClient.moveCandidates(ids, currentBlobType, 'export');
+        allBlobs.export = null;
+      } catch {
+        // Fallback: Einzel-Ops (altes Backend ohne Bulk-Op)
+        for (const c of targets) {
+          try {
+            await storageClient.moveCandidate(c.id, currentBlobType, 'export');
+            allBlobs.export = null;
+          } catch (err) {
+            toast(`Export fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
+          }
         }
-      } else {
-        await mockInsert('export', c);
       }
-      blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
+    } else {
+      for (const c of targets) await mockInsert('export', c);
     }
+    const idSet = new Set(ids);
+    blob.candidates = blob.candidates.filter((x) => !idSet.has(x.id));
     candidateList.setData(blob.candidates);
     candidateDetail.hide();
     toast(`↗ ${targets.length} Ticker → Export`, 'success');

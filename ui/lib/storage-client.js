@@ -53,6 +53,16 @@ export class StorageClient {
     return this.#post({ op: 'delete_candidate', blob_type: blobType, candidate_id: candidateId });
   }
 
+  /** Bulk-Löschen: ein Backend-Roundtrip für alle IDs (statt N Einzel-Ops). */
+  async deleteCandidates(blobType, candidateIds) {
+    return this.#post({ op: 'delete_candidates', blob_type: blobType, candidate_ids: candidateIds });
+  }
+
+  /** Bulk-Verschieben inkl. Dup-Merge im Ziel: ein Roundtrip für alle IDs. */
+  async moveCandidates(candidateIds, fromBlob, toBlob) {
+    return this.#post({ op: 'move_candidates', candidate_ids: candidateIds, from_blob: fromBlob, to_blob: toBlob });
+  }
+
   /** Read the nightly LS snapshot history (10-day rolling, watch-bucket tickers).
    *  Shape: { history: { [candidateId]: { symbol, name, snapshots:[…] } }, updated_at } */
   async readLsHistory() {

@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260717a';
+import { icons } from '../lib/icons.js?v=20260718a';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -174,7 +174,7 @@ function rsiClass(v) {
   if (v <= 30) return ' pos';
   return '';
 }
-function capSizeFromMC(mc) {
+export function capSizeFromMC(mc) {
   if (mc == null) return null;
   if (mc < 300e6) return 'micro';
   if (mc < 2e9)   return 'small';
@@ -768,6 +768,16 @@ export class CandidateList {
     if (map == null && this.dupMap == null) return;
     this.dupMap = map;
     this.renderRows();
+  }
+
+  /** Kontroll-Modal: Auswahl direkt auf die übergebenen IDs setzen
+   *  (ersetzt die bisherige Selektion, öffnet damit die Bulk-Bar). */
+  setSelection(ids) {
+    this.selected = new Set(ids);
+    this.showSelectedOnly = false;
+    this.renderRows();
+    this.renderBulkBar();
+    this.onSelectionChange?.();
   }
 
   /** Topbar-Suche: filtert nur die Zeilen — ohne das Auto-Select-Verhalten
@@ -1370,7 +1380,7 @@ function renderTrendStrengthScore(ts) {
 }
 
 // Returns a v2 health score, re-computing from stored tv_data if the cached value is v1 (0–20).
-function liveHealthScore(tv) {
+export function liveHealthScore(tv) {
   if (!tv) return null;
   const hs = tv.health_score;
   const isV2 = hs && hs.breakdown && 'A_Size' in hs.breakdown;
@@ -1410,7 +1420,7 @@ function renderHealthScore(hs) {
 }
 
 // Composite score over all standard-view metrics, computed live from tv_data.
-function liveOverallScore(tv) {
+export function liveOverallScore(tv) {
   if (!tv) return null;
   return computeOverallScore({
     perfW:         tv.perf_w,

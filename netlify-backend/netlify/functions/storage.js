@@ -335,6 +335,59 @@ export default async function handler(req) {
     return respond(200, { ok: true, id: candidateId });
   }
 
+  // --- op: delete_candidates (bulk: ein Read + ein Write statt N Roundtrips) ---
+  if (op === 'delete_candidates') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const ids = body.candidate_ids;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idSet = new Set(ids);
+    const before = doc.candidates.length;
+    doc.candidates = doc.candidates.filter((c) => !idSet.has(c.id));
+    const removed = before - doc.candidates.length;
+    await writeBlobDoc(store, blobType, doc);
+    log('info', 'storage: delete_candidates', { blobType, requested: ids.length, removed });
+    return respond(200, { ok: true, removed });
+  }
+
+  // --- op: move_candidates (bulk: je ein Read/Write pro Blob für alle IDs) ---
+  if (op === 'move_candidates') {
+    const { candidate_ids: ids, from_blob: fromBlob, to_blob: toBlob } = body;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+    if (!fromBlob || !BLOB_NAMES[fromBlob]) return respond(400, { ok: false, error: `Unknown from_blob: ${fromBlob}` });
+    if (!toBlob || !BLOB_NAMES[toBlob]) return respond(400, { ok: false, error: `Unknown to_blob: ${toBlob}` });
+
+    const fromDoc = await readBlobDoc(store, fromBlob);
+    const toDoc = await readBlobDoc(store, toBlob);
+    const idSet = new Set(ids);
+    const moving = fromDoc.candidates.filter((c) => idSet.has(c.id));
+    fromDoc.candidates = fromDoc.candidates.filter((c) => !idSet.has(c.id));
+
+    const now = new Date().toISOString();
+    for (const candidate of moving) {
+      candidate.last_updated_at = now;
+      const dupIdx = toDoc.candidates.findIndex(
+        (c) => c.symbol.toUpperCase() === candidate.symbol.toUpperCase() &&
+               c.exchange.toUpperCase() === candidate.exchange.toUpperCase(),
+      );
+      if (dupIdx !== -1) {
+        // Already in target – merge sources, don't duplicate
+        toDoc.candidates[dupIdx].sources.push(...(candidate.sources ?? []));
+        toDoc.candidates[dupIdx].last_updated_at = now;
+      } else {
+        toDoc.candidates.push(candidate);
+      }
+    }
+
+    await writeBlobDoc(store, fromBlob, fromDoc);
+    await writeBlobDoc(store, toBlob, toDoc);
+    log('info', 'storage: move_candidates', { fromBlob, toBlob, requested: ids.length, moved: moving.length });
+    return respond(200, { ok: true, moved: moving.length });
+  }
+
   // --- op: move_candidate ---
   if (op === 'move_candidate') {
     const { candidate_id: candidateId, from_blob: fromBlob, to_blob: toBlob } = body;

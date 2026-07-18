@@ -7,8 +7,8 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-import { icons } from '../lib/icons.js?v=20260717a';
-import { renderNewsPanel } from './news-panel.js?v=20260717a';
+import { icons } from '../lib/icons.js?v=20260718a';
+import { renderNewsPanel } from './news-panel.js?v=20260718a';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260709b';
 
