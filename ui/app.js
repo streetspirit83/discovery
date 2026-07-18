@@ -14,7 +14,7 @@ import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260718a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
-import { renderControlModal } from './components/control-modal.js?v=20260718a';
+import { renderControlModal } from './components/control-modal.js?v=20260718b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260718a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';

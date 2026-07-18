@@ -14,6 +14,7 @@
 import { icons } from '../lib/icons.js?v=20260718a';
 import { filterMultiSelect } from './filter-multiselect.js?v=20260718a';
 import { liveOverallScore, liveHealthScore, capSizeFromMC } from './candidate-list.js?v=20260718a';
+import { monthlyGrowthRate } from '../lib/tv-upside.js';
 
 const DIV_BUCKETS = [
   { value: 'none',  label: 'Keine Dividende' },
@@ -26,6 +27,20 @@ const GROWTH_BUCKETS = [
   { value: '0to10',  label: '0–10 %' },
   { value: '10to30', label: '10–30 %' },
   { value: 'gt30',   label: 'über 30 %' },
+];
+// Δ1W / Δ1M – kurzfristige Kursveränderung (kann negativ sein).
+const CHG_BUCKETS = [
+  { value: 'neg',    label: 'negativ' },
+  { value: '0to5',   label: '0–5 %' },
+  { value: '5to15',  label: '5–15 %' },
+  { value: 'gt15',   label: 'über 15 %' },
+];
+// ØGr/M – Ø monatliche Wachstumsrate (geometrisch aus Perf.6M).
+const OGRM_BUCKETS = [
+  { value: 'neg',   label: 'negativ' },
+  { value: '0to3',  label: '0–3 %' },
+  { value: '3to8',  label: '3–8 %' },
+  { value: 'gt8',   label: 'über 8 %' },
 ];
 const HEALTH_OPTIONS = [
   { value: 'STRONG', label: 'Safe Allocation (≥75)' },
@@ -42,6 +57,8 @@ const CAP_OPTIONS = [
 
 const divBucket = (d) => (d == null || d <= 0 ? 'none' : d < 2 ? 'lt2' : d <= 4 ? '2to4' : 'gt4');
 const growthBucket = (g) => (g < 0 ? 'neg' : g < 10 ? '0to10' : g < 30 ? '10to30' : 'gt30');
+const chgBucket = (v) => (v < 0 ? 'neg' : v < 5 ? '0to5' : v < 15 ? '5to15' : 'gt15');
+const ogrmBucket = (v) => (v < 0 ? 'neg' : v < 3 ? '0to3' : v < 8 ? '3to8' : 'gt8');
 
 /** Prüft einen Kandidaten gegen die eingestellten Kriterien (AND über alle). */
 export function matchesCriteria(c, crit) {
@@ -63,12 +80,25 @@ export function matchesCriteria(c, crit) {
     const g = tv?.perf_6m;
     if (g == null || !crit.growth.includes(growthBucket(g))) return false;
   }
+  if (crit.chg1w.length) {
+    const v = tv?.change_1w;
+    if (v == null || !crit.chg1w.includes(chgBucket(v))) return false;
+  }
+  if (crit.chg1m.length) {
+    const v = tv?.change_1m;
+    if (v == null || !crit.chg1m.includes(chgBucket(v))) return false;
+  }
+  if (crit.ogrm.length) {
+    const v = monthlyGrowthRate(tv?.perf_6m, 6);
+    if (v == null || !crit.ogrm.includes(ogrmBucket(v))) return false;
+  }
   return true;
 }
 
 const defaultCriteria = () => ({
   scoreMin: 0, scoreMax: 100, includeNoScore: true,
   sectors: [], health: [], caps: [], div: [], growth: [],
+  chg1w: [], chg1m: [], ogrm: [],
 });
 
 /**
@@ -166,6 +196,15 @@ export function renderControlModal({ candidates = [], bucket = '', onApply } = {
     mk({ id: 'ctl-growth', label: 'Wachstum 6M', title: 'Kursentwicklung der letzten 6 Monate (perf_6m, Mehrfachauswahl)',
       options: GROWTH_BUCKETS, selected: crit.growth,
       onChange: (v) => { crit.growth = v; renderHits(); } });
+    mk({ id: 'ctl-chg1w', label: 'Δ1W', title: 'Veränderung 1 Woche (Mehrfachauswahl)',
+      options: CHG_BUCKETS, selected: crit.chg1w,
+      onChange: (v) => { crit.chg1w = v; renderHits(); } });
+    mk({ id: 'ctl-chg1m', label: 'Δ1M', title: 'Veränderung 1 Monat (Mehrfachauswahl)',
+      options: CHG_BUCKETS, selected: crit.chg1m,
+      onChange: (v) => { crit.chg1m = v; renderHits(); } });
+    mk({ id: 'ctl-ogrm', label: 'ØGr/M', title: 'Ø monatliche Growth Rate der letzten 6 Monate (Mehrfachauswahl)',
+      options: OGRM_BUCKETS, selected: crit.ogrm,
+      onChange: (v) => { crit.ogrm = v; renderHits(); } });
   };
   buildDrops();
 
