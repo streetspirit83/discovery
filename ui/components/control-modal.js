@@ -13,7 +13,7 @@
 
 import { icons } from '../lib/icons.js?v=20260718a';
 import { filterMultiSelect } from './filter-multiselect.js?v=20260718a';
-import { liveOverallScore, liveHealthScore, capSizeFromMC } from './candidate-list.js?v=20260718a';
+import { liveOverallScore, liveHealthScore, capSizeFromMC } from './candidate-list.js?v=20260718c';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
 
 const DIV_BUCKETS = [
@@ -42,6 +42,13 @@ const OGRM_BUCKETS = [
   { value: '3to8',  label: '3–8 %' },
   { value: 'gt8',   label: 'über 8 %' },
 ];
+// ØV10d / ØV30d – durchschnittliches Handelsvolumen (Liquidität, Stück/Tag).
+const VOL_BUCKETS = [
+  { value: 'lt100k',   label: '< 100K' },
+  { value: '100kto1m', label: '100K–1M' },
+  { value: '1mto10m',  label: '1M–10M' },
+  { value: 'gt10m',    label: '> 10M' },
+];
 const HEALTH_OPTIONS = [
   { value: 'STRONG', label: 'Safe Allocation (≥75)' },
   { value: 'SOUND',  label: 'Solide (55–74)' },
@@ -59,6 +66,7 @@ const divBucket = (d) => (d == null || d <= 0 ? 'none' : d < 2 ? 'lt2' : d <= 4 
 const growthBucket = (g) => (g < 0 ? 'neg' : g < 10 ? '0to10' : g < 30 ? '10to30' : 'gt30');
 const chgBucket = (v) => (v < 0 ? 'neg' : v < 5 ? '0to5' : v < 15 ? '5to15' : 'gt15');
 const ogrmBucket = (v) => (v < 0 ? 'neg' : v < 3 ? '0to3' : v < 8 ? '3to8' : 'gt8');
+const volBucket = (v) => (v < 1e5 ? 'lt100k' : v < 1e6 ? '100kto1m' : v < 1e7 ? '1mto10m' : 'gt10m');
 
 /** Prüft einen Kandidaten gegen die eingestellten Kriterien (AND über alle). */
 export function matchesCriteria(c, crit) {
@@ -92,13 +100,21 @@ export function matchesCriteria(c, crit) {
     const v = monthlyGrowthRate(tv?.perf_6m, 6);
     if (v == null || !crit.ogrm.includes(ogrmBucket(v))) return false;
   }
+  if (crit.vol10d.length) {
+    const v = tv?.avg_vol_10d;
+    if (v == null || !crit.vol10d.includes(volBucket(v))) return false;
+  }
+  if (crit.vol30d.length) {
+    const v = tv?.average_volume_30d_calc;
+    if (v == null || !crit.vol30d.includes(volBucket(v))) return false;
+  }
   return true;
 }
 
 const defaultCriteria = () => ({
   scoreMin: 0, scoreMax: 100, includeNoScore: true,
   sectors: [], health: [], caps: [], div: [], growth: [],
-  chg1w: [], chg1m: [], ogrm: [],
+  chg1w: [], chg1m: [], ogrm: [], vol10d: [], vol30d: [],
 });
 
 /**
@@ -205,6 +221,12 @@ export function renderControlModal({ candidates = [], bucket = '', onApply } = {
     mk({ id: 'ctl-ogrm', label: 'ØGr/M', title: 'Ø monatliche Growth Rate der letzten 6 Monate (Mehrfachauswahl)',
       options: OGRM_BUCKETS, selected: crit.ogrm,
       onChange: (v) => { crit.ogrm = v; renderHits(); } });
+    mk({ id: 'ctl-vol10d', label: 'ØV10d', title: 'Ø Volumen 10 Tage — Liquidität (Mehrfachauswahl)',
+      options: VOL_BUCKETS, selected: crit.vol10d,
+      onChange: (v) => { crit.vol10d = v; renderHits(); } });
+    mk({ id: 'ctl-vol30d', label: 'ØV30d', title: 'Ø Volumen 30 Tage — Liquidität (Mehrfachauswahl)',
+      options: VOL_BUCKETS, selected: crit.vol30d,
+      onChange: (v) => { crit.vol30d = v; renderHits(); } });
   };
   buildDrops();
 

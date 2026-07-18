@@ -595,6 +595,10 @@ const VIEWS = {
     { key:'trade_trendscore', label:'TrdR', title:'Trend-Radar-Score 0–100 (kurzfristig ≤1M): LS-Regression 30% · Richtungs-Alignment Δ1T/PerfW/Perf1M 20% · SMA-Stack (Kurs>20>50) 15% · Beschleunigung 15% · Volumen 10% · frischer Kreuzungs-Trigger 10% · ⚡ = heute frisch gedreht', num:true, fmt:renderTrendRadarScore },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     SETUP_COL,
+    // Ø-Volumen (Liquidität) — aus dem Detail-Sheet (Ø10d/Ø30d-Referenz) hierher
+    // übernommen; Volumen-Basis der Cluster-Klassifizierung.
+    { key:'tv_vol10d',  label:'ØV10d',  title:'Ø Volumen 10 Tage (Liquidität; Volumen-Basis der Cluster)', num:true, groupStart:true, fmt:c=>fmtMCap(c.tv_data?.avg_vol_10d) },
+    { key:'tv_vol30d',  label:'ØV30d',  title:'Ø Volumen 30 Tage (Liquidität)', num:true, fmt:c=>fmtMCap(c.tv_data?.average_volume_30d_calc) },
     // Price cluster: nearest support zone — LS live price — nearest resistance zone
     { key:'trade_sup_cl', label:'Sup-Cl', title:'Nächstes Support-Cluster unter dem Kurs: Konfluenz-Zone aus allen Leveln (Extremes, SMAs, Pivots 1W/1M, Demark, Donchian, BB, LS-Tiefs) · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, groupStart:true, fmt:c=>renderClusterCell(c,'sup') },
     { key:'ls_price', label:'LS', title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) · „LS-Kurs“-Button in der Subbar', num:true, fmt:c=>lsPriceCell(c) },
