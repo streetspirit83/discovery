@@ -9,6 +9,7 @@ import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
 import { normalizeExchange } from '../lib/exchange-map.js';
+import { megaClusterOf } from '../lib/sector-clusters.js?v=20260719b';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
@@ -751,7 +752,7 @@ export class CandidateList {
     this.candidates        = [];
     // Mehrfachauswahl-Filter (sector/capSize/score/tr/lsTrend) sind Arrays;
     // Toggles (broker/alerts/dup) und state bleiben String.
-    this.filters           = { state: '', sector: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '' };
+    this.filters           = { state: '', sector: [], mega: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -941,12 +942,12 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search, mega } = this.filters;
     // Dropdown-Filter sind Mehrfachauswahl (Arrays): OR innerhalb eines
     // Filters, AND über die Filter hinweg. Strings (Alt-Zustand) werden als
     // Ein-Element-Auswahl behandelt.
     const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
-    const fSector = asArr(sector), fCap = asArr(capSize), fScore = asArr(score), fTr = asArr(tr), fTrendV = asArr(fTrend);
+    const fSector = asArr(sector), fCap = asArr(capSize), fScore = asArr(score), fTr = asArr(tr), fTrendV = asArr(fTrend), fMega = asArr(mega);
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (search && !matchesSearch(c, search))                  return false; // Topbar-Suche
@@ -962,6 +963,7 @@ export class CandidateList {
       }
       if (state   && c.workspace_state !== state)               return false;
       if (fSector.length && !fSector.some((v) => (v === '__no_sector__' ? !c.sector : c.sector === v))) return false;
+      if (fMega.length && !fMega.includes(megaClusterOf(c.sector))) return false;
       if (fCap.length && !fCap.includes(capSizeFromMC(c.tv_data?.market_cap))) return false;
       if (broker === 'broker' && !c.broker_armed)               return false;
       if (broker === 'star'   && !c.in_portfolio)               return false;

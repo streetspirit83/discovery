@@ -2091,3 +2091,23 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   box-shadow:0 1px 3px rgba(0,0,0,0.3);
 }
 .ctl-range input[type="range"]::-moz-range-track { background:none; }
+
+/* ── Sektoren-Heatmap (Markets-Modal): 5 Mega-Cluster × 4 Horizonte ──────── */
+.heat-loading { color:var(--muted); font-size:var(--fs-2); padding:var(--s-4) 0; }
+.heat-grid { display:flex; flex-direction:column; gap:var(--s-1); }
+.heat-row { display:flex; gap:var(--s-1); align-items:stretch; flex-wrap:nowrap; }
+.heat-name {
+  flex:0 0 128px; min-width:0; display:flex; flex-direction:column; justify-content:center;
+  font-size:var(--fs-2); font-weight:var(--fw-med); line-height:1.2;
+}
+.heat-name small { color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-reg); }
+/* Feste kleine Spaltenzahl → eine Zeile, gleich breite, schrumpfende Zellen (§5) */
+.heat-col, .heat-cell { flex:1 1 0; min-width:0; text-align:center; white-space:nowrap; }
+.heat-row--head .heat-col { color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); letter-spacing:0.03em; }
+.heat-cell {
+  padding:var(--s-3) var(--s-1); border-radius:var(--r-1); background:var(--surface-3);
+  font-size:var(--fs-3); font-weight:var(--fw-med); font-variant-numeric:tabular-nums;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.heat-note { color:var(--muted); font-size:var(--fs-1); margin-top:var(--s-3); }
+@media (max-width:479px) { .heat-name { flex-basis:96px; font-size:var(--fs-1); } }

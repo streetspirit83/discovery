@@ -13,8 +13,9 @@
 
 import { icons } from '../lib/icons.js?v=20260718a';
 import { filterMultiSelect } from './filter-multiselect.js?v=20260718a';
-import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260719a';
+import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260719b';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
+import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260719b';
 
 const DIV_BUCKETS = [
   { value: 'none',  label: 'Keine Dividende' },
@@ -77,6 +78,7 @@ export function matchesCriteria(c, crit) {
   } else if (score < crit.scoreMin || score > crit.scoreMax) {
     return false;
   }
+  if (crit.mega.length && !crit.mega.includes(megaClusterOf(c.sector))) return false;
   if (crit.sectors.length && !crit.sectors.includes(c.sector)) return false;
   if (crit.health.length) {
     const lc = liveHealthScore(tv)?.labelCode ?? null;
@@ -113,7 +115,7 @@ export function matchesCriteria(c, crit) {
 
 const defaultCriteria = () => ({
   scoreMin: 0, scoreMax: 100, includeNoScore: true,
-  sectors: [], health: [], caps: [], div: [], growth: [],
+  sectors: [], mega: [], health: [], caps: [], div: [], growth: [],
   chg1w: [], chg1m: [], ogrm: [], vol10d: [], vol30d: [],
 });
 
@@ -197,6 +199,9 @@ export function renderControlModal({ candidates = [], bucket = '', onApply } = {
     const host = $('ctl-drops');
     host.innerHTML = '';
     const mk = (cfg) => host.appendChild(filterMultiSelect(cfg));
+    mk({ id: 'ctl-mega', label: 'Mega', title: 'Nach Mega-Cluster filtern (5 Sektor-Gruppen, Mehrfachauswahl)',
+      options: MEGA_CLUSTERS.map((m) => ({ value: m.key, label: m.label })), selected: crit.mega,
+      onChange: (v) => { crit.mega = v; renderHits(); } });
     mk({ id: 'ctl-sectors', label: 'Sektoren', title: 'Nach Sektor filtern (Mehrfachauswahl)',
       options: sectors.map((s) => ({ value: s, label: s })), selected: crit.sectors,
       onChange: (v) => { crit.sectors = v; renderHits(); } });

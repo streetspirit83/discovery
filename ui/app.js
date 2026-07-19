@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260719a';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260719b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260718a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260718a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
@@ -12,9 +12,9 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260718a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260719b';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
-import { renderControlModal } from './components/control-modal.js?v=20260719a';
+import { renderControlModal } from './components/control-modal.js?v=20260719b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260718a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
@@ -27,6 +27,7 @@ import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js?v=20260718a';
+import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260719b';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260704i';
@@ -61,7 +62,7 @@ const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
   // Dropdown-Filter (fCap/fSector/fScore/fTr/fLsTrend) sind Mehrfachauswahl →
   // Arrays. fBroker/fAlerts/fDup bleiben Toggles (String).
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fMega: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -69,7 +70,7 @@ const uiState = (() => {
   if (!['standard', 'trade', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
   // Migrate the multi-select filters from the old single-value strings to arrays.
   const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
-  s.fCap = toArr(s.fCap); s.fSector = toArr(s.fSector); s.fScore = toArr(s.fScore);
+  s.fCap = toArr(s.fCap); s.fSector = toArr(s.fSector); s.fMega = toArr(s.fMega); s.fScore = toArr(s.fScore);
   s.fTr = toArr(s.fTr); s.fLsTrend = toArr(s.fLsTrend);
   return s;
 })();
@@ -459,6 +460,12 @@ function renderFilterbar() {
     ],
     selected: uiState.fScore,
     onChange: (v) => { uiState.fScore = v; saveUiState(); candidateList.setFilter('score', v); },
+  });
+  mkFilter({
+    id: 'filter-mega', label: 'Mega', title: 'Filter nach Mega-Cluster (5 Sektor-Gruppen, Mehrfachauswahl)',
+    options: MEGA_CLUSTERS.map((m) => ({ value: m.key, label: m.label })),
+    selected: uiState.fMega,
+    onChange: (v) => { uiState.fMega = v; saveUiState(); candidateList.setFilter('mega', v); },
   });
   mkFilter({
     id: 'filter-sector', label: 'Sectors', title: 'Filter nach Sektor (Mehrfachauswahl)',
@@ -1516,6 +1523,7 @@ async function init() {
   candidateList.filters = {
     state:   '',
     sector:  uiState.fSector ?? [],
+    mega:    uiState.fMega ?? [],
     capSize: uiState.fCap    ?? [],
     broker:  uiState.fBroker ?? '',
     score:   uiState.fScore  ?? [],
@@ -1662,6 +1670,20 @@ async function init() {
       },
       // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
       getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
+      // Sektoren-Heatmap: alle aktiven Kandidaten (inbox+watch+export),
+      // dedupliziert nach Symbol+Börse.
+      getHeatCandidates: async () => {
+        const blobs = await Promise.all(['inbox', 'watch', 'export'].map((b) => ensureBlob(b)));
+        const seen = new Set();
+        const out = [];
+        for (const c of blobs.flatMap((b) => b?.candidates ?? [])) {
+          const k = `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push(c);
+        }
+        return out;
+      },
     });
   });
 
