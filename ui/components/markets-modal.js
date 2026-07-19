@@ -11,7 +11,7 @@ import { icons } from '../lib/icons.js?v=20260718a';
 import { renderNewsPanel } from './news-panel.js?v=20260718a';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260719d';
 
-const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719e';
+const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 
 const DEFAULT_INDICATORS = [
   { label: 'DAX',    value: null, change: null, perf1m: null },

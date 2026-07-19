@@ -6,6 +6,10 @@
   <title>Markets Performance – Discovery</title>
   <link rel="stylesheet" href="../styles.css">
   <style>
+    /* ../styles.css setzt html,body{overflow-x:clip} (Fix für die Haupt-App-
+       Shell). Hier unerwünscht: die Perf-Tabellen (nowrap, ohne Wrapper)
+       brauchen das horizontale Body-Scrolling → lokal wieder freigeben. */
+    html, body { overflow-x: visible; }
     body { font-family: var(--font-ui); background: var(--bg); color: var(--text); margin: 0; }
     .mkt-container { max-width: 980px; margin: 0 auto; padding: 1rem; }
     .mkt-header { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
