@@ -35,14 +35,20 @@ function cellStyle(v) {
   return `background:color-mix(in srgb, ${tone} ${pct.toFixed(0)}%, var(--surface-2))`;
 }
 
-/** Aggregation: je Cluster × Horizont { v: Median-%, n: Stichprobe }. */
+/** Aggregation: je Cluster × Horizont { v: Median-%, n: Stichprobe } + Basis-
+ *  Statistik, damit die Fußnote transparent macht, was ein-/ausgeschlossen ist. */
 export function aggregateHeat(candidates) {
   const byCluster = new Map(MEGA_CLUSTERS.map((m) => [m.key, []]));
+  const stats = { total: 0, noTv: 0, noSector: 0, included: 0 };
   for (const c of candidates ?? []) {
+    stats.total++;
     const key = megaClusterOf(c.sector);
-    if (key && c.tv_data) byCluster.get(key).push(c.tv_data);
+    if (!c.tv_data) { stats.noTv++; continue; }
+    if (!key)       { stats.noSector++; continue; }   // kein/nicht-gemappter Sektor
+    byCluster.get(key).push(c.tv_data);
+    stats.included++;
   }
-  return MEGA_CLUSTERS.map((m) => ({
+  const rows = MEGA_CLUSTERS.map((m) => ({
     ...m,
     members: byCluster.get(m.key).length,
     cells: HORIZONS.map((h) => {
@@ -50,6 +56,7 @@ export function aggregateHeat(candidates) {
       return { label: h.label, v: median(vals), n: vals.length };
     }),
   }));
+  return { rows, stats };
 }
 
 /**
@@ -62,11 +69,10 @@ export function renderSectorHeatmap(container, { getCandidates } = {}) {
   (async () => {
     let candidates = [];
     try { candidates = (await getCandidates?.()) ?? []; } catch { /* leer rendern */ }
-    const rows = aggregateHeat(candidates);
-    const total = rows.reduce((s, r) => s + r.members, 0);
+    const { rows, stats } = aggregateHeat(candidates);
 
-    if (!total) {
-      container.innerHTML = `<div class="heat-loading">Keine Kandidaten mit Sektor/TV-Daten – Heatmap braucht geladene TV-Daten (inbox/watch/export).</div>`;
+    if (!stats.included) {
+      container.innerHTML = `<div class="heat-loading">Keine Kandidaten mit Sektor + TV-Daten (${stats.total} aktiv, davon ${stats.noTv} ohne TV-Daten, ${stats.noSector} ohne gemappten Sektor).</div>`;
       return;
     }
 
@@ -86,6 +92,8 @@ export function renderSectorHeatmap(container, { getCandidates } = {}) {
               </span>`).join('')}
           </div>`).join('')}
       </div>
-      <p class="heat-note">Median der TV-Performance aller aktiven Kandidaten (Inbox + Watch + Export, ${total} mit TV-Daten) je Mega-Cluster · Farbskala ±15%</p>`;
+      <p class="heat-note">Median der TV-Performance je Mega-Cluster · Farbskala ±15%.
+        Basis: ${stats.total} aktive Kandidaten (Inbox + Watch + Export, dedupliziert) →
+        <b>${stats.included}</b> mit Sektor & TV-Daten${stats.noSector ? ` · ${stats.noSector} ohne (gemappten) Sektor` : ''}${stats.noTv ? ` · ${stats.noTv} ohne TV-Daten` : ''}.</p>`;
   })();
 }
