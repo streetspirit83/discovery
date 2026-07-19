@@ -93,7 +93,7 @@ export function renderSectorHeatmap(container, { getCandidates } = {}) {
           </div>`).join('')}
       </div>
       <p class="heat-note">Median der TV-Performance je Mega-Cluster · Farbskala ±15%.
-        Basis: ${stats.total} aktive Kandidaten (Inbox + Watch + Export, dedupliziert) →
+        Basis: ${stats.total} Kandidaten (Inbox + Watch + Export + Archiv, dedupliziert) →
         <b>${stats.included}</b> mit Sektor & TV-Daten${stats.noSector ? ` · ${stats.noSector} ohne (gemappten) Sektor` : ''}${stats.noTv ? ` · ${stats.noTv} ohne TV-Daten` : ''}.</p>`;
   })();
 }

@@ -12,7 +12,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260719c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260719d';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
 import { renderControlModal } from './components/control-modal.js?v=20260719b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260718a';
@@ -1670,10 +1670,11 @@ async function init() {
       },
       // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
       getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
-      // Sektoren-Heatmap: alle aktiven Kandidaten (inbox+watch+export),
-      // dedupliziert nach Symbol+Börse.
+      // Sektoren-Heatmap: alle Kandidaten aus allen 4 Buckets (inbox + watch +
+      // export + archive), dedupliziert nach Symbol+Börse. Archiv ist meist der
+      // größte Topf (verworfene, aber TV-angereicherte Werte) → breitere Basis.
       getHeatCandidates: async () => {
-        const blobs = await Promise.all(['inbox', 'watch', 'export'].map((b) => ensureBlob(b)));
+        const blobs = await Promise.all(['inbox', 'watch', 'export', 'archive'].map((b) => ensureBlob(b)));
         const seen = new Set();
         const out = [];
         for (const c of blobs.flatMap((b) => b?.candidates ?? [])) {
