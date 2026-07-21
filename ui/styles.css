@@ -441,6 +441,9 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .act-btn--broker { color:var(--muted); opacity:.45; }
 .act-btn--broker:hover { background:rgba(46,204,113,0.12); color:#27ae60; opacity:1; }
 .act-btn--broker.is-active { color:#27ae60; opacity:1; }
+.act-btn--watch { color:var(--muted); opacity:.5; }
+.act-btn--watch:hover { background:var(--accent-weak); color:var(--accent); opacity:1; }
+.act-btn--watch.is-active { color:var(--accent); opacity:1; }
 .btn-icon--delete { color:var(--neg); }
 .btn-icon--delete:hover { background:var(--neg-weak); }
 .btn-icon svg { display:block; width:15px; height:15px; }
@@ -1522,6 +1525,15 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .detail-star.is-active { color:#f59e0b; }
 .detail-star svg { width:18px; height:18px; }
 span.detail-star { cursor:default; }
+
+/* Watch-Label toggle under the score donut (Watch-Bucket only) */
+.detail-score-stack { display:flex; flex-direction:column; align-items:center; gap:var(--s-1); }
+.detail-watch { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface);
+  color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); font-family:var(--font-ui); }
+.detail-watch svg { width:15px; height:15px; }
+.detail-watch:hover { background:var(--surface-3); color:var(--text); }
+.detail-watch.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .ticket__row--mk .ticket__lbl { color:#9333ea; font-weight:var(--fw-bold); }
 [data-theme="dark"] .ticket__row--mk .ticket__lbl { color:#c084fc; }
 /* Detail-Tabs: 5 Tabs müssen ohne Overflow auf 390px passen */
@@ -1616,7 +1628,7 @@ span.detail-star { cursor:default; }
 /* ════════════════════════════════════════════════════════════════
    DETAIL MODAL — SCORE RING + PRICE VISUALIZATIONS
    ════════════════════════════════════════════════════════════════ */
-.detail-header-right { display:flex; align-items:center; gap:var(--s-2); flex-shrink:0; }
+.detail-header-right { display:flex; align-items:flex-start; gap:var(--s-2); flex-shrink:0; }
 
 .score-ring { position:relative; width:52px; height:52px; flex-shrink:0; }
 .score-ring svg { display:block; }
@@ -2003,6 +2015,8 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   width:34px; height:30px; border:1px solid var(--border); border-radius:var(--r-1);
   background:var(--surface); color:var(--muted); cursor:pointer; flex-shrink:0; margin-right:.4rem; }
 .subnav-alert:hover { background:var(--surface-3); color:var(--text); }
+.subnav-alert[hidden] { display:none; }
+#subnav-watch.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .alert-badge-count { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px;
   border-radius:999px; background:var(--neg); color:#fff; font-size:10px; font-weight:700;
   line-height:16px; text-align:center; box-shadow:0 0 0 2px var(--surface-2); }

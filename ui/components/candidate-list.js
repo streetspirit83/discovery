@@ -388,6 +388,7 @@ function sortValue(c, col) {
     case 'tv_mcap':   return tv?.market_cap ?? null;
     case 'star':      return c.in_portfolio ? 1 : 0;
     case 'broker':    return c.broker_armed ? 1 : 0;
+    case 'watch':     return c.watch_flag ? 1 : 0;
     default:          return '';
   }
 }
@@ -752,11 +753,12 @@ export class CandidateList {
     this.candidates        = [];
     // Mehrfachauswahl-Filter (sector/capSize/score/tr/lsTrend) sind Arrays;
     // Toggles (broker/alerts/dup) und state bleiben String.
-    this.filters           = { state: '', sector: [], mega: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '' };
+    this.filters           = { state: '', sector: [], mega: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '', watch: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
     this.viewMode          = 'standard';
+    this.bucket            = 'inbox'; // aktiver Blob (Watch-Label nur im Watch-Bucket)
     this.dupMap            = null;   // "EXCH:SYMBOL" → Bucket-Name (Dup-Marker)
 
     this.thead     = document.getElementById('candidate-thead');
@@ -921,6 +923,21 @@ export class CandidateList {
     this.renderRows();
   }
 
+  /** Aktiven Bucket setzen (steuert die Watch-Label-Spalte in der Meta-Ansicht). */
+  setBucket(bucket) {
+    if (this.bucket === bucket) return;
+    this.bucket = bucket;
+    this.renderThead();
+    this.renderRows();
+  }
+
+  /** Watch-Filter-Toggle (Subbar, nur Watch-Bucket): zeigt nur Watch-Label-Kandidaten.
+   *  Ohne Auto-Select — es ist eine Sicht, keine Bulk-Vorauswahl. */
+  setWatchOnly(on) {
+    this.filters.watch = on ? 'yes' : '';
+    this.renderRows();
+  }
+
   // Returns ▲/▼ glyph only for the active sort column, nothing for others.
   sortGlyph(col) {
     if (this.sort.column !== col) return '';
@@ -942,7 +959,7 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search, mega } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search, mega, watch } = this.filters;
     // Dropdown-Filter sind Mehrfachauswahl (Arrays): OR innerhalb eines
     // Filters, AND über die Filter hinweg. Strings (Alt-Zustand) werden als
     // Ein-Element-Auswahl behandelt.
@@ -952,6 +969,7 @@ export class CandidateList {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (search && !matchesSearch(c, search))                  return false; // Topbar-Suche
       if (dup === 'yes' && !this.dupMap?.has(dupKey(c)))        return false; // nur Dubletten
+      if (watch === 'yes' && !c.watch_flag)                     return false; // nur Watch-Label
       if (alerts === 'active' && !(Array.isArray(c.alerts) && c.alerts.some((a) => a && a.enabled !== false))) return false;
       if (fTrendV.length) {
         const t = lsTrend(c);
@@ -1029,6 +1047,9 @@ export class CandidateList {
           <button class="sort-btn" data-sort="${d.key}">${d.label} ${this.sortGlyph(d.key)}</button></th>`
       ).join('');
       cols += `<th class="num">Aktion</th>`;
+      if (this.viewMode === 'meta' && this.bucket === 'watch') {
+        cols += this.thNum('watch', icons.eye, 'Watch-Label \u00b7 aktiv beobachtete Ticker (nur Watch-Bucket) \u00b7 antippen zum Umschalten');
+      }
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
       cols += this.thNum('tr_check', 'TR', 'Trade-Republic-Handelbarkeit (via Lang & Schwarz): \u2713 auf LS gelistet = sehr wahrscheinlich auf TR \u00b7 \u2717 nicht auf LS = nicht auf TR \u00b7 ? ungepr\u00fcft \u00b7 Klick \u00f6ffnet die LS-Seite \u00b7 Check-Button (Einkaufstasche) in der Subbar f\u00fcr ausgew\u00e4hlte Ticker');
@@ -1174,6 +1195,8 @@ export class CandidateList {
 
       const brokerTd = `<td class="num"><button class="act-btn act-btn--broker${c.broker_armed ? ' is-active' : ''}" data-action="toggleBroker" title="${c.broker_armed ? 'Broker-Marker entfernen' : 'Im Broker handelbar & Alert scharf'}">${icons.check}</button></td>`;
 
+      const watchTd = `<td class="num"><button class="act-btn act-btn--watch${c.watch_flag ? ' is-active' : ''}" data-action="toggleWatch" title="${c.watch_flag ? 'Watch-Label entfernen' : 'Als aktiv beobachtet markieren'}">${icons.eye}</button></td>`;
+
       const trCheckTd = `<td class="num">${renderTrCheck(c)}</td>`;
 
       let dataCols;
@@ -1190,10 +1213,11 @@ export class CandidateList {
           `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
           starTd + actionTd;
       } else {
+        const watchCol = (this.viewMode === 'meta' && this.bucket === 'watch') ? watchTd : '';
         dataCols = VIEWS[this.viewMode].map((d) => {
           const heat = HEAT_KEYS.has(d.key) ? heatStyle(sortValue(c, d.key)) : '';
           return `<td class="${d.num ? 'num' : ''}${d.groupStart ? ' col-group-start' : ''}"${heat}>${d.fmt(c)}</td>`;
-        }).join('') + actionTd + starTd + brokerTd + trCheckTd;
+        }).join('') + actionTd + watchCol + starTd + brokerTd + trCheckTd;
       }
 
       const tr = document.createElement('tr');
@@ -1234,6 +1258,7 @@ export class CandidateList {
       tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
+      tr.querySelector('[data-action="toggleWatch"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleWatch', c); });
       tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
 
       // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
