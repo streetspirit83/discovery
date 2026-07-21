@@ -2,7 +2,7 @@ import { enrichCandidate } from '../lib/claude-api.js';
 import {
   scoreRingSVG, priceBandHorizontalSVG, priceLevelsTable,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
-} from '../lib/price-viz.js?v=20260722c';
+} from '../lib/price-viz.js?v=20260722d';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { icons } from '../lib/icons.js?v=20260718a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';

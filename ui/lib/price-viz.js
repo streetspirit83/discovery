@@ -154,20 +154,9 @@ export function priceLadderSVG(tv, clusters = null) {
 
 /* ── Horizontal trend-band ───────────────────────────────────────────────── */
 // Same information as priceLadderSVG (52W range + ATH cap, SMAs, Bollinger,
-// pivots, Donchian, confluence clusters) but laid out left→right so it reads
-// as a wide chart. Levels are vertical ticks on the bar; the key ones get a
-// label above (two collision-avoided rows); the current price sits below.
-
-function spreadX(items, minGap, left, right) {
-  const a = items.slice().sort((p, q) => p.x - q.x);
-  for (let i = 1; i < a.length; i++) if (a[i].x < a[i - 1].x + minGap) a[i].x = a[i - 1].x + minGap;
-  if (a.length && a[a.length - 1].x > right) {
-    a[a.length - 1].x = right;
-    for (let i = a.length - 2; i >= 0; i--) if (a[i].x > a[i + 1].x - minGap) a[i].x = a[i + 1].x - minGap;
-  }
-  for (const it of a) it.x = Math.max(left, Math.min(right, it.x));
-  return a;
-}
+// pivots, Donchian, confluence clusters) but laid out left→right as a compact
+// bar. Levels are vertical ticks (values live in the Kurs-Daten table); the
+// current price sits below.
 
 export function priceBandHorizontalSVG(tv, clusters = null) {
   const cur = tv.close_1m ?? tv.close;
@@ -176,13 +165,15 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     return `<p class="pv-empty">Keine 52‑Wochen-Kursdaten – „TV Daten" laden.</p>`;
   }
 
-  const W = 320, H = 132, padL = 8, padR = 8;
-  const barTop = 80, barH = 18, barBottom = barTop + barH;
-  const rowY = [15, 41];
+  // Compact band: no level labels above (all values live in the Kurs-Daten
+  // table below), so the bar sits near the top and the chart stays narrow.
+  const W = 320, H = 52, padL = 8, padR = 8;
+  const barTop = 8, barH = 18, barBottom = barTop + barH;
   const hasCap = ath != null && ath > hi52;
   const usable = W - padL - padR;
   const capW = hasCap ? usable * 0.16 : 0;
   const mainLeft = padL, mainRight = W - padR - capW, mainSpan = hi52 - lo52;
+  const lft = padL + 2, rgt = W - padR - 2;
 
   const xOf = (v) => {
     if (v == null) return null;
@@ -200,34 +191,11 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     ['52W-T', lo52, 'anchor'],
   ].filter(([, v]) => v != null);
 
-  const tradable = raw.filter(([, , t]) => t !== 'anchor');
-  const resist = tradable.filter(([, v]) => v > cur).sort((a, b) => a[1] - b[1])[0];
-  const support = tradable.filter(([, v]) => v < cur).sort((a, b) => b[1] - a[1])[0];
-  const labelSet = new Set(['ATH', '52W-H', '52W-T', 'SMA20', 'SMA50', 'SMA200']);
-  if (resist) labelSet.add(resist[0]);
-  if (support) labelSet.add(support[0]);
-
-  // Vertical ticks for every level.
+  // Vertical ticks for every level (hover shows name + value).
   const ticks = raw.map(([name, v, type]) => {
     const x = xOf(v);
     return `<line x1="${x.toFixed(1)}" y1="${barTop}" x2="${x.toFixed(1)}" y2="${barBottom}"
       class="pv-tick pv-tick--${type}"><title>${esc(name)}: ${fmt(v)}</title></line>`;
-  }).join('');
-
-  // Labels above in two rows (alternating by price, then de-collided per row).
-  const sorted = raw.filter(([name]) => labelSet.has(name))
-    .sort((a, b) => a[1] - b[1])
-    .map(([name, v, type], i) => ({ name, v, type, ox: xOf(v), x: xOf(v), row: i % 2 }));
-  const minGap = 50, lft = padL + 2, rgt = W - padR - 2;
-  const laid = [0, 1].flatMap((r) => spreadX(sorted.filter((s) => s.row === r), minGap, lft, rgt));
-  const labels = laid.map((it) => {
-    const ty = rowY[it.row];
-    // Edge-aware anchor: middle-anchored text overflows the viewBox at the
-    // extremes, so anchor start/end near the left/right edge instead.
-    const anchor = it.x < 46 ? 'start' : it.x > W - 46 ? 'end' : 'middle';
-    const tx = anchor === 'start' ? padL : anchor === 'end' ? W - padR : it.x;
-    return `<line x1="${it.x.toFixed(1)}" y1="${(ty + 3).toFixed(1)}" x2="${it.ox.toFixed(1)}" y2="${barTop - 1}" class="pv-leader"/>
-      <text x="${tx.toFixed(1)}" y="${ty}" text-anchor="${anchor}" class="pv-lbl pv-lbl--${it.type}">${esc(it.name)} ${fmt(it.v)}</text>`;
   }).join('');
 
   // Bollinger band overlay.
@@ -255,9 +223,9 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
   const xc = xOf(cur);
   const xcl = Math.max(lft + 12, Math.min(rgt - 12, xc));
   const curMark = `
-    <line x1="${xc.toFixed(1)}" y1="${barTop - 6}" x2="${xc.toFixed(1)}" y2="${barBottom + 8}" class="pv-cur"/>
-    <circle cx="${xc.toFixed(1)}" cy="${(barBottom + 8).toFixed(1)}" r="3.5" class="pv-cur-dot"/>
-    <text x="${xcl.toFixed(1)}" y="122" text-anchor="middle" class="pv-lbl pv-lbl--cur">● ${fmt(cur)}</text>`;
+    <line x1="${xc.toFixed(1)}" y1="${barTop - 6}" x2="${xc.toFixed(1)}" y2="${barBottom + 6}" class="pv-cur"/>
+    <circle cx="${xc.toFixed(1)}" cy="${(barBottom + 6).toFixed(1)}" r="3.5" class="pv-cur-dot"/>
+    <text x="${xcl.toFixed(1)}" y="${H - 4}" text-anchor="middle" class="pv-lbl pv-lbl--cur">● ${fmt(cur)}</text>`;
 
   const capRect = hasCap
     ? `<rect x="${mainRight.toFixed(1)}" y="${barTop}" width="${capW.toFixed(1)}" height="${barH}" class="pv-cap"/>` : '';
@@ -266,7 +234,7 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     <svg class="pv-hband" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="Kursposition relativ zu 52-Wochen-Spanne und Leveln (horizontal)">
       <rect x="${mainLeft}" y="${barTop}" width="${(mainRight - mainLeft).toFixed(1)}" height="${barH}" class="pv-bar"/>
-      ${capRect}${bbBand}${cluBands}${ticks}${labels}${curMark}
+      ${capRect}${bbBand}${cluBands}${ticks}${curMark}
     </svg>`;
 }
 
