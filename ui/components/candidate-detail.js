@@ -433,16 +433,8 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
 
   // 1. Kurs + Δ + Quelle + R:R + €/$-Umschalter (die Level-Stationen liegen im
-  //    Trade-Tab), darunter das horizontale Trend-Band (ATH · SMAs · 52W ·
-  //    Pivots · Cluster) als Einstieg.
+  //    Trade-Tab).
   parts.push(heroPriceRow(c, disp, tl));
-  if (tv) {
-    const band = priceBandHorizontalSVG(tv, pc?.clusters ?? null);
-    if (!band.includes('pv-empty')) {
-      parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">Trend-Band im Detail</h4></div>
-        <div class="pv-hband-wrap">${band}</div>${priceLadderLegend(!!pc?.clusters?.length)}`);
-    }
-  }
 
   // 2. Interactive price/volume chart (Lightweight Charts, vendored): 10-day LS
   //    intraday area, OR — when a Swing-Check has fetched them — 1-year TD daily
@@ -501,7 +493,19 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
     parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
   }
 
-  // 3. Renditen, Range/Volatilität (der Live-Intraday-Verlauf steckt bereits
+  // 3. Trend-Band (horizontal): 52W-Range + ATH-Cap, SMAs/Bollinger/Pivots/
+  //    Donchian-Ticks, Cluster. Farb-Legende eingeklappt (nur die Fußnote mit
+  //    52W-Position / SMA-Ausrichtung / nächstem R/S bleibt sichtbar).
+  if (tv) {
+    const band = priceBandHorizontalSVG(tv, pc?.clusters ?? null);
+    if (!band.includes('pv-empty')) {
+      parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">Trend-Band im Detail</h4></div>
+        <div class="pv-hband-wrap">${band}</div>
+        <details class="pv-legend-details"><summary>Legende</summary>${priceLadderLegend(!!pc?.clusters?.length)}</details>`);
+    }
+  }
+
+  // 4. Renditen, Range/Volatilität (der Live-Intraday-Verlauf steckt bereits
   //    im Chart oben — keine separate Sparkline mehr).
   if (tv) {
     const perf = perfBarsHTML(tv);

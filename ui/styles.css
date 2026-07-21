@@ -1881,8 +1881,12 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 /* Interactive LS chart container (Lightweight Charts) */
 .ls-chart { height:240px; width:100%; }
 
-/* Collapsed detail ladder */
-.pv-ladder-details summary { cursor:pointer; list-style:revert; }
+/* Collapsed detail ladder / trend-band legend */
+.pv-ladder-details summary,
+.pv-legend-details summary { cursor:pointer; list-style:revert; }
+.pv-legend-details { margin-top:var(--s-1); }
+.pv-legend-details summary { font-size:var(--fs-1); color:var(--muted); }
+.pv-legend-details[open] summary { margin-bottom:var(--s-1); }
 
 /* ── Trade ticket: vertical scale + segmented Long|Short + prob bars ── */
 .ticket__seg { margin:var(--s-2) 0 var(--s-3); }
