@@ -152,6 +152,132 @@ export function priceLadderSVG(tv, clusters = null) {
     </p>`;
 }
 
+/* ── Horizontal trend-band ───────────────────────────────────────────────── */
+// Same information as priceLadderSVG (52W range + ATH cap, SMAs, Bollinger,
+// pivots, Donchian, confluence clusters) but laid out left→right so it reads
+// as a wide chart. Levels are vertical ticks on the bar; the key ones get a
+// label above (two collision-avoided rows); the current price sits below.
+
+function spreadX(items, minGap, left, right) {
+  const a = items.slice().sort((p, q) => p.x - q.x);
+  for (let i = 1; i < a.length; i++) if (a[i].x < a[i - 1].x + minGap) a[i].x = a[i - 1].x + minGap;
+  if (a.length && a[a.length - 1].x > right) {
+    a[a.length - 1].x = right;
+    for (let i = a.length - 2; i >= 0; i--) if (a[i].x > a[i + 1].x - minGap) a[i].x = a[i + 1].x - minGap;
+  }
+  for (const it of a) it.x = Math.max(left, Math.min(right, it.x));
+  return a;
+}
+
+export function priceBandHorizontalSVG(tv, clusters = null) {
+  const cur = tv.close_1m ?? tv.close;
+  const lo52 = tv.price_52_week_low, hi52 = tv.price_52_week_high, ath = tv.high_all;
+  if (cur == null || lo52 == null || hi52 == null || hi52 <= lo52) {
+    return `<p class="pv-empty">Keine 52‑Wochen-Kursdaten – „TV Daten" laden.</p>`;
+  }
+
+  const W = 320, H = 132, padL = 8, padR = 8;
+  const barTop = 80, barH = 18, barBottom = barTop + barH;
+  const rowY = [15, 41];
+  const hasCap = ath != null && ath > hi52;
+  const usable = W - padL - padR;
+  const capW = hasCap ? usable * 0.16 : 0;
+  const mainLeft = padL, mainRight = W - padR - capW, mainSpan = hi52 - lo52;
+
+  const xOf = (v) => {
+    if (v == null) return null;
+    if (v <= hi52) return mainLeft + clamp01((v - lo52) / mainSpan) * (mainRight - mainLeft);
+    return hasCap ? mainRight + clamp01((v - hi52) / (ath - hi52)) * capW : mainRight;
+  };
+
+  const raw = [
+    ['ATH', ath, 'anchor'], ['52W-H', hi52, 'anchor'],
+    ['R2', tv.pivot_r2, 'resist'], ['R1', tv.pivot_r1, 'resist'],
+    ['Donch↑', tv.donch_ch20_upper_1m, 'resist'], ['BB↑', tv.bb_upper, 'band'],
+    ['SMA20', tv.sma20, 'ma'], ['SMA50', tv.sma50, 'ma'], ['SMA100', tv.sma100, 'ma'], ['SMA200', tv.sma200, 'ma'],
+    ['BB↓', tv.bb_lower, 'band'], ['Donch↓', tv.donch_ch20_lower_1m, 'support'],
+    ['S1', tv.pivot_s1, 'support'], ['S2', tv.pivot_s2, 'support'],
+    ['52W-T', lo52, 'anchor'],
+  ].filter(([, v]) => v != null);
+
+  const tradable = raw.filter(([, , t]) => t !== 'anchor');
+  const resist = tradable.filter(([, v]) => v > cur).sort((a, b) => a[1] - b[1])[0];
+  const support = tradable.filter(([, v]) => v < cur).sort((a, b) => b[1] - a[1])[0];
+  const labelSet = new Set(['ATH', '52W-H', '52W-T', 'SMA20', 'SMA50', 'SMA200']);
+  if (resist) labelSet.add(resist[0]);
+  if (support) labelSet.add(support[0]);
+
+  // Vertical ticks for every level.
+  const ticks = raw.map(([name, v, type]) => {
+    const x = xOf(v);
+    return `<line x1="${x.toFixed(1)}" y1="${barTop}" x2="${x.toFixed(1)}" y2="${barBottom}"
+      class="pv-tick pv-tick--${type}"><title>${esc(name)}: ${fmt(v)}</title></line>`;
+  }).join('');
+
+  // Labels above in two rows (alternating by price, then de-collided per row).
+  const sorted = raw.filter(([name]) => labelSet.has(name))
+    .sort((a, b) => a[1] - b[1])
+    .map(([name, v, type], i) => ({ name, v, type, ox: xOf(v), x: xOf(v), row: i % 2 }));
+  const minGap = 50, lft = padL + 2, rgt = W - padR - 2;
+  const laid = [0, 1].flatMap((r) => spreadX(sorted.filter((s) => s.row === r), minGap, lft, rgt));
+  const labels = laid.map((it) => {
+    const ty = rowY[it.row];
+    // Edge-aware anchor: middle-anchored text overflows the viewBox at the
+    // extremes, so anchor start/end near the left/right edge instead.
+    const anchor = it.x < 46 ? 'start' : it.x > W - 46 ? 'end' : 'middle';
+    const tx = anchor === 'start' ? padL : anchor === 'end' ? W - padR : it.x;
+    return `<line x1="${it.x.toFixed(1)}" y1="${(ty + 3).toFixed(1)}" x2="${it.ox.toFixed(1)}" y2="${barTop - 1}" class="pv-leader"/>
+      <text x="${tx.toFixed(1)}" y="${ty}" text-anchor="${anchor}" class="pv-lbl pv-lbl--${it.type}">${esc(it.name)} ${fmt(it.v)}</text>`;
+  }).join('');
+
+  // Bollinger band overlay.
+  let bbBand = '';
+  if (tv.bb_upper != null && tv.bb_lower != null) {
+    const xl = xOf(tv.bb_lower), xu = xOf(tv.bb_upper);
+    bbBand = `<rect x="${xl.toFixed(1)}" y="${barTop}" width="${Math.max(1, xu - xl).toFixed(1)}" height="${barH}" class="pv-bb"/>`;
+  }
+
+  // Confluence clusters (green support / red resistance), opacity by score.
+  let cluBands = '';
+  if (Array.isArray(clusters) && clusters.length) {
+    cluBands = clusters.map((cl) => {
+      const x1 = xOf(cl.lo), x2 = xOf(cl.hi);
+      if (x1 == null || x2 == null) return '';
+      const op = Math.min(0.4, 0.12 + cl.score * 0.03).toFixed(2);
+      const names = cl.members.map((m) => m.label).join(' + ');
+      return `<rect x="${x1.toFixed(1)}" y="${barTop - 3}" width="${Math.max(3, x2 - x1).toFixed(1)}" height="${barH + 6}"
+        class="pv-clu pv-clu--${cl.side}" style="opacity:${op}">
+        <title>Cluster ${fmt(cl.lo)}–${fmt(cl.hi)} · Score ${cl.score} · ${esc(names)}</title></rect>`;
+    }).join('');
+  }
+
+  // Current-price marker below the bar.
+  const xc = xOf(cur);
+  const xcl = Math.max(lft + 12, Math.min(rgt - 12, xc));
+  const curMark = `
+    <line x1="${xc.toFixed(1)}" y1="${barTop - 6}" x2="${xc.toFixed(1)}" y2="${barBottom + 8}" class="pv-cur"/>
+    <circle cx="${xc.toFixed(1)}" cy="${(barBottom + 8).toFixed(1)}" r="3.5" class="pv-cur-dot"/>
+    <text x="${xcl.toFixed(1)}" y="122" text-anchor="middle" class="pv-lbl pv-lbl--cur">● ${fmt(cur)}</text>`;
+
+  const capRect = hasCap
+    ? `<rect x="${mainRight.toFixed(1)}" y="${barTop}" width="${capW.toFixed(1)}" height="${barH}" class="pv-cap"/>` : '';
+
+  const pos52 = clamp01((cur - lo52) / mainSpan) * 100;
+  const above = ['sma20', 'sma50', 'sma200'].map((k) => (tv[k] != null && cur >= tv[k] ? '✓' : '·')).join('');
+
+  return `
+    <svg class="pv-hband" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="Kursposition relativ zu 52-Wochen-Spanne und Leveln (horizontal)">
+      <rect x="${mainLeft}" y="${barTop}" width="${(mainRight - mainLeft).toFixed(1)}" height="${barH}" class="pv-bar"/>
+      ${capRect}${bbBand}${cluBands}${ticks}${labels}${curMark}
+    </svg>
+    <p class="pv-foot">
+      52W-Position <b>${pos52.toFixed(0)}%</b> · SMA20/50/200 <b>${above}</b>
+      ${resist ? ` · Widerstand ${esc(resist[0])} <span class="neg">${pctTxt((resist[1] - cur) / cur * 100)}</span>` : ''}
+      ${support ? ` · Stütze ${esc(support[0])} <span class="pos">${pctTxt((support[1] - cur) / cur * 100)}</span>` : ''}
+    </p>`;
+}
+
 /* ── Range bands per timeframe (A) ───────────────────────────────────────── */
 
 export function rangeBandsHTML(tv) {

@@ -1680,6 +1680,9 @@ span.detail-star { cursor:default; }
 
 /* Vertical price ladder (SVG) */
 .pv-ladder { display:block; overflow:visible; }
+.pv-hband-wrap { width:100%; min-width:0; margin-top:var(--s-1); }
+.pv-hband { display:block; overflow:visible; width:100%; }
+.pv-hband .pv-lbl { font-size:9px; }
 .pv-bar { fill:var(--surface-3); }
 .pv-cap { fill:var(--ai-weak); }
 .pv-bb  { fill:var(--accent); opacity:.12; }
