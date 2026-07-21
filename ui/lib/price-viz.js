@@ -227,13 +227,12 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     <text x="${padL}" y="${H - 4}" text-anchor="start" class="pv-lbl pv-lbl--anchor">52W-T ${fmt(lo52)}</text>
     <text x="${W - padR}" y="${H - 4}" text-anchor="end" class="pv-lbl pv-lbl--anchor">${rightTag} ${fmt(rightVal)}</text>`;
 
-  // Current-price marker below the bar.
+  // Current-price marker below the bar (line + dot only; the price value lives
+  // in the panel above, so no text label here — avoids overlap with the ends).
   const xc = xOf(cur);
-  const xcl = Math.max(lft + 12, Math.min(rgt - 12, xc));
   const curMark = `
     <line x1="${xc.toFixed(1)}" y1="${barTop - 6}" x2="${xc.toFixed(1)}" y2="${barBottom + 6}" class="pv-cur"/>
-    <circle cx="${xc.toFixed(1)}" cy="${(barBottom + 6).toFixed(1)}" r="3.5" class="pv-cur-dot"/>
-    <text x="${xcl.toFixed(1)}" y="${H - 4}" text-anchor="middle" class="pv-lbl pv-lbl--cur">● ${fmt(cur)}</text>`;
+    <circle cx="${xc.toFixed(1)}" cy="${(barBottom + 6).toFixed(1)}" r="3.5" class="pv-cur-dot"/>`;
 
   const capRect = hasCap
     ? `<rect x="${mainRight.toFixed(1)}" y="${barTop}" width="${capW.toFixed(1)}" height="${barH}" class="pv-cap"/>` : '';
