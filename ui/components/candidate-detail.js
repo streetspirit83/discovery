@@ -1,8 +1,8 @@
 import { enrichCandidate } from '../lib/claude-api.js';
 import {
-  scoreRingSVG, priceLadderSVG, priceLadderLegend,
+  scoreRingSVG, priceLadderLegend, priceBandHorizontalSVG,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
-} from '../lib/price-viz.js?v=20260702h';
+} from '../lib/price-viz.js?v=20260722a';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { icons } from '../lib/icons.js?v=20260718a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
@@ -291,11 +291,28 @@ function heroStation(label, value, kurs, cls = '') {
   </div>`;
 }
 
-function renderHeroPanel(c, disp, pc, tl) {
+// Hero price row (Perf tab): current price + change + source, R:R and the €/$
+// toggle. The level stations + volume chips moved to the Trade tab (heroLevels).
+function heroPriceRow(c, disp, tl) {
   if (!tl || tl.kurs == null) return '';
   const sym = disp.cur === 'EUR' ? '€' : disp.cur === 'USD' ? '$' : disp.cur;
   const isLive = c.ls_quote?.price != null && tl.lsF != null;
   const chg = isLive ? c.ls_quote.change_pct : disp.tv?.change_1d;
+  return `<div class="hero hero--pricerow">
+    <div class="hero__price-row">
+      <span class="hero__price">${fmtNum(tl.kurs)} ${sym}</span>
+      <span class="hero__chg ${chg == null ? '' : chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</span>
+      <span class="hero__src">${isLive ? `LS live${c.ls_quote?.checked_at ? ` · ${formatDate(c.ls_quote.checked_at).slice(-5)}` : ''}` : 'TV Close'}</span>
+      ${tl.rr != null ? `<span class="hero__rr" title="Chance-Risiko (Long): (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(tl.rr, 1)}</b></span>` : ''}
+      ${curToggle(disp, 'hero__cur')}
+    </div>
+  </div>`;
+}
+
+// Hero level stations (Trade tab): Stop/Support/Kurs/Resist/Target stat-blocks,
+// proportional track, and the Vol Ø10d/Ø30d chips.
+function heroLevels(c, disp, pc, tl) {
+  if (!tl || tl.kurs == null) return '';
   const sup = pc?.nearestSup?.mid ?? null;
   const res = pc?.nearestRes?.mid ?? null;
 
@@ -333,14 +350,7 @@ function renderHeroPanel(c, disp, pc, tl) {
         ${spike ? '<span class="hero__spike">SPIKE</span>' : ''}
       </div>` : '';
 
-  return `<div class="hero">
-    <div class="hero__price-row">
-      <span class="hero__price">${fmtNum(tl.kurs)} ${sym}</span>
-      <span class="hero__chg ${chg == null ? '' : chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</span>
-      <span class="hero__src">${isLive ? `LS live${c.ls_quote?.checked_at ? ` · ${formatDate(c.ls_quote.checked_at).slice(-5)}` : ''}` : 'TV Close'}</span>
-      ${tl.rr != null ? `<span class="hero__rr" title="Chance-Risiko (Long): (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(tl.rr, 1)}</b></span>` : ''}
-      ${curToggle(disp, 'hero__cur')}
-    </div>
+  return `<div class="hero hero--levels">
     <div class="hero__stations">${stations.map(([lbl, v2, cls]) => heroStation(lbl, v2, tl.kurs, cls)).join('')}</div>
     ${track}
     ${volRow}
@@ -422,8 +432,17 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
 
-  // 1. Hero: Kurs → Stop/Sup/Res/Target → Volumen-Spikes auf einen Blick.
-  parts.push(renderHeroPanel(c, disp, pc, tl));
+  // 1. Kurs + Δ + Quelle + R:R + €/$-Umschalter (die Level-Stationen liegen im
+  //    Trade-Tab), darunter das horizontale Trend-Band (ATH · SMAs · 52W ·
+  //    Pivots · Cluster) als Einstieg.
+  parts.push(heroPriceRow(c, disp, tl));
+  if (tv) {
+    const band = priceBandHorizontalSVG(tv, pc?.clusters ?? null);
+    if (!band.includes('pv-empty')) {
+      parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">Trend-Band im Detail</h4></div>
+        <div class="pv-hband-wrap">${band}</div>${priceLadderLegend(!!pc?.clusters?.length)}`);
+    }
+  }
 
   // 2. Interactive price/volume chart (Lightweight Charts, vendored): 10-day LS
   //    intraday area, OR — when a Swing-Check has fetched them — 1-year TD daily
@@ -492,14 +511,6 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
     const gauge = bollingerGaugeHTML(tv);
     if (ranges || vol || gauge) {
       parts.push(`<h4 class="pv-subhead">Range &amp; Volatilität (1M–52W)</h4>${ranges}${vol}${gauge}`);
-    }
-    // 4. Detail-Level-Leiter auf Abruf (eingeklappt) statt als Einstieg.
-    const ladder = priceLadderSVG(tv, pc?.clusters ?? null);
-    if (!ladder.includes('pv-empty')) {
-      parts.push(`<details class="pv-ladder-details">
-        <summary class="pv-subhead">Trend-Band im Detail (ATH · SMAs · 52W · Pivots · Cluster)</summary>
-        <div class="pv-ladder-row"><div class="pv-ladder-wrap">${ladder}</div>${priceLadderLegend(!!pc?.clusters?.length)}</div>
-      </details>`);
     }
   }
   return parts.join('');
@@ -705,6 +716,7 @@ function renderTradeTab(c, disp, pc, tl, side) {
       ${side === 'long' && rr != null ? `<span class="trade-head__target" title="Chance-Risiko: (Target − Entry) / (Entry − Stop)">R:R <b>${fmtNum(rr, 1)}</b></span>` : ''}
       ${curToggle(disp, 'trade-head__cur')}
     </div>
+    ${heroLevels(c, disp, pc, tl)}
     <div class="tab-bar ticket__seg" role="tablist">
       <button class="tab-btn${side === 'long' ? ' active' : ''}" data-side="long" role="tab" aria-selected="${side === 'long'}">Long</button>
       <button class="tab-btn${side === 'short' ? ' active' : ''}" data-side="short" role="tab" aria-selected="${side === 'short'}">Short</button>
