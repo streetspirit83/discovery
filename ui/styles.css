@@ -1881,12 +1881,32 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 /* Interactive LS chart container (Lightweight Charts) */
 .ls-chart { height:240px; width:100%; }
 
-/* Collapsed detail ladder / trend-band legend */
+/* Collapsed detail ladder / trend-band price-levels table */
 .pv-ladder-details summary,
-.pv-legend-details summary { cursor:pointer; list-style:revert; }
-.pv-legend-details { margin-top:var(--s-1); }
-.pv-legend-details summary { font-size:var(--fs-1); color:var(--muted); }
-.pv-legend-details[open] summary { margin-bottom:var(--s-1); }
+.pv-levels-details summary { cursor:pointer; list-style:revert; }
+.pv-levels-details { margin-top:var(--s-1); }
+.pv-levels-details summary { font-size:var(--fs-1); color:var(--muted); }
+.pv-levels-details[open] summary { margin-bottom:var(--s-1); }
+
+.pv-levels { width:100%; border-collapse:collapse; font-size:var(--fs-1); }
+.pv-levels th {
+  text-align:right; font-weight:var(--fw-bold); color:var(--muted);
+  padding:2px 6px; border-bottom:1px solid var(--border);
+}
+.pv-levels th:first-child { text-align:left; }
+.pv-levels td { padding:3px 6px; border-bottom:1px solid var(--surface-3); }
+.pv-lvl-name { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.pv-lvl-val, .pv-lvl-delta { text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pv-lvl-delta.pos { color:var(--pos); } .pv-lvl-delta.neg { color:var(--neg); }
+.pv-lvl-row--cur { background:var(--accent-weak); font-weight:var(--fw-bold); }
+.pv-lvl-row--cur .pv-lvl-val { color:var(--accent); }
+.pv-lvl-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.pv-lvl-dot--anchor  { background:var(--muted); }
+.pv-lvl-dot--ma      { background:#2980b9; }
+.pv-lvl-dot--band    { background:var(--ai); }
+.pv-lvl-dot--resist  { background:var(--neg); }
+.pv-lvl-dot--support { background:var(--pos); }
+.pv-lvl-dot--cur     { background:var(--accent); border-radius:50%; }
 
 /* ── Trade ticket: vertical scale + segmented Long|Short + prob bars ── */
 .ticket__seg { margin:var(--s-2) 0 var(--s-3); }
