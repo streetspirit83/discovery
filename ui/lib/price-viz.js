@@ -262,20 +262,48 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
   const capRect = hasCap
     ? `<rect x="${mainRight.toFixed(1)}" y="${barTop}" width="${capW.toFixed(1)}" height="${barH}" class="pv-cap"/>` : '';
 
-  const pos52 = clamp01((cur - lo52) / mainSpan) * 100;
-  const above = ['sma20', 'sma50', 'sma200'].map((k) => (tv[k] != null && cur >= tv[k] ? '✓' : '·')).join('');
-
   return `
     <svg class="pv-hband" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="Kursposition relativ zu 52-Wochen-Spanne und Leveln (horizontal)">
       <rect x="${mainLeft}" y="${barTop}" width="${(mainRight - mainLeft).toFixed(1)}" height="${barH}" class="pv-bar"/>
       ${capRect}${bbBand}${cluBands}${ticks}${labels}${curMark}
-    </svg>
-    <p class="pv-foot">
-      52W-Position <b>${pos52.toFixed(0)}%</b> · SMA20/50/200 <b>${above}</b>
-      ${resist ? ` · Widerstand ${esc(resist[0])} <span class="neg">${pctTxt((resist[1] - cur) / cur * 100)}</span>` : ''}
-      ${support ? ` · Stütze ${esc(support[0])} <span class="pos">${pctTxt((support[1] - cur) / cur * 100)}</span>` : ''}
-    </p>`;
+    </svg>`;
+}
+
+/* ── Price-levels table (expandable, replaces the trend-band legend) ──────── */
+// Every level the band draws as a tick, listed with its price and Δ to the
+// current Kurs. Sorted high→low; the current price is highlighted, levels above
+// read as resistance (red Δ), below as support (green Δ).
+
+export function priceLevelsTable(tv) {
+  const cur = tv.close_1m ?? tv.close;
+  if (cur == null) return '';
+  const rows = [
+    ['ATH', tv.high_all, 'anchor'], ['52W-Hoch', tv.price_52_week_high, 'anchor'],
+    ['Pivot R2', tv.pivot_r2, 'resist'], ['Pivot R1', tv.pivot_r1, 'resist'],
+    ['Donchian ↑', tv.donch_ch20_upper_1m, 'resist'], ['Bollinger ↑', tv.bb_upper, 'band'],
+    ['SMA 20', tv.sma20, 'ma'], ['SMA 50', tv.sma50, 'ma'], ['SMA 100', tv.sma100, 'ma'], ['SMA 200', tv.sma200, 'ma'],
+    ['Bollinger ↓', tv.bb_lower, 'band'], ['Donchian ↓', tv.donch_ch20_lower_1m, 'support'],
+    ['Pivot S1', tv.pivot_s1, 'support'], ['Pivot S2', tv.pivot_s2, 'support'],
+    ['52W-Tief', tv.price_52_week_low, 'anchor'],
+  ].filter(([, v]) => v != null);
+  rows.push(['Kurs', cur, 'cur']);
+  rows.sort((a, b) => b[1] - a[1]);
+
+  const body = rows.map(([name, v, type]) => {
+    const isCur = type === 'cur';
+    const d = !isCur && cur > 0 ? (v - cur) / cur * 100 : null;
+    const dCls = d == null ? '' : d >= 0 ? 'neg' : 'pos';
+    return `<tr class="pv-lvl-row${isCur ? ' pv-lvl-row--cur' : ''}">
+      <td class="pv-lvl-name"><span class="pv-lvl-dot pv-lvl-dot--${type}"></span>${esc(name)}</td>
+      <td class="pv-lvl-val">${fmt(v)}</td>
+      <td class="pv-lvl-delta ${dCls}">${isCur ? '—' : pctTxt(d)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="pv-levels"><thead><tr>
+    <th>Level</th><th>Kurs</th><th>Δ</th>
+  </tr></thead><tbody>${body}</tbody></table>`;
 }
 
 /* ── Range bands per timeframe (A) ───────────────────────────────────────── */

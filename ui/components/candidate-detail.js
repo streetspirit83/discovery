@@ -1,8 +1,8 @@
 import { enrichCandidate } from '../lib/claude-api.js';
 import {
-  scoreRingSVG, priceLadderLegend, priceBandHorizontalSVG,
+  scoreRingSVG, priceBandHorizontalSVG, priceLevelsTable,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
-} from '../lib/price-viz.js?v=20260722a';
+} from '../lib/price-viz.js?v=20260722c';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { icons } from '../lib/icons.js?v=20260718a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
@@ -456,7 +456,6 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
       ? `<div class="chart-horizon" role="tablist">${btns.join('')}</div>` : '';
 
     const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
-    const note = `Linie = LS-Intraday${hasLive ? ' inkl. heutigem Live-Verlauf' : ''} · Balken = Tagesvolumen · gestrichelt = Ø V10d / Ø V30d · Linien = Sup/Res-Cluster &amp; Target · Pinch/Ziehen zum Zoomen`;
 
     let body;
     if (want1J && !canTd) {
@@ -487,21 +486,21 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
       : '';
     const tail = want1J
       ? `${zoomRow}${profileHTML(c)}`
-      : `<p class="ph-note">${note} · <b>über den Chart ziehen → Level unten setzen</b></p>${tdReachable ? '' : profileHTML(c)}`;
+      : `${tdReachable ? '' : profileHTML(c)}`;
     parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}${tail}`);
   } else {
     parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
   }
 
   // 3. Trend-Band (horizontal): 52W-Range + ATH-Cap, SMAs/Bollinger/Pivots/
-  //    Donchian-Ticks, Cluster. Farb-Legende eingeklappt (nur die Fußnote mit
-  //    52W-Position / SMA-Ausrichtung / nächstem R/S bleibt sichtbar).
+  //    Donchian-Ticks, Cluster. Darunter alle Kurs-Level als ausklappbare
+  //    Tabelle (ersetzt Legende + Fußnote).
   if (tv) {
     const band = priceBandHorizontalSVG(tv, pc?.clusters ?? null);
     if (!band.includes('pv-empty')) {
       parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">Trend-Band im Detail</h4></div>
         <div class="pv-hband-wrap">${band}</div>
-        <details class="pv-legend-details"><summary>Legende</summary>${priceLadderLegend(!!pc?.clusters?.length)}</details>`);
+        <details class="pv-levels-details"><summary>Kurs-Daten</summary>${priceLevelsTable(tv)}</details>`);
     }
   }
 
