@@ -978,6 +978,7 @@ export class CandidateDetail {
     this.onClose = onClose;
     this.getSiblings = getSiblings;   // () => ordered candidate list (current table sort)
     this.candidate = null;
+    this.bucket = null;       // aktiver Blob (Watch-Label-Toggle nur im Watch-Bucket)
     this.activeTab = 'performance';
     this.altCurrency = false; // false = native currency, true = USD↔EUR switched
     this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
@@ -1366,7 +1367,15 @@ export class CandidateDetail {
           </div>
         </div>
         <div class="detail-header-right">
-          ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
+          <div class="detail-score-stack">
+            ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
+            ${this.bucket === 'watch'
+              ? `<button class="detail-watch${c.watch_flag ? ' is-active' : ''}" id="detail-watch"
+                  aria-pressed="${c.watch_flag ? 'true' : 'false'}"
+                  title="${c.watch_flag ? 'Watch-Label entfernen' : 'Als aktiv beobachtet markieren'}">
+                  ${icons.eye}<span class="detail-watch__lbl">Watch</span></button>`
+              : ''}
+          </div>
           <button class="icon-btn" id="detail-close" aria-label="Schließen">${icons.xMark}</button>
         </div>
       </div>
@@ -1517,6 +1526,9 @@ export class CandidateDetail {
 
     // Portfolio-Stern (nur manueller Marker ist toggelbar; Merkliste-Match ist fix).
     this.el.querySelector('#detail-star')?.addEventListener('pointerup', () => this.onAction?.('toggleStar', c));
+
+    // Watch-Label (nur Watch-Bucket): aktiv beobachtete Ticker markieren.
+    this.el.querySelector('#detail-watch')?.addEventListener('pointerup', () => this.onAction?.('toggleWatch', c));
 
     // Firmenprofil: manueller Abruf per Button (app.js cached in localStorage),
     // danach "mehr/weniger"-Toggle; Toggle verschwindet wenn nichts geklemmt ist.

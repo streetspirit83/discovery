@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260719b';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722f';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260718a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260722e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260722f';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -431,6 +431,19 @@ function renderSubbar() {
       });
     });
   }
+
+  // Watch-Filter (nur Watch-Bucket): schaltet die Liste auf Watch-Label-Ticker.
+  const watchBtn = document.getElementById('subnav-watch');
+  if (watchBtn && !watchBtn.dataset.wired) {
+    watchBtn.dataset.wired = '1';
+    document.getElementById('subnav-watch-icon').innerHTML = icons.eye;
+    watchBtn.addEventListener('pointerup', () => {
+      const on = candidateList.filters.watch !== 'yes';
+      candidateList.setWatchOnly(on);
+      watchBtn.classList.toggle('is-active', on);
+    });
+  }
+  updateWatchSubnav();
   updateAlertBadge();
 }
 
@@ -750,6 +763,9 @@ async function switchBlob(blobType) {
     uiState.fDup = '';
     candidateList.filters.dup = '';
   }
+  // Watch-Label-Feature gilt nur im Watch-Bucket — Filter beim Verlassen lösen.
+  if (blobType !== 'watch') candidateList.filters.watch = '';
+  candidateDetail.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
   // Carry merkliste entry prices onto this bucket's candidates before first render.
@@ -762,10 +778,22 @@ async function switchBlob(blobType) {
     loadLsHistory();
   }
   candidateList.setData(allBlobs[blobType].candidates);
+  candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
   renderBotnav();
   renderFilterbar();
+  updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
   refreshDupMarkers();                               // fire & forget
   if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
+}
+
+// Watch-Filter-Button (Subbar) nur im Watch-Bucket zeigen; beim Verlassen den
+// aktiven Filter/Highlight zurücksetzen.
+function updateWatchSubnav() {
+  const btn = document.getElementById('subnav-watch');
+  if (!btn) return;
+  const onWatch = currentBlobType === 'watch';
+  btn.hidden = !onWatch;
+  btn.classList.toggle('is-active', onWatch && candidateList?.filters?.watch === 'yes');
 }
 
 // ── Dup-Marker für Inbox/Archiv ─────────────────────────────────────────────────
@@ -1092,6 +1120,22 @@ async function handleAction(action, candidate, extras = {}) {
       } catch (err) {
         toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
         candidate.in_portfolio = !candidate.in_portfolio; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    if (candidateDetail?.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  if (action === 'toggleWatch') {
+    candidate.watch_flag = !candidate.watch_flag;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { watch_flag: candidate.watch_flag });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.watch_flag = !candidate.watch_flag; // revert
         return;
       }
     }
