@@ -219,6 +219,14 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     }).join('');
   }
 
+  // 52W-Tief (left end) and ATH (right end) below the bar — same baseline and
+  // font size as the current price, so the axis reads Tief · Kurs · ATH.
+  const rightVal = ath != null ? ath : hi52;
+  const rightTag = ath != null ? 'ATH' : '52W-H';
+  const endLabels = `
+    <text x="${padL}" y="${H - 4}" text-anchor="start" class="pv-lbl pv-lbl--anchor">52W-T ${fmt(lo52)}</text>
+    <text x="${W - padR}" y="${H - 4}" text-anchor="end" class="pv-lbl pv-lbl--anchor">${rightTag} ${fmt(rightVal)}</text>`;
+
   // Current-price marker below the bar.
   const xc = xOf(cur);
   const xcl = Math.max(lft + 12, Math.min(rgt - 12, xc));
@@ -234,7 +242,7 @@ export function priceBandHorizontalSVG(tv, clusters = null) {
     <svg class="pv-hband" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="Kursposition relativ zu 52-Wochen-Spanne und Leveln (horizontal)">
       <rect x="${mainLeft}" y="${barTop}" width="${(mainRight - mainLeft).toFixed(1)}" height="${barH}" class="pv-bar"/>
-      ${capRect}${bbBand}${cluBands}${ticks}${curMark}
+      ${capRect}${bbBand}${cluBands}${ticks}${endLabels}${curMark}
     </svg>`;
 }
 
