@@ -58,6 +58,11 @@ export class StorageClient {
     return this.#post({ op: 'delete_candidates', blob_type: blobType, candidate_ids: candidateIds });
   }
 
+  /** Echtes Löschen aus der Inbox + Tombstone (Re-Add-Schutz ohne Archiv). */
+  async deleteAndTombstone(blobType, candidateIds) {
+    return this.#post({ op: 'delete_and_tombstone', blob_type: blobType, candidate_ids: candidateIds });
+  }
+
   /** Bulk-Verschieben inkl. Dup-Merge im Ziel: ein Roundtrip für alle IDs. */
   async moveCandidates(candidateIds, fromBlob, toBlob) {
     return this.#post({ op: 'move_candidates', candidate_ids: candidateIds, from_blob: fromBlob, to_blob: toBlob });

@@ -14,6 +14,22 @@ const BLOB_NAMES = {
   watch: 'discovery-watch',
 };
 
+// Tombstone list: symbol:exchange keys of candidates the user hard-deleted
+// from the inbox. Keeps the scheduled adapters from re-adding them WITHOUT
+// polluting the archive bucket (which is reserved for manual dismissals).
+const TOMBSTONE_KEY = 'discovery-tombstone';
+async function readTombstone(store) {
+  try {
+    const data = await store.get(TOMBSTONE_KEY, { type: 'json' });
+    return Array.isArray(data?.keys) ? data.keys : [];
+  } catch {
+    return [];
+  }
+}
+async function writeTombstone(store, keys) {
+  await store.setJSON(TOMBSTONE_KEY, { updated_at: new Date().toISOString(), keys });
+}
+
 // Server-side config blob (screener presets etc.) – synced across devices.
 const CONFIG_KEY = 'discovery-config';
 function emptyConfig() {
@@ -207,7 +223,11 @@ export default async function handler(req) {
       readBlobDoc(store, 'inbox'),
     ]);
 
-    const archiveKeys = new Set(archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
+    const tombstoneKeys = new Set(await readTombstone(store));
+    const archiveKeys = new Set([
+      ...archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+      ...tombstoneKeys,
+    ]);
     const exportKeys  = new Set([
       ...exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
       ...watchDoc.candidates.map((c)  => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
@@ -333,6 +353,33 @@ export default async function handler(req) {
     await writeBlobDoc(store, blobType, doc);
     log('info', 'storage: delete_candidate', { blobType, candidateId });
     return respond(200, { ok: true, id: candidateId });
+  }
+
+  // --- op: delete_and_tombstone (bulk hard-delete + re-add-Schutz ohne Archiv) ---
+  // Ersetzt das frühere „Inbox-Löschen = ins Archiv verschieben": löscht die
+  // Kandidaten wirklich und merkt sich nur ihren Symbol:Exchange-Schlüssel als
+  // Tombstone, damit die geplanten Adapter sie nicht neu anlegen. Das Archiv
+  // bleibt sauber (nur manuell verworfene Werte).
+  if (op === 'delete_and_tombstone') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const ids = body.candidate_ids;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idSet = new Set(ids);
+    const removed = doc.candidates.filter((c) => idSet.has(c.id));
+    doc.candidates = doc.candidates.filter((c) => !idSet.has(c.id));
+
+    const tomb = new Set(await readTombstone(store));
+    for (const c of removed) {
+      if (c.symbol && c.exchange) tomb.add(`${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`);
+    }
+    await writeBlobDoc(store, blobType, doc);
+    await writeTombstone(store, [...tomb]);
+    log('info', 'storage: delete_and_tombstone', { blobType, requested: ids.length, removed: removed.length });
+    return respond(200, { ok: true, removed: removed.length });
   }
 
   // --- op: delete_candidates (bulk: ein Read + ein Write statt N Roundtrips) ---

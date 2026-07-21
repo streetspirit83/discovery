@@ -15,7 +15,7 @@ import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260719f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
 import { renderControlModal } from './components/control-modal.js?v=20260719b';
-import { loadStorageClient } from './lib/storage-client.js?v=20260718a';
+import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260707e';
 import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
@@ -1045,11 +1045,12 @@ async function handleAction(action, candidate, extras = {}) {
     if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
     if (!useMock) {
       try {
-        // Inbox delete → move to archive so the adapter won't re-add on next run.
-        // Archive/export delete → true hard delete (adapters never write there).
+        // Löschen = echtes Hard-Delete. Inbox: zusätzlich Tombstone (Re-Add-
+        // Schutz), aber NICHT ins Archiv (Archiv = nur manuell verworfene).
+        // Archive/export: reines Hard-Delete (Adapter schreiben dort nie).
         if (currentBlobType === 'inbox') {
-          await storageClient.moveCandidate(candidate.id, 'inbox', 'archive');
-          allBlobs.archive = null;
+          try { await storageClient.deleteAndTombstone('inbox', [candidate.id]); }
+          catch { await storageClient.deleteCandidate('inbox', candidate.id); }
         } else {
           await storageClient.deleteCandidate(currentBlobType, candidate.id);
         }
@@ -1214,28 +1215,21 @@ async function handleBulkAction(action, ids) {
     if (!confirm(`${targets.length} Kandidat(en) endgültig aus „${currentBlobType}" löschen?`)) return;
     const ids = targets.map((c) => c.id);
     if (!useMock) {
-      // Ein Bulk-Roundtrip (ein Blob-Read+Write) statt N sequentieller Einzel-
-      // Ops; Fallback auf die Einzel-Ops, solange das Backend die Bulk-Op noch
-      // nicht kennt (Deploy-Versatz Pages vs. Netlify).
+      // Löschen ist ein echtes Hard-Delete. In der Inbox zusätzlich Tombstone,
+      // damit die Adapter den Wert nicht neu anlegen — OHNE ihn ins Archiv zu
+      // schieben (Archiv = nur manuell verworfene Werte). Fallback auf Hard-
+      // Delete ohne Tombstone, falls das Backend die neue Op noch nicht kennt.
       try {
         if (currentBlobType === 'inbox') {
-          await storageClient.moveCandidates(ids, 'inbox', 'archive');
-          allBlobs.archive = null;
+          await storageClient.deleteAndTombstone('inbox', ids);
         } else {
           await storageClient.deleteCandidates(currentBlobType, ids);
         }
       } catch {
-        for (const c of targets) {
-          try {
-            if (currentBlobType === 'inbox') {
-              await storageClient.moveCandidate(c.id, 'inbox', 'archive');
-              allBlobs.archive = null;
-            } else {
-              await storageClient.deleteCandidate(currentBlobType, c.id);
-            }
-          } catch (err) {
-            toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
-          }
+        try {
+          await storageClient.deleteCandidates(currentBlobType, ids);
+        } catch (err) {
+          toast(`Löschen fehlgeschlagen: ${err.message}`, 'error');
         }
       }
     }
