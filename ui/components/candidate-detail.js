@@ -133,6 +133,9 @@ function renderToolbar(c) {
   const scUrl = c.symbol
     ? `https://www.stockconsultant.com/consultnow/basicplus.cgi?symbol=${encodeURIComponent(c.symbol)}`
     : null;
+  const tfUrl = c.isin
+    ? `https://aktie.traderfox.com/visualizations/${encodeURIComponent(c.isin)}`
+    : null;
   // Single row: external links · edit · | · quick actions. All direct flex
   // children so they shrink to fit one line even on a narrow phone (§5).
   return `
@@ -141,6 +144,7 @@ function renderToolbar(c) {
       ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
       ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
       ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
+      ${chipLink(tfUrl, icons.barChart2, 'TraderFox Visualisierung', 'link-chip--tf')}
       ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
       <span class="detail-toolbar__sep"></span>
       ${chipBtn('detail-trigger', icons.bellPlus, 'Trigger-Alert anlegen/bearbeiten')}

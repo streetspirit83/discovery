@@ -407,6 +407,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .link-chip--st:hover    { color:var(--pos); border-color:var(--pos); }
 .link-chip--yahoo:hover { color:var(--ai); border-color:var(--ai); }
 .link-chip--edit:hover  { color:var(--accent); border-color:var(--accent); }
+.link-chip--tf:hover    { color:#f97316; border-color:#f97316; }
 .link-chip--missing { opacity:0.25; cursor:default; pointer-events:none; }
 .link-logo    { width:14px; height:14px; border-radius:3px; object-fit:cover; display:block; pointer-events:none; }
 .link-btn-logo{ width:18px; height:18px; border-radius:3px; object-fit:cover; flex-shrink:0; }
