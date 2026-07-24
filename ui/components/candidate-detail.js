@@ -8,7 +8,7 @@ import { icons } from '../lib/icons.js?v=20260718a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260707e';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260722i';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260711a';
