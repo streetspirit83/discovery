@@ -16,6 +16,7 @@ const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260
 const DEFAULT_INDICATORS = [
   { label: 'DAX',    value: null, change: null, perf1m: null },
   { label: 'NASDAQ', value: null, change: null, perf1m: null },
+  { label: 'SOX',    value: null, change: null, perf1m: null },
   { label: 'NIKKEI', value: null, change: null, perf1m: null },
   { label: 'VIX',    value: null, change: null, perf1m: null },
 ];
@@ -25,6 +26,7 @@ const PREMARKETS_URL = 'https://edition.cnn.com/markets/premarkets';
 const INDICATOR_LINKS = {
   DAX:    'https://www.tradingview.com/symbols/XETR-DAX/?utm_source=androidapp&utm_medium=share',
   NASDAQ: 'https://www.tradingview.com/symbols/TVC-NDQ/?utm_source=androidapp&utm_medium=share',
+  SOX:    'https://www.tradingview.com/symbols/NASDAQ-SOX/',
   NIKKEI: 'https://www.tradingview.com/symbols/TVC-NI225/?utm_source=androidapp&utm_medium=share',
   VIX:    'https://www.tradingview.com/symbols/CBOE-VIX/?utm_source=androidapp&utm_medium=share',
 };

@@ -733,6 +733,7 @@ export async function fetchFxRate({ backendUrl, secret }) {
 const MARKET_INDICATORS = [
   { label: 'DAX',    ticker: 'XETR:DAX' },
   { label: 'NASDAQ', ticker: 'NASDAQ:IXIC' },
+  { label: 'SOX',    ticker: 'NASDAQ:SOX' },   // PHLX Semiconductor Index
   { label: 'NIKKEI', ticker: 'TVC:NI225' },
   { label: 'VIX',    ticker: 'TVC:VIX' },
 ];
