@@ -11,7 +11,7 @@
  * (Filterbar-Re-Render).
  */
 
-import { icons } from '../lib/icons.js?v=20260718a';
+import { icons } from '../lib/icons.js?v=20260722j';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 

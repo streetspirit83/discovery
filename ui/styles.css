@@ -17,6 +17,12 @@
   --text-muted:var(--muted); --success:var(--pos); --danger:var(--neg);
   --warning:var(--warn); --tv:var(--accent); --accent2:var(--accent);
   --bg2:var(--surface-2); --bg3:var(--surface-3);
+  /* Kategoriale Serien-Palette (Vergleichs-Charts): feste Reihenfolge, nie
+   * zyklisch. Getrennt von --pos/--neg/--warn, die Status bedeuten und nicht
+   * als "Serie 4" zweckentfremdet werden dürfen. Beide Modi gegen die eigenen
+   * Surfaces validiert (Helligkeitsband, Chroma, CVD-Abstand, Kontrast). */
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
+  --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
   --radius:8px; --radius-sm:4px;
 
   /* Spacing */
@@ -54,6 +60,9 @@
   --pos:#4ade80; --pos-weak:#0f2a1a;
   --neg:#f87171; --neg-weak:#3a1414;
   --warn:#fbbf24; --ai:#a78bfa; --ai-weak:#241a3d;
+  /* Dieselben acht Hues, für die dunkle Fläche neu gestuft (kein Auto-Flip). */
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
   --scrim:rgba(0,0,0,0.5);
 }
 
@@ -2153,3 +2162,75 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 }
 .heat-note { color:var(--muted); font-size:var(--fs-1); margin-top:var(--s-3); }
 @media (max-width:479px) { .heat-name { flex-basis:96px; font-size:var(--fs-1); } }
+
+/* ── Vergleichs-Modal (Bulk-Auswahl → Waage-Icon) ─────────────────────────── */
+.cmp-modal { max-width:760px; width:100%; }
+.cmp-count {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  background:var(--surface-3); border-radius:var(--r-pill); padding:1px 7px; margin-left:var(--s-1);
+}
+.cmp-warn {
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap;
+  padding:var(--s-2); margin-bottom:var(--s-2);
+  background:var(--warn-weak, var(--surface-2)); border:1px solid var(--border);
+  border-radius:var(--r-2); font-size:var(--fs-1); color:var(--muted);
+}
+.cmp-tabs { margin-bottom:var(--s-2); }
+.cmp-pane { min-width:0; }
+.cmp-note { font-size:var(--fs-1); color:var(--muted); line-height:1.5; margin-top:var(--s-2); }
+.cmp-note--cap { margin:0 0 var(--s-2); }
+.cmp-load {
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap;
+  margin-bottom:var(--s-2); font-size:var(--fs-1); color:var(--muted);
+}
+
+/* Gewinner-Leiste: gleich breite Blöcke in EINER Zeile (Styleguide §5) */
+.cmp-winners { display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-bottom:var(--s-2); }
+.cmp-win {
+  flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:0; padding:var(--s-1);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2);
+  line-height:1.2; overflow:hidden;
+}
+.cmp-win__lbl { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.cmp-win__sym { font-size:var(--fs-3); font-weight:var(--fw-bold); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.cmp-win__val { font-size:var(--fs-2); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+/* Matrix: erste Spalte fixiert, Rest horizontal scrollbar */
+.cmp-matrix-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.cmp-matrix { border-collapse:separate; border-spacing:0; font-size:var(--fs-1); width:max-content; min-width:100%; }
+.cmp-matrix th, .cmp-matrix td { padding:var(--s-1) var(--s-2); border-bottom:1px solid var(--border); white-space:nowrap; }
+.cmp-matrix td.num { text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+.cmp-th { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); text-align:right;
+  background:var(--surface); position:sticky; top:0; z-index:1; }
+.cmp-th--group { border-left:2px solid var(--border); }
+.cmp-th--sym {
+  position:sticky; left:0; z-index:2; background:var(--surface); text-align:left;
+  display:flex; align-items:center; gap:var(--s-1);
+}
+.cmp-matrix thead .cmp-th--sym { z-index:3; }
+.cmp-sym { font-weight:var(--fw-bold); }
+.cmp-exch { font-size:11px; color:var(--muted); }
+.cmp-best { font-weight:var(--fw-bold); }
+.cmp-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; display:inline-block; }
+
+/* Legende – Text in Text-Tokens, Farbe trägt nur das Kästchen */
+.cmp-legend { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-bottom:var(--s-2); }
+.cmp-leg { display:inline-flex; align-items:center; gap:var(--s-1); font-size:var(--fs-1); color:var(--text); }
+
+/* Charts */
+.cmp-svg { display:block; width:100%; height:auto; overflow:visible; }
+.cmp-axis { stroke:var(--border); stroke-width:1; }
+.cmp-median { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.5; }
+.cmp-base { stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; opacity:.6; }
+.cmp-axlbl { font-size:9px; fill:var(--muted); font-family:var(--font-ui); }
+.cmp-dot__c { stroke:var(--surface); stroke-width:2; }
+.cmp-dot__lbl { font-size:10px; fill:var(--text); font-family:var(--font-ui); font-weight:var(--fw-bold); }
+.cmp-endlbl { font-size:10px; font-family:var(--font-ui); font-weight:var(--fw-bold); }
+.cmp-line { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+
+@media (max-width:479px) {
+  .cmp-win__sym { font-size:var(--fs-2); }
+  .cmp-win__val { font-size:var(--fs-1); }
+}

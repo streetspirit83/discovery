@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722i';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260718a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260722i';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722j';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260722j';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260722j';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -12,9 +12,10 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260722i';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260718a';
-import { renderControlModal } from './components/control-modal.js?v=20260719b';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260722j';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260722j';
+import { renderControlModal } from './components/control-modal.js?v=20260722j';
+import { renderCompareModal } from './components/compare-modal.js?v=20260722j';
 import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260722i';
@@ -26,7 +27,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260718a';
+import { icons } from './lib/icons.js?v=20260722j';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260719b';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
@@ -1250,10 +1251,48 @@ async function handleAction(action, candidate, extras = {}) {
   }
 }
 
+/** TD-Tageskerzen für EINEN Kandidaten laden und persistieren (US-only, TD-Free).
+ *  Gibt das Ergebnis zurück – inkl. `{ error }`, damit Aufrufer bei einem
+ *  Rate-Limit abbrechen können, statt weiter Credits zu verbrennen. */
+async function fetchTdBars(candidate) {
+  if (!isUsTicker(candidate)) return { error: 'not_us' };
+  if (!localStorage.getItem('discovery_twelvedata_key')) {
+    toast(swingErrorText('no_key'), 'error', 4000);
+    return { error: 'no_key' };
+  }
+  let result;
+  try {
+    result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate() });
+  } catch (err) {
+    result = { error: 'td_error', message: err.message };
+  }
+  if (result?.error) {
+    toast(`${candidate.symbol}: ${swingErrorText(result.error)}`, 'error', 4000);
+    return result;
+  }
+  candidate.swing_analysis = result;
+  if (!useMock) {
+    try {
+      await storageClient.updateCandidate(currentBlobType, candidate.id, { swing_analysis: result });
+    } catch { /* Anzeige funktioniert auch ohne Persistenz */ }
+  }
+  return result;
+}
+
 async function handleBulkAction(action, ids) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
   const targets = blob.candidates.filter((c) => ids.includes(c.id));
+
+  // Vergleich: reine Ansicht auf bereits geladenen Daten – kein Schreibzugriff.
+  if (action === 'compare') {
+    if (targets.length < 2) { toast('Mindestens zwei Kandidaten auswählen', 'info', 2500); return; }
+    renderCompareModal(targets, {
+      onLoadTv: () => handleBulkAction('tv-data', ids),
+      onFetchTd: (c) => fetchTdBars(c),
+    });
+    return;
+  }
 
   if (action === 'delete') {
     if (!confirm(`${targets.length} Kandidat(en) endgültig aus „${currentBlobType}" löschen?`)) return;
