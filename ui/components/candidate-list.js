@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260718a';
+import { icons } from '../lib/icons.js?v=20260722j';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -1311,6 +1311,7 @@ export class CandidateList {
       <button class="bulk-btn bulk-btn--icon bulk-btn--del" id="bulk-delete" title="Ausgewählte löschen" aria-label="Löschen">${icons.trash}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-clear" title="Auswahl leeren" aria-label="Auswahl leeren">${icons.xMark}</button>
       <div class="bulk-spacer"></div>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-compare" title="Auswahl vergleichen (ab 2 Tickern)" aria-label="Vergleichen">${icons.scale}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-tv-data" title="TV-Daten laden" aria-label="TV-Daten"><img class="bulk-tvlogo" src="${TV_LOGO}" alt=""></button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-ls-quote" title="LS-Kurs laden" aria-label="LS-Kurs">${icons.activity}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-export" title="Exportieren" aria-label="Export">${icons.briefcase}</button>
@@ -1323,6 +1324,7 @@ export class CandidateList {
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
     ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
+    ba.querySelector('#bulk-compare').addEventListener('pointerup', () => this.onBulkAction?.('compare', [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
     ba.querySelector('#bulk-tr-check').addEventListener('pointerup', () => this.onBulkAction?.('tr-check', [...this.selected]));
     ba.querySelector('#bulk-ls-quote').addEventListener('pointerup', () => this.onBulkAction?.('ls-quote', [...this.selected]));
