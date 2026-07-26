@@ -1311,7 +1311,6 @@ export class CandidateList {
       <button class="bulk-btn bulk-btn--icon bulk-btn--del" id="bulk-delete" title="Ausgewählte löschen" aria-label="Löschen">${icons.trash}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-clear" title="Auswahl leeren" aria-label="Auswahl leeren">${icons.xMark}</button>
       <div class="bulk-spacer"></div>
-      <button class="bulk-btn bulk-btn--icon" id="bulk-compare" title="Auswahl vergleichen (ab 2 Tickern)" aria-label="Vergleichen">${icons.scale}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-tv-data" title="TV-Daten laden" aria-label="TV-Daten"><img class="bulk-tvlogo" src="${TV_LOGO}" alt=""></button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-ls-quote" title="LS-Kurs laden" aria-label="LS-Kurs">${icons.activity}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-export" title="Exportieren" aria-label="Export">${icons.briefcase}</button>
@@ -1319,7 +1318,8 @@ export class CandidateList {
       <button class="bulk-btn bulk-btn--icon" id="bulk-dismiss" title="Ablehnen (Archiv)" aria-label="Ablehnen">${icons.archive}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-enrich" title="AI-Enrichment" aria-label="Enrich">${icons.sparkles}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-copy-prompt" title="Research-Prompt kopieren" aria-label="Research-Prompt">${icons.clipboard}</button>
-      <button class="bulk-btn bulk-btn--icon" id="bulk-tr-check" title="TR-Check (Trade Republic)" aria-label="TR-Check">${icons.cart}</button>`;
+      <button class="bulk-btn bulk-btn--icon" id="bulk-tr-check" title="TR-Check (Trade Republic)" aria-label="TR-Check">${icons.cart}</button>
+      <button class="bulk-btn bulk-btn--icon" id="bulk-compare" title="Auswahl vergleichen (ab 2 Tickern)" aria-label="Vergleichen">${icons.scale}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
