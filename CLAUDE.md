@@ -118,11 +118,6 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   source of truth — don't hand-map exchanges elsewhere.
 
 ## Specs (docs/)
-**Starting fresh with no context? Read [`docs/AI_HANDOVER.md`](docs/AI_HANDOVER.md)
-first** — a full walkthrough of the architecture plus every metric's verified
-formula, weights and thresholds (incl. the two field-name namespaces and the
-`live*` adapters that bridge them).
-
 Deeper specs live in `docs/` — read the relevant one before (re)implementing a
 score/signal: the TV scoring specs (`tvtrend*`, `tvfinancialhealth*`,
 `tventryprices*`), and the newer feature handovers
