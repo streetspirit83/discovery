@@ -1702,18 +1702,40 @@ async function init() {
   // ── Beim Runterscrollen in der Tabelle Topbar+Subbar einklappen (mobil),
   // beim Hochscrollen wieder zeigen. CSS (#app.is-compact) macht das nur
   // ≤767px sichtbar; hier nur die Klasse anhand der Scroll-Richtung togglen.
+  //
+  // Das Umschalten ändert die Grid-Zeilen und damit die Höhe von #content.
+  // Am Seitenende sinkt dadurch die maximale Scrollposition, und der Browser
+  // klemmt scrollTop um die Leistenhöhe nach unten. Ungeschützt liest der
+  // Handler das als „hochgescrollt", klappt wieder aus, wodurch erneut geklemmt
+  // wird — die Leisten springen dann im Frame-Takt. Deshalb setzt jedes
+  // Umschalten die Richtungserkennung kurz aus (Referenz läuft mit), bis die
+  // Layout-Transition und das Klemmen durch sind.
   const contentEl = document.getElementById('content');
   const appEl = document.getElementById('app');
-  let lastScrollY = 0, scrollTicking = false;
+  const SETTLE_MS = 350;   // > Grid-Transition (--t-fast = 120 ms) + Klemm-Nachlauf
+  const DEAD_ZONE = 6;     // Mindestbewegung, damit Mikro-Deltas nichts auslösen
+  let lastScrollY = 0, scrollTicking = false, settleUntil = 0;
   contentEl.addEventListener('scroll', () => {
     if (scrollTicking) return;
     scrollTicking = true;
     requestAnimationFrame(() => {
-      const y = contentEl.scrollTop;
-      if (y > lastScrollY && y > 56) appEl.classList.add('is-compact');
-      else if (y < lastScrollY - 4 || y <= 8) appEl.classList.remove('is-compact');
-      lastScrollY = y;
       scrollTicking = false;
+      const y = contentEl.scrollTop;
+      const now = performance.now();
+      // Nachlauf nach eigenem Umschalten: nur die Referenz mitziehen, nicht schalten.
+      if (now < settleUntil) { lastScrollY = y; return; }
+      // Zielzustand bestimmen und nur bei echter Änderung schreiben — sonst
+      // setzt jeder Scroll-Frame das class-Attribut neu, ohne dass sich etwas
+      // ändert.
+      const isCompact = appEl.classList.contains('is-compact');
+      let want = isCompact;
+      if (y > lastScrollY + DEAD_ZONE && y > 56) want = true;
+      else if (y < lastScrollY - DEAD_ZONE || y <= 8) want = false;
+      if (want !== isCompact) {
+        appEl.classList.toggle('is-compact', want);
+        settleUntil = now + SETTLE_MS;
+      }
+      lastScrollY = y;
     });
   }, { passive: true });
 
