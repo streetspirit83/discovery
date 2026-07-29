@@ -19,7 +19,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff } from '../lib/tv-indices.js?v=20260729f';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260729g';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 
@@ -128,6 +128,7 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
             role="tab" aria-selected="${i === 0}">${esc(g.label)}</button>`).join('')}
         </div>
         <span class="idx-spacer"></span>
+        <button class="icon-btn idx-refresh" id="idx-diag" title="Diagnose der Ticker-Auflösung in die Zwischenablage kopieren" aria-label="Diagnose kopieren">${icons.clipboard}</button>
         <button class="icon-btn idx-refresh" id="idx-refresh" title="Neu laden" aria-label="Neu laden">${icons.refreshCw}</button>
       </div>
       <div class="idx-status" id="idx-status"></div>
@@ -199,13 +200,30 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
       paint(rows);
       const missing = rows.filter((r) => !r.ok).map((r) => r.code);
       const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      // Ein 403 der Symbolsuche (Host nicht in der Proxy-Allowlist / Netlify noch
+      // nicht neu deployt) sieht sonst aus wie "nichts gefunden" – explizit machen.
+      const searchErr = getResolveReport()?.searchErrors ?? [];
       statusEl.textContent = `Stand ${t} · ${rows.length - missing.length}/${rows.length} Indizes`
-        + (missing.length ? ` · ohne Daten: ${missing.join(', ')}` : '');
+        + (missing.length ? ` · ohne Daten: ${missing.join(', ')}` : '')
+        + (searchErr.length ? ` · Symbolsuche nicht erreichbar (${searchErr.length}×, z. B. ${searchErr[0]})` : '');
     }
     refreshBtn.disabled = false;
     loading = false;
   };
 
   refreshBtn.addEventListener('pointerup', () => load(true));
+
+  // Diagnose: das Protokoll des letzten Auflösungslaufs in die Zwischenablage.
+  container.querySelector('#idx-diag').addEventListener('pointerup', async () => {
+    const text = JSON.stringify(getResolveReport() ?? { note: 'noch kein Auflösungslauf' }, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      statusEl.textContent = 'Diagnose in der Zwischenablage.';
+    } catch {
+      console.info('[TV] Index-Diagnose:\n' + text);
+      statusEl.textContent = 'Zwischenablage nicht verfügbar – Diagnose steht in der Konsole.';
+    }
+  });
+
   load();
 }

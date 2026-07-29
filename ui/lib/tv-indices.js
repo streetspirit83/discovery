@@ -58,7 +58,8 @@ export const INDEX_GROUPS = [
       { code: 'HXR',      label: 'Cybersecurity',                  name: 'ISE Cyber Security Index',               tickers: ['INDEXDJX:HXR'],      url: 'https://www.tradingview.com/symbols/INDEXDJX-HXR/' },
       { code: 'EMCLOUD',  label: 'Cloud Computing',                name: 'BVP Nasdaq Emerging Cloud Index',        tickers: ['NASDAQ:EMCLOUD'],    url: 'https://www.tradingview.com/symbols/NASDAQ-EMCLOUD/' },
       { code: 'XBAI',     label: 'Künstliche Intelligenz',         name: 'Indxx AI & Big Data Index',              tickers: ['SBOX:XBAI'],         url: 'https://www.tradingview.com/symbols/SBOX-XBAI/' },
-      { code: 'ROBO',     label: 'Robotik & Automation',           name: 'ROBO Global Robotics Index',             tickers: ['SBOX:ROBO'],         url: 'https://www.tradingview.com/symbols/SBOX-ROBO/' },
+      // Symbol ist ROBOT (nicht ROBO) – korrigiert nach Prüfung auf TV.
+      { code: 'ROBO',     label: 'Robotik & Automation',           name: 'ROBO Global Robotics Index',             tickers: ['SBOX:ROBOT'],        url: 'https://www.tradingview.com/symbols/SBOX-ROBOT/' },
       { code: 'IXFT',     label: 'Fintech',                        name: 'Indxx Global Fintech Index',             tickers: ['SBOX:IXFT'],         url: 'https://www.tradingview.com/symbols/SBOX-IXFT/' },
       { code: 'BKX',      label: 'Banken',                         name: 'KBW Nasdaq Bank Index',                  tickers: ['NASDAQ:BKX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-BKX/' },
       { code: 'KRX',      label: 'Regionalbanken',                 name: 'KBW Regional Banking Index',             tickers: ['NASDAQ:KRX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-KRX/' },
@@ -190,6 +191,14 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
  */
 const RESOLVE_MARKETS = ['global', 'america'];
 
+/* Protokoll des letzten Auflösungslaufs – was wurde je Markt angefragt, was kam
+ * zurück, was hat die Suche vorgeschlagen, was blieb offen. Der "Diagnose"-Button
+ * im Panel legt das in die Zwischenablage. Ohne diese Fakten ist jede weitere
+ * Ticker-Korrektur wieder nur geraten (siehe CLAUDE.md, "Inspect real API
+ * responses before writing parsing logic"). */
+let lastReport = null;
+export const getResolveReport = () => lastReport;
+
 /** Ein Scanner-Scan; liefert Map ticker → Spaltenwerte (fehlerfrei = leere Map). */
 async function scan(backendUrl, secret, market, tickers, columns) {
   const out = new Map();
@@ -250,7 +259,12 @@ export function parseSearchHits(bodyStr) {
   }).filter((h) => h.ticker);
 }
 
-/** Vorschläge für einen Suchtext, beste zuerst (exakter Symbol-Match, Typ index). */
+/**
+ * Vorschläge für einen Suchtext, beste zuerst (exakter Symbol-Match, Typ index).
+ * Ein Fehler (Proxy nicht erreichbar, Host nicht in der Allowlist, HTTP-Fehler)
+ * wird NICHT verschluckt, sondern im Report vermerkt – sonst sieht ein 403 aus
+ * wie "nichts gefunden", und man sucht den Fehler an der falschen Stelle.
+ */
 async function searchTickers(backendUrl, secret, text, code) {
   const params = new URLSearchParams({
     text, hl: '0', lang: 'en', search_type: 'index', type: 'index', domain: 'production',
@@ -258,11 +272,16 @@ async function searchTickers(backendUrl, secret, text, code) {
   let hits = [];
   try { hits = parseSearchHits(await proxyGet(backendUrl, secret, `${SEARCH_URL}?${params}`)); } catch (err) {
     console.warn(`[TV] Symbolsuche fehlgeschlagen (${text}):`, err.message);
-    return [];
+    return { tickers: [], error: err.message };
   }
   const wanted = String(code).toUpperCase();
   const rank = (h) => (h.symbol.toUpperCase() === wanted ? 0 : 1) + (h.type === 'index' ? 0 : 2);
-  return [...new Set(hits.sort((a, b) => rank(a) - rank(b)).map((h) => h.ticker))].slice(0, 4);
+  const sorted = [...hits].sort((a, b) => rank(a) - rank(b));
+  return {
+    tickers: [...new Set(sorted.map((h) => h.ticker))].slice(0, 4),
+    hits: sorted.slice(0, 4).map((h) => `${h.ticker}[${h.type}]`),
+    error: null,
+  };
 }
 
 /**
@@ -270,12 +289,13 @@ async function searchTickers(backendUrl, secret, text, code) {
  * gesetzten Märkte) und liefert Map ticker → Markt für alles, was Daten hatte.
  * Bereits gefundene Ticker fallen aus den Folgemärkten raus.
  */
-async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKETS) {
+async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKETS, report = null) {
   const hit = new Map();
   let openTickers = [...new Set(tickers)];
   for (const market of markets) {
     if (!openTickers.length) break;
     const found = await scan(backendUrl, secret, market, openTickers, ['description']);
+    if (report) report.marketScans.push({ market, sent: openTickers.length, hits: found.size });
     for (const t of found.keys()) hit.set(t, market);
     openTickers = openTickers.filter((t) => !hit.has(t));
   }
@@ -290,13 +310,26 @@ async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKET
  */
 export async function resolveTickers({ backendUrl, secret, entries = allIndexEntries() }) {
   const cache = loadTickerCache();
+  const report = {
+    at: new Date().toISOString(),
+    markets: RESOLVE_MARKETS,
+    marketScans: [],          // { market, sent, hits } je Scan
+    searchErrors: [],         // Fehler der Symbolsuche (403 ≠ "nichts gefunden")
+    searchHits: {},           // code → was die Suche vorgeschlagen hat
+    unresolved: [],           // { code, tried:[…] }
+  };
+  lastReport = report;
+
   let open = entries.filter((e) => !cache.tickers[e.code]);
-  if (!open.length) return cache.tickers;
+  if (!open.length) {
+    report.note = 'alles aus dem Cache';
+    return cache.tickers;
+  }
 
   let dirty = false;
 
   // Stufe 1: hinterlegte Kandidaten, über alle Märkte
-  const found = await findMarkets(backendUrl, secret, open.flatMap((e) => e.tickers));
+  const found = await findMarkets(backendUrl, secret, open.flatMap((e) => e.tickers), RESOLVE_MARKETS, report);
   for (const e of open) {
     const hit = e.tickers.find((t) => found.has(t));
     if (hit) { cache.tickers[e.code] = { t: hit, m: found.get(hit) }; dirty = true; }
@@ -314,15 +347,17 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
   const proposals = new Map();   // code → Ticker-Vorschläge
   for (const batch of chunked(toSearch, SEARCH_BATCH)) {
     await Promise.all(batch.map(async (e) => {
-      let tickers = await searchTickers(backendUrl, secret, e.code, e.code);
-      if (!tickers.length) tickers = await searchTickers(backendUrl, secret, e.name, e.code);
-      if (tickers.length) proposals.set(e.code, tickers);
+      let res = await searchTickers(backendUrl, secret, e.code, e.code);
+      if (!res.tickers.length && !res.error) res = await searchTickers(backendUrl, secret, e.name, e.code);
+      if (res.error) report.searchErrors.push(`${e.code}: ${res.error}`);
+      else report.searchHits[e.code] = res.hits ?? [];
+      if (res.tickers.length) proposals.set(e.code, res.tickers);
     }));
   }
 
   // Stufe 3: Vorschläge durch den Scanner bestätigen (ebenfalls über alle Märkte)
   if (proposals.size) {
-    const confirmed = await findMarkets(backendUrl, secret, [...proposals.values()].flat());
+    const confirmed = await findMarkets(backendUrl, secret, [...proposals.values()].flat(), RESOLVE_MARKETS, report);
     for (const e of toSearch) {
       const hit = (proposals.get(e.code) ?? []).find((t) => confirmed.has(t));
       if (hit) cache.tickers[e.code] = { t: hit, m: confirmed.get(hit) };
@@ -332,6 +367,11 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
     if (!cache.tickers[e.code]) cache.tried[e.code] = new Date().toISOString();
   }
   if (toSearch.length) dirty = true;
+
+  for (const e of entries) {
+    if (!cache.tickers[e.code]) report.unresolved.push({ code: e.code, tried: e.tickers });
+  }
+  report.resolved = cache.tickers;
 
   if (dirty) saveTickerCache(cache);
   // Aufgelöste Zuordnung ins Log – so lässt sie sich als feste `tickers`-Liste
