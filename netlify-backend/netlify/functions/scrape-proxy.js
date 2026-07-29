@@ -25,6 +25,8 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/query1\.finance\.yahoo\.com\//,
   /^https:\/\/query2\.finance\.yahoo\.com\//,
   /^https:\/\/scanner\.tradingview\.com\//,
+  // Indices-Tab: löst Index-Kürzel → Scanner-Ticker auf (lib/tv-indices.js).
+  /^https:\/\/symbol-search\.tradingview\.com\//,
   /^https:\/\/api\.roic\.ai\//,
   /^https:\/\/www\.ls-tc\.de\//,
   /^https:\/\/merkliste-app\.netlify\.app\//,

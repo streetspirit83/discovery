@@ -16,7 +16,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow } from '../lib/tv-indices.js?v=20260729b';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff } from '../lib/tv-indices.js?v=20260729c';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 
@@ -117,9 +117,11 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
   };
 
   let loading = false;
-  const load = async () => {
+  /** @param {boolean} retrySearch manueller Refresh: 24-h-Sperre für erfolglose Suchen lösen */
+  const load = async (retrySearch = false) => {
     if (loading) return;
     loading = true;
+    if (retrySearch) clearSearchBackoff();
     refreshBtn.disabled = true;
     statusEl.textContent = 'Indizes werden geladen …';
     let rows = null;
@@ -139,6 +141,6 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
     loading = false;
   };
 
-  refreshBtn.addEventListener('pointerup', load);
+  refreshBtn.addEventListener('pointerup', () => load(true));
   load();
 }

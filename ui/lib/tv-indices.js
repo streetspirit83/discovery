@@ -5,16 +5,21 @@
  * ist `{ code, name, label, tickers }` – `code` ist das Kürzel aus der
  * abgestimmten Liste, `label` die Branche bzw. das Land.
  *
- * ── Warum `tickers` eine LISTE ist ───────────────────────────────────────────
- * Das TV-Präfix eines Index ist nicht ableitbar (SP: / DJ: / NASDAQ: / TVC: /
- * EURONEXT: / börsenspezifisch …) und war beim Bau nicht live prüfbar. Statt zu
- * raten steht je Index eine geordnete Kandidatenliste; `resolveTickers()` fragt
- * alle Kandidaten in einem Scanner-Request ab und nimmt den ersten, der Daten
- * liefert. Das Ergebnis landet in localStorage, danach geht nur noch der
- * bestätigte Ticker raus. Nicht auflösbare Indizes werden in der Statuszeile
- * des Panels benannt – kein stilles "–".
+ * ── Ticker-Auflösung: Suche schlägt vor, Scanner bestätigt ───────────────────
+ * Das TV-Präfix UND der TV-Symbolname eines Index sind nicht ableitbar
+ * (SP: / DJ: / NASDAQ: / TVC: / EURONEXT: / börsenspezifisch …) und waren beim
+ * Bau nicht live prüfbar. `resolveTickers()` rät deshalb nicht, sondern läuft
+ * in drei Stufen – gecacht wird ausschließlich, was der Scanner mit echten
+ * Daten bestätigt hat:
+ *   1. Kandidaten – die (kurze) Liste in `tickers` je Eintrag, ein Scan.
+ *   2. Suche      – für alles Offene `symbol-search.tradingview.com` mit dem
+ *                   Kürzel, ersatzweise mit dem Indexnamen.
+ *   3. Bestätigung – die Vorschläge aus 2. gehen erneut durch den Scanner; nur
+ *                   Treffer mit Daten werden gecacht.
+ * Nicht auflösbare Indizes werden in der Statuszeile des Panels benannt – kein
+ * stilles "–". Erfolglose Suchen werden 24 h nicht wiederholt.
  * Ein Index mit genau einem Kandidaten ist bereits verifiziert (aus
- * `tv-enrichment.js` `MARKET_INDICATORS`).
+ * `tv-enrichment.js` `MARKET_INDICATORS` bzw. aus einem Live-Lauf).
  *
  * Kurse kommen wie bei `fetchMarketIndicators()` aus dem TV-Scanner
  * (`scanner.tradingview.com/{market}/scan`) über die scrape-proxy-Function.
@@ -111,19 +116,34 @@ export const allIndexEntries = () => INDEX_GROUPS.flatMap((g) => g.entries);
 export const tvIndexUrl = (ticker) =>
   ticker ? `https://www.tradingview.com/symbols/${String(ticker).replace(':', '-')}/` : null;
 
-/* ── Ticker-Cache (localStorage) ──────────────────────────────────────────── */
+/* ── Ticker-Cache (localStorage) ──────────────────────────────────────────────
+ * `{ tickers: { code: ticker }, tried: { code: isoDate } }`
+ * `tickers` = vom Scanner bestätigt. `tried` = erfolglose Suche, wird 24 h
+ * nicht wiederholt, damit ein dauerhaft fehlender Index nicht bei jedem
+ * Tab-Öffnen 20+ Suchanfragen auslöst.
+ */
 
-const CACHE_KEY = 'discovery_index_tickers_v1';
+const CACHE_KEY = 'discovery_index_tickers_v2';
+const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export function loadTickerCache() {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY)) ?? {}; } catch { return {}; }
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+    return { tickers: c?.tickers ?? {}, tried: c?.tried ?? {} };
+  } catch { return { tickers: {}, tried: {} }; }
 }
-function saveTickerCache(map) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(map)); } catch { /* Quota – egal */ }
+function saveTickerCache(cache) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch { /* Quota – egal */ }
 }
-/** Auflösung verwerfen, damit der nächste Load neu sucht (Refresh-Button). */
+/** Auflösung verwerfen, damit der nächste Load komplett neu sucht. */
 export function clearTickerCache() {
   try { localStorage.removeItem(CACHE_KEY); } catch { /* egal */ }
+}
+/** Nur die 24-h-Sperre für erfolglose Suchen lösen (manueller Refresh). */
+export function clearSearchBackoff() {
+  const cache = loadTickerCache();
+  cache.tried = {};
+  saveTickerCache(cache);
 }
 
 /* ── Fetch ────────────────────────────────────────────────────────────────── */
@@ -165,26 +185,120 @@ async function scan(backendUrl, secret, market, tickers, columns) {
   return out;
 }
 
+/* ── Stufe 2: TV-Symbolsuche ──────────────────────────────────────────────── */
+
+const SEARCH_URL = 'https://symbol-search.tradingview.com/symbol_search/v3/';
+const SEARCH_BATCH = 5;   // parallele Suchanfragen
+
+async function proxyGet(backendUrl, secret, url) {
+  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+    body: JSON.stringify({ url, method: 'GET' }),
+  });
+  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+  const wrapper = await res.json();
+  if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
+  if (wrapper.status !== 200) throw new Error(`TV HTTP ${wrapper.status}`);
+  return wrapper.body;
+}
+
 /**
- * Ermittelt je Eintrag den TV-Ticker: erst Cache, für den Rest ein Scan über
- * alle Kandidaten – der erste Kandidat mit Daten gewinnt.
- * @returns {Promise<Record<string,string>>} code → Ticker (nur Aufgelöste)
+ * Defensiv geparst – das genaue Antwort-Schema der Suche ist nicht dokumentiert
+ * und war nicht prüfbar. Deshalb: Wurzel als Array ODER `symbols`/`data`,
+ * Präfix aus `prefix` ODER `exchange`, HTML-Highlights (`<em>`) raus. Was hier
+ * falsch rauskommt, fällt in Stufe 3 durch – nichts davon landet ungeprüft
+ * im Cache.
+ */
+export function parseSearchHits(bodyStr) {
+  let json;
+  try { json = JSON.parse(bodyStr); } catch { return []; }
+  const list = Array.isArray(json) ? json : (json.symbols ?? json.data ?? []);
+  if (!Array.isArray(list)) return [];
+  const clean = (s) => String(s ?? '').replace(/<[^>]*>/g, '').trim();
+  return list.map((h) => {
+    const symbol = clean(h.symbol);
+    const prefix = clean(h.prefix) || clean(h.exchange);
+    return {
+      ticker: symbol && prefix ? `${prefix}:${symbol}` : null,
+      symbol,
+      type: clean(h.type).toLowerCase(),
+      description: clean(h.description),
+    };
+  }).filter((h) => h.ticker);
+}
+
+/** Vorschläge für einen Suchtext, beste zuerst (exakter Symbol-Match, Typ index). */
+async function searchTickers(backendUrl, secret, text, code) {
+  const params = new URLSearchParams({
+    text, hl: '0', lang: 'en', search_type: 'index', type: 'index', domain: 'production',
+  });
+  let hits = [];
+  try { hits = parseSearchHits(await proxyGet(backendUrl, secret, `${SEARCH_URL}?${params}`)); } catch (err) {
+    console.warn(`[TV] Symbolsuche fehlgeschlagen (${text}):`, err.message);
+    return [];
+  }
+  const wanted = String(code).toUpperCase();
+  const rank = (h) => (h.symbol.toUpperCase() === wanted ? 0 : 1) + (h.type === 'index' ? 0 : 2);
+  return [...new Set(hits.sort((a, b) => rank(a) - rank(b)).map((h) => h.ticker))].slice(0, 4);
+}
+
+/**
+ * Ermittelt je Eintrag den TV-Ticker (Kandidaten → Suche → Bestätigung, siehe
+ * Modul-Kopf). Gecacht wird nur, was der Scanner mit Daten bestätigt hat.
+ * @returns {Promise<Record<string,string>>} code → Ticker (nur Bestätigte)
  */
 export async function resolveTickers({ backendUrl, secret, entries = allIndexEntries() }) {
   const cache = loadTickerCache();
-  const open = entries.filter((e) => !cache[e.code]);
-  if (!open.length) return cache;
+  let open = entries.filter((e) => !cache.tickers[e.code]);
+  if (!open.length) return cache.tickers;
 
-  const candidates = [...new Set(open.flatMap((e) => e.tickers))];
-  const found = await scan(backendUrl, secret, 'global', candidates, ['description']);
+  let dirty = false;
 
-  let added = 0;
+  // Stufe 1: hinterlegte Kandidaten
+  const found = await scan(backendUrl, secret, 'global', [...new Set(open.flatMap((e) => e.tickers))], ['description']);
   for (const e of open) {
     const hit = e.tickers.find((t) => found.has(t));
-    if (hit) { cache[e.code] = hit; added++; }
+    if (hit) { cache.tickers[e.code] = hit; dirty = true; }
   }
-  if (added) saveTickerCache(cache);
-  return cache;
+  open = open.filter((e) => !cache.tickers[e.code]);
+
+  // Stufe 2: Suche – erst Kürzel, ersatzweise Indexname. Kürzlich erfolglose
+  // Codes bleiben aussen vor (RETRY_AFTER_MS).
+  const now = Date.now();
+  const toSearch = open.filter((e) => {
+    const t = cache.tried[e.code];
+    return !t || now - new Date(t).getTime() > RETRY_AFTER_MS;
+  });
+
+  const proposals = new Map();   // code → Ticker-Vorschläge
+  for (const batch of chunked(toSearch, SEARCH_BATCH)) {
+    await Promise.all(batch.map(async (e) => {
+      let tickers = await searchTickers(backendUrl, secret, e.code, e.code);
+      if (!tickers.length) tickers = await searchTickers(backendUrl, secret, e.name, e.code);
+      if (tickers.length) proposals.set(e.code, tickers);
+    }));
+  }
+
+  // Stufe 3: Vorschläge durch den Scanner bestätigen
+  if (proposals.size) {
+    const confirmed = await scan(backendUrl, secret, 'global',
+      [...new Set([...proposals.values()].flat())], ['description']);
+    for (const e of toSearch) {
+      const hit = (proposals.get(e.code) ?? []).find((t) => confirmed.has(t));
+      if (hit) cache.tickers[e.code] = hit;
+    }
+  }
+  for (const e of toSearch) {
+    if (!cache.tickers[e.code]) cache.tried[e.code] = new Date().toISOString();
+  }
+  if (toSearch.length) dirty = true;
+
+  if (dirty) saveTickerCache(cache);
+  // Aufgelöste Zuordnung ins Log – so lässt sie sich als feste `tickers`-Liste
+  // zurück in dieses Modul übernehmen.
+  console.info('[TV] Index-Ticker aufgelöst:', JSON.stringify(cache.tickers));
+  return cache.tickers;
 }
 
 /** Leere Zeile – wird auch als Fallback gerendert, damit die Tabelle steht. */
