@@ -1034,6 +1034,7 @@ export class CandidateList {
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Entry) \u00b7 % oben, absolut in \u20ac (mit entry_shares) darunter \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
+      cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += `<th class="num">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
@@ -1206,6 +1207,7 @@ export class CandidateList {
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num col-portfolio">${renderPL(c)}</td>` +
+          heatPctTd(tv?.perf_w) +
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
@@ -1591,11 +1593,31 @@ function rangePos(tv) {
 
 function render52wRange(tv) {
   const pos = rangePos(tv);
-  if (pos == null) return '<span class="muted-dash">—</span>';
+  // Leere Zelle sichtbar machen: der Strich sagt sonst nicht, WARUM nichts da
+  // ist. Der Tooltip nennt das fehlende Feld, damit man weiß, ob „TV Daten"
+  // laden hilft oder die Spanne selbst kaputt ist.
+  if (pos == null) {
+    const close = tv?.close_1m ?? tv?.close;
+    const miss = [];
+    if (close == null) miss.push('Kurs');
+    if (tv?.price_52_week_high == null) miss.push('52W-Hoch');
+    if (tv?.price_52_week_low == null) miss.push('52W-Tief');
+    // Typografische Anführungszeichen: ein ASCII-" würde das title="…"-Attribut
+    // vorzeitig schließen und den Tooltip abschneiden.
+    const why = miss.length
+      ? `${miss.join(' + ')} fehlt – „TV Daten“ laden`
+      : 'Spanne ungültig (Hoch ≤ Tief)';
+    return `<span class="muted-dash" title="Keine 52W-Position: ${why}">—</span>`;
+  }
   const close = tv.close_1m ?? tv.close;
   const pct = Math.round(pos * 100);
   const tip = `52W-Spanne: ${fmtNum(tv.price_52_week_low, 2)} … ${fmtNum(tv.price_52_week_high, 2)} · Kurs ${fmtNum(close, 2)} (${pct}% der Spanne)`;
-  return `<span class="range52" title="${tip}"><span class="range52__track"><span class="range52__dot" style="left:${pct}%"></span></span></span>`;
+  // Füllbalken bis zur Position: die Platzierung ist damit auch ohne genaues
+  // Anvisieren des Punktes ablesbar.
+  return `<span class="range52" title="${tip}"><span class="range52__bar">
+    <span class="range52__track"><span class="range52__fill" style="width:${pct}%"></span></span>
+    <span class="range52__dot" style="left:${pct}%"></span>
+  </span><span class="range52__pct">${pct}</span></span>`;
 }
 
 // Consolidated direction chip: momentum traffic-light + 1M trend arrow.

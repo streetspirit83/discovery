@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722k';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722l';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260722j';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260722j';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';

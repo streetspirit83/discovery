@@ -641,11 +641,24 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .score-gauge__fill { display:block; height:100%; background:currentColor; border-radius:2px; }
 
 /* 52W-range: track with a dot marking where the price sits low → high */
-.range52 { display:inline-block; vertical-align:middle; }
-.range52__track { position:relative; display:inline-block; width:42px; height:5px;
-  border-radius:3px; background:var(--surface-3); vertical-align:middle; }
-.range52__dot { position:absolute; top:50%; width:7px; height:7px; border-radius:50%;
-  background:var(--text); border:1px solid var(--surface); transform:translate(-50%,-50%); }
+/* 52W-Position: Track + Füllung bis zur Position + Punkt + Prozentzahl.
+   Die Füllung trägt die Ablesbarkeit (Punkt allein war zu kontrastarm),
+   der Rahmen grenzt den Track gegen die weiße Zellfläche ab. */
+.range52 { display:inline-flex; align-items:center; gap:var(--s-2); justify-content:flex-end; }
+/* Bar = Bezugsrahmen für den Punkt; der Track darunter klippt nur die Füllung,
+   damit der Punkt an den Enden (0 % / 100 %) nicht angeschnitten wird. */
+.range52__bar { position:relative; display:inline-block; width:44px; height:8px; flex:0 0 auto; }
+.range52__track { position:absolute; inset:0; border-radius:var(--r-pill);
+  background:var(--surface-3); border:1px solid var(--border);
+  box-sizing:border-box; overflow:hidden; }
+/* Füllung deutlich gegen den Track abgesetzt – --accent-weak lag zu nah an
+   --surface-3, dadurch war der Füllstand kaum zu erkennen. */
+.range52__fill { position:absolute; left:0; top:0; bottom:0;
+  background:color-mix(in srgb, var(--accent) 40%, var(--surface-3)); }
+.range52__dot { position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 0 1.5px var(--surface); transform:translate(-50%,-50%); }
+.range52__pct { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums;
+  min-width:2ch; text-align:right; }
 
 /* Signal chip: momentum traffic-light dot + trend arrow */
 .signal { display:inline-flex; align-items:center; gap:4px; justify-content:flex-end; }
