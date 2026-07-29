@@ -11,12 +11,15 @@
  * Refresh-Button lädt neu; noch nicht aufgelöste Ticker werden dabei erneut
  * gesucht (bestätigte kommen aus dem localStorage-Cache).
  *
+ * Alle Spalten ausser dem TV-Link sind sortierbar (Kürzel, Index und die sechs
+ * Zahlenspalten); die Sortierung gilt für beide Sub-Tabs gemeinsam.
+ *
  * TV-Link als Icon-Only-Chip (STYLEGUIDE §4) – ohne aufgelösten Ticker als
  * ausgegrauter `.link-chip--missing`. Prozente über `.pos`/`.neg` (§8).
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff } from '../lib/tv-indices.js?v=20260729c';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff } from '../lib/tv-indices.js?v=20260729e';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 
@@ -33,6 +36,37 @@ const COLUMNS = [
   { key: 'perf_6m',  label: 'Perf6M', title: 'Performance 6 Monate' },
   { key: 'growth_m', label: 'ØGr/M',  title: 'Ø monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M)' },
 ];
+
+/* ── Sortierung ────────────────────────────────────────────────────────────
+ * Gilt für beide Sub-Tabs gemeinsam. Erster Klick auf eine Zahlenspalte
+ * sortiert absteigend (beste Performance oben), auf Text aufsteigend; erneuter
+ * Klick dreht um. Leere Werte stehen immer hinten – egal in welche Richtung,
+ * sonst verdrängen "–"-Zeilen die tatsächlichen Extremwerte.
+ */
+const SORTABLE = [
+  { key: 'code',  num: false },
+  { key: 'name',  num: false },
+  ...COLUMNS.map((c) => ({ key: c.key, num: true })),
+];
+
+export function sortRows(rows, sort) {
+  if (!sort?.key) return rows;
+  const num = SORTABLE.find((s) => s.key === sort.key)?.num;
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = a[sort.key], y = b[sort.key];
+    const xe = x == null || (num && Number.isNaN(x));
+    const ye = y == null || (num && Number.isNaN(y));
+    if (xe || ye) return xe && ye ? 0 : xe ? 1 : -1;    // Leeres immer ans Ende
+    return (num ? x - y : String(x).localeCompare(String(y), 'de')) * dir;
+  });
+}
+
+function sortGlyph(key, sort) {
+  if (sort?.key !== key) return '';
+  return `<span class="sort-glyph" aria-hidden="true">${sort.dir === 'asc' ? '▲' : '▼'}</span>`;
+}
+const ariaSort = (key, sort) => (sort?.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
 
 function tvChip(row) {
   if (!row.url) {
@@ -56,15 +90,24 @@ function row(r) {
   </tr>`;
 }
 
+function sortableTh(key, label, title, cls) {
+  return `<th class="${cls}" ${title ? `title="${esc(title)}"` : ''} aria-sort="${ariaSort(key, CURRENT_SORT)}">
+    <button class="sort-btn" data-idxsort="${key}">${label} ${sortGlyph(key, CURRENT_SORT)}</button></th>`;
+}
+
+/* Von renderIndicesPanel() vor jedem tableHtml()-Aufruf gesetzt – hält die
+ * Header-Helfer frei von Durchreich-Parametern. */
+let CURRENT_SORT = null;
+
 function tableHtml(rows) {
   return `<div class="idx-tablewrap">
     <table class="idx-table">
       <thead>
         <tr>
-          <th class="idx-code">Kürzel</th>
-          <th class="idx-name">Index</th>
+          ${sortableTh('code', 'Kürzel', 'Index-Kürzel', 'idx-code')}
+          ${sortableTh('name', 'Index', 'Indexname', 'idx-name')}
           <th class="idx-link">TV</th>
-          ${COLUMNS.map((c) => `<th class="num" title="${esc(c.title)}">${c.label}</th>`).join('')}
+          ${COLUMNS.map((c) => sortableTh(c.key, c.label, c.title, 'num')).join('')}
         </tr>
       </thead>
       <tbody>${rows.map(row).join('')}</tbody>
@@ -108,13 +151,35 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
     });
   });
 
+  let sort = null;          // { key, dir } – gilt für beide Sub-Tabs
+  let lastRows = null;      // zuletzt geladene Zeilen, für das Neusortieren
+
   /** Beide Gruppen aus einem Ergebnis-Array rendern (Zuordnung über `code`). */
   const paint = (rows) => {
+    lastRows = rows;
+    CURRENT_SORT = sort;
     const byCode = new Map(rows.map((r) => [r.code, r]));
     for (const g of INDEX_GROUPS) {
-      paneOf(g.key).innerHTML = tableHtml(g.entries.map((e) => byCode.get(e.code) ?? emptyIndexRow(e)));
+      const groupRows = g.entries.map((e) => byCode.get(e.code) ?? emptyIndexRow(e));
+      paneOf(g.key).innerHTML = tableHtml(sortRows(groupRows, sort));
     }
+    bindSortHandlers();
   };
+
+  /** Klick auf einen Spaltenkopf: erste Richtung nach Spaltentyp, dann drehen. */
+  function bindSortHandlers() {
+    container.querySelectorAll('[data-idxsort]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = btn.dataset.idxsort;
+        const isNum = SORTABLE.find((s) => s.key === key)?.num;
+        sort = sort?.key === key
+          ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+          : { key, dir: isNum ? 'desc' : 'asc' };
+        if (lastRows) paint(lastRows);
+      });
+    });
+  }
 
   let loading = false;
   /** @param {boolean} retrySearch manueller Refresh: 24-h-Sperre für erfolglose Suchen lösen */
