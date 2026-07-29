@@ -12,13 +12,14 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260722j';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260729a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260722j';
 import { renderControlModal } from './components/control-modal.js?v=20260722j';
 import { renderCompareModal } from './components/compare-modal.js?v=20260722j';
 import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260722i';
+import { fetchIndexRows } from './lib/tv-indices.js?v=20260729a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260711b';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
@@ -1766,6 +1767,13 @@ async function init() {
         const secret     = localStorage.getItem('discovery_secret');
         if (useMock || !backendUrl || !secret) return null;
         return fetchMarketIndicators({ backendUrl, secret });
+      },
+      // Indices-Tab: Branchen-/Länder-Indizes (Liste in lib/tv-indices.js).
+      onFetchIndexRows: async (entries) => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchIndexRows({ backendUrl, secret, entries });
       },
       // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
       getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],

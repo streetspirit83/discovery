@@ -2,14 +2,16 @@
  * Markets modal.
  *
  * Shows the live market indices (DAX / NASDAQ / NIKKEI / VIX) — moved out of the
- * Intra-Day modal — and two tabs below: "Märkte" (embedded Markets sub-page in
- * an iframe) and "News" (news-panel.js: Märkte / Portfolio / Quellen).
+ * Intra-Day modal — and the tabs below: "Märkte" (embedded Markets sub-page in
+ * an iframe), "Indices" (indices-panel.js: Branchen / Länder),
+ * "News" (news-panel.js: Märkte / Portfolio / Quellen) and "Sektoren".
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
 import { renderNewsPanel } from './news-panel.js?v=20260722j';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260719d';
+import { renderIndicesPanel } from './indices-panel.js?v=20260729a';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 
@@ -48,7 +50,7 @@ function indicatorChip(i) {
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
 }
 
-export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCandidates, getHeatCandidates } = {}) {
+export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, getWatchCandidates, getHeatCandidates } = {}) {
   if (document.getElementById('markets-modal-overlay')) return;
   let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
 
@@ -68,6 +70,7 @@ export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCand
         <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>
         <div class="tab-bar mk-tabs" role="tablist">
           <button class="tab-btn active" data-mktab="markets" role="tab" aria-selected="true">Märkte</button>
+          <button class="tab-btn" data-mktab="indices" role="tab" aria-selected="false">Indices</button>
           <button class="tab-btn" data-mktab="news" role="tab" aria-selected="false">News</button>
           <button class="tab-btn" data-mktab="sectors" role="tab" aria-selected="false">Sektoren</button>
         </div>
@@ -75,6 +78,7 @@ export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCand
           <div class="tab-panel active" data-mkpane="markets" role="tabpanel">
             <iframe class="markets-frame" src="${MARKETS_URL}" title="Markets" loading="lazy"></iframe>
           </div>
+          <div class="tab-panel" data-mkpane="indices" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="news" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="sectors" role="tabpanel"></div>
         </div>
@@ -82,7 +86,8 @@ export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCand
     </div>`;
   document.body.appendChild(overlay);
 
-  // Tab switch; news panel + sector heatmap render lazily on first activation.
+  // Tab switch; indices, news panel + sector heatmap render lazily on first activation.
+  let indicesMounted = false;
   let newsMounted = false;
   let sectorsMounted = false;
   overlay.querySelectorAll('[data-mktab]').forEach((btn) => {
@@ -93,6 +98,10 @@ export function renderMarketsModal({ indicators, onFetchIndicators, getWatchCand
         b.setAttribute('aria-selected', String(on));
       });
       overlay.querySelectorAll('[data-mkpane]').forEach((p) => p.classList.toggle('active', p.dataset.mkpane === btn.dataset.mktab));
+      if (btn.dataset.mktab === 'indices' && !indicesMounted) {
+        indicesMounted = true;
+        renderIndicesPanel(overlay.querySelector('[data-mkpane="indices"]'), { onFetchIndexRows });
+      }
       if (btn.dataset.mktab === 'news' && !newsMounted) {
         newsMounted = true;
         renderNewsPanel(overlay.querySelector('[data-mkpane="news"]'), { getWatchCandidates });

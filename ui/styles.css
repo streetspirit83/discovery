@@ -2156,6 +2156,37 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 }
 .ctl-range input[type="range"]::-moz-range-track { background:none; }
 
+/* ── Indices-Tab (Markets-Modal): Sub-Tabs Branchen / Länder + Tabelle ───── */
+.idx-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
+.idx-head { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
+.idx-subtabs { margin-bottom:0; border-bottom:none; }
+.idx-subtabs .tab-btn { padding:var(--s-2) var(--s-3); font-size:var(--fs-2); }
+.idx-spacer { flex:1; }
+.idx-refresh { width:28px; height:28px; flex:none; }
+.idx-status { color:var(--muted); font-size:var(--fs-1); margin-bottom:var(--s-2); }
+.idx-panes { flex:1; min-height:0; display:flex; }
+.idx-pane { display:none; }
+.idx-pane.active { display:block; flex:1; min-height:0; overflow-y:auto; }
+
+.idx-tablewrap { overflow-x:auto; }
+.idx-table { width:100%; border-collapse:collapse; font-size:var(--fs-1); }
+.idx-table th, .idx-table td { padding:var(--s-1) var(--s-2); border-bottom:1px solid var(--border); text-align:left; }
+.idx-table thead th {
+  position:sticky; top:0; z-index:1; background:var(--surface);
+  color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); letter-spacing:0.03em; white-space:nowrap;
+}
+.idx-table td.num, .idx-table th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.idx-table tbody tr:hover { background:var(--surface-2); }
+.idx-table .pos { color:var(--pos); }
+.idx-table .neg { color:var(--neg); }
+.idx-code { white-space:nowrap; }
+.idx-code__txt { font-weight:var(--fw-bold); font-family:var(--font-mono); }
+/* Name + Indexstand gestapelt; zweite Zeile eine Stufe kleiner (STYLEGUIDE §2) */
+.idx-name { min-width:0; }
+.idx-name__txt { display:block; font-size:var(--fs-1); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
+.idx-name__val { display:block; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2; }
+.idx-link { width:1%; white-space:nowrap; }
+
 /* ── Sektoren-Heatmap (Markets-Modal): 5 Mega-Cluster × 4 Horizonte ──────── */
 .heat-loading { color:var(--muted); font-size:var(--fs-2); padding:var(--s-4) 0; }
 .heat-grid { display:flex; flex-direction:column; gap:var(--s-1); }
