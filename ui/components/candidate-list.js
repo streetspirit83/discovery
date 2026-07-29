@@ -345,6 +345,7 @@ function sortValue(c, col) {
     case 'ls_chg':      return c.ls_quote?.change_pct ?? null;
     case 'mk_entry':    return c.mk_entry ?? null;
     case 'mk_pl':       return plData(c)?.pct ?? null;
+    case 'mk_pl_abs':   return plData(c)?.absEur ?? null;
     case 'range52':     return rangePos(c.tv_data) ?? null;
     case 'atrp': {       // sort by current spread, signed → green (up) to red (down)
       const a = c.tv_data?.atrp;
@@ -1028,18 +1029,23 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      // Lean decision view. Entry + P/L are always in the DOM but hidden via
-      // CSS unless the \u2605 (portfolio) filter is active (keeps header/row parity).
-      cols += this.thNum('mk_entry', 'Entry', 'Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio');
+      // Reihenfolge in drei Bl\u00f6cken (Trenner via col-group-start):
+      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 PerfW \u00b7 52W  (heute \u2192 5T \u2192 1J)
+      //   Qualit\u00e4t : Score \u00b7 Signal
+      //   Portfolio: Entry \u00b7 P/L \u00b7 P/Labs \u00b7 \u2605           (col-portfolio: immer im
+      //              DOM, per CSS nur bei aktivem \u2605-Filter sichtbar \u2014 so bleiben
+      //              Header und Zellen parit\u00e4tisch)
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
-      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust des Portfolio-Tickers: (LS-Kurs \u2212 Entry) \u00b7 % oben, absolut in \u20ac (mit entry_shares) darunter \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
+      cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
+      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
       cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
-      cols += `<th class="num">Verlauf</th>`;
-      cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
+      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
-      cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c');
+      cols += this.thNum('mk_entry', 'Entry', 'Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio col-group-start');
+      cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust in Prozent: (LS-Kurs \u2212 Entry) / Entry \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
+      cols += this.thNum('mk_pl_abs', 'P/Labs', 'Gewinn/Verlust absolut in Anzeigew\u00e4hrung: (LS-Kurs \u2212 Entry) \u00d7 St\u00fcckzahl \u00b7 braucht zus\u00e4tzlich eine St\u00fcckzahl aus der Merkliste', 'col-portfolio');
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += `<th class="num">Aktion</th>`;
     } else {
@@ -1202,17 +1208,19 @@ export class CandidateList {
 
       let dataCols;
       if (this.viewMode === 'standard') {
+        // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
         dataCols =
-          `<td class="num col-portfolio">${renderMkEntry(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
-          `<td class="num col-portfolio">${renderPL(c)}</td>` +
-          heatPctTd(tv?.perf_w) +
-          `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
+          heatPctTd(tv?.perf_w) +
+          `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderSignal(c)}</td>` +
-          `<td class="num">${renderOverallScore(liveOverallScore(tv))}</td>` +
+          `<td class="num col-portfolio col-group-start">${renderMkEntry(c)}</td>` +
+          `<td class="num col-portfolio">${renderPL(c)}</td>` +
+          `<td class="num col-portfolio">${renderPLabs(c)}</td>` +
           starTd + actionTd;
       } else {
         const watchCol = (this.viewMode === 'meta' && this.bucket === 'watch') ? watchTd : '';
@@ -1580,6 +1588,22 @@ function renderPL(c) {
     + ` · Entry ${fmtNum(c.mk_entry * convFromEur(), 2)}${sym}`
     + (c.mk_shares != null ? ` · ${c.mk_shares} St.` : ' · keine Stückzahl');
   return `<span class="pl ${cls}" title="${tip}">${fmtPct(d.pct)}</span>`;
+}
+
+/** Absoluter P/L in Anzeigewährung. Braucht zusätzlich zur Entry-Zuordnung eine
+ *  Stückzahl aus der Merkliste — ohne die ist nur die Prozent-Spalte belegt. */
+function renderPLabs(c) {
+  const d = plData(c);
+  if (!d) return '<span class="muted-dash" title="Braucht Entry (Merkliste) + LS-Kurs">—</span>';
+  if (d.absEur == null) {
+    return '<span class="muted-dash" title="Keine Stückzahl in der Merkliste hinterlegt">—</span>';
+  }
+  const v = d.absEur * convFromEur();
+  const sym = displayCurrency === 'USD' ? '$' : '€';
+  const cls = posNegClass(d.absEur);
+  const txt = `${d.absEur >= 0 ? '+' : '−'}${fmtNum(Math.abs(v), 2)}${sym}`;
+  const tip = `Absoluter P/L: ${txt}${c.mk_shares != null ? ` · ${c.mk_shares} St.` : ''}`;
+  return `<span class="pl ${cls}" title="${tip}">${txt}</span>`;
 }
 
 // Position of the current price within its 52-week range (0..1). Native currency
