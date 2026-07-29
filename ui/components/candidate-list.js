@@ -761,6 +761,7 @@ export class CandidateList {
     this.viewMode          = 'standard';
     this.bucket            = 'inbox'; // aktiver Blob (Watch-Label nur im Watch-Bucket)
     this.dupMap            = null;   // "EXCH:SYMBOL" → Bucket-Name (Dup-Marker)
+    this.portfolioColsOn   = false;  // Entry/P/L/P/Labs sichtbar? (★-Filter, Standard-View)
 
     this.thead     = document.getElementById('candidate-thead');
     this.tbody     = document.getElementById('candidate-tbody');
@@ -1093,15 +1094,24 @@ export class CandidateList {
 
   // Stable identity of the current column set: widths saved for an older
   // column layout must not be applied by index to a shifted layout.
+  // Die Portfolio-Spalten (Entry/P/L/P/Labs) sind nur unter dem ★-Filter
+  // sichtbar — das sind ZWEI Layouts mit gleicher th-Liste. Ohne den Präfix
+  // landen die Breiten des schmalen Layouts auf dem breiten: die drei Spalten
+  // stehen dort mit 0px in der Map, bekommen bei `table-layout:fixed` keine
+  // Breite mehr und bleiben unsichtbar, obwohl der Filter sie einblendet.
   colSignature(ths) {
-    return ths.map((th) => th.querySelector('.sort-btn')?.dataset.sort ?? th.textContent.trim()).join('|');
+    const pf = this.table?.classList.contains('show-portfolio-cols') ? 'pf' : 'nopf';
+    return [pf, ...ths.map((th) => th.querySelector('.sort-btn')?.dataset.sort ?? th.textContent.trim())].join('|');
   }
 
   // Freeze every column at its current rendered width so adjusting one
   // column doesn't reflow the others (requires table-layout: fixed).
+  // Ausgeblendete Spalten (offsetWidth 0) bleiben aussen vor — eine
+  // gespeicherte 0 würde die Spalte dauerhaft zuklappen.
   freezeColWidths(ths) {
     const widths = {};
     ths.forEach((th, i) => {
+      if (!th.offsetWidth) return;
       widths[i] = th.offsetWidth;
       th.style.width = `${th.offsetWidth}px`;
     });
@@ -1160,8 +1170,16 @@ export class CandidateList {
 
   renderRows() {
     // Show the Einstand/P/L columns only in Standard view with the ★ filter on.
-    this.thead.closest('table')?.classList.toggle(
-      'show-portfolio-cols', this.viewMode === 'standard' && this.filters.broker === 'star');
+    // Beim Umschalten ändert sich das Spalten-Layout (12 ↔ 15 sichtbare
+    // Spalten) — der Header muss neu, sonst behält eine eingefrorene
+    // `table-layout:fixed`-Breitenverteilung die neuen Spalten auf 0px.
+    const showPortfolio = this.viewMode === 'standard' && this.filters.broker === 'star';
+    this.table = this.table ?? this.thead.closest('table');
+    this.table?.classList.toggle('show-portfolio-cols', showPortfolio);
+    if (this.portfolioColsOn !== showPortfolio) {
+      this.portfolioColsOn = showPortfolio;
+      this.renderThead();
+    }
     const rows = this.getSorted(this.getFiltered());
     this.tbody.innerHTML = '';
 

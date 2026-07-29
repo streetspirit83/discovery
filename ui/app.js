@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260722m';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260729d';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260722j';
 import { CandidateDetail } from './components/candidate-detail.js?v=20260722j';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
@@ -14,7 +14,7 @@ import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260729c';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260722j';
-import { renderControlModal } from './components/control-modal.js?v=20260722j';
+import { renderControlModal } from './components/control-modal.js?v=20260729d';
 import { renderCompareModal } from './components/compare-modal.js?v=20260722j';
 import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';
