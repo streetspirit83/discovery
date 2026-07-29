@@ -17,7 +17,8 @@
  * Bau nicht live prüfbar. `resolveTickers()` rät deshalb nicht, sondern läuft
  * in drei Stufen – gecacht wird ausschließlich, was der Scanner mit echten
  * Daten bestätigt hat:
- *   1. Kandidaten – die (kurze) Liste in `tickers` je Eintrag, ein Scan.
+ *   1. Kandidaten – die (kurze) Liste in `tickers` je Eintrag, ein Scan je
+ *                   Scanner-Markt (`RESOLVE_MARKETS`).
  *   2. Suche      – für alles Offene `symbol-search.tradingview.com` mit dem
  *                   Kürzel, ersatzweise mit dem Indexnamen.
  *   3. Bestätigung – die Vorschläge aus 2. gehen erneut durch den Scanner; nur
@@ -132,7 +133,7 @@ export const tvIndexUrl = (ticker) =>
  * Tab-Öffnen 20+ Suchanfragen auslöst.
  */
 
-const CACHE_KEY = 'discovery_index_tickers_v2';
+const CACHE_KEY = 'discovery_index_tickers_v3';
 const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export function loadTickerCache() {
@@ -176,6 +177,18 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
   if (wrapper.status !== 200) throw new Error(`TV HTTP ${wrapper.status}`);
   return wrapper.body;
 }
+
+/**
+ * Scanner-Märkte, die für die Auflösung durchprobiert werden.
+ *
+ * Ein `symbols.tickers`-Lookup ist auf den Markt in der URL beschränkt (siehe
+ * `tv-enrichment.js`, EURONEXT_FALLBACK_MARKETS) — `global` kennt längst nicht
+ * jedes Symbol, das TradingView auf seinen Symbolseiten anzeigt. US-Indizes wie
+ * `NASDAQ:NBI` liegen im Markt `america`. Reihenfolge = Trefferwahrscheinlichkeit;
+ * der erste Markt mit Daten gewinnt und wird je Index mitgecacht, damit der
+ * Datenabruf danach direkt den richtigen Endpunkt trifft.
+ */
+const RESOLVE_MARKETS = ['global', 'america'];
 
 /** Ein Scanner-Scan; liefert Map ticker → Spaltenwerte (fehlerfrei = leere Map). */
 async function scan(backendUrl, secret, market, tickers, columns) {
@@ -253,9 +266,27 @@ async function searchTickers(backendUrl, secret, text, code) {
 }
 
 /**
- * Ermittelt je Eintrag den TV-Ticker (Kandidaten → Suche → Bestätigung, siehe
- * Modul-Kopf). Gecacht wird nur, was der Scanner mit Daten bestätigt hat.
- * @returns {Promise<Record<string,string>>} code → Ticker (nur Bestätigte)
+ * Probiert eine Tickerliste über alle `RESOLVE_MARKETS` (bzw. die per Eintrag
+ * gesetzten Märkte) und liefert Map ticker → Markt für alles, was Daten hatte.
+ * Bereits gefundene Ticker fallen aus den Folgemärkten raus.
+ */
+async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKETS) {
+  const hit = new Map();
+  let openTickers = [...new Set(tickers)];
+  for (const market of markets) {
+    if (!openTickers.length) break;
+    const found = await scan(backendUrl, secret, market, openTickers, ['description']);
+    for (const t of found.keys()) hit.set(t, market);
+    openTickers = openTickers.filter((t) => !hit.has(t));
+  }
+  return hit;
+}
+
+/**
+ * Ermittelt je Eintrag Ticker UND Scanner-Markt (Kandidaten → Suche →
+ * Bestätigung, siehe Modul-Kopf). Gecacht wird nur, was der Scanner mit Daten
+ * bestätigt hat.
+ * @returns {Promise<Record<string,{t:string,m:string}>>} code → { Ticker, Markt }
  */
 export async function resolveTickers({ backendUrl, secret, entries = allIndexEntries() }) {
   const cache = loadTickerCache();
@@ -264,11 +295,11 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
 
   let dirty = false;
 
-  // Stufe 1: hinterlegte Kandidaten
-  const found = await scan(backendUrl, secret, 'global', [...new Set(open.flatMap((e) => e.tickers))], ['description']);
+  // Stufe 1: hinterlegte Kandidaten, über alle Märkte
+  const found = await findMarkets(backendUrl, secret, open.flatMap((e) => e.tickers));
   for (const e of open) {
     const hit = e.tickers.find((t) => found.has(t));
-    if (hit) { cache.tickers[e.code] = hit; dirty = true; }
+    if (hit) { cache.tickers[e.code] = { t: hit, m: found.get(hit) }; dirty = true; }
   }
   open = open.filter((e) => !cache.tickers[e.code]);
 
@@ -289,13 +320,12 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
     }));
   }
 
-  // Stufe 3: Vorschläge durch den Scanner bestätigen
+  // Stufe 3: Vorschläge durch den Scanner bestätigen (ebenfalls über alle Märkte)
   if (proposals.size) {
-    const confirmed = await scan(backendUrl, secret, 'global',
-      [...new Set([...proposals.values()].flat())], ['description']);
+    const confirmed = await findMarkets(backendUrl, secret, [...proposals.values()].flat());
     for (const e of toSearch) {
       const hit = (proposals.get(e.code) ?? []).find((t) => confirmed.has(t));
-      if (hit) cache.tickers[e.code] = hit;
+      if (hit) cache.tickers[e.code] = { t: hit, m: confirmed.get(hit) };
     }
   }
   for (const e of toSearch) {
@@ -336,12 +366,25 @@ export function emptyIndexRow(entry, ticker = null) {
  * @returns {Promise<Array>} Zeilen in der Reihenfolge der Einträge
  */
 export async function fetchIndexRows({ backendUrl, secret, entries = allIndexEntries() }) {
-  const tickerOf = await resolveTickers({ backendUrl, secret, entries });
-  const tickers = entries.map((e) => tickerOf[e.code]).filter(Boolean);
-  const data = tickers.length ? await scan(backendUrl, secret, 'global', tickers, DATA_COLUMNS) : new Map();
+  const resolved = await resolveTickers({ backendUrl, secret, entries });
+
+  // Je Scanner-Markt ein Datenabruf – ein `symbols.tickers`-Lookup gilt nur für
+  // den Markt in der URL, deshalb wird der bei der Auflösung gefundene Markt
+  // mitgeführt statt pauschal `global` anzufragen.
+  const byMarket = new Map();
+  for (const e of entries) {
+    const r = resolved[e.code];
+    if (!r) continue;
+    if (!byMarket.has(r.m)) byMarket.set(r.m, []);
+    byMarket.get(r.m).push(r.t);
+  }
+  const data = new Map();
+  await Promise.all([...byMarket.entries()].map(async ([market, tickers]) => {
+    for (const [t, d] of await scan(backendUrl, secret, market, tickers, DATA_COLUMNS)) data.set(t, d);
+  }));
 
   return entries.map((e) => {
-    const ticker = tickerOf[e.code] ?? null;
+    const ticker = resolved[e.code]?.t ?? null;
     const d = ticker ? data.get(ticker) : null;
     if (!d) return emptyIndexRow(e, ticker);
     const perf6m = d[COL.perf_6m] ?? null;
