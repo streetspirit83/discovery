@@ -3,24 +3,27 @@
  *
  * Zwei Sub-Tabs (`Branchen` / `Länder`, Definition in `lib/tv-indices.js`), je
  * eine Tabelle:
- *   Kürzel · Indexname · TV · Δ1T · PerfW · Perf1M · Perf3M · Perf6M · ØGr/M
+ *   Kürzel · Index (+ Branche/Land · Stand) · TV · Δ1T · PerfW · Perf1M ·
+ *   Perf3M · Perf6M · ØGr/M
  *
  * Geladen wird beim ersten Öffnen des Tabs – ein gemeinsamer Scanner-Request
  * für beide Gruppen, damit der Sub-Tab-Wechsel ohne Nachladen läuft. Der
- * Refresh-Button erzwingt einen neuen Fetch.
+ * Refresh-Button lädt neu; noch nicht aufgelöste Ticker werden dabei erneut
+ * gesucht (bestätigte kommen aus dem localStorage-Cache).
  *
- * TV-Link als Icon-Only-Chip (STYLEGUIDE §4), Prozente über `.pos`/`.neg` (§8).
+ * TV-Link als Icon-Only-Chip (STYLEGUIDE §4) – ohne aufgelösten Ticker als
+ * ausgegrauter `.link-chip--missing`. Prozente über `.pos`/`.neg` (§8).
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow } from '../lib/tv-indices.js?v=20260729a';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow } from '../lib/tv-indices.js?v=20260729b';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const fmtPct = (v) => (v == null || Number.isNaN(v) ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`);
 const posNeg = (v) => (v == null ? '' : v >= 0 ? 'pos' : 'neg');
-const fmtVal = (v) => (v == null ? '–' : Number(v).toLocaleString('de-DE', { maximumFractionDigits: 2 }));
+const fmtVal = (v) => (v == null ? null : Number(v).toLocaleString('de-DE', { maximumFractionDigits: 2 }));
 
 const COLUMNS = [
   { key: 'change',   label: 'Δ1T',    title: 'Veränderung heute' },
@@ -32,8 +35,25 @@ const COLUMNS = [
 ];
 
 function tvChip(row) {
+  if (!row.url) {
+    return `<span class="link-chip link-chip--tv link-chip--missing" title="Kein TV-Ticker aufgelöst"><img src="${TV_LOGO}" alt=""></span>`;
+  }
+  const tip = `${row.code}${row.ticker ? ` (${row.ticker})` : ''} auf TradingView öffnen`;
   return `<a class="link-chip link-chip--tv" href="${esc(row.url)}" target="_blank" rel="noopener"
-    title="${esc(row.code)} auf TradingView öffnen" aria-label="${esc(row.code)} auf TradingView öffnen"><img src="${TV_LOGO}" alt=""></a>`;
+    title="${esc(tip)}" aria-label="${esc(tip)}"><img src="${TV_LOGO}" alt=""></a>`;
+}
+
+function row(r) {
+  const sub = [r.label, fmtVal(r.value)].filter(Boolean).join(' · ');
+  return `<tr>
+    <td class="idx-code"><span class="idx-code__txt" title="${esc(r.ticker ?? 'nicht aufgelöst')}">${esc(r.code)}</span></td>
+    <td class="idx-name">
+      <span class="idx-name__txt" title="${esc(r.tvName || r.name)}">${esc(r.name)}</span>
+      <span class="idx-name__sub">${esc(sub)}</span>
+    </td>
+    <td class="idx-link">${tvChip(r)}</td>
+    ${COLUMNS.map((c) => `<td class="num"><span class="${posNeg(r[c.key])}">${fmtPct(r[c.key])}</span></td>`).join('')}
+  </tr>`;
 }
 
 function tableHtml(rows) {
@@ -47,18 +67,7 @@ function tableHtml(rows) {
           ${COLUMNS.map((c) => `<th class="num" title="${esc(c.title)}">${c.label}</th>`).join('')}
         </tr>
       </thead>
-      <tbody>
-        ${rows.map((r) => `
-          <tr>
-            <td class="idx-code"><span class="idx-code__txt" title="${esc(r.ticker)}">${esc(r.code)}</span></td>
-            <td class="idx-name">
-              <span class="idx-name__txt" title="${esc(r.name)}">${esc(r.name)}</span>
-              <span class="idx-name__val">${fmtVal(r.value)}</span>
-            </td>
-            <td class="idx-link">${tvChip(r)}</td>
-            ${COLUMNS.map((c) => `<td class="num"><span class="${posNeg(r[c.key])}">${fmtPct(r[c.key])}</span></td>`).join('')}
-          </tr>`).join('')}
-      </tbody>
+      <tbody>${rows.map(row).join('')}</tbody>
     </table>
   </div>`;
 }
@@ -85,6 +94,7 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
     </div>`;
 
   const statusEl = container.querySelector('#idx-status');
+  const refreshBtn = container.querySelector('#idx-refresh');
   const paneOf = (key) => container.querySelector(`[data-idxpane="${key}"]`);
 
   container.querySelectorAll('[data-idxtab]').forEach((btn) => {
@@ -98,30 +108,37 @@ export function renderIndicesPanel(container, { onFetchIndexRows } = {}) {
     });
   });
 
-  /** Beide Gruppen aus einem Ergebnis-Array (Reihenfolge = allIndexEntries) rendern. */
+  /** Beide Gruppen aus einem Ergebnis-Array rendern (Zuordnung über `code`). */
   const paint = (rows) => {
-    const byTicker = new Map(rows.map((r) => [r.ticker, r]));
+    const byCode = new Map(rows.map((r) => [r.code, r]));
     for (const g of INDEX_GROUPS) {
-      paneOf(g.key).innerHTML = tableHtml(g.entries.map((e) => byTicker.get(e.ticker) ?? emptyIndexRow(e)));
+      paneOf(g.key).innerHTML = tableHtml(g.entries.map((e) => byCode.get(e.code) ?? emptyIndexRow(e)));
     }
   };
 
+  let loading = false;
   const load = async () => {
+    if (loading) return;
+    loading = true;
+    refreshBtn.disabled = true;
     statusEl.textContent = 'Indizes werden geladen …';
     let rows = null;
     try { rows = await onFetchIndexRows?.(allIndexEntries()); } catch { /* Fallback unten */ }
+
     if (!rows?.length) {
-      paint(allIndexEntries().map(emptyIndexRow));
+      paint(allIndexEntries().map((e) => emptyIndexRow(e)));
       statusEl.textContent = 'Keine Live-Daten – Backend-URL/Secret in den Einstellungen prüfen.';
-      return;
+    } else {
+      paint(rows);
+      const missing = rows.filter((r) => !r.ok).map((r) => r.code);
+      const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      statusEl.textContent = `Stand ${t} · ${rows.length - missing.length}/${rows.length} Indizes`
+        + (missing.length ? ` · ohne Daten: ${missing.join(', ')}` : '');
     }
-    paint(rows);
-    const missing = rows.filter((r) => !r.ok).map((r) => r.ticker);
-    const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    statusEl.textContent = `Stand ${t} · ${rows.length - missing.length}/${rows.length} Indizes`
-      + (missing.length ? ` · ohne Daten: ${missing.join(', ')}` : '');
+    refreshBtn.disabled = false;
+    loading = false;
   };
 
-  container.querySelector('#idx-refresh').addEventListener('pointerup', load);
+  refreshBtn.addEventListener('pointerup', load);
   load();
 }

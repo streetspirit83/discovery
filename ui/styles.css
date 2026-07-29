@@ -2184,7 +2184,8 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 /* Name + Indexstand gestapelt; zweite Zeile eine Stufe kleiner (STYLEGUIDE §2) */
 .idx-name { min-width:0; }
 .idx-name__txt { display:block; font-size:var(--fs-1); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
-.idx-name__val { display:block; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2; }
+.idx-name__sub { display:block; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
 .idx-link { width:1%; white-space:nowrap; }
 
 /* ── Sektoren-Heatmap (Markets-Modal): 5 Mega-Cluster × 4 Horizonte ──────── */

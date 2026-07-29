@@ -1,11 +1,22 @@
 /**
  * Indizes-Daten für den "Indices"-Tab im Markets-Modal.
  *
- * Zwei Gruppen (= die beiden Sub-Tabs): `branchen` und `laender`. Jede Gruppe
- * ist eine schlichte Liste aus `{ code, name, ticker }` – austauschbar, ohne
- * dass die Render-Logik angefasst werden muss.
+ * Zwei Gruppen (= die beiden Sub-Tabs): `branchen` und `laender`. Jeder Eintrag
+ * ist `{ code, name, label, tickers }` – `code` ist das Kürzel aus der
+ * abgestimmten Liste, `label` die Branche bzw. das Land.
  *
- * Die Kurse kommen wie bei `fetchMarketIndicators()` aus dem TV-Scanner
+ * ── Warum `tickers` eine LISTE ist ───────────────────────────────────────────
+ * Das TV-Präfix eines Index ist nicht ableitbar (SP: / DJ: / NASDAQ: / TVC: /
+ * EURONEXT: / börsenspezifisch …) und war beim Bau nicht live prüfbar. Statt zu
+ * raten steht je Index eine geordnete Kandidatenliste; `resolveTickers()` fragt
+ * alle Kandidaten in einem Scanner-Request ab und nimmt den ersten, der Daten
+ * liefert. Das Ergebnis landet in localStorage, danach geht nur noch der
+ * bestätigte Ticker raus. Nicht auflösbare Indizes werden in der Statuszeile
+ * des Panels benannt – kein stilles "–".
+ * Ein Index mit genau einem Kandidaten ist bereits verifiziert (aus
+ * `tv-enrichment.js` `MARKET_INDICATORS`).
+ *
+ * Kurse kommen wie bei `fetchMarketIndicators()` aus dem TV-Scanner
  * (`scanner.tradingview.com/{market}/scan`) über die scrape-proxy-Function.
  * Eigener kleiner Proxy-Helper statt Import aus `tv-enrichment.js` – so wie in
  * `ls-intraday.js` / `tr-check.js` / `news-feed.js` auch: hält die
@@ -18,47 +29,77 @@
 
 import { monthlyGrowthRate } from './tv-upside.js?v=20260704i';
 
-/* ── Index-Listen ─────────────────────────────────────────────────────────────
- * PLATZHALTER – wird durch die abgestimmte Liste ersetzt. `market` ist optional
- * (Default 'global'); pro Markt geht genau ein Scanner-Request raus.
- * `ticker` ist immer die TV-Notation `PREFIX:SYMBOL`, daraus wird der TV-Link
- * gebaut (`PREFIX-SYMBOL`).
- */
+/* ── Index-Listen ─────────────────────────────────────────────────────────── */
+
 export const INDEX_GROUPS = [
   {
     key: 'branchen',
     label: 'Branchen',
     entries: [
-      { code: 'S5INFT', name: 'S&P 500 Information Technology', ticker: 'SP:S5INFT' },
-      { code: 'SOX',    name: 'PHLX Semiconductor',             ticker: 'NASDAQ:SOX' },
-      { code: 'S5TELS', name: 'S&P 500 Communication Services', ticker: 'SP:S5TELS' },
-      { code: 'S5COND', name: 'S&P 500 Consumer Discretionary', ticker: 'SP:S5COND' },
-      { code: 'S5CONS', name: 'S&P 500 Consumer Staples',       ticker: 'SP:S5CONS' },
-      { code: 'S5HLTH', name: 'S&P 500 Health Care',            ticker: 'SP:S5HLTH' },
-      { code: 'S5FINL', name: 'S&P 500 Financials',             ticker: 'SP:S5FINL' },
-      { code: 'S5INDU', name: 'S&P 500 Industrials',            ticker: 'SP:S5INDU' },
-      { code: 'S5ENRS', name: 'S&P 500 Energy',                 ticker: 'SP:S5ENRS' },
-      { code: 'S5MATR', name: 'S&P 500 Materials',              ticker: 'SP:S5MATR' },
-      { code: 'S5UTIL', name: 'S&P 500 Utilities',              ticker: 'SP:S5UTIL' },
-      { code: 'S5RLST', name: 'S&P 500 Real Estate',            ticker: 'SP:S5RLST' },
+      { code: 'SOX',      label: 'Halbleiter',                     name: 'PHLX Semiconductor Index',            tickers: ['NASDAQ:SOX'] },
+      { code: 'NBI',      label: 'Biotechnologie',                 name: 'NASDAQ Biotechnology Index',          tickers: ['NASDAQ:NBI', 'INDEX:NBI'] },
+      { code: 'DJUSSW',   label: 'Software',                       name: 'Dow Jones U.S. Software Index',       tickers: ['DJ:DJUSSW', 'INDEX:DJUSSW'] },
+      { code: 'DJINET',   label: 'Internet',                       name: 'Dow Jones Internet Index',            tickers: ['DJ:DJINET', 'INDEX:DJINET'] },
+      { code: 'HXR',      label: 'Cybersecurity',                  name: 'ISE Cyber Security Index',            tickers: ['NASDAQ:HXR', 'INDEX:HXR', 'DJ:HXR'] },
+      { code: 'EMCLOUD',  label: 'Cloud Computing',                name: 'BVP Nasdaq Emerging Cloud Index',     tickers: ['NASDAQ:EMCLOUD', 'INDEX:EMCLOUD'] },
+      { code: 'XBAI',     label: 'Künstliche Intelligenz',         name: 'Indxx AI & Big Data Index',           tickers: ['NASDAQ:XBAI', 'INDEX:XBAI'] },
+      { code: 'ROBO',     label: 'Robotik & Automation',           name: 'ROBO Global Robotics Index',          tickers: ['INDEX:ROBO', 'NASDAQ:ROBO', 'DJ:ROBO'] },
+      { code: 'IXFT',     label: 'Fintech',                        name: 'Indxx Global Fintech Index',          tickers: ['NASDAQ:IXFT', 'INDEX:IXFT'] },
+      { code: 'BKX',      label: 'Banken',                         name: 'KBW Nasdaq Bank Index',               tickers: ['NASDAQ:BKX', 'INDEX:BKX', 'DJ:BKX'] },
+      { code: 'KRX',      label: 'Regionalbanken',                 name: 'KBW Regional Banking Index',          tickers: ['NASDAQ:KRX', 'INDEX:KRX'] },
+      { code: 'KIX',      label: 'Versicherungen',                 name: 'KBW Insurance Index',                 tickers: ['NASDAQ:KIX', 'INDEX:KIX'] },
+      { code: 'SPN',      label: 'Energie',                        name: 'S&P 500 Energy Sector',               tickers: ['SP:SPN', 'SP:S5ENRS', 'INDEX:SPN'] },
+      { code: 'SPSIOP',   label: 'Öl & Gas Exploration',           name: 'S&P Oil & Gas Exploration & Production', tickers: ['SP:SPSIOP', 'INDEX:SPSIOP'] },
+      { code: 'DJUSUT',   label: 'Versorger',                      name: 'Dow Jones U.S. Utilities Index',      tickers: ['DJ:DJUSUT', 'INDEX:DJUSUT'] },
+      { code: 'SPGTCLEN', label: 'Erneuerbare Energien',           name: 'S&P Global Clean Energy Index',       tickers: ['SP:SPGTCLEN', 'INDEX:SPGTCLEN'] },
+      { code: 'FNRE',     label: 'Immobilien (REITs)',             name: 'FTSE Nareit All Equity REITs',        tickers: ['FTSE:FNRE', 'INDEX:FNRE', 'TVC:FNRE', 'NASDAQ:FNRE'] },
+      { code: 'DJUSIN',   label: 'Industrie',                      name: 'Dow Jones U.S. Industrials',          tickers: ['DJ:DJUSIN', 'INDEX:DJUSIN'] },
+      { code: 'DJUSAS',   label: 'Luft- & Raumfahrt/Verteidigung', name: 'Dow Jones U.S. Aerospace & Defense',  tickers: ['DJ:DJUSAS', 'INDEX:DJUSAS'] },
+      { code: 'SPAUTO',   label: 'Automobil',                      name: 'S&P Global Automotive Index',         tickers: ['SP:SPAUTO', 'INDEX:SPAUTO'] },
+      { code: 'SPLUX',    label: 'Luxusgüter',                     name: 'S&P Global Luxury Index',             tickers: ['SP:SPLUX', 'INDEX:SPLUX'] },
+      { code: 'S5COND',   label: 'Konsumgüter',                    name: 'S&P Consumer Discretionary',          tickers: ['SP:S5COND'] },
+      { code: 'S5CONS',   label: 'Basiskonsum',                    name: 'S&P Consumer Staples',                tickers: ['SP:S5CONS'] },
+      { code: 'S5HLTH',   label: 'Gesundheitswesen',               name: 'S&P Health Care',                     tickers: ['SP:S5HLTH'] },
+      { code: 'DJUSMS',   label: 'Medizintechnik',                 name: 'Dow Jones U.S. Medical Equipment',    tickers: ['DJ:DJUSMS', 'INDEX:DJUSMS'] },
+      { code: 'S5CHEM',   label: 'Chemie',                         name: 'S&P Chemicals',                       tickers: ['SP:S5CHEM', 'INDEX:S5CHEM'] },
+      { code: 'SPMTMN',   label: 'Metalle & Bergbau',              name: 'S&P Metals & Mining',                 tickers: ['SP:SPMTMN', 'INDEX:SPMTMN'] },
+      { code: 'DJT',      label: 'Transport',                      name: 'Dow Jones Transportation Average',    tickers: ['DJ:DJT', 'TVC:DJT', 'INDEX:DJT'] },
     ],
   },
   {
     key: 'laender',
     label: 'Länder',
     entries: [
-      { code: 'DAX',    name: 'DAX (Deutschland)',        ticker: 'XETR:DAX' },
-      { code: 'SX5E',   name: 'Euro Stoxx 50 (Eurozone)', ticker: 'TVC:SX5E' },
-      { code: 'SPX',    name: 'S&P 500 (USA)',            ticker: 'SP:SPX' },
-      { code: 'IXIC',   name: 'Nasdaq Composite (USA)',   ticker: 'NASDAQ:IXIC' },
-      { code: 'UKX',    name: 'FTSE 100 (UK)',            ticker: 'TVC:UKX' },
-      { code: 'CAC40',  name: 'CAC 40 (Frankreich)',      ticker: 'TVC:CAC40' },
-      { code: 'SSMI',   name: 'SMI (Schweiz)',            ticker: 'TVC:SSMI' },
-      { code: 'IBEX35', name: 'IBEX 35 (Spanien)',        ticker: 'TVC:IBEX35' },
-      { code: 'AEX',    name: 'AEX (Niederlande)',        ticker: 'TVC:AEX' },
-      { code: 'NI225',  name: 'Nikkei 225 (Japan)',       ticker: 'TVC:NI225' },
-      { code: 'HSI',    name: 'Hang Seng (Hongkong)',     ticker: 'TVC:HSI' },
-      { code: 'VIX',    name: 'CBOE Volatility Index',    ticker: 'TVC:VIX' },
+      { code: 'DAX',     label: 'Deutschland',    name: 'DAX',                  tickers: ['XETR:DAX'] },
+      { code: 'SPX',     label: 'USA',            name: 'S&P 500',              tickers: ['SP:SPX'] },
+      { code: 'TSX',     label: 'Kanada',         name: 'S&P/TSX Composite',    tickers: ['TSX:TSX', 'TVC:TSX', 'INDEX:TSX'] },
+      { code: 'MEXBOL',  label: 'Mexiko',         name: 'IPC',                  tickers: ['BMV:ME', 'TVC:MEXBOL', 'INDEX:MEXBOL'] },
+      { code: 'IBOV',    label: 'Brasilien',      name: 'Ibovespa',             tickers: ['BMFBOVESPA:IBOV', 'INDEX:IBOV', 'TVC:IBOV'] },
+      { code: 'FTSE',    label: 'Großbritannien', name: 'FTSE 100',             tickers: ['TVC:UKX', 'FTSE:UKX', 'INDEX:UKX'] },
+      { code: 'CAC',     label: 'Frankreich',     name: 'CAC 40',               tickers: ['EURONEXT:PX1', 'TVC:CAC40', 'INDEX:CAC40'] },
+      { code: 'AEX',     label: 'Niederlande',    name: 'AEX',                  tickers: ['EURONEXT:AEX', 'TVC:AEX', 'INDEX:AEX'] },
+      { code: 'BEL20',   label: 'Belgien',        name: 'BEL 20',               tickers: ['EURONEXT:BEL20', 'TVC:BEL20', 'INDEX:BEL20'] },
+      { code: 'SMI',     label: 'Schweiz',        name: 'SMI',                  tickers: ['SIX:SMI', 'TVC:SSMI', 'INDEX:SMI'] },
+      { code: 'ATX',     label: 'Österreich',     name: 'ATX',                  tickers: ['VIE:ATX', 'TVC:ATX', 'INDEX:ATX'] },
+      { code: 'FTSEMIB', label: 'Italien',        name: 'FTSE MIB',             tickers: ['MIL:FTSEMIB', 'TVC:FTSEMIB', 'INDEX:FTSEMIB'] },
+      { code: 'IBEX',    label: 'Spanien',        name: 'IBEX 35',              tickers: ['BME:IBC', 'TVC:IBEX35', 'INDEX:IBEX35'] },
+      { code: 'PSI',     label: 'Portugal',       name: 'PSI',                  tickers: ['EURONEXT:PSI20', 'TVC:PSI20', 'INDEX:PSI20'] },
+      { code: 'OMXS30',  label: 'Schweden',       name: 'OMX Stockholm 30',     tickers: ['OMXSTO:OMXS30', 'TVC:OMXS30', 'INDEX:OMXS30'] },
+      { code: 'OBX',     label: 'Norwegen',       name: 'OBX',                  tickers: ['OSL:OBX', 'TVC:OBX', 'INDEX:OBX'] },
+      { code: 'OMXC25',  label: 'Dänemark',       name: 'OMX Copenhagen 25',    tickers: ['OMXCOP:OMXC25', 'TVC:OMXC25', 'INDEX:OMXC25'] },
+      { code: 'OMXH25',  label: 'Finnland',       name: 'OMX Helsinki 25',      tickers: ['OMXHEX:OMXH25', 'TVC:OMXH25', 'INDEX:OMXH25'] },
+      { code: 'WIG20',   label: 'Polen',          name: 'WIG20',                tickers: ['GPW:WIG20', 'TVC:WIG20', 'INDEX:WIG20'] },
+      { code: 'XU100',   label: 'Türkei',         name: 'BIST 100',             tickers: ['BIST:XU100', 'TVC:XU100', 'INDEX:XU100'] },
+      { code: 'N225',    label: 'Japan',          name: 'Nikkei 225',           tickers: ['TVC:NI225'] },
+      { code: 'CSI300',  label: 'China',          name: 'CSI 300',              tickers: ['SSE:000300', 'TVC:CSI300', 'INDEX:CSI300'] },
+      { code: 'HSI',     label: 'Hongkong',       name: 'Hang Seng',            tickers: ['HSI:HSI', 'TVC:HSI', 'INDEX:HSI'] },
+      { code: 'TAIEX',   label: 'Taiwan',         name: 'TAIEX',                tickers: ['TWSE:TAIEX', 'TVC:TWII', 'INDEX:TAIEX'] },
+      { code: 'KOSPI',   label: 'Südkorea',       name: 'KOSPI',                tickers: ['KRX:KOSPI', 'TVC:KOSPI', 'INDEX:KOSPI'] },
+      { code: 'NIFTY',   label: 'Indien',         name: 'Nifty 50',             tickers: ['NSE:NIFTY', 'TVC:NIFTY', 'INDEX:NIFTY'] },
+      { code: 'STI',     label: 'Singapur',       name: 'Straits Times Index',  tickers: ['SGX:STI', 'TVC:STI', 'INDEX:STI'] },
+      { code: 'ASX200',  label: 'Australien',     name: 'S&P/ASX 200',          tickers: ['ASX:XJO', 'TVC:AS200', 'INDEX:ASX200'] },
+      { code: 'NZ50',    label: 'Neuseeland',     name: 'NZX 50',               tickers: ['NZX:NZ50G', 'TVC:NZ50', 'INDEX:NZ50'] },
+      { code: 'JTOPI',   label: 'Südafrika',      name: 'FTSE/JSE Top 40',      tickers: ['JSE:J200', 'TVC:JTOPI', 'INDEX:JTOPI'] },
     ],
   },
 ];
@@ -68,12 +109,30 @@ export const allIndexEntries = () => INDEX_GROUPS.flatMap((g) => g.entries);
 
 /** TV-Symbolseite zum Scanner-Ticker: `XETR:DAX` → `.../symbols/XETR-DAX/`. */
 export const tvIndexUrl = (ticker) =>
-  `https://www.tradingview.com/symbols/${String(ticker).replace(':', '-')}/`;
+  ticker ? `https://www.tradingview.com/symbols/${String(ticker).replace(':', '-')}/` : null;
+
+/* ── Ticker-Cache (localStorage) ──────────────────────────────────────────── */
+
+const CACHE_KEY = 'discovery_index_tickers_v1';
+
+export function loadTickerCache() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY)) ?? {}; } catch { return {}; }
+}
+function saveTickerCache(map) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(map)); } catch { /* Quota – egal */ }
+}
+/** Auflösung verwerfen, damit der nächste Load neu sucht (Refresh-Button). */
+export function clearTickerCache() {
+  try { localStorage.removeItem(CACHE_KEY); } catch { /* egal */ }
+}
 
 /* ── Fetch ────────────────────────────────────────────────────────────────── */
 
-const TV_COLUMNS = ['description', 'close', 'change', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M'];
+const DATA_COLUMNS = ['description', 'close', 'change', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M'];
 const COL = { description: 0, close: 1, change: 2, perf_w: 3, perf_1m: 4, perf_3m: 5, perf_6m: 6 };
+const CHUNK = 60;   // Ticker pro Scanner-Request
+
+const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
 async function proxyPost(backendUrl, secret, url, requestBody) {
   const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
@@ -89,11 +148,51 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
   return wrapper.body;
 }
 
+/** Ein Scanner-Scan; liefert Map ticker → Spaltenwerte (fehlerfrei = leere Map). */
+async function scan(backendUrl, secret, market, tickers, columns) {
+  const out = new Map();
+  await Promise.all(chunked(tickers, CHUNK).map(async (part) => {
+    try {
+      const bodyStr = await proxyPost(backendUrl, secret,
+        `https://scanner.tradingview.com/${market}/scan`,
+        { symbols: { tickers: part, query: { types: [] } }, columns },
+      );
+      for (const r of JSON.parse(bodyStr)?.data ?? []) out.set(r.s, r.d);
+    } catch (err) {
+      console.warn(`[TV] index scan failed (${market}, ${part.length} Ticker):`, err.message);
+    }
+  }));
+  return out;
+}
+
+/**
+ * Ermittelt je Eintrag den TV-Ticker: erst Cache, für den Rest ein Scan über
+ * alle Kandidaten – der erste Kandidat mit Daten gewinnt.
+ * @returns {Promise<Record<string,string>>} code → Ticker (nur Aufgelöste)
+ */
+export async function resolveTickers({ backendUrl, secret, entries = allIndexEntries() }) {
+  const cache = loadTickerCache();
+  const open = entries.filter((e) => !cache[e.code]);
+  if (!open.length) return cache;
+
+  const candidates = [...new Set(open.flatMap((e) => e.tickers))];
+  const found = await scan(backendUrl, secret, 'global', candidates, ['description']);
+
+  let added = 0;
+  for (const e of open) {
+    const hit = e.tickers.find((t) => found.has(t));
+    if (hit) { cache[e.code] = hit; added++; }
+  }
+  if (added) saveTickerCache(cache);
+  return cache;
+}
+
 /** Leere Zeile – wird auch als Fallback gerendert, damit die Tabelle steht. */
-export function emptyIndexRow(entry) {
+export function emptyIndexRow(entry, ticker = null) {
   return {
     ...entry,
-    url: tvIndexUrl(entry.ticker),
+    ticker,
+    url: tvIndexUrl(ticker),
     value: null, change: null,
     perf_w: null, perf_1m: null, perf_3m: null, perf_6m: null,
     growth_m: null,
@@ -102,43 +201,28 @@ export function emptyIndexRow(entry) {
 }
 
 /**
- * Holt Kurse + Performance für die übergebenen Einträge.
- * Gruppiert nach `market` (Default 'global') → ein Scanner-Request je Markt.
- * Nicht auflösbare Ticker kommen als leere Zeile mit `ok:false` zurück, damit
- * die Fußnote sie benennen kann.
+ * Holt Kurse + Performance für die übergebenen Einträge (Ticker-Auflösung
+ * inklusive). Einträge ohne Daten kommen als leere Zeile mit `ok:false` zurück,
+ * damit die Statuszeile sie benennen kann.
  *
  * @param {{backendUrl:string, secret:string, entries?:Array}} opts
  * @returns {Promise<Array>} Zeilen in der Reihenfolge der Einträge
  */
 export async function fetchIndexRows({ backendUrl, secret, entries = allIndexEntries() }) {
-  const byMarket = new Map();
-  for (const e of entries) {
-    const m = e.market ?? 'global';
-    if (!byMarket.has(m)) byMarket.set(m, []);
-    byMarket.get(m).push(e);
-  }
-
-  const data = new Map();
-  await Promise.all([...byMarket.entries()].map(async ([market, list]) => {
-    try {
-      const bodyStr = await proxyPost(backendUrl, secret,
-        `https://scanner.tradingview.com/${market}/scan`,
-        { symbols: { tickers: list.map((e) => e.ticker), query: { types: [] } }, columns: TV_COLUMNS },
-      );
-      for (const r of JSON.parse(bodyStr)?.data ?? []) data.set(r.s, r.d);
-    } catch (err) {
-      console.warn(`[TV] index fetch failed (${market}):`, err.message);
-    }
-  }));
+  const tickerOf = await resolveTickers({ backendUrl, secret, entries });
+  const tickers = entries.map((e) => tickerOf[e.code]).filter(Boolean);
+  const data = tickers.length ? await scan(backendUrl, secret, 'global', tickers, DATA_COLUMNS) : new Map();
 
   return entries.map((e) => {
-    const d = data.get(e.ticker);
-    if (!d) return emptyIndexRow(e);
+    const ticker = tickerOf[e.code] ?? null;
+    const d = ticker ? data.get(ticker) : null;
+    if (!d) return emptyIndexRow(e, ticker);
     const perf6m = d[COL.perf_6m] ?? null;
     return {
       ...e,
-      url:      tvIndexUrl(e.ticker),
-      name:     e.name || d[COL.description] || e.code,
+      ticker,
+      url:      tvIndexUrl(ticker),
+      tvName:   d[COL.description] ?? null,
       value:    d[COL.close]   ?? null,
       change:   d[COL.change]  ?? null,
       perf_w:   d[COL.perf_w]  ?? null,
