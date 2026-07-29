@@ -19,7 +19,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260729g';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260729h';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 

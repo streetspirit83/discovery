@@ -134,7 +134,7 @@ export const tvIndexUrl = (ticker) =>
  * Tab-Öffnen 20+ Suchanfragen auslöst.
  */
 
-const CACHE_KEY = 'discovery_index_tickers_v3';
+const CACHE_KEY = 'discovery_index_tickers_v4';
 const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export function loadTickerCache() {
@@ -190,6 +190,29 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
  * Datenabruf danach direkt den richtigen Endpunkt trifft.
  */
 const RESOLVE_MARKETS = ['global', 'america'];
+
+/**
+ * Präfixe, unter denen der Scanner Index-Symbole führt.
+ *
+ * Belegt durch den Diagnose-Lauf vom 29.07.: **das URL-Präfix ist nicht das
+ * Scanner-Präfix.** `TVC:SOX` und `NASDAQ:BKX` liefern Daten, `TVC:DJT` nicht –
+ * obwohl DJT davor mit `DJ:DJT`/`INDEX:DJT` sauber aufgelöst hat. Auch die
+ * Vorgabeliste selbst nutzt für zwei Dow-Jones-Indizes zwei verschiedene
+ * Präfixe (INDEXDJX-DJUSSW vs. DJ-DJINET).
+ *
+ * Deshalb wird für den DATENABRUF das Symbol unter allen gängigen Präfixen
+ * probiert – das ist kein Raten, sondern eine Abfrage: nur was der Scanner mit
+ * Daten bestätigt, wird übernommen. Der ANGEZEIGTE TV-Link bleibt in jedem Fall
+ * die vorgegebene URL (`entry.url`).
+ */
+const ALT_PREFIXES = ['DJ', 'INDEXDJX', 'INDEX', 'NASDAQ', 'TVC', 'SP', 'SBOX', 'FTSE', 'CBOE'];
+
+/** Vorgegebener Ticker zuerst, danach dasselbe Symbol unter den Alt-Präfixen. */
+export function candidatesFor(entry) {
+  const base = entry.tickers ?? [];
+  const symbols = [...new Set(base.map((t) => String(t).split(':').pop()))];
+  return [...new Set([...base, ...symbols.flatMap((s) => ALT_PREFIXES.map((p) => `${p}:${s}`))])];
+}
 
 /* Protokoll des letzten Auflösungslaufs – was wurde je Markt angefragt, was kam
  * zurück, was hat die Suche vorgeschlagen, was blieb offen. Der "Diagnose"-Button
@@ -308,8 +331,22 @@ async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKET
  * bestätigt hat.
  * @returns {Promise<Record<string,{t:string,m:string}>>} code → { Ticker, Markt }
  */
+/** Fingerabdruck der Ticker-Definition eines Eintrags. Ändert sie sich, sind
+ *  Auflösung und Such-Sperre für diesen Code hinfällig. */
+const entrySig = (e) => (e.tickers ?? []).join(',');
+
 export async function resolveTickers({ backendUrl, secret, entries = allIndexEntries() }) {
   const cache = loadTickerCache();
+
+  // Korrigierte Ticker sollen sofort greifen: Cache-Einträge, deren Definition
+  // sich seit der Auflösung geändert hat, verfallen – inklusive der 24-h-Sperre
+  // für erfolglose Suchen. Sonst blockiert ein alter Fehlversuch die Korrektur.
+  for (const e of entries) {
+    const sig = entrySig(e);
+    if (cache.tickers[e.code] && cache.tickers[e.code].sig !== sig) delete cache.tickers[e.code];
+    if (cache.tried[e.code]   && cache.tried[e.code].sig   !== sig) delete cache.tried[e.code];
+  }
+
   const report = {
     at: new Date().toISOString(),
     markets: RESOLVE_MARKETS,
@@ -328,11 +365,13 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
 
   let dirty = false;
 
-  // Stufe 1: hinterlegte Kandidaten, über alle Märkte
-  const found = await findMarkets(backendUrl, secret, open.flatMap((e) => e.tickers), RESOLVE_MARKETS, report);
+  // Stufe 1: vorgegebener Ticker + dasselbe Symbol unter den Alt-Präfixen,
+  // über alle Märkte. Reihenfolge = Vorgabe zuerst.
+  const candOf = new Map(open.map((e) => [e.code, candidatesFor(e)]));
+  const found = await findMarkets(backendUrl, secret, [...candOf.values()].flat(), RESOLVE_MARKETS, report);
   for (const e of open) {
-    const hit = e.tickers.find((t) => found.has(t));
-    if (hit) { cache.tickers[e.code] = { t: hit, m: found.get(hit) }; dirty = true; }
+    const hit = candOf.get(e.code).find((t) => found.has(t));
+    if (hit) { cache.tickers[e.code] = { t: hit, m: found.get(hit), sig: entrySig(e) }; dirty = true; }
   }
   open = open.filter((e) => !cache.tickers[e.code]);
 
@@ -341,8 +380,9 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
   const now = Date.now();
   const toSearch = open.filter((e) => {
     const t = cache.tried[e.code];
-    return !t || now - new Date(t).getTime() > RETRY_AFTER_MS;
+    return !t || now - new Date(t.at).getTime() > RETRY_AFTER_MS;
   });
+  report.searchSkipped = open.filter((e) => !toSearch.includes(e)).map((e) => e.code);
 
   const proposals = new Map();   // code → Ticker-Vorschläge
   for (const batch of chunked(toSearch, SEARCH_BATCH)) {
@@ -360,16 +400,16 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
     const confirmed = await findMarkets(backendUrl, secret, [...proposals.values()].flat(), RESOLVE_MARKETS, report);
     for (const e of toSearch) {
       const hit = (proposals.get(e.code) ?? []).find((t) => confirmed.has(t));
-      if (hit) cache.tickers[e.code] = { t: hit, m: confirmed.get(hit) };
+      if (hit) cache.tickers[e.code] = { t: hit, m: confirmed.get(hit), sig: entrySig(e) };
     }
   }
   for (const e of toSearch) {
-    if (!cache.tickers[e.code]) cache.tried[e.code] = new Date().toISOString();
+    if (!cache.tickers[e.code]) cache.tried[e.code] = { at: new Date().toISOString(), sig: entrySig(e) };
   }
   if (toSearch.length) dirty = true;
 
   for (const e of entries) {
-    if (!cache.tickers[e.code]) report.unresolved.push({ code: e.code, tried: e.tickers });
+    if (!cache.tickers[e.code]) report.unresolved.push({ code: e.code, tried: candidatesFor(e) });
   }
   report.resolved = cache.tickers;
 
