@@ -52,33 +52,33 @@ export const INDEX_GROUPS = [
       // abgeleitet. `url` ist gesetzt ⇒ der TV-Link zeigt IMMER hierhin, auch
       // wenn der Scanner die Daten unter einem anderen Symbol führt.
       { code: 'SOX',      label: 'Halbleiter',                     name: 'PHLX Semiconductor Index',               tickers: ['TVC:SOX'],           url: 'https://www.tradingview.com/symbols/TVC-SOX/' },
-      { code: 'NBI',      label: 'Biotechnologie',                 name: 'NASDAQ Biotechnology Index',             tickers: ['NASDAQ:NBI'],        url: 'https://www.tradingview.com/symbols/NASDAQ-NBI/' },
-      { code: 'DJUSSW',   label: 'Software',                       name: 'Dow Jones U.S. Software Index',          tickers: ['INDEXDJX:DJUSSW'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSSW/' },
-      { code: 'DJINET',   label: 'Internet',                       name: 'Dow Jones Internet Index',               tickers: ['DJ:DJINET'],         url: 'https://www.tradingview.com/symbols/DJ-DJINET/' },
-      { code: 'HXR',      label: 'Cybersecurity',                  name: 'ISE Cyber Security Index',               tickers: ['INDEXDJX:HXR'],      url: 'https://www.tradingview.com/symbols/INDEXDJX-HXR/' },
-      { code: 'EMCLOUD',  label: 'Cloud Computing',                name: 'BVP Nasdaq Emerging Cloud Index',        tickers: ['NASDAQ:EMCLOUD'],    url: 'https://www.tradingview.com/symbols/NASDAQ-EMCLOUD/' },
-      { code: 'XBAI',     label: 'Künstliche Intelligenz',         name: 'Indxx AI & Big Data Index',              tickers: ['SBOX:XBAI'],         url: 'https://www.tradingview.com/symbols/SBOX-XBAI/' },
+      { code: 'NBI',      label: 'Biotechnologie',                 name: 'NASDAQ Biotechnology Index',             tickers: ['NASDAQ:NBI'],        url: 'https://www.tradingview.com/symbols/NASDAQ-NBI/' , etf: 'IBB' },
+      { code: 'DJUSSW',   label: 'Software',                       name: 'Dow Jones U.S. Software Index',          tickers: ['INDEXDJX:DJUSSW'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSSW/' , etf: 'IGV' },
+      { code: 'DJINET',   label: 'Internet',                       name: 'Dow Jones Internet Index',               tickers: ['DJ:DJINET'],         url: 'https://www.tradingview.com/symbols/DJ-DJINET/' , etf: 'FDN' },
+      { code: 'HXR',      label: 'Cybersecurity',                  name: 'ISE Cyber Security Index',               tickers: ['INDEXDJX:HXR'],      url: 'https://www.tradingview.com/symbols/INDEXDJX-HXR/' , etf: 'HACK' },
+      { code: 'EMCLOUD',  label: 'Cloud Computing',                name: 'BVP Nasdaq Emerging Cloud Index',        tickers: ['NASDAQ:EMCLOUD'],    url: 'https://www.tradingview.com/symbols/NASDAQ-EMCLOUD/' , etf: 'WCLD' },
+      { code: 'XBAI',     label: 'Künstliche Intelligenz',         name: 'Indxx AI & Big Data Index',              tickers: ['SBOX:XBAI'],         url: 'https://www.tradingview.com/symbols/SBOX-XBAI/' , etf: 'AIQ' },
       // Symbol ist ROBOT (nicht ROBO) – korrigiert nach Prüfung auf TV.
-      { code: 'ROBO',     label: 'Robotik & Automation',           name: 'ROBO Global Robotics Index',             tickers: ['SBOX:ROBOT'],        url: 'https://www.tradingview.com/symbols/SBOX-ROBOT/' },
-      { code: 'IXFT',     label: 'Fintech',                        name: 'Indxx Global Fintech Index',             tickers: ['SBOX:IXFT'],         url: 'https://www.tradingview.com/symbols/SBOX-IXFT/' },
+      { code: 'ROBO',     label: 'Robotik & Automation',           name: 'ROBO Global Robotics Index',             tickers: ['SBOX:ROBOT'],        url: 'https://www.tradingview.com/symbols/SBOX-ROBOT/' , etf: 'ROBO' },
+      { code: 'IXFT',     label: 'Fintech',                        name: 'Indxx Global Fintech Index',             tickers: ['SBOX:IXFT'],         url: 'https://www.tradingview.com/symbols/SBOX-IXFT/' , etf: 'FINX' },
       { code: 'BKX',      label: 'Banken',                         name: 'KBW Nasdaq Bank Index',                  tickers: ['NASDAQ:BKX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-BKX/' },
-      { code: 'KRX',      label: 'Regionalbanken',                 name: 'KBW Regional Banking Index',             tickers: ['NASDAQ:KRX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-KRX/' },
-      { code: 'KIX',      label: 'Versicherungen',                 name: 'KBW Insurance Index',                    tickers: ['NASDAQ:KIX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-KIX/' },
+      { code: 'KRX',      label: 'Regionalbanken',                 name: 'KBW Regional Banking Index',             tickers: ['NASDAQ:KRX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-KRX/' , etf: 'KBWR' },
+      { code: 'KIX',      label: 'Versicherungen',                 name: 'KBW Insurance Index',                    tickers: ['NASDAQ:KIX'],        url: 'https://www.tradingview.com/symbols/NASDAQ-KIX/' , etf: 'KBWI' },
       { code: 'SPN',      label: 'Energie',                        name: 'S&P 500 Energy Sector',                  tickers: ['SP:SPN'],            url: 'https://www.tradingview.com/symbols/SP-SPN/' },
-      { code: 'SPSIOP',   label: 'Öl & Gas Exploration',           name: 'S&P Oil & Gas Exploration & Prod.',      tickers: ['SP:SPSIOP'],         url: 'https://www.tradingview.com/symbols/SP-SPSIOP/' },
-      { code: 'DJUSUT',   label: 'Versorger',                      name: 'Dow Jones U.S. Utilities Index',         tickers: ['INDEXDJX:DJUSUT'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSUT/' },
-      { code: 'SPGTCLEN', label: 'Erneuerbare Energien',           name: 'S&P Global Clean Energy Index',          tickers: ['SP:SPGTCLEN'],       url: 'https://www.tradingview.com/symbols/SP-SPGTCLEN/' },
+      { code: 'SPSIOP',   label: 'Öl & Gas Exploration',           name: 'S&P Oil & Gas Exploration & Prod.',      tickers: ['SP:SPSIOP'],         url: 'https://www.tradingview.com/symbols/SP-SPSIOP/' , etf: 'XOP' },
+      { code: 'DJUSUT',   label: 'Versorger',                      name: 'Dow Jones U.S. Utilities Index',         tickers: ['INDEXDJX:DJUSUT'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSUT/' , etf: 'IDU' },
+      { code: 'SPGTCLEN', label: 'Erneuerbare Energien',           name: 'S&P Global Clean Energy Index',          tickers: ['SP:SPGTCLEN'],       url: 'https://www.tradingview.com/symbols/SP-SPGTCLEN/' , etf: 'ICLN' },
       { code: 'FNRE',     label: 'Immobilien (REITs)',             name: 'FTSE Nareit All Equity REITs',           tickers: ['FTSE:FNRE'],         url: 'https://www.tradingview.com/symbols/FTSE-FNRE/' },
-      { code: 'DJUSIN',   label: 'Industrie',                      name: 'Dow Jones U.S. Industrials',             tickers: ['INDEXDJX:DJUSIN'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSIN/' },
-      { code: 'DJUSAS',   label: 'Luft-/Raumfahrt',                name: 'Dow Jones U.S. Aerospace & Defense',     tickers: ['INDEXDJX:DJUSAS'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSAS/' },
+      { code: 'DJUSIN',   label: 'Industrie',                      name: 'Dow Jones U.S. Industrials',             tickers: ['INDEXDJX:DJUSIN'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSIN/' , etf: 'IYJ' },
+      { code: 'DJUSAS',   label: 'Luft-/Raumfahrt',                name: 'Dow Jones U.S. Aerospace & Defense',     tickers: ['INDEXDJX:DJUSAS'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSAS/' , etf: 'ITA' },
       { code: 'SPAUTO',   label: 'Automobil',                      name: 'S&P Global Automotive Index',            tickers: ['SP:SPAUTO'],         url: 'https://www.tradingview.com/symbols/SP-SPAUTO/' },
       { code: 'SPLUX',    label: 'Luxusgüter',                     name: 'S&P Global Luxury Index',                tickers: ['SP:SPLUX'],          url: 'https://www.tradingview.com/symbols/SP-SPLUX/' },
       { code: 'S5COND',   label: 'Konsumgüter',                    name: 'S&P Consumer Discretionary',             tickers: ['SP:S5COND'],         url: 'https://www.tradingview.com/symbols/SP-S5COND/' },
       { code: 'S5CONS',   label: 'Basiskonsum',                    name: 'S&P Consumer Staples',                   tickers: ['SP:S5CONS'],         url: 'https://www.tradingview.com/symbols/SP-S5CONS/' },
       { code: 'S5HLTH',   label: 'Gesundheitswesen',               name: 'S&P Health Care',                        tickers: ['SP:S5HLTH'],         url: 'https://www.tradingview.com/symbols/SP-S5HLTH/' },
-      { code: 'DJUSMS',   label: 'Medizintechnik',                 name: 'Dow Jones U.S. Medical Equipment',       tickers: ['INDEXDJX:DJUSMS'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSMS/' },
+      { code: 'DJUSMS',   label: 'Medizintechnik',                 name: 'Dow Jones U.S. Medical Equipment',       tickers: ['INDEXDJX:DJUSMS'],   url: 'https://www.tradingview.com/symbols/INDEXDJX-DJUSMS/' , etf: 'IHI' },
       { code: 'S5CHEM',   label: 'Chemie',                         name: 'S&P Chemicals',                          tickers: ['SP:S5CHEM'],         url: 'https://www.tradingview.com/symbols/SP-S5CHEM/' },
-      { code: 'SPMTMN',   label: 'Metalle & Bergbau',              name: 'S&P Metals & Mining',                    tickers: ['SP:SPMTMN'],         url: 'https://www.tradingview.com/symbols/SP-SPMTMN/' },
+      { code: 'SPMTMN',   label: 'Metalle & Bergbau',              name: 'S&P Metals & Mining',                    tickers: ['SP:SPMTMN'],         url: 'https://www.tradingview.com/symbols/SP-SPMTMN/' , etf: 'XME' },
       { code: 'DJT',      label: 'Transport',                      name: 'Dow Jones Transportation Average',       tickers: ['TVC:DJT'],           url: 'https://www.tradingview.com/symbols/TVC-DJT/' },
     ],
   },
@@ -219,6 +219,12 @@ export function candidatesFor(entry) {
   const symbols = [...new Set(base.map((t) => String(t).split(':').pop()))];
   return [...new Set([...base, ...symbols.flatMap((s) => ALT_PREFIXES.map((p) => `${p}:${s}`))])];
 }
+
+/* US-ETFs liegen im Scanner unter den Handelsplatz-Präfixen (TV führt
+ * NYSE-Arca-Werte als AMEX). */
+const ETF_PREFIXES = ['NASDAQ', 'AMEX', 'ARCA', 'NYSE', 'BATS', 'CBOE'];
+export const etfCandidatesFor = (entry) =>
+  (entry.etf ? ETF_PREFIXES.map((p) => `${p}:${entry.etf}`) : []);
 
 /* Protokoll des letzten Auflösungslaufs – was wurde je Markt angefragt, was kam
  * zurück, was hat die Suche vorgeschlagen, was blieb offen. Der "Diagnose"-Button
@@ -450,6 +456,25 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
   }
   if (toSearch.length) dirty = true;
 
+  // Stufe 4: Stellvertreter-ETF. Erst wenn der Index selbst über Kandidaten UND
+  // Suche nicht auflösbar war – der echte Index hat immer Vorrang. Die Zeile
+  // wird als `viaEtf` markiert, damit in der Tabelle sichtbar bleibt, dass hier
+  // ETF-Performance steht (inkl. Gebühren/Tracking) und nicht der Index.
+  const etfOpen = entries.filter((e) => !cache.tickers[e.code] && e.etf);
+  if (etfOpen.length) {
+    const etfCand = new Map(etfOpen.map((e) => [e.code, etfCandidatesFor(e)]));
+    const etfFound = await findMarkets(backendUrl, secret, [...etfCand.values()].flat(), RESOLVE_MARKETS, report);
+    for (const e of etfOpen) {
+      const hit = etfCand.get(e.code).find((t) => etfFound.has(t));
+      if (hit) {
+        cache.tickers[e.code] = { t: hit, m: etfFound.get(hit), sig: entrySig(e), viaEtf: e.etf };
+        dirty = true;
+      }
+    }
+    report.etfFallback = Object.fromEntries(
+      etfOpen.map((e) => [e.code, cache.tickers[e.code]?.viaEtf ? cache.tickers[e.code].t : null]));
+  }
+
   for (const e of entries) {
     if (!cache.tickers[e.code]) report.unresolved.push({ code: e.code, tried: candidatesFor(e) });
   }
@@ -471,6 +496,7 @@ export function emptyIndexRow(entry, ticker = null) {
   return {
     ...entry,
     ticker,
+    viaEtf: null,
     url: rowUrl(entry, ticker),
     value: null, change: null,
     perf_w: null, perf_1m: null, perf_3m: null, perf_6m: null,
@@ -513,6 +539,7 @@ export async function fetchIndexRows({ backendUrl, secret, entries = allIndexEnt
     return {
       ...e,
       ticker,
+      viaEtf:   resolved[e.code]?.viaEtf ?? null,
       url:      rowUrl(e, ticker),
       tvName:   d[COL.description] ?? null,
       value:    d[COL.close]   ?? null,

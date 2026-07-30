@@ -2183,7 +2183,14 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .idx-code__txt { font-weight:var(--fw-bold); font-family:var(--font-mono); }
 /* Name + Indexstand gestapelt; zweite Zeile eine Stufe kleiner (STYLEGUIDE §2) */
 .idx-name { min-width:0; }
-.idx-name__txt { display:block; font-size:var(--fs-1); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
+.idx-name__row { display:flex; align-items:center; gap:var(--s-1); min-width:0; }
+.idx-name__txt { font-size:var(--fs-1); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
+/* Zahlen stammen vom Stellvertreter-ETF, nicht vom Index – muss auffallen. */
+.idx-etf {
+  flex:none; font-size:11px; font-weight:var(--fw-bold); line-height:1.4; white-space:nowrap;
+  padding:0 var(--s-1); border-radius:var(--r-pill);
+  background:var(--warn); color:var(--surface);
+}
 .idx-name__sub { display:block; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
 .idx-link { width:1%; white-space:nowrap; }

@@ -19,7 +19,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20260722j';
-import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260730b';
+import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260730c';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 
@@ -79,10 +79,16 @@ function tvChip(row) {
 
 function row(r) {
   const sub = [r.label, fmtVal(r.value)].filter(Boolean).join(' · ');
+  // Der Scanner führt einige Branchen-Indizes nicht; dort stehen die Zahlen des
+  // Stellvertreter-ETF. Das MUSS in der Zeile sichtbar sein – ETF-Performance
+  // enthält Gebühren und Tracking-Abweichung, ist also nicht der Indexstand.
+  const etfTag = r.viaEtf
+    ? `<span class="idx-etf" title="Kein Index-Datenstrom im TV-Scanner – Zahlen stammen vom Stellvertreter-ETF ${esc(r.viaEtf)} (${esc(r.ticker ?? '')}). Enthält Gebühren und Tracking-Abweichung; der TV-Link zeigt weiterhin auf den Index.">ETF ${esc(r.viaEtf)}</span>`
+    : '';
   return `<tr>
     <td class="idx-code"><span class="idx-code__txt" title="${esc(r.ticker ?? 'nicht aufgelöst')}">${esc(r.code)}</span></td>
     <td class="idx-name">
-      <span class="idx-name__txt" title="${esc(r.tvName || r.name)}">${esc(r.name)}</span>
+      <span class="idx-name__row"><span class="idx-name__txt" title="${esc(r.tvName || r.name)}">${esc(r.name)}</span>${etfTag}</span>
       <span class="idx-name__sub">${esc(sub)}</span>
     </td>
     <td class="idx-link">${tvChip(r)}</td>
