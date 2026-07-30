@@ -164,6 +164,10 @@ export function clearSearchBackoff() {
 const DATA_COLUMNS = ['description', 'close', 'change', 'Perf.W', 'Perf.1M', 'Perf.3M', 'Perf.6M'];
 const COL = { description: 0, close: 1, change: 2, perf_w: 3, perf_1m: 4, perf_3m: 5, perf_6m: 6 };
 const CHUNK = 60;   // Ticker pro Scanner-Request
+/* Kontroll-Ticker: liefert im Scanner nachweislich Daten (steht seit dem ersten
+ * Lauf als `SP:SPX` im aufgelösten Cache). Reist in jedem Auflösungs-Request
+ * mit, um funktionierende von fehlgeschlagenen Requests zu trennen. */
+const PROBE_TICKER = 'SP:SPX';
 
 const chunked = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
@@ -224,19 +228,41 @@ export function candidatesFor(entry) {
 let lastReport = null;
 export const getResolveReport = () => lastReport;
 
-/** Ein Scanner-Scan; liefert Map ticker → Spaltenwerte (fehlerfrei = leere Map). */
-async function scan(backendUrl, secret, market, tickers, columns) {
+/**
+ * Ein Scanner-Scan; liefert Map ticker → Spaltenwerte (fehlerfrei = leere Map).
+ *
+ * `report` bekommt je Chunk einen Eintrag mit Fehler bzw. der Roh-Antwort
+ * (gekürzt). Ohne das lässt sich "der Scanner kennt die Symbole nicht" nicht von
+ * "alle Requests sind fehlgeschlagen" unterscheiden – beides endet sonst in
+ * `hits: 0` und schickt die Fehlersuche in die falsche Richtung.
+ */
+async function scan(backendUrl, secret, market, tickers, columns, report = null) {
   const out = new Map();
-  await Promise.all(chunked(tickers, CHUNK).map(async (part) => {
+  const wanted = new Set(tickers);
+  await Promise.all(chunked(tickers, CHUNK).map(async (part, i) => {
+    // Kontroll-Ticker in JEDEN Auflösungs-Request: kommt er zurück, hat der
+    // Request funktioniert und die übrigen Symbole fehlen wirklich im Scanner.
+    // Kommt er nicht zurück, ist der Request kaputt – zwei völlig verschiedene
+    // Befunde, die in `hits: 0` sonst gleich aussehen.
+    const body = report ? [...part, PROBE_TICKER] : part;
+    const log = { market, chunk: i, sent: part.length };
     try {
       const bodyStr = await proxyPost(backendUrl, secret,
         `https://scanner.tradingview.com/${market}/scan`,
-        { symbols: { tickers: part, query: { types: [] } }, columns },
+        { symbols: { tickers: body, query: { types: [] } }, columns },
       );
-      for (const r of JSON.parse(bodyStr)?.data ?? []) out.set(r.s, r.d);
+      const rows = JSON.parse(bodyStr)?.data ?? [];
+      for (const r of rows) if (wanted.has(r.s)) out.set(r.s, r.d);
+      log.rows = rows.length;
+      if (report) log.probeOk = rows.some((r) => r.s === PROBE_TICKER);
+      // Roh-Antwort mitschneiden, wenn ein Chunk NICHTS zurückgibt – das ist der
+      // Fall, den wir verstehen müssen.
+      if (!rows.length) { log.raw = String(bodyStr).slice(0, 300); log.firstTickers = part.slice(0, 3); }
     } catch (err) {
+      log.error = err.message;
       console.warn(`[TV] index scan failed (${market}, ${part.length} Ticker):`, err.message);
     }
+    report?.chunkLog?.push(log);
   }));
   return out;
 }
@@ -319,7 +345,7 @@ async function findMarkets(backendUrl, secret, tickers, markets = RESOLVE_MARKET
   let openTickers = [...new Set(tickers)];
   for (const market of markets) {
     if (!openTickers.length) break;
-    const found = await scan(backendUrl, secret, market, openTickers, ['description']);
+    const found = await scan(backendUrl, secret, market, openTickers, ['description'], report);
     if (report) report.marketScans.push({ market, sent: openTickers.length, hits: found.size });
     for (const t of found.keys()) hit.set(t, market);
     openTickers = openTickers.filter((t) => !hit.has(t));
@@ -353,6 +379,7 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
     at: new Date().toISOString(),
     markets: RESOLVE_MARKETS,
     marketScans: [],          // { market, sent, hits } je Scan
+    chunkLog: [],             // je Request: Zeilen, Fehler, Roh-Antwort bei 0 Zeilen
     searchErrors: [],         // Fehler der Symbolsuche (403 ≠ "nichts gefunden")
     searchHits: {},           // code → was die Suche vorgeschlagen hat
     unresolved: [],           // { code, tried:[…] }
