@@ -109,7 +109,9 @@ export const INDEX_GROUPS = [
       { code: 'N225',    label: 'Japan',          name: 'Nikkei 225',           tickers: ['TVC:NI225'] },
       { code: 'CSI300',  label: 'China',          name: 'CSI 300',              tickers: ['SSE:000300', 'TVC:CSI300', 'INDEX:CSI300'] },
       { code: 'HSI',     label: 'Hongkong',       name: 'Hang Seng',            tickers: ['HSI:HSI', 'TVC:HSI', 'INDEX:HSI'] },
-      { code: 'TAIEX',   label: 'Taiwan',         name: 'TAIEX',                tickers: ['TWSE:TAIEX', 'TVC:TWII', 'INDEX:TAIEX'] },
+      // Einziger Länderindex ohne Treffer in `global` – zusätzlich im nationalen
+      // Scanner-Markt suchen.
+      { code: 'TAIEX',   label: 'Taiwan',         name: 'TAIEX',                tickers: ['TWSE:TAIEX', 'TVC:TWII', 'INDEX:TAIEX'], markets: ['global', 'taiwan'] },
       { code: 'KOSPI',   label: 'Südkorea',       name: 'KOSPI',                tickers: ['KRX:KOSPI', 'TVC:KOSPI', 'INDEX:KOSPI'] },
       { code: 'NIFTY',   label: 'Indien',         name: 'Nifty 50',             tickers: ['NSE:NIFTY', 'TVC:NIFTY', 'INDEX:NIFTY'] },
       { code: 'STI',     label: 'Singapur',       name: 'Straits Times Index',  tickers: ['SGX:STI', 'TVC:STI', 'INDEX:STI'] },
@@ -368,7 +370,14 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
   // Stufe 1: vorgegebener Ticker + dasselbe Symbol unter den Alt-Präfixen,
   // über alle Märkte. Reihenfolge = Vorgabe zuerst.
   const candOf = new Map(open.map((e) => [e.code, candidatesFor(e)]));
-  const found = await findMarkets(backendUrl, secret, [...candOf.values()].flat(), RESOLVE_MARKETS, report);
+  // Einträge ohne eigenen Markt laufen gemeinsam; `entry.markets` überschreibt
+  // (z. B. Länderindizes, die nur im nationalen Scanner-Markt liegen).
+  const std = open.filter((e) => !e.markets);
+  const found = await findMarkets(backendUrl, secret, std.flatMap((e) => candOf.get(e.code)), RESOLVE_MARKETS, report);
+  for (const e of open.filter((x) => x.markets)) {
+    const extra = await findMarkets(backendUrl, secret, candOf.get(e.code), e.markets, report);
+    for (const [t, m] of extra) found.set(t, m);
+  }
   for (const e of open) {
     const hit = candOf.get(e.code).find((t) => found.has(t));
     if (hit) { cache.tickers[e.code] = { t: hit, m: found.get(hit), sig: entrySig(e) }; dirty = true; }
@@ -385,11 +394,12 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
   report.searchSkipped = open.filter((e) => !toSearch.includes(e)).map((e) => e.code);
 
   const proposals = new Map();   // code → Ticker-Vorschläge
+  const searchFailed = new Set();
   for (const batch of chunked(toSearch, SEARCH_BATCH)) {
     await Promise.all(batch.map(async (e) => {
       let res = await searchTickers(backendUrl, secret, e.code, e.code);
       if (!res.tickers.length && !res.error) res = await searchTickers(backendUrl, secret, e.name, e.code);
-      if (res.error) report.searchErrors.push(`${e.code}: ${res.error}`);
+      if (res.error) { report.searchErrors.push(`${e.code}: ${res.error}`); searchFailed.add(e.code); }
       else report.searchHits[e.code] = res.hits ?? [];
       if (res.tickers.length) proposals.set(e.code, res.tickers);
     }));
@@ -404,7 +414,12 @@ export async function resolveTickers({ backendUrl, secret, entries = allIndexEnt
     }
   }
   for (const e of toSearch) {
-    if (!cache.tickers[e.code]) cache.tried[e.code] = { at: new Date().toISOString(), sig: entrySig(e) };
+    // Nur sperren, wenn die Suche sauber durchlief und nichts fand. Nach einem
+    // Fehler (403, Netzwerk) wäre die Sperre eine 24-h-Blockade auf Basis einer
+    // Nicht-Antwort – dann lieber beim nächsten Laden erneut versuchen.
+    if (!cache.tickers[e.code] && !searchFailed.has(e.code)) {
+      cache.tried[e.code] = { at: new Date().toISOString(), sig: entrySig(e) };
+    }
   }
   if (toSearch.length) dirty = true;
 
