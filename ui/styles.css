@@ -2286,3 +2286,61 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   .cmp-win__sym { font-size:var(--fs-2); }
   .cmp-win__val { font-size:var(--fs-1); }
 }
+
+/* ── Nachkauf-Kalkulator (Standard-Ansicht, ★-Zeilen) ────────────────────── */
+
+/* Zeilenaktion: neutral, wird erst beim Hover zum Akzent — der Rechner ist ein
+   Werkzeug, kein Statusmarker wie ★ / ✓. */
+.act-btn--calc { color:var(--muted); }
+.act-btn--calc:hover { background:var(--accent-weak); color:var(--accent); }
+
+.nk-modal { max-width:440px; }
+
+/* Kontextzeile: Einstand · Stück · Live — eine Zeile, gleich breite Spalten,
+   kein Umbruch (STYLEGUIDE §5). */
+.nk-context {
+  display:flex; flex-wrap:nowrap; gap:var(--s-2);
+  margin-bottom:var(--s-4);
+  padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface-2);
+  font-size:var(--fs-1); color:var(--muted);
+}
+.nk-context > span { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:1px; white-space:nowrap; }
+.nk-context b { font-size:var(--fs-2); color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Buy/Sell-Umschalter */
+.nk-seg { display:flex; gap:var(--s-1); margin-bottom:var(--s-3); }
+.nk-seg__btn {
+  flex:1 1 0; min-width:0; padding:var(--s-2) var(--s-1);
+  border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted);
+  font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; cursor:pointer;
+}
+.nk-seg__btn.is-active.nk-seg__btn--buy  { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.nk-seg__btn.is-active.nk-seg__btn--sell { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+
+.nk-fields { display:flex; gap:var(--s-2); margin-bottom:var(--s-3); }
+.nk-field { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:var(--s-1); }
+.nk-field label { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+.nk-field input {
+  width:100%; padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text);
+  font-family:var(--font-mono); font-size:var(--fs-3); font-variant-numeric:tabular-nums;
+}
+
+/* Ergebnis: zweispaltige Stat-Blöcke, Nebenwert immer eine Stufe kleiner (§2) */
+.nk-out {
+  display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3);
+  padding:var(--s-3); border-radius:var(--r-1); background:var(--surface-2);
+}
+.nk-out__row { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.nk-out__lbl { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); letter-spacing:.02em; }
+.nk-out__val {
+  font-size:var(--fs-4); font-weight:var(--fw-bold);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.nk-out__sub { display:block; font-size:var(--fs-2); font-weight:var(--fw-reg); color:var(--muted); }
+.nk-out__val.pos { color:var(--pos); }
+.nk-out__val.neg { color:var(--neg); }
+.nk-out__val.pos .nk-out__sub, .nk-out__val.neg .nk-out__sub { color:inherit; }
+.nk-out__hint { grid-column:1 / -1; font-size:var(--fs-2); color:var(--muted); }

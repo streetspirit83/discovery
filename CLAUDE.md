@@ -67,6 +67,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
 - `trigger-modal.js` – per-symbol alert editor (price / MA / indicator presets).
+- `nachkauf-modal.js` – Nachkauf/Teilverkauf calculator for ★ portfolio tickers
+  (Standard view row action). Pure calculator, EUR only — it reads `mk_entry` /
+  `mk_shares` (merkliste) + the LS quote and persists nothing.
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 

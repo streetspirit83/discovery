@@ -18,7 +18,7 @@
  * Semantik vorbehalten und werden nie als Serienfarbe benutzt.
  */
 
-import { icons } from '../lib/icons.js?v=20260722j';
+import { icons } from '../lib/icons.js?v=20260803a';
 import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashboard-metrics.js?v=20260707a';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js?v=20260704i';
 import { classifyCluster, tradeTarget, exitLevels } from '../lib/trade-setup.js?v=20260702h';

@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260722j';
+import { icons } from '../lib/icons.js?v=20260803a';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -154,12 +154,18 @@ function fmtNum(v, dec = 2) {
   if (v == null) return '—';
   return Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
+/* Große Beträge kompakt (T/B/M). Wird auch für EBITDA benutzt, das — anders als
+   die Marktkapitalisierung — negativ sein kann: deshalb über den Betrag skalieren
+   und das Vorzeichen wieder vorne dranhängen (sonst rutscht ein Verlust in den
+   toLocaleString()-Zweig und sprengt als „-400.000.000" die Spalte). */
 function fmtMCap(mc) {
   if (mc == null) return '—';
-  if (mc >= 1e12) return `${(mc / 1e12).toFixed(1)}T`;
-  if (mc >= 1e9)  return `${(mc / 1e9).toFixed(1)}B`;
-  if (mc >= 1e6)  return `${(mc / 1e6).toFixed(0)}M`;
-  return mc.toLocaleString();
+  const sign = mc < 0 ? '−' : '';
+  const v = Math.abs(mc);
+  if (v >= 1e12) return `${sign}${(v / 1e12).toFixed(1)}T`;
+  if (v >= 1e9)  return `${sign}${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6)  return `${sign}${(v / 1e6).toFixed(0)}M`;
+  return `${sign}${v.toLocaleString('de-DE')}`;
 }
 function fmtDate(ts) {
   if (!ts) return '—';
@@ -703,13 +709,13 @@ const VIEWS = {
   ],
   fundamentals: [
     { key:'tv_pe',          label:'KGV',    title:'Kurs-Gewinn-Verhältnis (TTM)',  num:true,  fmt:c=>fmtNum(c.tv_data?.pe_ttm,1) },
-    { key:'tv_div',         label:'Div%',   title:'Dividendenrendite',             num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.dividend_yield)}">${c.tv_data?.dividend_yield!=null?fmtNum(c.tv_data.dividend_yield,2)+'%':'—'}</span>` },
+    { key:'tv_div',         label:'Div%',   title:'Dividendenrendite',             num:true,  fmt:divCell },
     { key:'tv_eps',         label:'EPS',    title:'Gewinn je Aktie',               num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.basic_eps_net_income)}">${fmtNum(c.tv_data?.basic_eps_net_income,2)}</span>` },
     { key:'tv_earnings',    label:'Earnings',title:'Nächster Earnings-Termin',    num:false, fmt:c=>c.tv_data?.earnings_next_date?fmtDate(c.tv_data.earnings_next_date):'—' },
     { key:'tv_ebitdagrowth',label:'EBITDA%',title:'EBITDA YoY Wachstum',          num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.ebitda_yoy_growth_fy)}">${c.tv_data?.ebitda_yoy_growth_fy!=null?fmtNum(c.tv_data.ebitda_yoy_growth_fy,1)+'%':'—'}</span>` },
-    { key:'tv_ebitda',      label:'EBITDA', title:'EBITDA',                        num:true,  fmt:c=>fmtMCap(c.tv_data?.ebitda) },
+    { key:'tv_ebitda',      label:'EBITDA', title:'EBITDA',                        num:true,  fmt:ebitdaCell },
     { key:'tv_grossmargin', label:'GM%',    title:'Bruttomarge',                   num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_margin)}">${c.tv_data?.gross_margin!=null?fmtNum(c.tv_data.gross_margin,1)+'%':'—'}</span>` },
-    { key:'tv_roic',        label:'ROIC',   title:'Return on Invested Capital (FY)', num:true, fmt:c=>`<span class="${posNegClass(c.tv_data?.return_on_invested_capital)}">${c.tv_data?.return_on_invested_capital!=null?fmtNum(c.tv_data.return_on_invested_capital,1)+'%':'—'}</span>` },
+    { key:'tv_roic',        label:'ROIC',   title:'Return on Invested Capital (FY)', num:true, fmt:roicCell },
     { key:'tv_grossgrowth', label:'Gross%', title:'Bruttogewinn YoY Wachstum',    num:true,  fmt:c=>`<span class="${posNegClass(c.tv_data?.gross_profit_yoy_growth_fy)}">${c.tv_data?.gross_profit_yoy_growth_fy!=null?fmtNum(c.tv_data.gross_profit_yoy_growth_fy,1)+'%':'—'}</span>` },
     { key:'tv_mcap',        label:'MCap',   title:'Marktkapitalisierung',          num:true,  fmt:c=>fmtMCap(c.tv_data?.market_cap) },
     { key:'tv_analysts',    label:'Analysten', title:'Anzahl Analysten mit Empfehlung', num:true, fmt:c=>fmtNum(c.tv_data?.recommendation_total,0) },
@@ -1030,9 +1036,11 @@ export class CandidateList {
     cols += this.th('symbol', 'Symbol', 'class="col-anchor"');
 
     if (this.viewMode === 'standard') {
-      // Reihenfolge in drei Bl\u00f6cken (Trenner via col-group-start):
-      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 PerfW \u00b7 52W  (heute \u2192 5T \u2192 1J)
+      // Reihenfolge in vier Bl\u00f6cken (Trenner via col-group-start):
+      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W (heute \u2192 5T \u2192 1J)
       //   Qualit\u00e4t : Score \u00b7 Signal
+      //   Substanz : ROIC \u00b7 Div% \u00b7 EBITDA            (Kurzfassung der Fundamental-
+      //              Ansicht; Zell-T\u00f6nung statt Zahlenlesen \u2014 siehe *Tint())
       //   Portfolio: Entry \u00b7 P/L \u00b7 P/Labs \u00b7 \u2605           (col-portfolio: immer im
       //              DOM, per CSS nur bei aktivem \u2605-Filter sichtbar \u2014 so bleiben
       //              Header und Zellen parit\u00e4tisch)
@@ -1041,9 +1049,13 @@ export class CandidateList {
       cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
       cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
+      cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
+      cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
+      cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
+      cols += this.thNum('tv_ebitda', 'EBITDA', 'EBITDA \u00b7 Zell-T\u00f6nung nach EBITDA-YoY-Wachstum (voll bei \u00b125%), rot bei negativem EBITDA');
       cols += this.thNum('mk_entry', 'Entry', 'Entry: manueller Entry-Preis aus dem Merkliste-Portfolio (EUR) \u00b7 Zuordnung \u00fcber Symbol \u00b7 leer wenn nicht im Portfolio', 'col-portfolio col-group-start');
       cols += this.thNum('mk_pl', 'P/L', 'Gewinn/Verlust in Prozent: (LS-Kurs \u2212 Entry) / Entry \u00b7 braucht LS-Kurs + Entry', 'col-portfolio');
       cols += this.thNum('mk_pl_abs', 'P/Labs', 'Gewinn/Verlust absolut in Anzeigew\u00e4hrung: (LS-Kurs \u2212 Entry) \u00d7 St\u00fcckzahl \u00b7 braucht zus\u00e4tzlich eine St\u00fcckzahl aus der Merkliste', 'col-portfolio');
@@ -1210,9 +1222,14 @@ export class CandidateList {
 
       const alertCount = Array.isArray(c.alerts) ? c.alerts.filter((a) => a && a.enabled !== false).length : 0;
       const trigSet = alertCount > 0;
+      // Nachkauf-Kalkulator: nur für Portfolio-Ticker (★) in der Standard-Ansicht.
+      // Sitzt in der Aktion-Zelle statt im Portfolio-Block, damit er auch ohne
+      // aktiven ★-Filter erreichbar bleibt.
+      const canCalc = this.viewMode === 'standard' && c.in_portfolio;
       const actionTd = `<td class="num"><div class="row-actions">
         ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
         ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
+        ${canCalc ? `<button class="act-btn act-btn--calc" data-action="openNachkauf" title="Nachkauf-Kalkulator" aria-label="Nachkauf-Kalkulator">${icons.calculator}</button>` : ''}
         <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? `Alerts bearbeiten (${alertCount} aktiv)` : 'Alert hinzufügen'}">${trigSet ? alertCount : '+'}</button>
       </div></td>`;
 
@@ -1233,9 +1250,13 @@ export class CandidateList {
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
           heatPctTd(tv?.perf_w) +
+          heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderSignal(c)}</td>` +
+          `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
+          `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
+          `<td class="num"${ebitdaTint(tv)}>${ebitdaCell(c)}</td>` +
           `<td class="num col-portfolio col-group-start">${renderMkEntry(c)}</td>` +
           `<td class="num col-portfolio">${renderPL(c)}</td>` +
           `<td class="num col-portfolio">${renderPLabs(c)}</td>` +
@@ -1288,6 +1309,7 @@ export class CandidateList {
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
       tr.querySelector('[data-action="toggleWatch"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleWatch', c); });
       tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
+      tr.querySelector('[data-action="openNachkauf"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openNachkauf', c); });
 
       // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
       // it can be pasted into the Trade Republic app search.
@@ -1684,6 +1706,65 @@ function heatStyle(v) {
 const HEAT_KEYS = new Set(['tv_chg1d','tv_chg1w','tv_chg1m','tv_perfw','tv_perf1m','tv_perf3m','tv_perf6m','tv_growth6m']);
 function heatPctTd(v) {
   return `<td class="num"${heatStyle(v)}><span class="${posNegClass(v)}">${fmtPct(v)}</span></td>`;
+}
+
+// ── Fundamental-Zellen (Standard- UND Fundamental-Ansicht) ───────────────────
+// Beide Ansichten rendern dieselben Funktionen, damit die Formatierung nicht
+// auseinanderläuft, wenn eine von beiden angefasst wird.
+
+function roicCell(c) {
+  const v = c.tv_data?.return_on_invested_capital;
+  return `<span class="${posNegClass(v)}">${v != null ? fmtNum(v, 1) + '%' : '—'}</span>`;
+}
+
+function divCell(c) {
+  const v = c.tv_data?.dividend_yield;
+  return `<span class="${posNegClass(v)}">${v != null ? fmtNum(v, 2) + '%' : '—'}</span>`;
+}
+
+function ebitdaCell(c) {
+  return fmtMCap(c.tv_data?.ebitda);
+}
+
+/* Qualitäts-Tint der Fundamental-Spalten in der Standard-Ansicht.
+   Gleiche Idee wie der Heat-Strip der Perf-Spalten (heatStyle): die Güte soll
+   ohne Zahlenlesen erkennbar sein. Alpha bleibt bei ≤0.30, damit die Zahl
+   lesbar bleibt; die Skalen sind kennzahlspezifisch, weil "gut" hier nicht
+   einfach "positiv" heißt. */
+function tintBg(positive, strength) {
+  const a = Math.min(Math.max(strength, 0), 1) * 0.30;
+  if (a <= 0) return '';
+  return ` style="background:rgba(${positive ? '34,197,94' : '239,68,68'},${a.toFixed(3)})"`;
+}
+
+/* ROIC: unter 0 = Kapitalvernichtung (rot, voll bei −15%), 0–10% neutral,
+   ab 10% solide → grüne Rampe, voll ab 25%. */
+function roicTint(tv) {
+  const v = tv?.return_on_invested_capital;
+  if (v == null) return '';
+  if (v < 0)   return tintBg(false, -v / 15);
+  if (v >= 10) return tintBg(true, (v - 10) / 15);
+  return '';
+}
+
+/* Dividendenrendite: nur Ausschüttung tönt (grün), voll ab 5%. Keine
+   Dividende = kein Tint (nicht negativ – ein Wachstumswert ist deshalb nicht
+   schlechter). */
+function divTint(tv) {
+  const v = tv?.dividend_yield;
+  if (v == null || v <= 0) return '';
+  return tintBg(true, v / 5);
+}
+
+/* EBITDA: der Absolutwert allein sagt wenig – getönt wird nach der Richtung.
+   Negatives EBITDA = rot (voll), sonst nach YoY-Wachstum, voll bei ±25%. */
+function ebitdaTint(tv) {
+  const v = tv?.ebitda;
+  if (v == null) return '';
+  if (v < 0) return tintBg(false, 1);
+  const g = tv.ebitda_yoy_growth_fy ?? tv.ebitda_yoy_growth_ttm;
+  if (g == null) return '';
+  return tintBg(g >= 0, Math.abs(g) / 25);
 }
 
 function renderMomentumCheck(mc) {
