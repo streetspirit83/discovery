@@ -1037,7 +1037,8 @@ export class CandidateList {
 
     if (this.viewMode === 'standard') {
       // Reihenfolge in vier Bl\u00f6cken (Trenner via col-group-start):
-      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W (heute \u2192 5T \u2192 1J)
+      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 \u03941T \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W
+      //              (heute \u2192 5T \u2192 6M \u2192 1J)
       //   Qualit\u00e4t : Score \u00b7 Signal
       //   Substanz : ROIC \u00b7 Div% \u00b7 EBITDA            (Kurzfassung der Fundamental-
       //              Ansicht; Zell-T\u00f6nung statt Zahlenlesen \u2014 siehe *Tint())
@@ -1048,6 +1049,7 @@ export class CandidateList {
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
+      cols += this.thNum('tv_chg1d', '\u03941T', 'Ver\u00e4nderung heute (1 Tag) laut TradingView-Schlusskursen \u2013 LS\u0394 daneben ist der Live-Stand von Lang & Schwarz');
       cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
       cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
@@ -1207,8 +1209,6 @@ export class CandidateList {
     for (const c of rows) {
       const tv    = c.tv_data;
       const links = c.links ?? {};
-      const canPromote = !['promoted', 'imported'].includes(c.workspace_state);
-      const canDismiss = c.workspace_state !== 'dismissed';
       const isSelected = this.selected.has(c.id);
 
       const symHtml = `<div class="sym-cell">
@@ -1226,9 +1226,10 @@ export class CandidateList {
       // Sitzt in der Aktion-Zelle statt im Portfolio-Block, damit er auch ohne
       // aktiven ★-Filter erreichbar bleibt.
       const canCalc = this.viewMode === 'standard' && c.in_portfolio;
+      // Promote/Dismiss bewusst NICHT pro Zeile: in der Tabelle wird gescannt,
+      // entschieden wird im Detail-Sheet (Promoten/Ablehnen) oder über die
+      // Bulk-Leiste für eine Auswahl. Spart zwei Icons pro Zeile.
       const actionTd = `<td class="num"><div class="row-actions">
-        ${canPromote ? `<button class="act-btn act-btn--promote" data-action="promote" aria-label="Promoten">${icons.check}</button>` : ''}
-        ${canDismiss ? `<button class="act-btn act-btn--dismiss" data-action="dismiss" aria-label="Ablehnen">${icons.xMark}</button>` : ''}
         ${canCalc ? `<button class="act-btn act-btn--calc" data-action="openNachkauf" title="Nachkauf-Kalkulator" aria-label="Nachkauf-Kalkulator">${icons.calculator}</button>` : ''}
         <button class="act-btn act-btn--trigger${trigSet ? ' is-active' : ''}" data-action="openTrigger" title="${trigSet ? `Alerts bearbeiten (${alertCount} aktiv)` : 'Alert hinzufügen'}">${trigSet ? alertCount : '+'}</button>
       </div></td>`;
@@ -1249,6 +1250,7 @@ export class CandidateList {
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
+          heatPctTd(tv?.change_1d) +
           heatPctTd(tv?.perf_w) +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
@@ -1302,9 +1304,7 @@ export class CandidateList {
         this.syncSelectAll();
       });
 
-      // Promote / Dismiss / Star
-      tr.querySelector('[data-action="promote"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('promote', c); });
-      tr.querySelector('[data-action="dismiss"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('dismiss', c); });
+      // Star / Broker / Watch (Promote+Dismiss liegen im Detail-Sheet + Bulk-Leiste)
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
       tr.querySelector('[data-action="toggleWatch"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleWatch', c); });
