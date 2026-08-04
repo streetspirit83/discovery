@@ -911,15 +911,16 @@ function renderTrendTab(c) {
     Volumen ×${b.volBoost}${b.volBoost > 1 ? ' (bestätigt)' : b.volBoost < 1 ? ' (dünn)' : ''}
     · Datenabdeckung ${Math.round(b.coverage * 100)}%</div>`;
 
-  /* 3 · Ring-Legende */
-  const legend = `<div class="tb-legend">
-    <h4 class="pv-subhead">Was der Ring zeigt</h4>
+  /* 3 · Ring-Legende — eingeklappt: der Text erklärt einmal, danach steht er
+     nur im Weg. <details> statt eigenem Toggle, wie bei .pv-levels-details. */
+  const legend = `<details class="tb-legend">
+    <summary>Was der Ring zeigt</summary>
     <p>Drei Segmente im Uhrzeigersinn ab 12 Uhr: <b>Regime</b> → <b>Trend</b> → <b>Momentum</b>.
     Grün = aufwärts, rot = abwärts, grau = neutral. Ein durchgehend grüner Ring heißt,
     dass alle drei Ebenen einig sind; ein gemischter Ring zeigt, dass eine Ebene bereits
     dreht — ein frischer Ausbruch gegen ein noch negatives Regime liest sich als rot/grün/grün.
     Die Zahl daneben ist die gewichtete Summe (−100…+100), das Icon ihre Richtung.</p>
-  </div>`;
+  </details>`;
 
   /* 4 · Historie (TwelveData) */
   const hist = c.swing_analysis?.bias_history;

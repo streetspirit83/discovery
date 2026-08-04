@@ -2407,7 +2407,15 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .tb-meta { font-size:var(--fs-1); color:var(--muted); border-top:1px solid var(--border);
   padding-top:var(--s-2); }
 
-.tb-legend p { font-size:var(--fs-2); color:var(--muted); line-height:var(--lh); margin:0 0 var(--s-4); }
+/* Legende: standardmäßig zu — die Erklärung braucht man einmal, danach nicht
+   mehr. Summary wie .pv-levels-details, damit die Aufklapper im Sheet gleich
+   aussehen. */
+.tb-legend { margin-bottom:var(--s-4); }
+.tb-legend > summary { cursor:pointer; list-style:revert;
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em; }
+.tb-legend[open] > summary { margin-bottom:var(--s-2); }
+.tb-legend p { font-size:var(--fs-2); color:var(--muted); line-height:var(--lh); margin:0; }
 .tb-legend b { color:var(--text); }
 
 .tb-spark { width:100%; height:56px; display:block; }
