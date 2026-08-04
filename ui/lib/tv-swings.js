@@ -16,6 +16,7 @@
  */
 
 import { normalizeExchange } from './exchange-map.js';
+import { buildBiasSeries, WARMUP } from './tv-bias-history.js?v=20260803d';
 
 const US_EXCHANGES = new Set(['NASDAQ', 'NYSE', 'AMEX']);
 export const MIN_BARS = 20; // need enough history for pivots + ATR
@@ -161,7 +162,7 @@ export function analyzeBars(bars, refPrice, { interval = 'daily', k = 3 } = {}) 
  *   td_limit, td_error, few_bars, empty.
  * refPrice: live LS quote (EUR) → USD via eurUsd, else last TD close.
  */
-export async function fetchSwingAnalysis(candidate, { interval = '1day', outputsize = 250, eurUsd = null } = {}) {
+export async function fetchSwingAnalysis(candidate, { interval = '1day', outputsize = 500, eurUsd = null } = {}) {
   if (!isUsTicker(candidate)) return { error: 'not_us' };
   const key = localStorage.getItem('discovery_twelvedata_key');
   if (!key) return { error: 'no_key' };
@@ -199,6 +200,16 @@ export async function fetchSwingAnalysis(candidate, { interval = '1day', outputs
   // Keep a capped compact OHLCV series (USD) so the detail chart can draw daily
   // candles without re-hitting TD. Short keys keep the blob small (~180 bars).
   analysis.ohlc = bars.slice(-180).map((b) => ({ date: b.date, o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume }));
+
+  /* Bias-Historie aus den VOLLEN Bars — nicht aus den 180 gespeicherten: SMA200
+     und die EMA250-Näherung brauchen ~260 Bars Vorlauf (WARMUP). Persistiert
+     wird nur die kompakte Serie [{d,b}] (~3 KB statt ~27 KB Rohbars); der Chart
+     lebt weiter von `ohlc`. Deshalb holt der Call oben 500 statt 250 Bars —
+     ein TD-Credit deckt die Anfrage unabhängig von outputsize ab. */
+  if (interval === '1day' && bars.length > WARMUP) {
+    const bh = buildBiasSeries(bars);
+    if (bh) analysis.bias_history = bh;
+  }
   return analysis;
 }
 

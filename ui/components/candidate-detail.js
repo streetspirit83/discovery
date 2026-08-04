@@ -10,7 +10,9 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260722i';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker } from '../lib/tv-swings.js?v=20260704i';
+import { swingLadderSVG, isUsTicker, detectPivots } from '../lib/tv-swings.js?v=20260803d';
+import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260803d';
+import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260803d';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260711a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260711b';
 
@@ -20,6 +22,7 @@ const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-
 
 const TABS = [
   { key: 'performance', label: 'Perf.' },
+  { key: 'trend',       label: 'Trend' },
   { key: 'trade',       label: 'Trade' },
   { key: 'fundamental', label: 'Fund.' },
   { key: 'news',        label: 'News' },
@@ -756,6 +759,229 @@ function renderTradeTab(c, disp, pc, tl, side) {
   `;
 }
 
+/* ── Tab 2: Trend ─────────────────────────────────────────────────────────────
+ * Erklärt die Bias-Grafik aus der Tabelle und vertieft sie. Der obere Teil
+ * (Bias-Kopf, Ebenen, Ring-Legende, Trendalter-Proxy) läuft für JEDEN Ticker
+ * aus tv_data. Alles darunter braucht die TwelveData-Historie, die es auf dem
+ * Free-Tier nur für US-Titel gibt — deshalb der klar getrennte zweite Block.
+ */
+
+const fmtN = (v, d = 1) => (v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(d));
+const fmtPctS = (v, d = 1) =>
+  (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(d)}%`);
+const deDate = (s) => (s ? new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—');
+
+/* Balken für einen Ebenen-Score −1…+1: Nulllinie in der Mitte, Ausschlag nach
+   rechts (grün) oder links (rot) — ein reiner Füllstand könnte die Richtung
+   nicht zeigen. */
+function levelBar(v) {
+  if (v == null) return '<span class="tb-bar tb-bar--empty"></span>';
+  const w = Math.min(Math.abs(v), 1) * 50;
+  const side = v >= 0 ? `left:50%;width:${w}%` : `right:50%;width:${w}%`;
+  return `<span class="tb-bar"><i class="tb-bar__fill ${v >= 0 ? 'pos' : 'neg'}" style="${side}"></i></span>`;
+}
+
+/* Die Einzelchecks je Ebene als Klartext — das ist die eigentliche Erklärung,
+   warum ein Ring-Segment rot oder grün ist. */
+function levelChecks(key, tv) {
+  const close = tv.close_1m ?? tv.close;
+  const relTxt = (a, b) => (a == null || b == null || !b ? null : fmtPctS((a - b) / Math.abs(b) * 100));
+  if (key === 'regime') {
+    return [
+      relTxt(close, tv.sma200) && `Kurs ${relTxt(close, tv.sma200)} zur SMA200`,
+      tv.sma50 != null && tv.sma200 != null && `SMA50 ${tv.sma50 > tv.sma200 ? '>' : '<'} SMA200 (${tv.sma50 > tv.sma200 ? 'Golden' : 'Death'} Cross)`,
+      tv.ema20_1w != null && tv.ema50_1w != null && `Weekly-Stack ${tv.ema20_1w > tv.ema50_1w ? '▲' : '▼'}`,
+    ].filter(Boolean);
+  }
+  if (key === 'trend') {
+    const up = tv.aroon_up ?? tv.aroon_up_1m, dn = tv.aroon_down ?? tv.aroon_down_1m;
+    return [
+      tv.ema20 != null && tv.ema50 != null && `EMA-Stack ${tv.ema20 > tv.ema50 ? '▲' : '▼'}`,
+      tv.adx != null && `ADX ${fmtN(tv.adx)}${tv.adx_plus_di != null ? ` (DI+ ${fmtN(tv.adx_plus_di, 0)} / DI− ${fmtN(tv.adx_minus_di, 0)})` : ''}`,
+      up != null && dn != null && `Aroon ${fmtPctS(up - dn, 0).replace('%', '')}`,
+      tv.perf_1m != null && `Perf1M ${fmtPctS(tv.perf_1m)}`,
+    ].filter(Boolean);
+  }
+  const hist = tv.macd != null && tv.macd_signal != null ? tv.macd - tv.macd_signal : null;
+  return [
+    tv.perf_w != null && `PerfW ${fmtPctS(tv.perf_w)}`,
+    tv.change_1d != null && `Δ1T ${fmtPctS(tv.change_1d)}`,
+    hist != null && `MACD-Hist ${hist >= 0 ? '▲' : '▼'}`,
+    tv.rsi != null && `RSI ${fmtN(tv.rsi, 0)}`,
+  ].filter(Boolean);
+}
+
+/* Bias-Verlauf als Fläche um die Nulllinie. Bewusst kein Liniendiagramm: die
+   Frage ist „wann war es positiv/negativ und wie lange", nicht der exakte Wert. */
+function biasSparkSVG(series, w = 320, h = 56) {
+  if (!series?.length) return '';
+  const n = series.length, mid = h / 2;
+  const x = (i) => (i / (n - 1)) * w;
+  const y = (b) => mid - (Math.max(-100, Math.min(100, b)) / 100) * (mid - 2);
+  const areaFor = (positive) => {
+    // Nur den jeweiligen Halbraum füllen — an der Nulllinie abgeschnitten.
+    let d = `M0 ${mid}`;
+    series.forEach((p, i) => {
+      const v = positive ? Math.max(0, p.b) : Math.min(0, p.b);
+      d += ` L${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
+    });
+    return `${d} L${w} ${mid} Z`;
+  };
+  return `<svg class="tb-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
+      aria-label="Bias-Verlauf ${n} Handelstage">
+    <path class="tb-spark__pos" d="${areaFor(true)}"/>
+    <path class="tb-spark__neg" d="${areaFor(false)}"/>
+    <line class="tb-spark__zero" x1="0" y1="${mid}" x2="${w}" y2="${mid}"/>
+  </svg>`;
+}
+
+function trendStat(label, value, sub = '') {
+  return `<div class="tb-stat"><span class="tb-stat__lbl">${label}</span>
+    <span class="tb-stat__val">${value}</span>
+    ${sub ? `<span class="tb-stat__sub">${sub}</span>` : ''}</div>`;
+}
+
+/* Fragilität: Frühwarnung, ausdrücklich KEINE Prognose eines Wendepunkts. */
+function fragilityItems(c, tv, bars) {
+  const out = [];
+  const close = tv.close_1m ?? tv.close;
+
+  const div = bars ? detectDivergence(bars, detectPivots(bars, 3)) : null;
+  if (div) {
+    out.push({ warn: true, txt: div.kind === 'bear'
+      ? `Bearishe Divergenz: höheres Kurshoch am ${deDate(div.date)}, aber RSI ${fmtN(div.rsiLast, 0)} statt ${fmtN(div.rsiPrev, 0)}`
+      : `Bullishe Divergenz: tieferes Tief am ${deDate(div.date)}, aber RSI ${fmtN(div.rsiLast, 0)} statt ${fmtN(div.rsiPrev, 0)}` });
+  }
+
+  if (tv.adx != null) {
+    out.push({ warn: tv.adx < 20,
+      txt: tv.adx < 20 ? `ADX ${fmtN(tv.adx)} — Trend verliert Struktur` : `ADX ${fmtN(tv.adx)} — Struktur intakt` });
+  }
+
+  // Abstand zur Regime-Linie in ATR: „wie weit bis zum Bruch", vergleichbar
+  // über Papiere hinweg (Prozent wäre bei volatilen Werten irreführend).
+  const atr = tv.atr ?? (tv.atrp != null && close != null ? tv.atrp / 100 * close : null);
+  for (const [lbl, sma] of [['SMA50', tv.sma50], ['SMA200', tv.sma200]]) {
+    if (close == null || sma == null || !atr) continue;
+    const d = (close - sma) / atr;
+    out.push({ warn: Math.abs(d) < 1,
+      txt: `Abstand zur ${lbl}: ${fmtN(Math.abs(d))} ATR ${d >= 0 ? 'darüber' : 'darunter'}` });
+  }
+  return out;
+}
+
+function renderTrendTab(c) {
+  const tv = c.tv_data;
+  const b = tv ? computeBias(tv) : null;
+  if (!b) {
+    return `<p class="pv-empty">Kein Bias berechenbar – „TV Daten" in der Subbar laden.</p>`;
+  }
+
+  const age  = b.neutral ? null : trendAge(tv, b.sign);
+  const tone = b.neutral ? 'flat' : b.sign > 0 ? 'pos' : 'neg';
+  const num  = `${b.score > 0 ? '+' : b.score < 0 ? '−' : ''}${Math.abs(b.score)}`;
+
+  /* 1 · Kopf */
+  const head = `<div class="tb-head">
+    ${biasRingSVG(b, { size: 96, icon: b.sign > 0 ? icons.bull : icons.bear })}
+    <div class="tb-head__txt">
+      <div class="tb-head__val ${tone}">${num}</div>
+      <div class="tb-head__lbl">${biasLabel(b.score)}</div>
+      ${age ? `<div class="tb-head__age">${b.sign > 0 ? 'aufwärts' : 'abwärts'} seit ${age.label}${age.exact ? '' : ' (Untergrenze)'}</div>` : ''}
+    </div>
+  </div>`;
+
+  /* 2 · Ebenen-Aufschlüsselung */
+  const weights = { regime: 40, trend: 35, momentum: 25 };
+  const levels = BIAS_LEVELS.map(([key, label]) => {
+    const v = b.levels[key];
+    return `<div class="tb-level">
+      <div class="tb-level__top">
+        <span class="tb-level__dot bias-seg--${b.dirs[key] ?? 'flat'}"></span>
+        <span class="tb-level__name">${label}</span>
+        ${levelBar(v)}
+        <span class="tb-level__val ${v == null ? '' : v >= 0 ? 'pos' : 'neg'}">${v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2)}</span>
+        <span class="tb-level__w">${weights[key]}%</span>
+      </div>
+      <div class="tb-level__checks">${levelChecks(key, tv).join(' · ') || '—'}</div>
+    </div>`;
+  }).join('');
+
+  const meta = `<div class="tb-meta">
+    Volumen ×${b.volBoost}${b.volBoost > 1 ? ' (bestätigt)' : b.volBoost < 1 ? ' (dünn)' : ''}
+    · Datenabdeckung ${Math.round(b.coverage * 100)}%</div>`;
+
+  /* 3 · Ring-Legende */
+  const legend = `<div class="tb-legend">
+    <h4 class="pv-subhead">Was der Ring zeigt</h4>
+    <p>Drei Segmente im Uhrzeigersinn ab 12 Uhr: <b>Regime</b> → <b>Trend</b> → <b>Momentum</b>.
+    Grün = aufwärts, rot = abwärts, grau = neutral. Ein durchgehend grüner Ring heißt,
+    dass alle drei Ebenen einig sind; ein gemischter Ring zeigt, dass eine Ebene bereits
+    dreht — ein frischer Ausbruch gegen ein noch negatives Regime liest sich als rot/grün/grün.
+    Die Zahl daneben ist die gewichtete Summe (−100…+100), das Icon ihre Richtung.</p>
+  </div>`;
+
+  /* 4 · Historie (TwelveData) */
+  const hist = c.swing_analysis?.bias_history;
+  const bars = Array.isArray(c.swing_analysis?.ohlc)
+    ? c.swing_analysis.ohlc.map((o) => ({ date: o.date, open: o.o, high: o.h, low: o.l, close: o.c, volume: o.v }))
+    : null;
+
+  let histBlock;
+  if (hist?.series?.length) {
+    const st = regimeStats(hist.series);
+    const cur = st?.current;
+    const dirTxt = cur ? (cur.dir > 0 ? 'bullish' : 'bearish') : '—';
+    /* Live-Bias und Verlaufsende können auseinanderlaufen: tv_data ist von
+       heute, der letzte TD-Bar oft einen Tag oder mehr älter. Das kommentarlos
+       nebeneinander zu stellen (Kopf „bullish", Historie „bearish seit …")
+       wäre irreführend — also benennen. */
+    const mismatch = cur && !b.neutral && cur.dir !== b.sign;
+    histBlock = `
+      <h4 class="pv-subhead">Bias-Verlauf · ${hist.series.length} Handelstage</h4>
+      ${mismatch ? `<p class="tb-hint is-warn">Der Verlauf endet am ${deDate(hist.to)}
+        ${dirTxt}, das aktuelle Bias oben ist ${b.sign > 0 ? 'bullish' : 'bearish'} —
+        die Wende liegt nach dem letzten geladenen Kurstag. Verlauf neu laden für
+        ein aktuelles Alter.</p>` : ''}
+      ${biasSparkSVG(hist.series)}
+      <div class="tb-spark__axis"><span>${deDate(hist.from)}</span><span>${deDate(hist.to)}</span></div>
+      <div class="tb-stats">
+        ${trendStat('Gemessenes Alter', cur ? `${cur.days} T` : '—', cur ? `${dirTxt} seit ${deDate(cur.start)}` : '')}
+        ${trendStat('Reifegrad', st?.percentile != null ? `${st.percentile}%` : '—',
+          st?.percentile != null ? `länger als ${st.percentile}% der bisherigen ${dirTxt}en Phasen` : 'keine Vergleichsphase')}
+        ${trendStat('Ø-Dauer', `${st?.avgBull != null ? Math.round(st.avgBull) : '—'} / ${st?.avgBear != null ? Math.round(st.avgBear) : '—'} T`,
+          `bull / bear · ${st?.countBull ?? 0} + ${st?.countBear ?? 0} Phasen`)}
+        ${trendStat('Richtungswechsel', `${st?.flips ?? 0}`, 'im Auswertungsfenster')}
+        ${trendStat('Marktstruktur', STRUCT_LABEL[c.swing_analysis.structure] ?? '—', 'aus den Swing-Punkten')}
+      </div>`;
+  } else if (isUsTicker(c)) {
+    histBlock = `<h4 class="pv-subhead">Gemessenes Trendalter</h4>
+      <p class="tb-hint">Noch kein Verlauf geladen. Der 1-Jahres-Abruf im
+      <b>Perf.</b>-Tab („1J TD") holt die Tageskerzen — daraus wird das Bias für jeden
+      vergangenen Tag nachgerechnet und das Trendalter gemessen statt geschätzt.</p>
+      <button class="btn btn-sm btn-secondary" id="tb-load">${icons.candlestick} Verlauf laden (TwelveData)</button>`;
+  } else {
+    histBlock = `<h4 class="pv-subhead">Gemessenes Trendalter</h4>
+      <p class="tb-hint">Nur für US-Titel: der Verlauf kommt von TwelveData, dessen
+      Free-Tier keine europäischen Börsen liefert. Das Trendalter oben bleibt deshalb
+      hier die Untergrenze aus den Performance-Fenstern.</p>`;
+  }
+
+  /* 5 · Fragilität */
+  const frag = fragilityItems(c, tv, bars);
+  const fragBlock = frag.length
+    ? `<h4 class="pv-subhead">Fragilität</h4>
+       <ul class="tb-frag">${frag.map((f) =>
+         `<li class="${f.warn ? 'is-warn' : ''}">${f.warn ? '⚠' : '·'} ${f.txt}</li>`).join('')}</ul>
+       <p class="tb-hint">Frühwarnung, keine Prognose: die Punkte sagen, wo der Trend
+       angreifbar ist — nicht, wann er dreht.</p>`
+    : '';
+
+  return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + fragBlock;
+}
+
+const STRUCT_LABEL = { up: '▲ Aufwärts (HH/HL)', down: '▼ Abwärts (LH/LL)', range: '↔ Seitwärts' };
+
 /* ── Tab 3: Fundamentaldaten (TV) ─────────────────────────────────────────── */
 
 function kv(label, value, cls = '') {
@@ -1343,6 +1569,7 @@ export class CandidateDetail {
     const tl = tradeLevels(c, disp);
     const tabPanels = {
       performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { zoom: this.chartZoom, showInd: this.showInd }),
+      trend:       renderTrendTab(c),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       news:        renderNewsTab(c),
@@ -1510,6 +1737,12 @@ export class CandidateDetail {
       });
     });
     this.el.querySelector('#td-load')?.addEventListener('pointerup', pick1J);
+    // Gleicher Abruf aus dem Trend-Tab: swing_analysis wird persistiert, ein
+    // Fetch versorgt also beide Tabs. Hier NICHT über pick1J, damit der
+    // Perf-Chart nicht ungefragt auf 1J umschaltet.
+    this.el.querySelector('#tb-load')?.addEventListener('pointerup', () => {
+      this.onAction?.('tdQuote', c);
+    });
 
     // Earnings-Call-Transcript: Laden + LLM-Copy (Prompt + Volltext).
     this.el.querySelector('#transcript-load')?.addEventListener('pointerup', () => this.onAction?.('loadTranscript', c));

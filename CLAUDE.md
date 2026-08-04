@@ -63,6 +63,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   toggle. Largest file; header and cell order per view must stay in sync.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
+  Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
+  geladener TD-Historie Bias-Verlauf, Regime-Statistik und Fragilität.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
@@ -77,9 +79,14 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Data: `tv-enrichment.js` (TV scanner bulk fetch + FX + indices),
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
-- Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter —
-  die anderen Scores sind ungerichtete Qualitätsmaße 0–100 und dürfen dafür
-  NICHT gemittelt werden), `tv-overall-score.js`, `tv-entry-score.js`, `tv-health-score.js`,
+- Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter +
+  `biasRingSVG` — die Ring-Grafik liegt dort, damit Tabelle und Detail-Sheet
+  garantiert dieselbe zeigen; die anderen Scores sind ungerichtete
+  Qualitätsmaße 0–100 und dürfen dafür NICHT gemittelt werden),
+  `tv-bias-history.js` (rechnet das Bias aus TD-Tagesbars für jeden vergangenen
+  Tag nach → gemessenes Trendalter, Regime-Statistik, Divergenzen; braucht
+  WARMUP=260 Bars Vorlauf, deshalb holt `fetchSwingAnalysis` 500 und
+  persistiert nur die kompakte Serie), `tv-overall-score.js`, `tv-entry-score.js`, `tv-health-score.js`,
   `tv-cycle-score.js`, `tv-trend-score.js`, `tv-trend-strength-score.js`,
   `tv-momentum-check.js`, `tv-upside.js`, `tv-entry-prices.js`.
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.

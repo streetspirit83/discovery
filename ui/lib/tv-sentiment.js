@@ -185,6 +185,38 @@ export function computeBias(tv) {
   };
 }
 
+/* ── Ring-Grafik ──────────────────────────────────────────────────────────────
+ * Drei Segmente (Regime · Trend · Momentum) um eine Bulle/Bär-Silhouette.
+ * Liegt hier, damit Tabelle und Detail-Sheet garantiert dieselbe Grafik zeigen.
+ *
+ * Das Icon-Markup kommt als Argument herein statt via Import: icons.js ist
+ * UI-Schicht, dieses Modul soll abhängigkeitsfrei und ohne DOM testbar bleiben.
+ */
+export const RING = { r: 14, sw: 2.6, gap: 3.4, iconT: 4.6, iconS: 1.425 };
+const RING_C = 2 * Math.PI * RING.r;
+const RING_SEG = RING_C / 3;
+const RING_VIS = RING_SEG - RING.gap;
+export const BIAS_LEVELS = [['regime', 'Regime'], ['trend', 'Trend'], ['momentum', 'Momentum']];
+
+/**
+ * biasRingSVG(bias, { size, icon }) → SVG-String.
+ * Das Icon MUSS in den Innenkreis passen (r ≈ 12.7 bei viewBox 32) — ein
+ * quadratisch ausgereiztes Motiv würde an den Ecken vom Ring beschnitten.
+ */
+export function biasRingSVG(bias, { size = 34, icon = '' } = {}) {
+  const tone = bias.neutral ? 'flat' : bias.sign > 0 ? 'pos' : 'neg';
+  const segs = BIAS_LEVELS.map(([key], i) => {
+    const d = bias.dirs[key] ?? 'flat';
+    return `<circle class="bias-seg bias-seg--${d}" cx="16" cy="16" r="${RING.r}" fill="none"
+      stroke-width="${RING.sw}"
+      stroke-dasharray="${RING_VIS.toFixed(2)} ${(RING_C - RING_VIS).toFixed(2)}"
+      stroke-dashoffset="${(-i * RING_SEG).toFixed(2)}" transform="rotate(-90 16 16)"/>`;
+  }).join('');
+  return `<svg class="bias-ring bias-ring--${tone}" width="${size}" height="${size}"
+      viewBox="0 0 32 32" aria-hidden="true">${segs}
+      <g transform="translate(${RING.iconT} ${RING.iconT}) scale(${RING.iconS})">${icon}</g></svg>`;
+}
+
 /** Klartext-Label für Tooltips und das Detail-Sheet. */
 export function biasLabel(score) {
   if (score == null) return '—';

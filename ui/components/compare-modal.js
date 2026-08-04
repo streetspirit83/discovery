@@ -23,7 +23,7 @@ import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashbo
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js?v=20260704i';
 import { classifyCluster, tradeTarget, exitLevels } from '../lib/trade-setup.js?v=20260702h';
 import { megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260719b';
-import { isUsTicker } from '../lib/tv-swings.js?v=20260704i';
+import { isUsTicker } from '../lib/tv-swings.js?v=20260803d';
 
 /** Charts bekommen höchstens so viele Serien – darüber trägt nur die Matrix.
  *  (Die validierte Palette hat acht Slots; ein neunter wäre eine erfundene

@@ -17,7 +17,7 @@ import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
 import { trendScore } from '../lib/trend-radar.js?v=20260709c';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260803c';
-import { computeBias, trendAge, biasLabel } from '../lib/tv-sentiment.js?v=20260803c';
+import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260803d';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -1695,25 +1695,7 @@ function render52wRange(tv) {
    wird — ein durchgehend grüner Ring heißt „alle drei einig", ein gemischter
    warnt vor einem Trend, der auf einer Ebene schon bröckelt. Diese Information
    trägt die Zahl daneben nicht. */
-const BIAS_R = 14, BIAS_SW = 2.6, BIAS_GAP = 3.4;
-const BIAS_C = 2 * Math.PI * BIAS_R;
-const BIAS_SEG = BIAS_C / 3;
-const BIAS_VIS = BIAS_SEG - BIAS_GAP;
-// Das Icon muss in den INNENKREIS passen (r ≈ 12.7), nicht ins Quadrat — sonst
-// schneidet der Ring die Ecken, also genau die Hornspitzen, ab.
-const BIAS_ICON_T = 4.6, BIAS_ICON_S = 1.425;
-const BIAS_LEVELS = [['regime', 'Regime'], ['trend', 'Trend'], ['momentum', 'Momentum']];
 const DIR_GLYPH = { up: '▲', dn: '▼', flat: '–' };
-
-function biasRing(dirs) {
-  return BIAS_LEVELS.map(([key], i) => {
-    const d = dirs[key];
-    return `<circle class="bias-seg bias-seg--${d ?? 'flat'}" cx="16" cy="16" r="${BIAS_R}"
-      fill="none" stroke-width="${BIAS_SW}"
-      stroke-dasharray="${BIAS_VIS.toFixed(2)} ${(BIAS_C - BIAS_VIS).toFixed(2)}"
-      stroke-dashoffset="${(-i * BIAS_SEG).toFixed(2)}" transform="rotate(-90 16 16)"/>`;
-  }).join('');
-}
 
 function renderBias(c) {
   const tv = c.tv_data;
@@ -1735,10 +1717,7 @@ function renderBias(c) {
   ].filter(Boolean).join(' · ');
 
   return `<div class="bias-cell" title="${tip}">
-    <svg class="bias-ring bias-ring--${tone}" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
-      ${biasRing(b.dirs)}
-      <g transform="translate(${BIAS_ICON_T} ${BIAS_ICON_T}) scale(${BIAS_ICON_S})">${b.sign > 0 ? icons.bull : icons.bear}</g>
-    </svg>
+    ${biasRingSVG(b, { size: 34, icon: b.sign > 0 ? icons.bull : icons.bear })}
     <span class="bias-txt">
       <span class="bias-val ${tone}">${num}</span>
       <span class="bias-age">${age?.label ?? '—'}</span>
