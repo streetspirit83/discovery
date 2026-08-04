@@ -2344,3 +2344,25 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .nk-out__val.neg { color:var(--neg); }
 .nk-out__val.pos .nk-out__sub, .nk-out__val.neg .nk-out__sub { color:inherit; }
 .nk-out__hint { grid-column:1 / -1; font-size:var(--fs-2); color:var(--muted); }
+
+/* ── Bias-Zelle (Standard-Ansicht) ───────────────────────────────────────────
+   Ring mit drei Segmenten (Regime · Trend · Momentum) um das Bulle/Bär-Icon,
+   rechts der signierte Score mit dem Trendalter als kleinerer zweiter Zeile
+   (STYLEGUIDE §2: Nebenwert immer eine Stufe kleiner als der Hauptwert). */
+.bias-cell { display:flex; align-items:center; gap:var(--s-2); justify-content:flex-end; }
+.bias-ring { flex:0 0 auto; }
+.bias-ring--pos  { color:var(--pos); }
+.bias-ring--neg  { color:var(--neg); }
+.bias-ring--flat { color:var(--muted); }
+
+.bias-seg { stroke:currentColor; }
+.bias-seg--up   { stroke:var(--pos); }
+.bias-seg--dn   { stroke:var(--neg); }
+.bias-seg--flat { stroke:var(--muted); opacity:.25; }
+
+.bias-txt { display:flex; flex-direction:column; align-items:flex-end; line-height:1.15; min-width:0; }
+.bias-val { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.bias-val.pos  { color:var(--pos); }
+.bias-val.neg  { color:var(--neg); }
+.bias-val.flat { color:var(--muted); }
+.bias-age { font-size:var(--fs-2); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }

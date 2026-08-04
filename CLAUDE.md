@@ -77,7 +77,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Data: `tv-enrichment.js` (TV scanner bulk fetch + FX + indices),
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
-- Scoring/signals: `tv-overall-score.js`, `tv-entry-score.js`, `tv-health-score.js`,
+- Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter —
+  die anderen Scores sind ungerichtete Qualitätsmaße 0–100 und dürfen dafür
+  NICHT gemittelt werden), `tv-overall-score.js`, `tv-entry-score.js`, `tv-health-score.js`,
   `tv-cycle-score.js`, `tv-trend-score.js`, `tv-trend-strength-score.js`,
   `tv-momentum-check.js`, `tv-upside.js`, `tv-entry-prices.js`.
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.

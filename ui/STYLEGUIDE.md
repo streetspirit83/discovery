@@ -93,6 +93,16 @@ nie so groß wie der Wert selbst.
 - **Verboten:** Emoji als UI-Icon (📊 📈 ✅ ⚙ …). Emoji nur in reinem Fließtext/
   Toasts, wenn überhaupt.
 
+### Benannte Ausnahme: gefüllte Silhouetten für Marktsymbole
+`icons.bull` / `icons.bear` (Bias-Spalte) sind **gefüllte Silhouetten**, kein
+2px-Strich. Grund: im Bias-Ring stehen nur ~19px zur Verfügung, dort trägt die
+Fläche, während eine Strichkontur zu Matsch wird. Bulle und Bär werden über die
+**Außenform** unterschieden (Hörner seitlich vs. runder Kopf mit Ohren), nicht
+über Innendetails; Nüstern/Schnauze sind Aussparungen (`fill-rule="evenodd"`).
+Sie erben weiterhin `currentColor` und liegen in `icons.js` – die Regel „ein
+einziges Icon-System" gilt unverändert. **Diese Ausnahme ist auf semantische
+Marktsymbole begrenzt**, sie ist kein Freibrief für gefüllte Icons allgemein.
+
 > **Altlast/Tech-Debt:** Einige Modal-Header nutzen noch Emoji-Titel
 > (`<h2>📈 Intra-Day</h2>`) und `✕`-Close-Buttons. Das ist **nicht** Vorbild –
 > bei Berührung auf Lucide (`icons.xMark` im `.icon-btn`) migrieren.

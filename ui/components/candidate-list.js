@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260803a';
+import { icons } from '../lib/icons.js?v=20260803c';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -16,7 +16,8 @@ import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPS
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
 import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
 import { trendScore } from '../lib/trend-radar.js?v=20260709c';
-import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260704c';
+import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260803c';
+import { computeBias, trendAge, biasLabel } from '../lib/tv-sentiment.js?v=20260803c';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -359,6 +360,7 @@ function sortValue(c, col) {
       return (a > 0 && ch != null) ? ch / a : null;
     }
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
+    case 'bias':        return computeBias(c.tv_data)?.score ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -1039,7 +1041,9 @@ export class CandidateList {
       // Reihenfolge in vier Bl\u00f6cken (Trenner via col-group-start):
       //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 \u03941T \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W
       //              (heute \u2192 5T \u2192 6M \u2192 1J)
-      //   Qualit\u00e4t : Score \u00b7 Signal
+      //   Qualit\u00e4t : Score \u00b7 Bias   (Bias hat die fr\u00fchere \u201eSignal"-Spalte ersetzt \u2014
+      //              es sagt dasselbe gerichtet und umfassender; die Momentum-
+      //              Ampel f\u00fcr sich steht weiter in der Score-Ansicht)
       //   Substanz : ROIC \u00b7 Div% \u00b7 EBITDA            (Kurzfassung der Fundamental-
       //              Ansicht; Zell-T\u00f6nung statt Zahlenlesen \u2014 siehe *Tint())
       //   Portfolio: Entry \u00b7 P/L \u00b7 P/Labs \u00b7 \u2605           (col-portfolio: immer im
@@ -1054,7 +1058,7 @@ export class CandidateList {
       cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
-      cols += this.thNum('signal', 'Signal', 'Signal: Momentum-Ampel (gr\u00fcn/gelb/rot) + Trend-Richtung (Empfehlung 1M)');
+      cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
       cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
       cols += this.thNum('tv_ebitda', 'EBITDA', 'EBITDA \u00b7 Zell-T\u00f6nung nach EBITDA-YoY-Wachstum (voll bei \u00b125%), rot bei negativem EBITDA');
@@ -1255,7 +1259,7 @@ export class CandidateList {
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
-          `<td class="num">${renderSignal(c)}</td>` +
+          `<td class="num">${renderBias(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
           `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
           `<td class="num"${ebitdaTint(tv)}>${ebitdaCell(c)}</td>` +
@@ -1685,14 +1689,61 @@ function render52wRange(tv) {
 }
 
 // Consolidated direction chip: momentum traffic-light + 1M trend arrow.
-function renderSignal(c) {
-  const v = c.momentum_check?.verdict ?? null;
-  const r = c.tv_data?.recommend_all_1m ?? null;
-  if (v == null && r == null) return '<span class="muted-dash">—</span>';
-  const dot   = `<span class="signal__dot signal__dot--${v ?? 'none'}"></span>`;
-  const arrow = r != null ? `<span class="tv-rating-txt--${tvRatingClass(r)}">${tvRatingGlyph(r)}</span>` : '';
-  const tip = `Momentum: ${v ?? 'n/a'} · Trend (1M): ${r != null ? fmtNum(r, 2) : 'n/a'}`;
-  return `<span class="signal" title="${tip}">${dot}${arrow}</span>`;
+/* ── Bias-Zelle: Ring (3 Zeitebenen) + Bulle/Bär + signierter Score ─────────
+   Der Ring ist bewusst kein Füllstand-Donut: die drei Segmente stehen für
+   Regime · Trend · Momentum, damit Uneinigkeit zwischen den Ebenen sichtbar
+   wird — ein durchgehend grüner Ring heißt „alle drei einig", ein gemischter
+   warnt vor einem Trend, der auf einer Ebene schon bröckelt. Diese Information
+   trägt die Zahl daneben nicht. */
+const BIAS_R = 14, BIAS_SW = 2.6, BIAS_GAP = 3.4;
+const BIAS_C = 2 * Math.PI * BIAS_R;
+const BIAS_SEG = BIAS_C / 3;
+const BIAS_VIS = BIAS_SEG - BIAS_GAP;
+// Das Icon muss in den INNENKREIS passen (r ≈ 12.7), nicht ins Quadrat — sonst
+// schneidet der Ring die Ecken, also genau die Hornspitzen, ab.
+const BIAS_ICON_T = 4.6, BIAS_ICON_S = 1.425;
+const BIAS_LEVELS = [['regime', 'Regime'], ['trend', 'Trend'], ['momentum', 'Momentum']];
+const DIR_GLYPH = { up: '▲', dn: '▼', flat: '–' };
+
+function biasRing(dirs) {
+  return BIAS_LEVELS.map(([key], i) => {
+    const d = dirs[key];
+    return `<circle class="bias-seg bias-seg--${d ?? 'flat'}" cx="16" cy="16" r="${BIAS_R}"
+      fill="none" stroke-width="${BIAS_SW}"
+      stroke-dasharray="${BIAS_VIS.toFixed(2)} ${(BIAS_C - BIAS_VIS).toFixed(2)}"
+      stroke-dashoffset="${(-i * BIAS_SEG).toFixed(2)}" transform="rotate(-90 16 16)"/>`;
+  }).join('');
+}
+
+function renderBias(c) {
+  const tv = c.tv_data;
+  const b = computeBias(tv);
+  if (!b) return '<span class="muted-dash" title="Zu wenig TV-Daten für ein Bias – „TV Daten“ in der Subbar laden">—</span>';
+
+  // Im neutralen Band hat „seit wann" keine Bedeutung — dann bleibt die zweite
+  // Zeile leer, statt eine Richtung zu behaupten, die der Score nicht hergibt.
+  const age  = b.neutral ? null : trendAge(tv, b.sign);
+  const tone = b.neutral ? 'flat' : b.sign > 0 ? 'pos' : 'neg';
+  const num  = `${b.score > 0 ? '+' : b.score < 0 ? '−' : ''}${Math.abs(b.score)}`;
+
+  const tip = [
+    `Bias ${num} · ${biasLabel(b.score)}`,
+    BIAS_LEVELS.map(([k, l]) => `${l} ${DIR_GLYPH[b.dirs[k]] ?? '?'}`).join(' · '),
+    age ? `Trend ${b.sign > 0 ? 'aufwärts' : 'abwärts'} seit ${age.label}${age.exact ? '' : ' (Untergrenze — Performance-Fenster, kein gemessenes Alter)'}` : '',
+    b.volBoost !== 1 ? `Volumen ${b.volBoost > 1 ? 'bestätigt' : 'dünn'} (×${b.volBoost})` : '',
+    b.coverage < 1 ? `Datenabdeckung ${Math.round(b.coverage * 100)}%` : '',
+  ].filter(Boolean).join(' · ');
+
+  return `<div class="bias-cell" title="${tip}">
+    <svg class="bias-ring bias-ring--${tone}" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+      ${biasRing(b.dirs)}
+      <g transform="translate(${BIAS_ICON_T} ${BIAS_ICON_T}) scale(${BIAS_ICON_S})">${b.sign > 0 ? icons.bull : icons.bear}</g>
+    </svg>
+    <span class="bias-txt">
+      <span class="bias-val ${tone}">${num}</span>
+      <span class="bias-age">${age?.label ?? '—'}</span>
+    </span>
+  </div>`;
 }
 
 // % cell with a magnitude-scaled red/green background tint (heat-strip effect).

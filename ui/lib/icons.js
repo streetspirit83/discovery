@@ -51,6 +51,14 @@ export const icons = {
   newspaper:     svg('<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>'),
   rss:           svg('<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>'),
   plus:          svg('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  // Bias-Spalte: Bulle/Bär als gefüllte Silhouette. Bewusst KEIN Strich-Icon —
+  // im Bias-Ring stehen nur ~19px zur Verfügung, da trägt die Kontur besser als
+  // eine 2px-Linie. Unterschieden wird über die Außenform (Hörner seitlich vs.
+  // runder Kopf mit Ohren), nicht über Innendetails. Nüstern/Schnauze sind
+  // Aussparungen (fill-rule evenodd), damit die Fläche bei großer Darstellung
+  // nicht anonym wirkt.
+  bull: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd"><path d="M8.8 10.4C6.3 10.2 4 9 2.7 6.3c-.35-.75.55-1.35 1.15-.8 1.5 1.4 3.1 2.2 5.2 2.5z"/><path d="M15.2 10.4c2.5-.2 4.8-1.4 6.1-4.1.35-.75-.55-1.35-1.15-.8-1.5 1.4-3.1 2.2-5.2 2.5z"/><path d="M8.3 8.4h7.4a2.3 2.3 0 0 1 2.3 2.6l-.5 4A5.7 5.7 0 0 1 12 20.4a5.7 5.7 0 0 1-5.5-5.4l-.5-4a2.3 2.3 0 0 1 2.3-2.6zm2 7.1a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3zm3.4 0a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3z"/></svg>`,
+  bear: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd"><circle cx="6" cy="8.2" r="3.2"/><circle cx="18" cy="8.2" r="3.2"/><path d="M12 20.6c-4.4 0-8-3-8-6.6S7.6 7.4 12 7.4s8 3 8 6.6-3.6 6.6-8 6.6zm0-2.1c1.9 0 3.4-1.1 3.4-2.4S13.9 13.7 12 13.7s-3.4 1.1-3.4 2.4S10.1 18.5 12 18.5z"/></svg>`,
   // Nachkauf-Kalkulator (Zeilenaktion bei Portfolio-Tickern)
   calculator:    svg('<rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>'),
 };

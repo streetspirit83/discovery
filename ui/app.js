@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260803b';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260803a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260803a';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260803c';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260803c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260803c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -13,10 +13,10 @@ import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260803a';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260803a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260803a';
-import { renderControlModal } from './components/control-modal.js?v=20260803b';
-import { renderCompareModal } from './components/compare-modal.js?v=20260803a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260803c';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260803c';
+import { renderControlModal } from './components/control-modal.js?v=20260803c';
+import { renderCompareModal } from './components/compare-modal.js?v=20260803c';
 import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260722i';
@@ -29,7 +29,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260803a';
+import { icons } from './lib/icons.js?v=20260803c';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260719b';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';

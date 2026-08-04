@@ -18,7 +18,7 @@
  * ausgegrauter `.link-chip--missing`. Prozente über `.pos`/`.neg` (§8).
  */
 
-import { icons } from '../lib/icons.js?v=20260803a';
+import { icons } from '../lib/icons.js?v=20260803c';
 import { INDEX_GROUPS, allIndexEntries, emptyIndexRow, clearSearchBackoff, getResolveReport } from '../lib/tv-indices.js?v=20260730c';
 
 const TV_LOGO = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
