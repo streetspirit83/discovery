@@ -2439,4 +2439,10 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .tb-frag li.is-warn { color:var(--warn); font-weight:var(--fw-med); }
 
 .tb-hint { font-size:var(--fs-2); color:var(--muted); line-height:var(--lh); margin:0 0 var(--s-3); }
+
+/* Fazit-Satz: fasst Ebenen, Verlauf und Fragilität zusammen. Etwas kräftiger
+   als die Hinweistexte darüber — er ist die Aussage, nicht die Fußnote. */
+.tb-summary { font-size:var(--fs-2); line-height:var(--lh); margin:var(--s-2) 0 0;
+  padding:var(--s-2) var(--s-3); border-left:3px solid var(--border);
+  background:var(--surface-2); border-radius:0 var(--r-1) var(--r-1) 0; }
 .tb-hint.is-warn { color:var(--warn); }
