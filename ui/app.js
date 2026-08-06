@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260803d';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260803h';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260803c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260803e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260803h';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
@@ -15,7 +15,7 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260803a';
 import { triggeredCount } from './lib/alerts.js?v=20260704e';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260803c';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260803c';
-import { renderControlModal } from './components/control-modal.js?v=20260803d';
+import { renderControlModal } from './components/control-modal.js?v=20260803h';
 import { renderCompareModal } from './components/compare-modal.js?v=20260803d';
 import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
 import { enrichBulk } from './lib/claude-api.js';

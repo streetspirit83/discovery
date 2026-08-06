@@ -18,6 +18,7 @@ import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
 import { trendScore } from '../lib/trend-radar.js?v=20260709c';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260803c';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260803d';
+import { regimeStats } from '../lib/tv-bias-history.js?v=20260803d';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -361,6 +362,7 @@ function sortValue(c, col) {
     }
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'bias':        return computeBias(c.tv_data)?.score ?? null;
+    case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -1059,6 +1061,7 @@ export class CandidateList {
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
+      cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
       cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
       cols += this.thNum('tv_ebitda', 'EBITDA', 'EBITDA \u00b7 Zell-T\u00f6nung nach EBITDA-YoY-Wachstum (voll bei \u00b125%), rot bei negativem EBITDA');
@@ -1260,6 +1263,7 @@ export class CandidateList {
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
+          `<td class="num">${renderTrendAge(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
           `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
           `<td class="num"${ebitdaTint(tv)}>${ebitdaCell(c)}</td>` +
@@ -1702,27 +1706,75 @@ function renderBias(c) {
   const b = computeBias(tv);
   if (!b) return '<span class="muted-dash" title="Zu wenig TV-Daten für ein Bias – „TV Daten“ in der Subbar laden">—</span>';
 
-  // Im neutralen Band hat „seit wann" keine Bedeutung — dann bleibt die zweite
-  // Zeile leer, statt eine Richtung zu behaupten, die der Score nicht hergibt.
-  const age  = b.neutral ? null : trendAge(tv, b.sign);
   const tone = b.neutral ? 'flat' : b.sign > 0 ? 'pos' : 'neg';
   const num  = `${b.score > 0 ? '+' : b.score < 0 ? '−' : ''}${Math.abs(b.score)}`;
 
   const tip = [
     `Bias ${num} · ${biasLabel(b.score)}`,
     BIAS_LEVELS.map(([k, l]) => `${l} ${DIR_GLYPH[b.dirs[k]] ?? '?'}`).join(' · '),
-    age ? `Trend ${b.sign > 0 ? 'aufwärts' : 'abwärts'} seit ${age.label}${age.exact ? '' : ' (Untergrenze — Performance-Fenster, kein gemessenes Alter)'}` : '',
     b.volBoost !== 1 ? `Volumen ${b.volBoost > 1 ? 'bestätigt' : 'dünn'} (×${b.volBoost})` : '',
     b.coverage < 1 ? `Datenabdeckung ${Math.round(b.coverage * 100)}%` : '',
   ].filter(Boolean).join(' · ');
 
   return `<div class="bias-cell" title="${tip}">
     ${biasRingSVG(b, { size: 34, icon: b.sign > 0 ? icons.bull : icons.bear })}
-    <span class="bias-txt">
-      <span class="bias-val ${tone}">${num}</span>
-      <span class="bias-age">${age?.label ?? '—'}</span>
-    </span>
+    <span class="bias-val ${tone}">${num}</span>
   </div>`;
+}
+
+/* ── Trenddauer (eigene Spalte, sortierbar) ──────────────────────────────────
+ * Drei Quellen, absteigend belastbar:
+ *   1. GEMESSEN aus der zwischengespeicherten TD-Historie (`bias_history`) —
+ *      exakte Tage seit dem Richtungswechsel
+ *   2. Tages-Aroon — exakt, aber bei 14 Tagen gedeckelt
+ *   3. Performance-Leiter — nur eine Untergrenze („≥3M")
+ *
+ * Die gemessene Dauer wird NUR benutzt, wenn ihre Richtung zum aktuellen Bias
+ * passt. Der letzte TD-Bar kann Tage alt sein; hat der Trend seither gedreht,
+ * stünde in der Spalte sonst das Alter eines Trends, den es nicht mehr gibt.
+ */
+const isoDate = (s) => (s ? new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—');
+
+function trendDuration(c) {
+  const tv = c.tv_data;
+  const b = tv ? computeBias(tv) : null;
+  if (!b || b.neutral) return null;
+
+  const sa = c.swing_analysis;
+  const bh = sa?.bias_history;
+  if (bh?.series?.length) {
+    const st = regimeStats(bh.series);
+    if (st?.current && st.current.dir === b.sign) {
+      return { days: st.current.days, label: `${st.current.days}T`, source: 'td', sign: b.sign,
+               start: st.current.start, lastBar: bh.to, fetched: sa.checked_at };
+    }
+  }
+  const age = trendAge(tv, b.sign);
+  return age ? { days: age.days, label: age.label, sign: b.sign,
+                 source: age.exact ? 'aroon' : 'ladder' } : null;
+}
+
+function renderTrendAge(c) {
+  const d = trendDuration(c);
+  if (!d) {
+    return '<span class="muted-dash" title="Kein gerichteter Trend (neutrales Bias) oder keine TV-Daten">—</span>';
+  }
+  const dir = d.sign > 0 ? 'aufwärts' : 'abwärts';
+  let tip, cls;
+  if (d.source === 'td') {
+    cls = 'tage tage--td';
+    tip = `Gemessen aus der TD-Historie: ${dir} seit ${isoDate(d.start)} · letzter Kurstag ${isoDate(d.lastBar)}`
+        + (d.fetched ? ` · Abruf vor ${timeAgo(d.fetched)}` : '');
+  } else if (d.source === 'aroon') {
+    cls = 'tage';
+    tip = `Tages-Aroon: ${d.days} Tage seit dem letzten 14-Tage-${d.sign > 0 ? 'Tief' : 'Hoch'}`
+        + ' · Reichweite max. 14 Tage, darüber greift die Performance-Leiter';
+  } else {
+    cls = 'tage tage--approx';
+    tip = `Untergrenze aus dem Performance-Fenster, kein gemessenes Alter`
+        + ' · „1J TD" im Perf.-Tab laden für die gemessene Dauer';
+  }
+  return `<span class="${cls}" title="${tip}">${d.label}</span>`;
 }
 
 // % cell with a magnitude-scaled red/green background tint (heat-strip effect).

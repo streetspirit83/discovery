@@ -2360,12 +2360,16 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .bias-seg--dn   { stroke:var(--neg); }
 .bias-seg--flat { stroke:var(--muted); opacity:.25; }
 
-.bias-txt { display:flex; flex-direction:column; align-items:flex-end; line-height:1.15; min-width:0; }
 .bias-val { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
 .bias-val.pos  { color:var(--pos); }
 .bias-val.neg  { color:var(--neg); }
 .bias-val.flat { color:var(--muted); }
-.bias-age { font-size:var(--fs-2); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* Trenddauer (eigene Spalte): gemessene Werte stehen kräftiger als die
+   Näherungen — der Unterschied zwischen „47T gemessen" und „≥3M geschätzt"
+   muss ohne Tooltip sichtbar sein. */
+.tage { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tage--td { font-weight:var(--fw-bold); }
+.tage--approx { color:var(--muted); }
 
 /* ── Trend-Tab (Detail-Sheet) ────────────────────────────────────────────── */
 
