@@ -766,7 +766,8 @@ function renderTradeTab(c, disp, pc, tl, side) {
  * Free-Tier nur für US-Titel gibt — deshalb der klar getrennte zweite Block.
  */
 
-const fmtN = (v, d = 1) => (v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(d));
+const fmtN = (v, d = 1) => (v == null || Number.isNaN(v) ? '—'
+  : Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }));
 const fmtPctS = (v, d = 1) =>
   (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(d)}%`);
 const deDate = (s) => (s ? new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—');
@@ -848,13 +849,13 @@ function fragilityItems(c, tv, bars) {
 
   const div = bars ? detectDivergence(bars, detectPivots(bars, 3)) : null;
   if (div) {
-    out.push({ warn: true, txt: div.kind === 'bear'
+    out.push({ warn: true, kind: 'div', div, txt: div.kind === 'bear'
       ? `Bearishe Divergenz: höheres Kurshoch am ${deDate(div.date)}, aber RSI ${fmtN(div.rsiLast, 0)} statt ${fmtN(div.rsiPrev, 0)}`
       : `Bullishe Divergenz: tieferes Tief am ${deDate(div.date)}, aber RSI ${fmtN(div.rsiLast, 0)} statt ${fmtN(div.rsiPrev, 0)}` });
   }
 
   if (tv.adx != null) {
-    out.push({ warn: tv.adx < 20,
+    out.push({ warn: tv.adx < 20, kind: 'adx', adx: tv.adx,
       txt: tv.adx < 20 ? `ADX ${fmtN(tv.adx)} — Trend verliert Struktur` : `ADX ${fmtN(tv.adx)} — Struktur intakt` });
   }
 
@@ -864,10 +865,66 @@ function fragilityItems(c, tv, bars) {
   for (const [lbl, sma] of [['SMA50', tv.sma50], ['SMA200', tv.sma200]]) {
     if (close == null || sma == null || !atr) continue;
     const d = (close - sma) / atr;
-    out.push({ warn: Math.abs(d) < 1,
+    out.push({ warn: Math.abs(d) < 1, kind: lbl === 'SMA200' ? 'sma200' : 'sma50', lbl, dist: d,
       txt: `Abstand zur ${lbl}: ${fmtN(Math.abs(d))} ATR ${d >= 0 ? 'darüber' : 'darunter'}` });
   }
   return out;
+}
+
+/* ── Fazit-Satz ───────────────────────────────────────────────────────────────
+ * Ersetzt den früheren „Frühwarnung, keine Prognose"-Absatz: statt eines
+ * Disclaimers eine Aussage, die alles darüber zusammenfasst. Bewusst
+ * BESCHREIBEND formuliert („mahnt zur Vorsicht", „zieht noch nicht mit") und
+ * nie vorhersagend — die Einordnung steckt damit in der Wortwahl statt in
+ * einem eigenen Absatz.
+ */
+const LEVEL_NOUN = { regime: 'das Regime', trend: 'die Trend-Ebene', momentum: 'das Momentum' };
+
+function trendSummary(b, age, frag, st) {
+  const num = `${b.score > 0 ? '+' : b.score < 0 ? '−' : ''}${Math.abs(b.score)}`;
+  if (b.neutral) {
+    return `Kein klarer Trend: die Ebenen tragen sich gegenseitig nicht, das Bias liegt bei ${num}.`;
+  }
+
+  const want = b.sign > 0 ? 'up' : 'dn';
+  const dirWord = b.sign > 0 ? 'Aufwärts' : 'Abwärts';
+  let s = `${dirWord}trend${age ? ` seit ${age.label}` : ''}`;
+
+  // Einigkeit der drei Ebenen
+  const known = BIAS_LEVELS.filter(([k]) => b.dirs[k]);
+  const agree = known.filter(([k]) => b.dirs[k] === want);
+  const off   = known.filter(([k]) => b.dirs[k] !== want);
+  if (off.length === 0) s += ', alle drei Ebenen einig';
+  else if (agree.length >= 2) {
+    const [k] = off[0];
+    s += `, aber ${LEVEL_NOUN[k]} ${b.dirs[k] === 'flat' ? 'ist neutral' : 'zieht noch nicht mit'}`;
+  } else if (agree.length === 1) s += `, getragen nur von ${LEVEL_NOUN[agree[0][0]]}`;
+  else s += ', die Ebenen widersprechen sich';
+
+  // Reifegrad aus der gemessenen Historie (nur wenn Richtung dazu passt)
+  if (st?.percentile != null && st.current?.dir === b.sign) {
+    s += ` und länger als ${st.percentile}% der bisherigen ${dirWord}phasen`;
+  }
+
+  // Stärkste Einschränkung, nach Gewicht sortiert
+  const warn = ['div', 'adx', 'sma200', 'sma50']
+    .map((k) => frag.find((f) => f.warn && f.kind === k)).find(Boolean);
+  let tail = '';
+  if (warn?.kind === 'div') {
+    tail = warn.div.kind === 'bear'
+      ? `die bearishe Divergenz am letzten Hoch (${deDate(warn.div.date)}) mahnt zur Vorsicht`
+      : `die bullishe Divergenz am letzten Tief (${deDate(warn.div.date)}) stützt gegen den Trend`;
+  } else if (warn?.kind === 'adx') {
+    tail = `ADX ${fmtN(warn.adx, 0)}, die Struktur lässt nach`;
+  } else if (warn) {
+    tail = `der Kurs steht nur ${fmtN(Math.abs(warn.dist))} ATR ${warn.dist >= 0 ? 'über' : 'unter'} der ${warn.lbl}`;
+  } else if (off.length === 0) {
+    // „Struktur intakt" nur, wenn es nichts anderes zu sagen gibt — hängt man
+    // es an eine bereits genannte Uneinigkeit, widerspricht es sich selbst.
+    tail = 'Struktur intakt';
+  }
+
+  return `${s}${tail ? ` — ${tail}` : ''}.`;
 }
 
 function renderTrendTab(c) {
@@ -928,9 +985,12 @@ function renderTrendTab(c) {
     ? c.swing_analysis.ohlc.map((o) => ({ date: o.date, open: o.o, high: o.h, low: o.l, close: o.c, volume: o.v }))
     : null;
 
+  // Vor dem Historien-Block berechnet, weil der Fazit-Satz unten den Reifegrad
+  // mitnimmt.
+  const st = hist?.series?.length ? regimeStats(hist.series) : null;
+
   let histBlock;
   if (hist?.series?.length) {
-    const st = regimeStats(hist.series);
     const cur = st?.current;
     const dirTxt = cur ? (cur.dir > 0 ? 'bullish' : 'bearish') : '—';
     /* Live-Bias und Verlaufsende können auseinanderlaufen: tv_data ist von
@@ -974,9 +1034,8 @@ function renderTrendTab(c) {
     ? `<h4 class="pv-subhead">Fragilität</h4>
        <ul class="tb-frag">${frag.map((f) =>
          `<li class="${f.warn ? 'is-warn' : ''}">${f.warn ? '⚠' : '·'} ${f.txt}</li>`).join('')}</ul>
-       <p class="tb-hint">Frühwarnung, keine Prognose: die Punkte sagen, wo der Trend
-       angreifbar ist — nicht, wann er dreht.</p>`
-    : '';
+       <p class="tb-summary">${trendSummary(b, age, frag, st)}</p>`
+    : `<p class="tb-summary">${trendSummary(b, age, [], st)}</p>`;
 
   return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + fragBlock;
 }
