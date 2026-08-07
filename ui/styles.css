@@ -1752,6 +1752,25 @@ span.detail-star { cursor:default; }
 }
 .chart-horizon .seg-btn.active { background:var(--sheet-bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.12); }
 
+/* Chart-Vollbild (Perf-Tab, LS wie TD). Der Block `#chart-fs` wird dafür per JS
+   in den <body> verschoben – die Detail-Sheet trägt ein `transform`, ein
+   `position:fixed`-Kind bliebe sonst auf die Sheet-Breite eingesperrt. */
+.chart-fs__act { display:inline-flex; align-items:center; gap:var(--s-2); }
+/* Im Vollbild fehlt der Sheet-Kopf – der Ticker steht dann im Chart-Titel. */
+.chart-fs__sym { display:none; }
+.chart-fs.is-fs .chart-fs__sym { display:inline; color:var(--text); margin-right:var(--s-2); }
+.chart-fs__btn { flex:0 0 auto; }
+.chart-fs.is-fs {
+  position:fixed; inset:0; z-index:var(--z-toast);
+  display:flex; flex-direction:column; gap:var(--s-2);
+  height:100dvh; overflow:hidden; background:var(--sheet-bg);
+  padding:var(--s-3) var(--s-3) max(var(--s-3), env(safe-area-inset-bottom));
+}
+.chart-fs.is-fs > * { flex:0 0 auto; margin:0; }
+.chart-fs.is-fs .pv-subhead { margin:0; }
+.chart-fs.is-fs .ls-chart { flex:1 1 auto; height:auto; min-height:0; }
+body.has-chart-fs { overflow:hidden; }
+
 /* "Level" bar under the chart: pointer-tracked price readout + set-alert button */
 .chart-level { display:flex; align-items:center; gap:8px; margin-top:6px; padding:6px 8px; background:var(--surface-3); border-radius:var(--r-1); }
 .chart-level__lbl { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }

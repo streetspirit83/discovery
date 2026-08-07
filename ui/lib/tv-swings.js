@@ -16,7 +16,7 @@
  */
 
 import { normalizeExchange } from './exchange-map.js';
-import { buildBiasSeries, WARMUP } from './tv-bias-history.js?v=20260803d';
+import { buildBiasSeries, WARMUP } from './tv-bias-history.js?v=20260807a';
 
 const US_EXCHANGES = new Set(['NASDAQ', 'NYSE', 'AMEX']);
 export const MIN_BARS = 20; // need enough history for pivots + ATR

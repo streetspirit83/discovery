@@ -10,7 +10,7 @@
 import {
   candidateQuoteEur, candidateTriggered, primaryPriceAlert, candidateAdvice,
   ALERTS_MUTED_KEY,
-} from '../lib/alerts.js?v=20260704e';
+} from '../lib/alerts.js?v=20260807a';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`);

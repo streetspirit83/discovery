@@ -15,7 +15,7 @@
  * der Wahrheit für Einstand/Stückzahl).
  */
 
-import { icons } from '../lib/icons.js?v=20260803c';
+import { icons } from '../lib/icons.js?v=20260807a';
 
 const num = (v, d = 2) =>
   v == null || !Number.isFinite(v) ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });

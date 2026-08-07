@@ -18,8 +18,8 @@
  *          (basis.kind = level *source*, distinct from the alert `kind` above).
  */
 
-import { evalAlert, alertDir } from './status-logic.js?v=20260704e';
-import { computePriceClusters } from './price-cluster.js?v=20260702h';
+import { evalAlert, alertDir } from './status-logic.js?v=20260807a';
+import { computePriceClusters } from './price-cluster.js?v=20260807a';
 
 export const ALERTS_MUTED_KEY = 'discovery_alerts_muted_all';
 

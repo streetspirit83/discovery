@@ -39,7 +39,7 @@
  * gleichnamigen Spalte in `candidate-list.js`).
  */
 
-import { monthlyGrowthRate } from './tv-upside.js?v=20260704i';
+import { monthlyGrowthRate } from './tv-upside.js?v=20260807a';
 
 /* ── Index-Listen ─────────────────────────────────────────────────────────── */
 

@@ -1,24 +1,24 @@
-import { icons } from '../lib/icons.js?v=20260803c';
+import { icons } from '../lib/icons.js?v=20260807a';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260722i';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
-import { checkTradeRepublic } from '../lib/tr-check.js?v=20260616b';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260626d';
+import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { megaClusterOf } from '../lib/sector-clusters.js?v=20260719b';
-import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260626e';
-import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
-import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
-import { lsTrend } from '../lib/ls-trend.js?v=20260709b';
-import { trendScore } from '../lib/trend-radar.js?v=20260709c';
-import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260803c';
-import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260803d';
-import { regimeStats } from '../lib/tv-bias-history.js?v=20260803d';
+import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
+import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260807a';
+import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
+import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
+import { lsTrend } from '../lib/ls-trend.js?v=20260807a';
+import { trendScore } from '../lib/trend-radar.js?v=20260807a';
+import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260807a';
+import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
+import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;

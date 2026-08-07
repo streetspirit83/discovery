@@ -17,7 +17,7 @@ import { computeHealthScore }   from './tv-health-score.js';
 import { computeMomentumCheck } from './tv-momentum-check.js';
 import { monthlyGrowthRate }    from './tv-upside.js';
 import { isAlertTriggered }     from './alerts.js';
-import { alertDir }             from './status-logic.js?v=20260704e';
+import { alertDir }             from './status-logic.js?v=20260807a';
 
 /* ── Live score helpers (mirror candidate-list's live* derivations) ───────── */
 

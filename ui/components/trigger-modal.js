@@ -17,9 +17,9 @@ import {
   entryBasisEur, alertSummary, isAlertTriggered, toEur,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert, buildClusterAlert,
   ALERT_KINDS, alertKind,
-} from '../lib/alerts.js?v=20260704e';
-import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
-import { classifyCluster, tradeTarget } from '../lib/trade-setup.js?v=20260702h';
+} from '../lib/alerts.js?v=20260807a';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
+import { classifyCluster, tradeTarget } from '../lib/trade-setup.js?v=20260807a';
 
 const fmtEur = (v) => (v == null ? '—' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
 

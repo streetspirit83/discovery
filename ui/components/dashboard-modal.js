@@ -11,12 +11,12 @@
  * it when the sheet closes (X or swipe).
  */
 
-import { icons } from '../lib/icons.js?v=20260803c';
+import { icons } from '../lib/icons.js?v=20260807a';
 import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends, smaCrosses,
-} from '../lib/dashboard-metrics.js?v=20260707a';
-import { trendRadar } from '../lib/trend-radar.js?v=20260709c';
+} from '../lib/dashboard-metrics.js?v=20260807a';
+import { trendRadar } from '../lib/trend-radar.js?v=20260807a';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist' };
 const COLLAPSED = 3;

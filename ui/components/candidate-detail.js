@@ -2,19 +2,19 @@ import { enrichCandidate } from '../lib/claude-api.js';
 import {
   scoreRingSVG, priceBandHorizontalSVG, priceLevelsTable,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
-} from '../lib/price-viz.js?v=20260722g';
-import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260707a';
-import { icons } from '../lib/icons.js?v=20260803c';
-import { computePriceClusters } from '../lib/price-cluster.js?v=20260702h';
-import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260702e';
-import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260722i';
+} from '../lib/price-viz.js?v=20260807a';
+import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260807a';
+import { icons } from '../lib/icons.js?v=20260807a';
+import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
+import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
+import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker, detectPivots } from '../lib/tv-swings.js?v=20260803d';
-import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260803d';
-import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260803d';
-import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260711a';
-import { transcriptLlmText } from '../lib/company-profile.js?v=20260711b';
+import { swingLadderSVG, isUsTicker, detectPivots } from '../lib/tv-swings.js?v=20260807a';
+import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
+import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
+import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
+import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -461,6 +461,12 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
     if (tdReachable) btns.push(`<button class="seg-btn${want1J ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${want1J}">1J TD${canTd ? '' : ' ⤓'}</button>`);
     const toggle = btns.length >= 2 || (btns.length === 1 && !canLs)
       ? `<div class="chart-horizon" role="tablist">${btns.join('')}</div>` : '';
+    // Vollbild nur wenn wirklich ein Chart gezeichnet wird (nicht über dem
+    // „Kerzen laden"-Prompt).
+    const hasChart = !(want1J && !canTd);
+    const fsBtn = hasChart
+      ? `<button class="icon-btn chart-fs__btn" id="chart-fs-btn" title="Chart im Vollbild" aria-label="Chart im Vollbild">${icons.maximize}</button>`
+      : '';
 
     const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
 
@@ -491,10 +497,16 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
             title="Indikatoren ein-/ausblenden: Bollinger (20,2) · Supertrend (10,3) · CCI 20 (untere Skala)">ƒ Ind.</button>
         </div>`
       : '';
-    const tail = want1J
-      ? `${zoomRow}${profileHTML(c)}`
-      : `${tdReachable ? '' : profileHTML(c)}`;
-    parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">${head}</h4>${toggle}</div>${body}${tail}`);
+    // Kopf + Chart + Level-Bar + Zoom-Zeile liegen zusammen in `#chart-fs` —
+    // dieser Block wandert im Vollbild als Ganzes in den <body> (siehe
+    // `enterChartFs`), damit Titel, Horizont-Umschalter und Zoom mitkommen.
+    const profile = want1J || !tdReachable ? profileHTML(c) : '';
+    parts.push(`<div class="chart-fs" id="chart-fs">
+        <div class="chart-head-row">
+          <h4 class="pv-subhead"><span class="chart-fs__sym">${c.symbol}</span>${head}</h4>
+          <div class="chart-fs__act">${toggle}${fsBtn}</div>
+        </div>${body}${zoomRow}
+      </div>${profile}`);
   } else {
     parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
   }
@@ -1276,11 +1288,71 @@ export class CandidateDetail {
     this.chartZoom = 'ALL';    // TD-Chart Zoom-Preset (1M/3M/6M/ALL)
     this.showInd = localStorage.getItem('discovery_chart_ind') === '1'; // BB/Supertrend/CCI
     this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
+    this.chartFs = false;     // Perf-Chart im Vollbild (LS wie TD)
+    this._chartWrap = null;   // #chart-fs (auch wenn er gerade im <body> hängt)
+    this._fsAnchor = null;    // Platzhalter, an den der Block zurückwandert
+    this._fsKey = null;       // Escape-Handler des Vollbilds
   }
 
   destroyChart() {
     try { this._chart?.remove(); } catch { /* already gone */ }
     this._chart = null;
+  }
+
+  /* ── Chart-Vollbild ──────────────────────────────────────────────────────
+   * Der Chart-Block wird nach `document.body` verschoben statt nur per CSS
+   * aufgezogen: die Detail-Sheet trägt ein `transform`, damit wäre ein
+   * `position:fixed`-Kind auf die Sheet-Breite (max. 480px) eingesperrt.
+   * Verschieben erhält die bereits gebundenen Listener; Lightweight Charts
+   * läuft mit `autoSize` und wächst per ResizeObserver von selbst mit.
+   * Kein natives `requestFullscreen()` — iOS Safari kennt es für Nicht-Video
+   * nicht, das CSS-Overlay funktioniert überall gleich. */
+  setFsBtn(wrap, on) {
+    const btn = wrap?.querySelector('#chart-fs-btn');
+    if (!btn) return;
+    const label = on ? 'Vollbild beenden' : 'Chart im Vollbild';
+    btn.innerHTML = on ? icons.minimize : icons.maximize;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  }
+
+  enterChartFs() {
+    const wrap = this._chartWrap;
+    if (!wrap || wrap.classList.contains('is-fs') || !wrap.parentNode) return;
+    this._fsAnchor = document.createComment('chart-fs');
+    wrap.parentNode.insertBefore(this._fsAnchor, wrap);
+    document.body.appendChild(wrap);
+    wrap.classList.add('is-fs');
+    document.body.classList.add('has-chart-fs');
+    this.setFsBtn(wrap, true);
+    this.chartFs = true;
+    // Escape schließt nur das Vollbild, nicht die Detail-Sheet darunter — außer
+    // ein Modal liegt darüber (z. B. der Alert-Editor), das hat Vorrang.
+    this._fsKey = (e) => {
+      if (e.key !== 'Escape' || document.querySelector('.modal-overlay')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.exitChartFs();
+    };
+    document.addEventListener('keydown', this._fsKey, true);
+  }
+
+  // `keepFlag` = das Vollbild soll den Re-Render überleben: der Block wandert
+  // zurück in die (gleich ersetzte) Sheet, `chartFs` bleibt gesetzt, und
+  // `render()` betritt das Vollbild danach mit dem neuen Block erneut.
+  exitChartFs(keepFlag = false) {
+    if (this._fsKey) { document.removeEventListener('keydown', this._fsKey, true); this._fsKey = null; }
+    document.body.classList.remove('has-chart-fs');
+    const wrap = this._chartWrap;
+    if (wrap?.classList.contains('is-fs')) {
+      wrap.classList.remove('is-fs');
+      if (this._fsAnchor?.parentNode) this._fsAnchor.parentNode.insertBefore(wrap, this._fsAnchor);
+      else wrap.remove();
+      this.setFsBtn(wrap, false);
+    }
+    this._fsAnchor?.remove();
+    this._fsAnchor = null;
+    if (!keepFlag) this.chartFs = false;
   }
 
   // Interactive 10-day LS chart (Lightweight Charts): area price series from
@@ -1347,8 +1419,10 @@ export class CandidateDetail {
     for (const p of points) if (!clean.length || p.time > clean[clean.length - 1].time) clean.push(p);
 
     // Defensive: unparsable dates would leave an empty chart — SVG fallback.
+    // Ohne interaktiven Chart ergibt auch das Vollbild keinen Sinn.
     if (clean.length < 2) {
       chart.remove();
+      el.closest('.chart-fs')?.querySelector('#chart-fs-btn')?.remove();
       el.outerHTML = ls10dChartHTML(c, disp);
       return;
     }
@@ -1546,19 +1620,21 @@ export class CandidateDetail {
 
     this.wireChartLevelReadout(el, candle, disp);
 
-    // Zoom-Presets unter dem Chart (1M/3M/6M/ALL, Handelstage).
+    // Zoom-Presets unter dem Chart (1M/3M/6M/ALL, Handelstage). Gesucht wird ab
+    // dem Chart-Block, nicht ab der Sheet — im Vollbild hängt er im <body>.
+    const root = el.closest('.chart-fs') ?? this.el;
     const applyZoom = (z) => {
       this.chartZoom = z;
       const ts = chart.timeScale();
       const days = { '1M': 22, '3M': 66, '6M': 132 }[z];
       if (!days || candles.length <= days) ts.fitContent();
       else ts.setVisibleRange({ from: candles[candles.length - days].time, to: candles[candles.length - 1].time });
-      this.el.querySelectorAll('.chart-zoom [data-zoom]').forEach((b) =>
+      root.querySelectorAll('.chart-zoom [data-zoom]').forEach((b) =>
         b.classList.toggle('active', b.dataset.zoom === z));
     };
-    this.el.querySelectorAll('.chart-zoom [data-zoom]').forEach((btn) =>
+    root.querySelectorAll('.chart-zoom [data-zoom]').forEach((btn) =>
       btn.addEventListener('pointerup', () => applyZoom(btn.dataset.zoom)));
-    this.el.querySelector('#chart-ind')?.addEventListener('pointerup', () => {
+    root.querySelector('#chart-ind')?.addEventListener('pointerup', () => {
       this.showInd = !this.showInd;
       try { localStorage.setItem('discovery_chart_ind', this.showInd ? '1' : '0'); } catch { /* ignore */ }
       this.render();
@@ -1596,12 +1672,14 @@ export class CandidateDetail {
     if (this.candidate?.id !== candidate.id) {
       this.activeTab = 'performance'; // Tab 1 onload
       this.chartHorizon = '10T';      // reset chart horizon per candidate
+      this.exitChartFs();             // Vollbild nicht auf den nächsten Ticker mitnehmen
     }
     this.candidate = candidate;
     this.render();
   }
 
   hide() {
+    this.exitChartFs();
     this.destroyChart();
     this.candidate = null;
     this.onClose?.();
@@ -1623,6 +1701,7 @@ export class CandidateDetail {
     if (!this.candidate) return;
     const c = this.candidate;
 
+    this.exitChartFs(true);   // Block zurückholen, Flag behalten (s. u.)
     this.destroyChart();
     const disp = this.displayInfo(c);
     const pc = priceClustersDisp(c, disp);
@@ -1783,6 +1862,13 @@ export class CandidateDetail {
     // Interactive price chart — LS-intraday (10T) or TD candles (1J) per horizon.
     this.initChart(c, disp, pc, tl);
 
+    // Vollbild-Umschalter (das Betreten selbst passiert am Ende von `render()`,
+    // wenn alle Listener im Block hängen — danach verlässt er `this.el`).
+    this._chartWrap = this.el.querySelector('#chart-fs');
+    this._chartWrap?.querySelector('#chart-fs-btn')?.addEventListener('pointerup', () => {
+      if (this.chartFs) this.exitChartFs(); else this.enterChartFs();
+    });
+
     // Performance chart horizon toggle (10T LS ⟷ 1J TD candles). Picking 1J
     // when the candles aren't fetched yet runs the Swing-Check on demand.
     const tdLoaded = () => Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
@@ -1909,5 +1995,14 @@ export class CandidateDetail {
         btn.disabled = false;
       }
     });
+
+    // Zuletzt: war der Chart im Vollbild (Horizont-, Zoom- oder Indikator-
+    // Wechsel rendern neu), wird der frische Block wieder ins Vollbild gehoben.
+    // Muss ans Ende — danach hängt er im <body>, `this.el.querySelector` findet
+    // die Chart-Steuerung also nicht mehr.
+    if (this.chartFs) {
+      if (this._chartWrap?.querySelector('#chart-fs-btn')) this.enterChartFs();
+      else this.chartFs = false;
+    }
   }
 }

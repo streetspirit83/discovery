@@ -8,7 +8,7 @@
  * Zellfarbe: Token-Mix (--pos/--neg in --surface-2), Intensität ∝ |Wert|.
  */
 
-import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260719b';
+import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 
 const HORIZONS = [
   { key: 'perf_w',  label: '1W' },

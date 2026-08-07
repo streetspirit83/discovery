@@ -24,7 +24,7 @@
  *    mit Verhältnissen, nie mit absoluten Beträgen.
  */
 
-import { computeBias } from './tv-sentiment.js?v=20260803d';
+import { computeBias } from './tv-sentiment.js?v=20260807a';
 
 /** Bars, die vor dem ersten verwertbaren Bias-Wert verbraucht werden. */
 export const WARMUP = 260;

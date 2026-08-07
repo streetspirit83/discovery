@@ -14,8 +14,8 @@
  * das Radar soll junge Bewegungen zeigen, nicht etablierte Dauerläufer.
  */
 
-import { lsTrend } from './ls-trend.js?v=20260709b';
-import { smaCrosses } from './dashboard-metrics.js?v=20260707a';
+import { lsTrend } from './ls-trend.js?v=20260807a';
+import { smaCrosses } from './dashboard-metrics.js?v=20260807a';
 import { monthlyGrowthRate } from './tv-upside.js';
 
 export function trendScore(c) {

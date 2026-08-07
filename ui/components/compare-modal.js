@@ -18,12 +18,12 @@
  * Semantik vorbehalten und werden nie als Serienfarbe benutzt.
  */
 
-import { icons } from '../lib/icons.js?v=20260803c';
-import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashboard-metrics.js?v=20260707a';
-import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js?v=20260704i';
-import { classifyCluster, tradeTarget, exitLevels } from '../lib/trade-setup.js?v=20260702h';
-import { megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260719b';
-import { isUsTicker } from '../lib/tv-swings.js?v=20260803d';
+import { icons } from '../lib/icons.js?v=20260807a';
+import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashboard-metrics.js?v=20260807a';
+import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js?v=20260807a';
+import { classifyCluster, tradeTarget, exitLevels } from '../lib/trade-setup.js?v=20260807a';
+import { megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
+import { isUsTicker } from '../lib/tv-swings.js?v=20260807a';
 
 /** Charts bekommen höchstens so viele Serien – darüber trägt nur die Matrix.
  *  (Die validierte Palette hat acht Slots; ein neunter wäre eine erfundene

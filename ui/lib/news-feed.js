@@ -19,7 +19,7 @@
  * scrape-proxy (Hosts müssen dort in ALLOWED_DOMAINS stehen).
  */
 
-import { loadNewsSources } from './news-sources.js?v=20260712c';
+import { loadNewsSources } from './news-sources.js?v=20260807a';
 
 const CACHE_TTL = 30 * 60e3;
 const MAX_ITEMS = 40;

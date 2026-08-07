@@ -2,38 +2,38 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260803i';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260803c';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260803i';
-import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260712c';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260807a';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260807a';
+import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260807a';
 import { renderUploadModal } from './components/upload-modal.js';
-import { renderScreenerModal } from './components/screener-modal.js?v=20260621a';
+import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260704e';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260704k';
-import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260803a';
-import { triggeredCount } from './lib/alerts.js?v=20260704e';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260803c';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260803c';
-import { renderControlModal } from './components/control-modal.js?v=20260803i';
-import { renderCompareModal } from './components/compare-modal.js?v=20260803d';
-import { loadStorageClient } from './lib/storage-client.js?v=20260722a';
+import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
+import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
+import { triggeredCount } from './lib/alerts.js?v=20260807a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
+import { renderControlModal } from './components/control-modal.js?v=20260807a';
+import { renderCompareModal } from './components/compare-modal.js?v=20260807a';
+import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260722i';
-import { fetchIndexRows } from './lib/tv-indices.js?v=20260730c';
-import { trackSignals } from './lib/signal-tracker.js?v=20260709b';
-import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260711b';
-import { fetchLsQuote } from './lib/ls-intraday.js?v=20260626d';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20260616a';
-import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260614c';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260807a';
+import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
+import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
+import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
+import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260803c';
-import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260719b';
-import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
-import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260625c';
-import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260803d';
+import { icons } from './lib/icons.js?v=20260807a';
+import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
+import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260807a';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>

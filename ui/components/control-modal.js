@@ -11,11 +11,11 @@
  * Treffer → die Bulk-Bar mit allen Aktionen (Löschen/Export/…) erscheint.
  */
 
-import { icons } from '../lib/icons.js?v=20260803c';
-import { filterMultiSelect } from './filter-multiselect.js?v=20260803c';
-import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260803i';
+import { icons } from '../lib/icons.js?v=20260807a';
+import { filterMultiSelect } from './filter-multiselect.js?v=20260807a';
+import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260807a';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
-import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260719b';
+import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 
 const DIV_BUCKETS = [
   { value: 'none',  label: 'Keine Dividende' },

@@ -14,13 +14,13 @@
  * liegen in `lib/news-feed.js` (30-min-Cache, Refresh erzwingt neu).
  */
 
-import { icons } from '../lib/icons.js?v=20260803c';
+import { icons } from '../lib/icons.js?v=20260807a';
 import {
   topSectors, portfolioCandidates, portfolioSubSectors, sectorToIndustry,
   fetchMarketNews, fetchPortfolioNews, hasMarketNewsKeys,
   demoMarketNews, demoPortfolioNews,
-} from '../lib/news-feed.js?v=20260713b';
-import { loadNewsSources, addNewsSource, removeNewsSource } from '../lib/news-sources.js?v=20260712c';
+} from '../lib/news-feed.js?v=20260807a';
+import { loadNewsSources, addNewsSource, removeNewsSource } from '../lib/news-sources.js?v=20260807a';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 

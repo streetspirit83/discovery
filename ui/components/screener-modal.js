@@ -6,9 +6,9 @@
 import {
   FIELDS, OPERATORS, MARKETS, SECTORS, FIELD_BY_VALUE,
   fieldLabel, isSynthetic, syntheticDeps, computeSynthetic, matchesOp,
-} from '../lib/tv-fields.js?v=20260621a';
+} from '../lib/tv-fields.js?v=20260807a';
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
-import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260621a';
+import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260807a';
 import { uuid } from '../lib/import-parser.js';
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
