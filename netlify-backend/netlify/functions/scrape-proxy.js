@@ -35,6 +35,9 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/api\.marketaux\.com\//,
   /^https:\/\/tradingview-data1\.p\.rapidapi\.com\//,
   /^https:\/\/www\.google\.com\/alerts\/feeds\//,
+  // Retail-Sentiment im Detail-Sheet (lib/stocktwits-sentiment.js) — öffentlicher
+  // Aggregat-Endpoint, kein Key. Pfad-Anker hält die Freigabe auf die API eng.
+  /^https:\/\/api\.stocktwits\.com\/api\/2\//,
 ];
 
 function isAllowed(url) {
