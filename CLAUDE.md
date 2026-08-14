@@ -78,6 +78,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 **lib/** (logic, all pure/browser):
 - Data: `tv-enrichment.js` (TV scanner bulk fetch + FX + indices),
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
+  `stocktwits-sentiment.js` (Retail-Bull/Bear-Tagesreihe, on demand im Trend-Tab),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
 - Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter +
   `biasRingSVG` — die Ring-Grafik liegt dort, damit Tabelle und Detail-Sheet
@@ -112,6 +113,13 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   `series=intraday`|`history`). Any non-default UA works (`Mozilla/5.0`). Returns
   `[ts, price]` only — no OHLC, no volume. It is NOT IP-blocked; earlier 403/502s
   were wrong paths.
+- **StockTwits** (`api.stocktwits.com/api/2/`): public, no key.
+  `symbols/{SYM}/sentiment.json` returns a ~60-day daily bull/bear series in
+  percent — this is the only usable sentiment source. The **message stream**
+  (`streams/symbol/{SYM}.json`) is **not**: `entities.sentiment` is `null` on
+  virtually every message because users rarely tag posts. `trending/symbols.json`
+  also carries `exchange`, `symbol_mic`, `isin`, `cusip` and a `trends.summary`
+  blurb, so the adapter needs no external exchange lookup.
 - **TwelveData** (`api.twelvedata.com`): `time_series` gives OHLC + volume, but is
   **US-only on the free tier** (≈8 req/min, 800 credits/day). Key in localStorage
   `discovery_twelvedata_key`; the public `demo` key only serves AAPL.

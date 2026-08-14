@@ -848,9 +848,9 @@ function biasSparkSVG(series, w = 320, h = 56) {
   </svg>`;
 }
 
-function trendStat(label, value, sub = '') {
+function trendStat(label, value, sub = '', cls = '') {
   return `<div class="tb-stat"><span class="tb-stat__lbl">${label}</span>
-    <span class="tb-stat__val">${value}</span>
+    <span class="tb-stat__val ${cls}">${value}</span>
     ${sub ? `<span class="tb-stat__sub">${sub}</span>` : ''}</div>`;
 }
 
@@ -943,7 +943,10 @@ function renderTrendTab(c) {
   const tv = c.tv_data;
   const b = tv ? computeBias(tv) : null;
   if (!b) {
-    return `<p class="pv-empty">Kein Bias berechenbar – „TV Daten" in der Subbar laden.</p>`;
+    // Die Retail-Stimmung hängt nicht an den TV-Daten — sie bleibt auch ohne
+    // berechenbares Bias sichtbar, sonst wäre der Tab hier komplett leer.
+    return `<p class="pv-empty">Kein Bias berechenbar – „TV Daten" in der Subbar laden.</p>`
+      + renderStocktwitsBlock(c);
   }
 
   const age  = b.neutral ? null : trendAge(tv, b.sign);
@@ -1049,10 +1052,74 @@ function renderTrendTab(c) {
        <p class="tb-summary">${trendSummary(b, age, frag, st)}</p>`
     : `<p class="tb-summary">${trendSummary(b, age, [], st)}</p>`;
 
-  return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + fragBlock;
+  return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + fragBlock
+    + renderStocktwitsBlock(c);
 }
 
 const STRUCT_LABEL = { up: '▲ Aufwärts (HH/HL)', down: '▼ Abwärts (LH/LL)', range: '↔ Seitwärts' };
+
+/* ── StockTwits: Retail-Stimmung ──────────────────────────────────────────────
+   Bewusst unter dem Bias-Block, aber klar abgesetzt: das hier ist die Meinung
+   der Menge, kein Qualitätsmaß und kein Score. Es wird deshalb nirgends mit den
+   TV-Ebenen verrechnet — es steht daneben und darf ihnen widersprechen.
+   Die Sparkline teilt sich die Grafik mit dem Bias-Verlauf darüber (Nulllinie =
+   50% neutral), damit beide Verläufe in derselben Bildsprache lesbar sind. */
+function renderStocktwitsBlock(c) {
+  const head = `<h4 class="pv-subhead">Retail-Stimmung · StockTwits</h4>`;
+  const s = c.st_sentiment;
+
+  if (c._st_loading) return head + `<p class="tb-hint">Lade Bull/Bear-Quote …</p>`;
+
+  if (!s) {
+    if (!isUsTicker(c)) {
+      return head + `<p class="tb-hint">Nur für US-Titel: StockTwits führt für
+        europäische Notierungen keine Sentiment-Reihe.</p>`;
+    }
+    return head + `<p class="tb-hint">Öffentliche Bull/Bear-Quote der letzten
+      ~60 Tage — zeigt, ob die Netz-Stimmung den Kurs bestätigt oder ihm
+      widerspricht.</p>
+      <button class="btn btn-sm btn-secondary" id="st-load">${icons.messageSquare} Stimmung laden (StockTwits)</button>`;
+  }
+
+  if (s.unsupported) {
+    return head + `<p class="tb-hint">Nur für US-Titel: StockTwits führt für
+      europäische Notierungen keine Sentiment-Reihe.</p>`;
+  }
+  if (s.error) {
+    return head + `<p class="tb-hint is-warn">${s.error}</p>
+      <button class="btn btn-sm btn-secondary" id="st-load">${icons.messageSquare} Erneut versuchen</button>`;
+  }
+
+  const bullCls = s.bullish >= 50 ? 'pos' : 'neg';
+  const dCls    = s.delta7 == null ? '' : s.delta7 >= 0 ? 'pos' : 'neg';
+  const dTxt    = s.delta7 == null ? '—'
+    : `${s.delta7 >= 0 ? '+' : '−'}${fmtNum(Math.abs(s.delta7), 1)} pp`;
+
+  /* Bull/Bear-Prozent (0…100, neutral 50) auf die Bias-Skala (−100…+100,
+     neutral 0) mappen, damit dieselbe Sparkline-Funktion greift. */
+  const spark = s.series?.length
+    ? biasSparkSVG(s.series.map((v) => ({ b: (v - 50) * 2 })))
+    : '';
+
+  const extremeHint = s.extreme
+    ? `<p class="tb-hint is-warn">Die Menge steht mit ${fmtNum(s.bullish, 0)}%
+       ${s.extreme === 'bull' ? 'bullish' : 'bearish'} sehr einseitig. Einseitige
+       Retail-Positionierung ist historisch eher Kontra-Indikator als Bestätigung —
+       als Warnsignal lesen, nicht als Rückenwind.</p>`
+    : '';
+
+  return head + spark + `
+    <div class="tb-stats">
+      ${trendStat('Bullen', `${fmtNum(s.bullish, 1)}%`, `${fmtNum(s.bearish, 1)}% bearish`, bullCls)}
+      ${trendStat('Ø 7 Tage', s.avg7 == null ? '—' : `${fmtNum(s.avg7, 1)}%`,
+        s.avg30 == null ? '' : `Ø 30 T ${fmtNum(s.avg30, 1)}%`)}
+      ${trendStat('Momentum', dTxt, 'heute vs. Ø 7 Tage', dCls)}
+    </div>
+    ${extremeHint}
+    <p class="tb-hint">${s.days} Tage Reihe${s.date ? ` bis ${deDate(s.date)}` : ''} ·
+      Stimmung der StockTwits-Nutzer, kein Qualitätsmaß — sie fließt in keinen Score ein.</p>
+    <button class="btn btn-sm btn-secondary" id="st-load">${icons.refreshCw} Aktualisieren</button>`;
+}
 
 /* ── Tab 3: Fundamentaldaten (TV) ─────────────────────────────────────────── */
 
@@ -1888,6 +1955,12 @@ export class CandidateDetail {
     // Perf-Chart nicht ungefragt auf 1J umschaltet.
     this.el.querySelector('#tb-load')?.addEventListener('pointerup', () => {
       this.onAction?.('tdQuote', c);
+    });
+
+    // Retail-Stimmung (StockTwits) — on demand, damit kein Sheet-Aufruf
+    // ungefragt eine Proxy-Runde auslöst.
+    this.el.querySelector('#st-load')?.addEventListener('pointerup', () => {
+      this.onAction?.('stSentiment', c);
     });
 
     // Earnings-Call-Transcript: Laden + LLM-Copy (Prompt + Volltext).

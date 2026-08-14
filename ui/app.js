@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260807a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260807a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260814a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260807a';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -23,6 +23,7 @@ import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-
 import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
+import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260814a';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
@@ -979,6 +980,27 @@ async function handleAction(action, candidate, extras = {}) {
       candidate.company_transcript = { error: true, message: err.message };
     }
     candidate._transcript_loading = false;
+    rerender();
+    return;
+  }
+
+  // Trend-Tab: Retail-Stimmung (StockTwits Bull/Bear-Tagesreihe).
+  // Bewusst nur im Speicher, nicht persistiert: die Quote ist tagesaktuell und
+  // in 60 min ohnehin neu zu holen — sie im Blob abzulegen würde nur veralten.
+  if (action === 'stSentiment') {
+    if (candidate._st_loading) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._st_loading = true; rerender();
+    try {
+      candidate.st_sentiment = await fetchStocktwitsSentiment(candidate, { backendUrl, secret });
+    } catch (err) {
+      console.warn('[stocktwits] fetch fehlgeschlagen:', err.message);
+      candidate.st_sentiment = { error: err.message, checked_at: new Date().toISOString() };
+    }
+    candidate._st_loading = false;
     rerender();
     return;
   }
