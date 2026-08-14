@@ -10,7 +10,7 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker, detectPivots } from '../lib/tv-swings.js?v=20260807a';
+import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol } from '../lib/tv-swings.js?v=20260814b';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
@@ -181,11 +181,16 @@ function lsDisplayFactor(disp) {
   return disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
 }
 
-// TD (USD) → display-currency factor. TwelveData is US-only, so native is USD:
-// display USD → 1, display EUR → 1/fx (fx = USD per EUR). null = unknown rate.
-function tdDisplayFactor(disp) {
-  if (disp.cur === 'USD') return 1;
-  if (disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
+// Bar-Währung → Anzeigewährung. Die Bars kommen je nach Titel von TwelveData
+// (USD) oder Yahoo (EUR/CHF/JPY/…), deshalb steht die Währung in der Analyse.
+// Ältere, vor dem Yahoo-Umbau gespeicherte Analysen haben kein `currency` —
+// die stammen zwangsläufig von TD und sind damit USD.
+// null = nicht umrechenbar (nur USD↔EUR haben wir als Kurs).
+function barsDisplayFactor(disp, analysis) {
+  const native = analysis?.currency ?? 'USD';
+  if (native === disp.cur) return 1;
+  if (native === 'USD' && disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
+  if (native === 'EUR' && disp.cur === 'USD' && disp.fx) return disp.fx;
   return null;
 }
 
@@ -198,7 +203,7 @@ function resolveChartHorizon(c, disp, horizon) {
   // vorher blieb der Chart leer, bis 2 Nacht-Snapshots existierten.
   const liveOk = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
   const canLs = !!(lw && (liveOk || (Array.isArray(c.ls_history) && c.ls_history.length >= 1)));
-  const canTd = !!(lw && Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2 && tdDisplayFactor(disp) != null);
+  const canTd = !!(lw && Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2 && barsDisplayFactor(disp, c.swing_analysis) != null);
   const active = (horizon === '1J' && canTd) ? '1J' : (canLs ? '10T' : (canTd ? '1J' : null));
   return { canLs, canTd, active };
 }
@@ -448,8 +453,10 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   //    candles (both converted to the display currency). Toggle when both exist;
   //    the SVG band stays as fallback when the lib/data is missing.
   const { canLs, canTd } = resolveChartHorizon(c, disp, horizon);
-  const usCap = isUsTicker(c);
-  const tdReachable = canTd || usCap;           // 1J shown (data) or loadable (US)
+  // Kerzen sind holbar, wenn eine Quelle greift: US → TwelveData, sonst Yahoo
+  // (das braucht ein auflösbares Börsensuffix, siehe yahooChartSymbol).
+  const barsLoadable = isUsTicker(c) || yahooChartSymbol(c) != null;
+  const tdReachable = canTd || barsLoadable;    // 1J shown (data) or loadable
   // Show 1J when explicitly picked, or when there's no LS chart to fall back to.
   const want1J = tdReachable && (horizon === '1J' || !canLs);
   const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
@@ -457,25 +464,46 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   if (want1J || canLs) {
     const btns = [];
     if (canLs) btns.push(`<button class="seg-btn${!want1J ? ' active' : ''}" data-horizon="10T" role="tab" aria-selected="${!want1J}">10T LS</button>`);
-    // "⤓" hints the candles are fetched on demand (US-only, TwelveData).
-    if (tdReachable) btns.push(`<button class="seg-btn${want1J ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${want1J}">1J TD${canTd ? '' : ' ⤓'}</button>`);
+    // "⤓" zeigt an, dass die Kerzen erst geholt werden. Das Kürzel benennt die
+    // Quelle, weil sie sich je Titel unterscheidet (TD für US, Yahoo sonst) —
+    // und damit auch, welches Limit gilt.
+    const srcTag = c.swing_analysis?.source === 'yahoo' ? 'YF'
+      : c.swing_analysis?.source === 'twelvedata' ? 'TD'
+      : isUsTicker(c) ? 'TD' : 'YF';
+    if (tdReachable) btns.push(`<button class="seg-btn${want1J ? ' active' : ''}" data-horizon="1J" role="tab" aria-selected="${want1J}">1J ${srcTag}${canTd ? '' : ' ⤓'}</button>`);
     const toggle = btns.length >= 2 || (btns.length === 1 && !canLs)
       ? `<div class="chart-horizon" role="tablist">${btns.join('')}</div>` : '';
     // Vollbild nur wenn wirklich ein Chart gezeichnet wird (nicht über dem
     // „Kerzen laden"-Prompt).
-    const hasChart = !(want1J && !canTd);
+    const hasChart = !(want1J && !canTd);   // gilt auch für den Währungs-Hinweis
     const fsBtn = hasChart
       ? `<button class="icon-btn chart-fs__btn" id="chart-fs-btn" title="Chart im Vollbild" aria-label="Chart im Vollbild">${icons.maximize}</button>`
       : '';
 
-    const head = want1J ? '1 Jahr Tageskerzen (TwelveData)' : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
+    // Quelle benennen statt TwelveData zu unterstellen: die Kerzen kommen je
+    // nach Titel von TD (US) oder Yahoo — geladene Analysen sagen es selbst,
+    // vorher entscheidet der Ticker.
+    const barSrc = c.swing_analysis?.source === 'yahoo' ? 'Yahoo'
+      : c.swing_analysis?.source === 'twelvedata' ? 'TwelveData'
+      : isUsTicker(c) ? 'TwelveData' : 'Yahoo';
+    const head = want1J ? `1 Jahr Tageskerzen (${barSrc})` : `10-Tage-Verlauf + Volumen (LS)${hasLive ? ' · heute live' : ''}`;
+
+    // Kerzen da, aber ihre Währung lässt sich nicht in die Anzeigewährung
+    // bringen (wir haben nur USD↔EUR). Ohne diesen Zweig führte der Ladebutton
+    // in eine Schleife: laden klappt, der Chart erscheint trotzdem nie.
+    const barsUnconvertible = !canTd
+      && Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
 
     let body;
-    if (want1J && !canTd) {
-      // 1J picked but candles not fetched yet (US ticker) → load prompt / spinner.
+    if (want1J && barsUnconvertible) {
+      body = `<div class="ls-chart chart-loading">Kerzen liegen in
+        ${c.swing_analysis?.currency ?? '?'} vor, die Anzeige steht auf ${disp.cur} —
+        umrechnen können wir nur USD↔EUR.</div>`;
+    } else if (want1J && !canTd) {
+      // 1J picked but candles not fetched yet → load prompt / spinner.
       body = c._swing_loading
-        ? `<div class="ls-chart chart-loading"><span class="ls-loading"></span> Lade Tageskerzen (TwelveData) …</div>`
-        : `<button class="ls-chart chart-loading chart-loading--btn" id="td-load">📊 1 Jahr Tageskerzen laden (TwelveData)</button>`;
+        ? `<div class="ls-chart chart-loading"><span class="ls-loading"></span> Lade Tageskerzen (${barSrc}) …</div>`
+        : `<button class="ls-chart chart-loading chart-loading--btn" id="td-load">📊 1 Jahr Tageskerzen laden (${barSrc})</button>`;
     } else {
       // Real chart → add the "Level" bar below it: the readout follows the
       // pointer over the chart, the ＋-button sets an alert at that level.
@@ -1030,17 +1058,23 @@ function renderTrendTab(c) {
         ${trendStat('Richtungswechsel', `${st?.flips ?? 0}`, 'im Auswertungsfenster')}
         ${trendStat('Marktstruktur', STRUCT_LABEL[c.swing_analysis.structure] ?? '—', 'aus den Swing-Punkten')}
       </div>`;
-  } else if (isUsTicker(c)) {
+  } else if (isUsTicker(c) || yahooChartSymbol(c) != null) {
+    const src = isUsTicker(c) ? 'TwelveData' : 'Yahoo';
     histBlock = `<h4 class="pv-subhead">Gemessenes Trendalter</h4>
       <p class="tb-hint">Noch kein Verlauf geladen. Der 1-Jahres-Abruf im
-      <b>Perf.</b>-Tab („1J TD") holt die Tageskerzen — daraus wird das Bias für jeden
+      <b>Perf.</b>-Tab („1J ${isUsTicker(c) ? 'TD' : 'YF'}") holt die Tageskerzen — daraus wird das Bias für jeden
       vergangenen Tag nachgerechnet und das Trendalter gemessen statt geschätzt.</p>
-      <button class="btn btn-sm btn-secondary" id="tb-load">${icons.candlestick} Verlauf laden (TwelveData)</button>`;
+      <button class="btn btn-sm btn-secondary" id="tb-load">${icons.candlestick} Verlauf laden (${src})</button>`;
   } else {
+    // Übrig bleiben Titel ohne auflösbares Yahoo-Suffix — praktisch nur
+    // Euronext-Notierungen ohne `yahoo_symbol`, weil unser kanonischer Code
+    // Paris/Amsterdam/Brüssel zusammenfasst und Yahoo sie trennt.
     histBlock = `<h4 class="pv-subhead">Gemessenes Trendalter</h4>
-      <p class="tb-hint">Nur für US-Titel: der Verlauf kommt von TwelveData, dessen
-      Free-Tier keine europäischen Börsen liefert. Das Trendalter oben bleibt deshalb
-      hier die Untergrenze aus den Performance-Fenstern.</p>`;
+      <p class="tb-hint">Für diesen Titel fehlt das Yahoo-Symbol samt Börsensuffix
+      (z. B. <code>.PA</code> oder <code>.AS</code>) — ohne das lassen sich keine
+      Tageskerzen holen. Im Abschnitt „Links" lässt sich die Yahoo-URL ergänzen.
+      Das Trendalter oben bleibt so lange die Untergrenze aus den
+      Performance-Fenstern.</p>`;
   }
 
   /* 5 · Fragilität */
@@ -1591,7 +1625,7 @@ export class CandidateDetail {
   initTdChart(c, disp) {
     const el = this.el.querySelector('#ls-chart');
     const a = c.swing_analysis;
-    const f = tdDisplayFactor(disp);
+    const f = barsDisplayFactor(disp, a);
     if (!el || !window.LightweightCharts || !Array.isArray(a?.ohlc) || a.ohlc.length < 2 || f == null) return;
 
     const css = getComputedStyle(document.documentElement);

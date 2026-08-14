@@ -1,18 +1,27 @@
 /**
- * tv-swings.js — Swing-Analyse aus echtem OHLC (TwelveData `time_series`).
+ * tv-swings.js — Swing-Analyse aus echtem OHLC.
  *
- * Spec: docs/SWING_CHECK_HANDOVER.md. On-demand pro US-Ticker im Detail-Modal.
- * TwelveData Free liefert echte tägliche OHLC+Volumen, aber NUR US-Werte — daher
- * der US-Guard. Aus ~1 Jahr Tagesbars werden Fractal-Pivots (Swing-Hochs/Tiefs)
- * erkannt, zu Support-/Resistance-Zonen gemerged (mit `touches` als Signifikanz),
- * die Marktstruktur (up/down/range) klassifiziert und ATR(14) berechnet.
+ * Spec: docs/SWING_CHECK_HANDOVER.md. On-demand pro Ticker im Detail-Modal. Aus
+ * ~1 Jahr Tagesbars werden Fractal-Pivots (Swing-Hochs/Tiefs) erkannt, zu
+ * Support-/Resistance-Zonen gemerged (mit `touches` als Signifikanz), die
+ * Marktstruktur (up/down/range) klassifiziert und ATR(14) berechnet.
  *
- * Währung: TD ist US-only ⇒ Zonen/Preise sind USD. Der Live-LS-Kurs ist EUR und
- * wird für den Referenzpreis nach USD umgerechnet (× EUR/USD-Rate), damit die
- * „nächste Zone/Abstand"-Berechnung nicht Äpfel mit Birnen vergleicht.
+ * Zwei Quellen, weil keine allein reicht:
+ * - **US-Titel → TwelveData** `time_series` (direkter CORS-Call). Free-Tier,
+ *   aber ausschliesslich US: Nicht-US-Symbole beantwortet TD mit „available
+ *   starting with the Grow or Venture plan" (mit echtem Key gegengeprüft).
+ * - **Alles andere → Yahoo** `chart/v8` über die scrape-proxy. Liefert dieselben
+ *   Tages-OHLC+Volumen für XETR/AMS/SIX/JPX/PAR, ohne Key und ohne Kontingent;
+ *   `range=2y` ergibt ~507 Bars, genug für Zonen UND den WARMUP der Bias-Historie.
  *
- * Reine Rechen-Helfer sind exportiert und ohne Netz testbar; nur
- * fetchSwingAnalysis() ruft TwelveData (direkt, CORS-fähig wie symbol_search).
+ * Währung: die Analyse rechnet in der **nativen Währung der Bars** —
+ * `analysis.currency` sagt welche. Nichts hier darf USD annehmen; die Anzeige
+ * rechnet über diesen Wert um. Der Live-LS-Kurs ist EUR und wird nur als
+ * Referenzpreis benutzt, wenn er in die Bar-Währung passt (EUR direkt, USD über
+ * die Rate) — sonst ist der letzte Close die Referenz.
+ *
+ * Reine Rechen-Helfer sind exportiert und ohne Netz testbar; nur die
+ * fetch*-Funktionen gehen ins Netz.
  */
 
 import { normalizeExchange } from './exchange-map.js';
@@ -123,8 +132,8 @@ export function classifyStructure(highs, lows) {
 
 /**
  * analyzeBars(bars, refPrice, { interval, k }) → the compact swing_analysis
- * object (pure, no network). refPrice is the native (USD) reference used for
- * the nearest-zone split and the live marker.
+ * object (pure, no network). refPrice is the reference in the bars' own native
+ * currency, used for the nearest-zone split and the live marker.
  */
 export function analyzeBars(bars, refPrice, { interval = 'daily', k = 3 } = {}) {
   if (!Array.isArray(bars) || bars.length < MIN_BARS) return { error: 'few_bars' };
@@ -139,7 +148,6 @@ export function analyzeBars(bars, refPrice, { interval = 'daily', k = 3 } = {}) 
   const hi = Math.max(...bars.map((b) => b.high).filter((v) => v != null));
 
   return {
-    source: 'twelvedata',
     interval,
     domain: { low: lo, high: hi },
     ref_price: ref,
@@ -154,21 +162,114 @@ export function analyzeBars(bars, refPrice, { interval = 'daily', k = 3 } = {}) 
   };
 }
 
-/* ── TwelveData fetch (US-only, direct CORS call like symbol_search) ────── */
+/* ── Bar-Quellen: TwelveData (US) und Yahoo (alles andere) ──────────────── */
 
 /**
- * fetchSwingAnalysis(candidate, { interval, outputsize, eurUsd })
- * → analysis object | { error: <code> }.  Error codes: no_key, not_us,
- *   td_limit, td_error, few_bars, empty.
- * refPrice: live LS quote (EUR) → USD via eurUsd, else last TD close.
+ * Yahoo-Ticker inkl. Börsensuffix. Die Adapter schreiben ihn meist schon als
+ * `yahoo_symbol` mit ("SAP.DE"); nur wenn der fehlt, wird er aus der
+ * normalisierten Börse abgeleitet.
+ *
+ * EURONEXT fehlt in der Tabelle mit Absicht: unser kanonischer Code fasst
+ * Paris/Amsterdam/Brüssel/Lissabon zusammen, Yahoo trennt sie (.PA/.AS/.BR/.LS).
+ * Raten wäre schlimmer als aufgeben — dort zählt allein `yahoo_symbol`.
  */
-export async function fetchSwingAnalysis(candidate, { interval = '1day', outputsize = 500, eurUsd = null } = {}) {
-  if (!isUsTicker(candidate)) return { error: 'not_us' };
+const YF_SUFFIX = {
+  XETR: '.DE', MIL: '.MI', BME: '.MC', VIE: '.VI',
+  OMXSTO: '.ST', OMXCOP: '.CO', OSL: '.OL', OMXHEX: '.HE',
+  LSE: '.L', SIX: '.SW',
+};
+
+export function yahooChartSymbol(candidate) {
+  const given = String(candidate?.yahoo_symbol ?? '').trim();
+  if (given.includes('.')) return given;              // Adapter hat das Suffix gesetzt
+  if (isUsTicker(candidate)) return given || candidate?.symbol || null;  // US: ohne Suffix
+  const suffix = YF_SUFFIX[normalizeExchange(candidate?.exchange || '')];
+  if (!suffix) return given || null;
+  return candidate?.symbol ? `${candidate.symbol}${suffix}` : null;
+}
+
+/**
+ * Yahoo chart v8 über die scrape-proxy. Liefert echte Tages-OHLC+Volumen auch
+ * für XETR/AMS/SIX/JPX — anders als TwelveData Free, das Nicht-US-Symbole hinter
+ * dem Grow-Plan sperrt (per Live-Response geprüft).
+ *
+ * Die Browser-Header sind NICHT optional: ohne `Origin`/`Referer` antwortet
+ * Yahoo mit 429, mit ihnen mit 200. Gleiche Header wie in yahoo-trending.js.
+ */
+const YF_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Origin': 'https://finance.yahoo.com',
+  'Referer': 'https://finance.yahoo.com/',
+};
+
+/** Epoch-Sekunden → 'YYYY-MM-DD'. Für Tagesbars ist der UTC-Tag korrekt: alle
+ *  betroffenen Börsen öffnen nach 00:00 UTC (Tokio 09:00 JST = 00:00 UTC). */
+const ymd = (sec) => new Date(sec * 1000).toISOString().slice(0, 10);
+
+/* `num()` allein reicht hier NICHT: Number(null) ist 0 und damit finite, d.h.
+   Yahoos Feiertags-Löcher (`null` in den quote-Arrays) würden zu Kursen von 0
+   — das ergäbe eine Phantom-Zone bei 0 und zöge domain.low mit sich. Deshalb
+   null/undefined vorher explizit aussortieren. */
+const numOrNull = (v) => (v == null ? null : num(v));
+
+export function parseYahooChart(json) {
+  const res = json?.chart?.result?.[0];
+  const ts = res?.timestamp;
+  const q = res?.indicators?.quote?.[0];
+  if (!Array.isArray(ts) || !q) return { bars: [], currency: null };
+
+  const bars = [];
+  for (let i = 0; i < ts.length; i++) {
+    const high = numOrNull(q.high?.[i]);
+    const low = numOrNull(q.low?.[i]);
+    const close = numOrNull(q.close?.[i]);
+    if (high == null || low == null || close == null) continue;  // Feiertage → null-Löcher
+    bars.push({
+      date: ymd(ts[i]),
+      open: numOrNull(q.open?.[i]),
+      high, low, close,
+      volume: numOrNull(q.volume?.[i]),
+    });
+  }
+  return { bars, currency: res?.meta?.currency ?? null };
+}
+
+async function fetchYahooBars(candidate, { backendUrl, secret, range = '2y' }) {
+  if (!backendUrl || !secret) return { error: 'no_backend' };
+  const symbol = yahooChartSymbol(candidate);
+  if (!symbol) return { error: 'no_symbol' };
+
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
+  let wrapper;
+  try {
+    const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+      body: JSON.stringify({ url: target, method: 'GET', headers: YF_HEADERS }),
+    });
+    wrapper = await res.json();
+  } catch (e) {
+    return { error: 'yf_error', message: e.message };
+  }
+  if (!wrapper?.ok) return { error: 'yf_error', message: wrapper?.error };
+  if (wrapper.status === 429) return { error: 'yf_limit' };
+  if (wrapper.status !== 200) return { error: 'yf_error', message: `HTTP ${wrapper.status}` };
+
+  let json; try { json = JSON.parse(wrapper.body); } catch { return { error: 'yf_error', message: 'kein JSON' }; }
+  const { bars, currency } = parseYahooChart(json);
+  if (!bars.length) return { error: 'empty' };
+  return { bars, currency, symbol };
+}
+
+async function fetchTwelveDataBars(candidate, { interval, outputsize }) {
   const key = localStorage.getItem('discovery_twelvedata_key');
   if (!key) return { error: 'no_key' };
 
-  const symbol = candidate.symbol;
-  const params = new URLSearchParams({ symbol, interval, outputsize: String(outputsize), order: 'ASC', apikey: key });
+  const params = new URLSearchParams({
+    symbol: candidate.symbol, interval, outputsize: String(outputsize), order: 'ASC', apikey: key,
+  });
   let data;
   try {
     const res = await fetch(`https://api.twelvedata.com/time_series?${params}`);
@@ -183,20 +284,56 @@ export async function fetchSwingAnalysis(candidate, { interval = '1day', outputs
   const values = Array.isArray(data?.values) ? data.values : [];
   if (!values.length) return { error: 'empty' };
 
-  // Parse (strings → numbers) and sort oldest → newest.
   const bars = values.map((v) => ({
     date: v.datetime,
     open: num(v.open), high: num(v.high), low: num(v.low), close: num(v.close), volume: num(v.volume),
   })).filter((b) => b.high != null && b.low != null && b.close != null)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
+  return { bars, currency: 'USD' };
+}
+
+/**
+ * fetchSwingAnalysis(candidate, { interval, outputsize, eurUsd, backendUrl, secret })
+ * → analysis object | { error: <code> }.
+ *
+ * Quelle nach Titel: US → TwelveData (wie bisher, direkter CORS-Call), alles
+ * andere → Yahoo über die scrape-proxy. Die Analyse rechnet in der **nativen
+ * Währung der Bars**; `analysis.currency` sagt, welche das ist, damit die
+ * Anzeige nicht länger USD annehmen muss.
+ *
+ * refPrice: der Live-LS-Kurs ist EUR und wird nur benutzt, wenn er sich in die
+ * Bar-Währung bringen lässt (EUR→EUR direkt, EUR→USD über eurUsd). Für CHF/JPY
+ * & Co. gibt es keinen Kurs — dort ist der letzte Close die Referenz.
+ */
+export async function fetchSwingAnalysis(candidate, {
+  interval = '1day', outputsize = 500, eurUsd = null, backendUrl = null, secret = null,
+} = {}) {
+  const useTd = isUsTicker(candidate);
+  const fetched = useTd
+    ? await fetchTwelveDataBars(candidate, { interval, outputsize })
+    : await fetchYahooBars(candidate, { backendUrl, secret });
+  if (fetched.error) return fetched;
+
+  const bars = fetched.bars;
   if (bars.length < MIN_BARS) return { error: 'few_bars' };
 
+  const currency = fetched.currency ?? (useTd ? 'USD' : null);
   const lastClose = bars[bars.length - 1].close;
+
+  // LS quotiert in EUR — nur in EUR- oder (über die Rate) USD-Reihen einsetzbar.
   const lsEur = candidate.ls_quote?.price;
-  const refPrice = (lsEur != null && eurUsd) ? lsEur * eurUsd : lastClose; // EUR→USD, else USD close
+  let refPrice = lastClose;
+  let refSource = useTd ? 'td_close' : 'yf_close';
+  if (lsEur != null) {
+    if (currency === 'EUR') { refPrice = lsEur; refSource = 'ls'; }
+    else if (currency === 'USD' && eurUsd) { refPrice = lsEur * eurUsd; refSource = 'ls'; }
+  }
+
   const analysis = analyzeBars(bars, refPrice, { interval: interval === '1week' ? 'weekly' : 'daily' });
-  analysis.ref_source = (lsEur != null && eurUsd) ? 'ls' : 'td_close';
+  analysis.source = useTd ? 'twelvedata' : 'yahoo';
+  analysis.currency = currency;
+  analysis.ref_source = refSource;
   // Keep a capped compact OHLCV series (USD) so the detail chart can draw daily
   // candles without re-hitting TD. Short keys keep the blob small (~180 bars).
   analysis.ohlc = bars.slice(-180).map((b) => ({ date: b.date, o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume }));
@@ -223,8 +360,18 @@ const pctTxt = (v) => (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : 
 
 const STRUCTURE_LABEL = { up: '▲ Aufwärts (HH/HL)', down: '▼ Abwärts (LH/LL)', range: '↔ Seitwärts' };
 
+// Herkunft der Bars bzw. des Referenzkurses — sichtbar machen, damit im Sheet
+// nie unklar ist, ob eine Zone aus TD- oder Yahoo-Kerzen stammt.
+const SOURCE_LABEL = { twelvedata: 'TwelveData', yahoo: 'Yahoo' };
+const REF_LABEL = {
+  ls: ' · Kurs aus LS',
+  td_close: ' · Kurs = letzter Close',
+  yf_close: ' · Kurs = letzter Close',
+};
+
 /**
- * swingLadderSVG(analysis) → HTML string (SVG ladder + footer). Prices in USD
+ * swingLadderSVG(analysis) → HTML string (SVG ladder + footer). Preise in der
+ * nativen Währung der Bars (`analysis.currency`).
  * (TD is US-only). Opacity of each zone band scales with its `touches`.
  */
 export function swingLadderSVG(a) {
@@ -274,7 +421,7 @@ export function swingLadderSVG(a) {
     Struktur <b>${STRUCTURE_LABEL[a.structure] || a.structure}</b> ·
     ${a.nearest_sup ? `Support <span class="pos">${pctTxt((a.nearest_sup.mid - ref) / ref * 100)}</span>` : 'kein Support'} ·
     ${a.nearest_res ? `Widerstand <span class="neg">${pctTxt((a.nearest_res.mid - ref) / ref * 100)}</span>` : 'kein Widerstand'}
-    <br><span class="pv-muted">${a.bars} Bars · ATR ${fmt(a.atr)} · $ (US-Titel${a.ref_source === 'ls' ? ', Kurs aus LS→USD' : ', Kurs = TD-Close'})</span>
+    <br><span class="pv-muted">${a.bars} Bars · ATR ${fmt(a.atr)} · ${esc(a.currency ?? 'USD')} ${SOURCE_LABEL[a.source] ?? 'TwelveData'}${REF_LABEL[a.ref_source] ?? ''}</span>
   </p>`;
 
   return svg + foot;
@@ -283,11 +430,15 @@ export function swingLadderSVG(a) {
 /** Human-readable message for a fetch/compute error code. */
 export function swingErrorText(code) {
   switch (code) {
-    case 'no_key':  return 'TwelveData-Key in Einstellungen hinterlegen.';
+    case 'no_key':  return 'TwelveData-Key in Einstellungen hinterlegen (nur für US-Titel nötig).';
     case 'not_us':  return 'Swing-Check: nur US-Titel (TwelveData Free).';
     case 'td_limit':return 'TwelveData-Limit erreicht – später erneut.';
     case 'few_bars':return 'Zu wenig Historie für Swing-Zonen.';
-    case 'empty':   return 'TwelveData lieferte keine Daten.';
+    case 'empty':   return 'Keine Kursdaten erhalten.';
+    case 'no_backend': return 'Backend nicht konfiguriert – Yahoo läuft über die scrape-proxy.';
+    case 'no_symbol':  return 'Kein Yahoo-Symbol: Börsensuffix unbekannt, bitte im Detail-Sheet ergänzen.';
+    case 'yf_limit':   return 'Yahoo drosselt gerade (429) – später erneut.';
+    case 'yf_error':   return 'Yahoo-Abruf fehlgeschlagen.';
     default:        return 'Swing-Check fehlgeschlagen.';
   }
 }

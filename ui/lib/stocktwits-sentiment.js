@@ -24,9 +24,9 @@
  *       | { error, checked_at }
  */
 
-// tv-swings.js ist unverändert → bewusst der bestehende ?v=-Tag, sonst lädt der
-// Browser das Modul ein zweites Mal (eigene Instanz pro URL).
-import { isUsTicker } from './tv-swings.js?v=20260807a';
+// Der ?v=-Tag muss mit allen anderen tv-swings-Importen übereinstimmen, sonst
+// lädt der Browser das Modul ein zweites Mal (eigene Instanz pro URL).
+import { isUsTicker } from './tv-swings.js?v=20260814b';
 
 const ENDPOINT = 'https://api.stocktwits.com/api/2/symbols';
 

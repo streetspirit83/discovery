@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260807a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260814a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260814b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260807a';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -16,14 +16,14 @@ import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
 import { renderControlModal } from './components/control-modal.js?v=20260807a';
-import { renderCompareModal } from './components/compare-modal.js?v=20260807a';
+import { renderCompareModal } from './components/compare-modal.js?v=20260814b';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260807a';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
-import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260814a';
+import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260814b';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
@@ -34,7 +34,7 @@ import { icons } from './lib/icons.js?v=20260807a';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
-import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260807a';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260814b';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -1005,18 +1005,22 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
-  // Detail toolbar: Swing-Check (TwelveData OHLC → support/resistance zones).
-  // On-demand, US-only (TD Free), persisted on the candidate as swing_analysis.
+  // Detail toolbar: Swing-Check (OHLC → support/resistance zones + Bias-Historie).
+  // On-demand, persistiert als swing_analysis. Quelle nach Titel: US →
+  // TwelveData (Key nötig), sonst Yahoo über die scrape-proxy (Backend nötig).
   if (action === 'tdQuote') {
-    if (!isUsTicker(candidate)) { toast(swingErrorText('not_us'), 'info', 3500); return; }
-    if (!localStorage.getItem('discovery_twelvedata_key')) { toast(swingErrorText('no_key'), 'error', 4000); return; }
+    const us = isUsTicker(candidate);
+    if (us && !localStorage.getItem('discovery_twelvedata_key')) { toast(swingErrorText('no_key'), 'error', 4000); return; }
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!us && (!backendUrl || !secret)) { toast(swingErrorText('no_backend'), 'error', 4000); return; }
     const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
     candidate._swing_loading = true; rerender();
     let result;
     try {
-      result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate() });
+      result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate(), backendUrl, secret });
     } catch (err) {
-      result = { error: 'td_error', message: err.message };
+      result = { error: us ? 'td_error' : 'yf_error', message: err.message };
     }
     candidate._swing_loading = false;
     if (result?.error) { toast(swingErrorText(result.error), result.error === 'not_us' ? 'info' : 'error', 4000); rerender(); return; }

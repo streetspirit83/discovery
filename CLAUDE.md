@@ -80,6 +80,12 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
   `stocktwits-sentiment.js` (Retail-Bull/Bear-Tagesreihe, on demand im Trend-Tab),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
+- Bars/Swings: `tv-swings.js` holt die Tages-OHLC — **US → TwelveData, alles
+  andere → Yahoo über die scrape-proxy** — und rechnet Zonen/Struktur/ATR daraus.
+  Die Analyse liegt in der **nativen Währung der Bars**; `analysis.currency` sagt
+  welche, und die Anzeige rechnet über `barsDisplayFactor()` um. Nichts darf hier
+  USD annehmen (alte, vor dem Umbau gespeicherte Analysen haben kein `currency`
+  und sind per Definition USD/TwelveData).
 - Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter +
   `biasRingSVG` — die Ring-Grafik liegt dort, damit Tabelle und Detail-Sheet
   garantiert dieselbe zeigen; die anderen Scores sind ungerichtete
@@ -122,7 +128,17 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   blurb, so the adapter needs no external exchange lookup.
 - **TwelveData** (`api.twelvedata.com`): `time_series` gives OHLC + volume, but is
   **US-only on the free tier** (≈8 req/min, 800 credits/day). Key in localStorage
-  `discovery_twelvedata_key`; the public `demo` key only serves AAPL.
+  `discovery_twelvedata_key`; the public `demo` key only serves AAPL. Verified
+  against a live call: a non-US symbol answers `404 "available starting with the
+  Grow or Venture plan"` — there is no free workaround.
+- **Yahoo chart v8** (`query1.finance.yahoo.com/v8/finance/chart/{SYM}`): the
+  free OHLC source for **non-US** titles (`range=2y` ≈ 507 daily bars, enough for
+  swing zones AND the bias-history WARMUP). No key, no quota. Two hard rules:
+  send the full browser headers (`Origin`/`Referer` on finance.yahoo.com) or
+  Yahoo answers **429**; and the `quote` arrays carry `null` holes on holidays —
+  `Number(null)` is `0`, so filter them *before* any numeric coercion or you get
+  phantom price-0 zones. Symbol needs the exchange suffix (`SAP.DE`), which the
+  adapters already store as `yahoo_symbol`.
 
 ## Frontend Conventions
 - **LS = EUR:** Lang & Schwarz quotes are always EUR (the price you'd pay on TR).
