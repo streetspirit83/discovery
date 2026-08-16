@@ -1051,6 +1051,7 @@ export class CandidateList {
       //   Portfolio: Entry \u00b7 P/L \u00b7 P/Labs \u00b7 \u2605           (col-portfolio: immer im
       //              DOM, per CSS nur bei aktivem \u2605-Filter sichtbar \u2014 so bleiben
       //              Header und Zellen parit\u00e4tisch)
+      cols += this.th('name', 'Name', 'class="col-name" title="Firmenname"');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
@@ -1253,6 +1254,7 @@ export class CandidateList {
       if (this.viewMode === 'standard') {
         // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
         dataCols =
+          `<td class="col-name-data" title="${c.name ?? ''}">${c.name ?? '—'}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
