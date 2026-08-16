@@ -622,6 +622,12 @@ const PIVOT_COLS = [['w', '1W'], ['m', '1M']].flatMap(([tf, tfLbl], tfIdx) =>
     fmt: (c) => pivotCell(c, tf, lvl),
   })));
 
+// Firmenname-Zelle. EIN Renderer für Meta- und Standard-Ansicht, damit die
+// Spalte in beiden identisch aussieht und sich nicht auseinanderentwickelt.
+// Bewusst ohne .col-name/.col-name-data: diese Alt-Klassen blenden unter 768px
+// aus, und die Spalte soll überall sichtbar sein — wie bisher in der Meta-Ansicht.
+const nameCell = (c) => `<span class="name-cell" title="${c.name ?? ''}">${c.name ?? '—'}</span>`;
+
 const VIEWS = {
   trade: [
     { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
@@ -743,7 +749,7 @@ VIEWS.score = [
 
 // Meta view: identity + context columns moved out of the Standard view.
 VIEWS.meta = [
-  { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:c=>`<span class="name-cell" title="${c.name ?? ''}">${c.name ?? '—'}</span>` },
+  { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:nameCell },
   { key:'sector',      label:'Sektor',         title:'Sektor', num:false, fmt:c=>`<span class="sector-cell">${c.sector ?? '—'}</span>` },
   { key:'sources',     label:'Quellen',        title:'Signal-Quellen', num:false, fmt:c=>renderSourceBadges(c.sources) },
   { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(c.links?.tradingview,TV_LOGO,'TradingView','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
@@ -1051,7 +1057,7 @@ export class CandidateList {
       //   Portfolio: Entry \u00b7 P/L \u00b7 P/Labs \u00b7 \u2605           (col-portfolio: immer im
       //              DOM, per CSS nur bei aktivem \u2605-Filter sichtbar \u2014 so bleiben
       //              Header und Zellen parit\u00e4tisch)
-      cols += this.th('name', 'Name', 'class="col-name" title="Firmenname"');
+      cols += this.th('name', 'Name', 'title="Firmenname"');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
@@ -1254,7 +1260,7 @@ export class CandidateList {
       if (this.viewMode === 'standard') {
         // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
         dataCols =
-          `<td class="col-name-data" title="${c.name ?? ''}">${c.name ?? '—'}</td>` +
+          `<td>${nameCell(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
