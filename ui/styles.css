@@ -399,6 +399,17 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* Name column (hidden mobile) */
 .col-name-data, .col-name { overflow:hidden; text-overflow:ellipsis; max-width:var(--col-name-w); }
 
+/* Standard-Ansicht: Name auf die Breite der Symbol-Spalte kappen (beide nutzen
+   --col-name-w), Überlauf mit … abschneiden. Die Begrenzung muss am inneren
+   Span sitzen — ein max-width auf der <td> ignoriert die Tabelle bei
+   table-layout:auto. Kein display:none: die Spalte bleibt auf jeder Breite
+   sichtbar (anders als die Alt-Klassen darüber). */
+.col-name-fit { width:var(--col-name-w); max-width:var(--col-name-w); }
+.col-name-fit .name-cell {
+  display:block; max-width:var(--col-name-w);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
 /* Link cluster (table) */
 .link-cluster { display:flex; align-items:center; gap:var(--s-1); }
 .link-chip {

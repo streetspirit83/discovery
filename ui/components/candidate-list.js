@@ -1260,7 +1260,7 @@ export class CandidateList {
       if (this.viewMode === 'standard') {
         // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
         dataCols =
-          `<td>${nameCell(c)}</td>` +
+          `<td class="col-name-fit">${nameCell(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
