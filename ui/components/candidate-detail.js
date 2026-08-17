@@ -15,7 +15,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
-import { reverseDcf, growthDemandLabel } from '../lib/tv-reverse-dcf.js?v=20260814f';
+import { reverseDcf, growthDemandLabel } from '../lib/tv-reverse-dcf.js?v=20260814h';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';

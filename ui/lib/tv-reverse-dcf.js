@@ -143,6 +143,71 @@ export function reverseDcf(tv, opts = {}) {
   };
 }
 
+/* ── Szenario-Leiter: Wert je Wachstumsannahme ──────────────────────────────
+   Dieselbe Rechnung vorwärts statt rückwärts. Sie beantwortet die Frage, die
+   eine einzelne eingepreiste Rate offen lässt: was wäre die Aktie wert, wenn
+   das Wachstum 10, 20, 30, 40 % beträgt — und ab wann ist sie damit günstig?
+
+   Der faire Kurs je Aktie kommt ohne Aktienanzahl aus: Wert ÷ Marktkap. × Kurs
+   kürzt sie heraus. Das spart ein Feld, das die TV-Anreicherung gar nicht hat. */
+
+export const LADDER_GROWTHS = [0.05, 0.10, 0.20, 0.30, 0.40];
+
+/** Anteil des Endwerts am Gesamtwert — je höher, desto stärker hängt das
+ *  Ergebnis an Diskontsatz und ewigem Wachstum statt an der Wachstumsannahme. */
+export function terminalShare(fcf, g, r, gt, years) {
+  const total = presentValue(fcf, g, r, gt, years);
+  if (!Number.isFinite(total) || total === 0) return null;
+  let pv1 = 0, cf = fcf;
+  for (let t = 1; t <= years; t++) { cf *= (1 + g); pv1 += cf / Math.pow(1 + r, t); }
+  return 1 - pv1 / total;
+}
+
+/**
+ * growthLadder(tv, opts) →
+ *   { rows: [{ growth, value, fair_price, upside }], implied_growth, price,
+ *     market_cap, rate, fcf, terminal_share }
+ * | { error }
+ *
+ * `upside` ist Wert ÷ Marktkapitalisierung − 1, also währungsfrei. Die Zeile,
+ * bei der upside das Vorzeichen wechselt, ist genau die eingepreiste Rate.
+ */
+export function growthLadder(tv, opts = {}) {
+  const o = { ...DCF_DEFAULTS, ...opts };
+  const growths = opts.growths ?? LADDER_GROWTHS;
+
+  const base = reverseDcf(tv, o);
+  if (base.error) return base;
+
+  const price = num(tv?.close_1m) ?? num(tv?.close);
+  const { fcf, market_cap: marketCap, rate } = base;
+
+  const rows = growths.map((g) => {
+    const value = presentValue(fcf, g, rate, o.terminalGrowth, o.years);
+    return {
+      growth: g,
+      value,
+      // Ohne Aktienanzahl: der faire Kurs skaliert wie der Wert.
+      fair_price: price == null ? null : price * (value / marketCap),
+      upside: value / marketCap - 1,
+    };
+  });
+
+  return {
+    rows,
+    implied_growth: base.implied_growth,
+    observed_growth: base.observed_growth,
+    price,
+    market_cap: marketCap,
+    fcf,
+    rate,
+    // Beim eingepreisten Wachstum ausgewertet — dort steht die Aussage.
+    terminal_share: terminalShare(fcf, base.implied_growth, rate, o.terminalGrowth, o.years),
+    assumptions: base.assumptions,
+    leverage_warn: base.leverage_warn,
+  };
+}
+
 /**
  * Einordnung der eingepreisten Rate. Bewusst grob und ohne Punktzahl: das hier
  * ist kein Score, sondern eine Lesehilfe („was muss passieren, damit der Kurs

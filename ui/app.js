@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260814e';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260814f';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260814h';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814g';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
