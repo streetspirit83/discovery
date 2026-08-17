@@ -15,6 +15,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
+import { reverseDcf, growthDemandLabel } from '../lib/tv-reverse-dcf.js?v=20260814f';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -1161,6 +1162,53 @@ function kv(label, value, cls = '') {
   return `<div class="tv-kv"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
 }
 
+/* ── Reverse-DCF: welches FCF-Wachstum preist der Markt ein? ─────────────────
+   Kontextwert, kein Score — er fliesst in keine der TV-Kennzahlen ein. Die
+   Annahmenzeile ist Pflicht, nicht Deko: die eingepreiste Rate reagiert
+   deutlich auf den Diskontsatz (ERP 4 statt 6 % verschiebt sie um rund 4 pp),
+   und ohne sichtbare Annahmen liest sich eine Rechnung wie eine Messung. */
+function renderReverseDcfBlock(c, tv) {
+  const head = `<h4 class="pv-subhead">Eingepreistes Wachstum · Reverse-DCF</h4>`;
+  const d = reverseDcf(tv);
+
+  if (d.error === 'negative_fcf') {
+    return head + `<p class="tb-hint">Der freie Cashflow ist negativ — ein Wachstumspfad
+      darauf ergäbe jeden Barwert negativ. Für diesen Titel lässt sich nichts einpreisen.</p>`;
+  }
+  if (d.error) {
+    return head + `<p class="tb-hint">Nicht berechenbar: es fehlen Marktkapitalisierung
+      oder P/FCF aus den TV-Daten.</p>`;
+  }
+
+  const pct = (v, dec = 1) => (v == null ? '—' : `${fmtNum(v * 100, dec)} %`);
+  const label = growthDemandLabel(d.implied_growth);
+  // Liefert die Firma mehr, als der Kurs verlangt, ist die Lücke positiv gemeint.
+  const gapCls = d.gap == null ? '' : d.gap <= 0 ? 'pos' : 'neg';
+  const gapTxt = d.gap == null ? '—'
+    : `${d.gap >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.gap) * 100, 1)} pp`;
+
+  const cur = nativeCur(c);
+  const a = d.assumptions;
+
+  return head + `
+    <div class="tb-stats">
+      ${trendStat('Eingepreist', pct(d.implied_growth),
+        `p. a. · ${a.years} J · ${label?.text ?? ''}${d.bounded ? ' · ausserhalb der Skala' : ''}`,
+        d.implied_growth > 0.20 ? 'neg' : d.implied_growth <= 0.05 ? 'pos' : '')}
+      ${trendStat('Beobachtet', pct(d.observed_growth), 'FCF TTM y/y')}
+      ${trendStat('Lücke', gapTxt,
+        d.gap == null ? '' : d.gap <= 0 ? 'Firma liefert mehr' : 'Firma liefert weniger', gapCls)}
+    </div>
+    ${d.leverage_warn ? `<p class="tb-hint is-warn">Debt/Equity über 1,5: die Rechnung
+      diskontiert den gesamten FCF mit Eigenkapitalkosten. Bei dieser Verschuldung
+      fällt die eingepreiste Rate dadurch zu niedrig aus — als untere Grenze lesen.</p>` : ''}
+    <p class="tb-hint">Annahmen: Diskontsatz ${pct(d.rate)} (β ${fmtNum(d.beta, 2)}${
+      d.beta_raw != null && d.beta_raw !== d.beta ? ` · gedämpft von ${fmtNum(d.beta_raw, 2)}` : ''
+    } · risikofrei ${pct(a.riskFree, 1)} · Risikoprämie ${pct(a.erp, 1)}) ·
+      ewiges Wachstum ${pct(a.terminalGrowth, 1)} · FCF ${formatMarketCap(d.fcf)} ${cur}.
+      Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>`;
+}
+
 function renderFundamentalTab(c, disp) {
   const tv = disp?.tv ?? c.tv_data;
   if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
@@ -1240,6 +1288,8 @@ function renderFundamentalTab(c, disp) {
       ${stat(ratioVal(tv.debt_to_equity), 'Debt/Eq', band(tv.debt_to_equity, [0.5, 1.5, 3]))}
       ${stat(ratioVal(tv.total_debt_to_ebitda_fy), 'Debt/EBITDA', band(tv.total_debt_to_ebitda_fy, [2, 4, 6]))}
     </div>
+
+    ${renderReverseDcfBlock(c, tv)}
 
     <h4 class="pv-subhead">Earnings Call</h4>
     ${transcriptHTML(c)}
