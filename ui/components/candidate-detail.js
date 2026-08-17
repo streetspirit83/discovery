@@ -15,7 +15,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
-import { reverseDcf, growthDemandLabel } from '../lib/tv-reverse-dcf.js?v=20260814h';
+import { reverseDcf, growthDemandLabel, growthLadder } from '../lib/tv-reverse-dcf.js?v=20260814i';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -1162,12 +1162,50 @@ function kv(label, value, cls = '') {
   return `<div class="tv-kv"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
 }
 
+/* Szenario-Leiter: derselbe Rechenkern vorwärts. Eingeklappt, damit der
+   Fund.-Tab nicht länger wird — wie die Ring-Legende im Trend-Tab.
+   Der Balken ist bei ±150 % gekappt: die Spanne reicht real bis weit über
+   +800 %, linear ungekappt wären alle unteren Zeilen unsichtbar. */
+function renderLadderDetails(tv, disp) {
+  const L = growthLadder(tv);
+  if (L.error || !L.rows?.length) return '';   // Fehler meldet schon der Hauptblock
+
+  const CAP = 1.5;
+  const rows = L.rows.map((r) => {
+    const dir = r.upside >= 0 ? 'pos' : 'neg';
+    const w = (Math.min(Math.abs(r.upside), CAP) / CAP) * 50;
+    const up = `${r.upside >= 0 ? '+' : '−'}${fmtNum(Math.abs(r.upside) * 100, 0)} %`;
+    return `<div class="fm-row">
+      <span class="fm-label">${fmtNum(r.growth * 100, 0)} %</span>
+      <span class="fm-price">${r.fair_price == null ? '—' : fmtNum(r.fair_price)}</span>
+      <span class="fm-bar fm-bar--signed"><i class="${dir}" style="${
+        r.upside >= 0 ? 'left:50%' : 'right:50%'};width:${w.toFixed(1)}%"></i></span>
+      <b class="fm-val ${dir}">${up}</b>
+    </div>`;
+  }).join('');
+
+  // Erste Zeile mit nicht-negativem Auf-/Abschlag — dort kippt es.
+  const cross = L.rows.find((r) => r.upside >= 0);
+
+  return `<details class="tb-legend dcf-ladder">
+    <summary>Szenarien: was wäre die Aktie wert?</summary>
+    ${rows}
+    <p class="tb-hint">Fairer Kurs in ${disp.cur}. ${cross
+      ? `Ab rund ${fmtNum(cross.growth * 100, 0)} % Wachstum liegt der faire Kurs über dem aktuellen —
+         die eingepreiste Rate von ${fmtNum(L.implied_growth * 100, 1)} % ist genau der Punkt, an dem er ihn trifft.`
+      : `Selbst bei ${fmtNum(L.rows[L.rows.length - 1].growth * 100, 0)} % Wachstum bliebe der faire Kurs unter dem aktuellen.`}
+      ${L.terminal_share == null ? '' : `<b>${fmtNum(L.terminal_share * 100, 0)} % des Werts stammen aus der ewigen Rente</b> —
+      das Ergebnis hängt damit stärker am Diskontsatz (${fmtNum(L.rate * 100, 1)} %) und am ewigen Wachstum
+      als an der Wachstumsannahme selbst.`}</p>
+  </details>`;
+}
+
 /* ── Reverse-DCF: welches FCF-Wachstum preist der Markt ein? ─────────────────
    Kontextwert, kein Score — er fliesst in keine der TV-Kennzahlen ein. Die
    Annahmenzeile ist Pflicht, nicht Deko: die eingepreiste Rate reagiert
    deutlich auf den Diskontsatz (ERP 4 statt 6 % verschiebt sie um rund 4 pp),
    und ohne sichtbare Annahmen liest sich eine Rechnung wie eine Messung. */
-function renderReverseDcfBlock(c, tv) {
+function renderReverseDcfBlock(c, tv, disp) {
   const head = `<h4 class="pv-subhead">Eingepreistes Wachstum · Reverse-DCF</h4>`;
   const d = reverseDcf(tv);
 
@@ -1206,7 +1244,8 @@ function renderReverseDcfBlock(c, tv) {
       d.beta_raw != null && d.beta_raw !== d.beta ? ` · gedämpft von ${fmtNum(d.beta_raw, 2)}` : ''
     } · risikofrei ${pct(a.riskFree, 1)} · Risikoprämie ${pct(a.erp, 1)}) ·
       ewiges Wachstum ${pct(a.terminalGrowth, 1)} · FCF ${formatMarketCap(d.fcf)} ${cur}.
-      Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>`;
+      Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>
+    ${renderLadderDetails(tv, disp)}`;
 }
 
 function renderFundamentalTab(c, disp) {
@@ -1289,7 +1328,7 @@ function renderFundamentalTab(c, disp) {
       ${stat(ratioVal(tv.total_debt_to_ebitda_fy), 'Debt/EBITDA', band(tv.total_debt_to_ebitda_fy, [2, 4, 6]))}
     </div>
 
-    ${renderReverseDcfBlock(c, tv)}
+    ${renderReverseDcfBlock(c, tv, disp)}
 
     <h4 class="pv-subhead">Earnings Call</h4>
     ${transcriptHTML(c)}

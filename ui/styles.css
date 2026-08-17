@@ -1592,6 +1592,16 @@ span.detail-star { cursor:default; }
 .fm-val.pos { color:var(--pos); }
 .fm-val.neg { color:var(--neg); }
 .fm-val.mid { color:#d97706; }
+/* Szenario-Leiter (Reverse-DCF): nutzt die Fundamental-Meter, braucht aber
+   eigene Spaltenbreiten — .fm-label ist mit 96px zu breit für „10 %" und der
+   faire Kurs bekommt eine eigene, rechtsbündige Spalte. */
+.dcf-ladder .fm-label { flex:0 0 auto; width:46px; white-space:nowrap; }
+.dcf-ladder .fm-price { flex:0 0 72px; text-align:right; font-size:var(--fs-2);
+  color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* +891 % braucht mehr als die 64px der Fundamental-Meter — sonst bricht die
+   Prozentzahl auf eine zweite Zeile und die Zeilenhöhen springen. */
+.dcf-ladder .fm-val { flex:0 0 62px; white-space:nowrap; }
+
 .fund-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
 .fund-stat { display:flex; flex-direction:column; gap:1px; align-items:center; padding:7px 4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); text-align:center; }
 .fund-stat b { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
