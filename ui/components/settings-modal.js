@@ -9,6 +9,7 @@ const KEYS = {
   githubPat: 'discovery_github_pat',
   twelveDataKey: 'discovery_twelvedata_key',
   roicKey: 'discovery_roic_key',
+  fmpKey: 'discovery_fmp_key',
   marketauxKey: 'discovery_marketaux_key',
   rapidApiKey: 'discovery_rapidapi_key',
   fxEurUsd: 'discovery_fx_eurusd',
@@ -22,6 +23,7 @@ export function loadSettings() {
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
     twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
     roicKey: localStorage.getItem(KEYS.roicKey) ?? '',
+    fmpKey: localStorage.getItem(KEYS.fmpKey) ?? '',
     marketauxKey: localStorage.getItem(KEYS.marketauxKey) ?? '',
     rapidApiKey: localStorage.getItem(KEYS.rapidApiKey) ?? '',
     fxEurUsd: localStorage.getItem(KEYS.fxEurUsd) ?? '',
@@ -99,6 +101,15 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-fmp-key">FMP API Key <small>(optional)</small></label>
+          <input type="password" id="set-fmp-key" placeholder="site.financialmodelingprep.com → Dashboard"
+            value="${settings.fmpKey}" autocomplete="off">
+          <small>DCF-Fair-Value und Rating im Fund.-Tab. Free-Plan: 250 Anfragen/Tag und
+            <b>nur US-Titel</b> — für XETR &amp; Co. antwortet FMP mit 402. Der eigene
+            Reverse-DCF daneben funktioniert für alle Titel.</small>
+        </div>
+
+        <div class="form-group">
           <label for="set-marketaux-key">Marketaux API Key <small>(optional)</small></label>
           <input type="password" id="set-marketaux-key" placeholder="marketaux.com → API Token"
             value="${settings.marketauxKey}" autocomplete="off">
@@ -143,6 +154,7 @@ export function renderSettingsModal(onSave) {
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
       twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
       roicKey: overlay.querySelector('#set-roic-key').value.trim(),
+      fmpKey: overlay.querySelector('#set-fmp-key').value.trim(),
       marketauxKey: overlay.querySelector('#set-marketaux-key').value.trim(),
       rapidApiKey: overlay.querySelector('#set-rapidapi-key').value.trim(),
       fxEurUsd: overlay.querySelector('#set-fx-eurusd').value.trim(),
