@@ -1,0 +1,20 @@
+name: Probe – Analysten-Kursziele (einmalig)
+
+# Einmal-Probe von Hand. Klärt, welche unserer bestehenden Quellen
+# Analysten-Kursziele liefern. Kein Zeitplan — nach der Auswertung wieder
+# löschen (samt scripts/probe-analyst-targets.mjs).
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe
+        run: node scripts/probe-analyst-targets.mjs
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
