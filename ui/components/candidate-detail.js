@@ -1168,17 +1168,20 @@ function kv(label, value, cls = '') {
    durch UNSERE Bisektion zurückgerechnet: welches Wachstum müsste gelten,
    damit unser Modell auf FMPs Zahl kommt? Erst dadurch stehen Markt, eigenes
    Modell und FMP auf derselben Skala statt Betrag gegen Prozent. */
-function renderFmpRow(c, tv, disp) {
+function renderFmpRow(c, tv, disp, { standalone = false } = {}) {
+  // Eigene Überschrift nur, wenn die Zeile allein steht — sonst gehört sie
+  // sichtbar zum Reverse-DCF-Block darüber.
+  const head = standalone ? `<h4 class="pv-subhead">Bewertung · FMP</h4>` : '';
   const f = c.fmp_valuation;
-  if (c._fmp_loading) return `<p class="tb-hint">Lade FMP-Bewertung …</p>`;
+  if (c._fmp_loading) return head + `<p class="tb-hint">Lade FMP-Bewertung …</p>`;
 
   if (!f) {
     if (!isUsTicker(c)) return '';                       // stumm: FMP kann Nicht-US nicht
-    return `<p class="tb-hint"><button class="btn btn-sm btn-secondary" id="fmp-load">${icons.scale} FMP-Zweitmeinung laden</button></p>`;
+    return head + `<p class="tb-hint"><button class="btn btn-sm btn-secondary" id="fmp-load">${icons.scale} FMP-Zweitmeinung laden</button></p>`;
   }
   if (f.unsupported) return '';
   if (f.error) {
-    return `<p class="tb-hint is-warn">${fmpErrorText(f.error)}
+    return head + `<p class="tb-hint is-warn">${fmpErrorText(f.error)}
       <button class="btn btn-sm btn-secondary" id="fmp-load">${icons.refreshCw} Erneut</button></p>`;
   }
 
@@ -1188,11 +1191,12 @@ function renderFmpRow(c, tv, disp) {
     : `${f.upside >= 0 ? '+' : '−'}${fmtNum(Math.abs(f.upside) * 100, 0)} %`;
 
   // FMPs Wert je Aktie → Eigenkapitalwert, damit unsere Rechnung greifen kann.
-  const rd = reverseDcf(tv);
+  // Ohne TV-Daten entfällt nur der Vergleich, nicht die Zeile.
+  const rd = tv ? reverseDcf(tv) : { error: 'no_data' };
   const fmpValue = (!rd.error && f.upside != null) ? rd.market_cap * (1 + f.upside) : null;
   const fmpGrowth = fmpValue == null ? null : impliedGrowthForValue(tv, fmpValue);
 
-  return `
+  return head + `
     <div class="tb-stats">
       ${trendStat('FMP Fair Value', f.dcf == null ? '—' : `${fmtNum(f.dcf)} ${disp.cur}`,
         f.date ? `Stand ${deDate(f.date)}` : 'mechanischer DCF')}
@@ -1299,7 +1303,14 @@ function renderReverseDcfBlock(c, tv, disp) {
 
 function renderFundamentalTab(c, disp) {
   const tv = disp?.tv ?? c.tv_data;
-  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  if (!tv) {
+    // Kennzahlen, Reverse-DCF und Szenarien brauchen die TV-Felder (Marktkap.,
+    // P/FCF). Die FMP-Zeile nicht — die fragt FMP direkt per Symbol und bleibt
+    // deshalb sichtbar, statt mit auszusteigen.
+    return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.
+      Kennzahlen, Reverse-DCF und Szenarien brauchen sie (Marktkapitalisierung + P/FCF).</p>`
+      + renderFmpRow(c, null, disp, { standalone: true });
+  }
 
   const hs = liveHealthScore(tv);
   const ratingClass = tvRatingClass(tv.rating);
