@@ -93,6 +93,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
   geladener TD-Historie Bias-Verlauf, Regime-Statistik und Fragilität.
+  Tab „Prog." (Forecast) projiziert 6 Monate: 3 Monate echte Kerzen + drei
+  gestrichelte Szenarien (Breakout/Status Quo/Breakdown) mit Fächer-Fläche, ATH
+  und Fair Value als Linien — Rechnung in `tv-forecast.js`, Spec in
+  `docs/FORECAST_SPEC.md`.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
@@ -127,7 +131,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   WARMUP=260 Bars Vorlauf, deshalb holt `fetchSwingAnalysis` 500 und
   persistiert nur die kompakte Serie), `tv-overall-score.js`, `tv-entry-score.js`, `tv-health-score.js`,
   `tv-cycle-score.js`, `tv-trend-score.js`, `tv-trend-strength-score.js`,
-  `tv-momentum-check.js`, `tv-upside.js`, `tv-entry-prices.js`.
+  `tv-momentum-check.js`, `tv-upside.js`, `tv-entry-prices.js`,
+  `tv-forecast.js` (6-Monats-Szenarien für den Prog.-Tab: Drift + σ√t, an
+  Resistance/Support gebremst, ATH/52W-Tief als harte Grenzen — währungsfrei,
+  alle Preise kommen in EINER Währung herein).
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.
 - Viz/metrics: `price-viz.js` (range ladder), `spark.js`, `dashboard-metrics.js`,
   `alerts.js` (alert model + evaluation).
@@ -190,7 +197,7 @@ Deeper specs live in `docs/` — read the relevant one before (re)implementing a
 score/signal: the TV scoring specs (`tvtrend*`, `tvfinancialhealth*`,
 `tventryprices*`), and the newer feature handovers
 (`SWING_CHECK_HANDOVER.md`, `BREAKOUT_PROBABILITY_SPEC.md`,
-`BREAKDOWN_PROBABILITY_SPEC.md`). `discovery-workspace-spec.md` has the original
+`BREAKDOWN_PROBABILITY_SPEC.md`, `FORECAST_SPEC.md`). `discovery-workspace-spec.md` has the original
 product spec.
 
 ## GitHub Actions

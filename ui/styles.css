@@ -2031,6 +2031,43 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .prob-row__val.neg { color:var(--neg); }
 .prob-row__note { grid-column:2 / 4; font-size:var(--fs-1); color:var(--muted); }
 
+/* ── Forecast-Tab: Szenario-Tabelle + Chart-Legende ────────────────────────
+   Eine Zeile je Szenario: Farbpunkt · Name/Bremse · Ziel+Δ · Wahrscheinlichkeit.
+   Zweite Zeile je Block immer eine Stufe kleiner als der Wert darüber. */
+.trade-head--fc { flex-wrap:wrap; gap:var(--s-2) var(--s-3); }
+.fc-head__sig { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.fc-head__sig b { color:var(--text); font-size:var(--fs-2); font-variant-numeric:tabular-nums; }
+.fc-table { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.fc-row {
+  display:grid; grid-template-columns:8px 1fr auto 46px; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-3); border-bottom:1px solid var(--border); background:var(--surface-2);
+}
+.fc-row:last-child { border-bottom:none; }
+.fc-row__dot { width:8px; height:8px; border-radius:50%; }
+.fc-row__dot--pos { background:var(--pos); }
+.fc-row__dot--neg { background:var(--neg); }
+.fc-row__dot--muted { background:var(--muted); }
+.fc-row__id { min-width:0; }
+.fc-row__id b { display:block; font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.fc-row__id small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.fc-row__val { text-align:right; }
+.fc-row__val b { display:block; font-family:var(--font-mono); font-size:var(--fs-3);
+  font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fc-row__val small { display:block; font-size:var(--fs-2); font-variant-numeric:tabular-nums; }
+.fc-row__prob { text-align:right; }
+.fc-row__prob b { display:block; font-size:var(--fs-3); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fc-row__prob small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.fc-legend { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-3);
+  margin-top:var(--s-2); font-size:var(--fs-1); color:var(--muted); }
+.fc-legend__it { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.fc-legend__dash { width:16px; height:0; border-top:2px dashed var(--muted); }
+.fc-legend__dash--pos { border-color:var(--pos); }
+.fc-legend__dash--neg { border-color:var(--neg); }
+.fc-legend__dash--muted { border-color:var(--muted); }
+.fc-legend__line { width:16px; height:2px; border-radius:1px; }
+.fc-legend__line--ath { background:var(--warn); }
+.fc-legend__line--fair { background:var(--ai); }
+
 /* Performance tab: 10-day LS band (price segments + volume-% bars) */
 .ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }
 .ls10d__line { fill:none; stroke:var(--muted); stroke-width:1.5; vector-effect:non-scaling-stroke; }

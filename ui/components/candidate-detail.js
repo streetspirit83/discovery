@@ -16,6 +16,7 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
+import { buildForecast, futureBusinessDays, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260818c';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -25,6 +26,7 @@ const YH_LOGO  = 'https://s.yimg.com/os/creatr-uploaded-images/2021-04/05009f00-
 const TABS = [
   { key: 'performance', label: 'Perf.' },
   { key: 'trend',       label: 'Trend' },
+  { key: 'forecast',    label: 'Prog.' },
   { key: 'trade',       label: 'Trade' },
   { key: 'fundamental', label: 'Fund.' },
   { key: 'news',        label: 'News' },
@@ -1163,6 +1165,207 @@ function renderStocktwitsBlock(c) {
     <button class="btn btn-sm btn-secondary" id="st-load">${icons.refreshCw} Aktualisieren</button>`;
 }
 
+/* ── Tab: Forecast ────────────────────────────────────────────────────────────
+ * Drei Szenarien über 6 Monate (Spec: docs/FORECAST_SPEC.md). Die Rechnung liegt
+ * in `tv-forecast.js` und ist währungsfrei — hier wird alles VORHER in die
+ * Anzeigewährung gebracht, sonst mischen sich Bar-Währung (Yahoo/TD), EUR (LS)
+ * und Börsenwährung (TV) im selben Chart:
+ *   - Bars  → `barsDisplayFactor`
+ *   - LS    → `lsDisplayFactor`
+ *   - tv_data steht in `disp.tv` bereits umgerechnet.
+ */
+
+// Alle Eingänge des Modells in Anzeigewährung, plus die Zusatzlinien.
+function forecastInput(c, disp) {
+  const tv = disp.tv;
+  if (!tv) return null;
+  const lsF = lsDisplayFactor(disp);
+  const lsPrice = (c.ls_quote?.price != null && lsF != null) ? c.ls_quote.price * lsF : null;
+  const p0 = lsPrice ?? tv.close_1m ?? tv.close ?? null;
+  if (p0 == null) return null;
+
+  const a = c.swing_analysis;
+  const barsF = barsDisplayFactor(disp, a);
+  const zoneMids = (list) => (barsF == null || !Array.isArray(list) ? [] : list.map((z) => z.mid * barsF));
+
+  // Bremslevel: Swing-Zonen (echte, mehrfach getestete Kurse) + die TV-Extreme.
+  // 52W-Hoch bremst, ATH ist die Wand dahinter; nach unten spiegelbildlich.
+  const resistances = [...zoneMids(a?.resistance), tv.high_1m, tv.high_3m, tv.high_6m, tv.price_52_week_high];
+  const supports    = [...zoneMids(a?.support),    tv.low_1m,  tv.low_3m,  tv.low_6m];
+
+  const fv = fairValue(tv, lsPrice != null ? { price: lsPrice } : {});
+  return {
+    p0, lsPrice, barsF,
+    fc: buildForecast({
+      tv, p0,
+      biasScore: computeBias(c.tv_data)?.score ?? 0,
+      resistances, supports,
+      cap: tv.high_all ?? null,
+      floor: tv.price_52_week_low ?? null,
+    }),
+    ath: tv.high_all ?? null,
+    low52: tv.price_52_week_low ?? null,
+    fair: fv?.error ? null : (fv?.fair_price ?? null),
+  };
+}
+
+const FC_CLS = { breakout: 'pos', status: 'muted', breakdown: 'neg' };
+const FC_COLOR = { breakout: '--pos', status: '--muted', breakdown: '--neg' };
+/** Historie im Forecast-Chart: ~3 Monate Handelstage. */
+const FC_HISTORY_BARS = 66;
+
+/**
+ * Series-Primitive für die Fächer-Fläche (Lightweight Charts v4). Zeichnet zwei
+ * Polygone — Breakout↔Status Quo und Status Quo↔Breakdown — unter den Linien.
+ *
+ * Die Pixel werden bei JEDEM Zeichnen neu aus Zeit/Preis geholt, sonst hinge
+ * die Fläche beim Zoomen und Scrollen fest. Punkte, deren Zeit gerade nicht auf
+ * der Achse liegt, fallen still heraus.
+ */
+function forecastFanPrimitive(seriesData, colors) {
+  let chart = null;
+  let series = null;
+
+  const coords = (data) => {
+    const ts = chart?.timeScale();
+    if (!ts || !series) return null;
+    return data.map((p) => {
+      const x = ts.timeToCoordinate(p.time);
+      const y = series.priceToCoordinate(p.value);
+      return (x == null || y == null) ? null : { x, y };
+    });
+  };
+
+  const band = (ctx, a, b, fill, hr, vr) => {
+    // Nur Indizes, an denen BEIDE Ränder eine Koordinate haben — sonst entstünde
+    // ein Polygon, das quer durch den Chart springt.
+    const pairs = a.map((p, i) => (p && b[i] ? [p, b[i]] : null)).filter(Boolean);
+    if (pairs.length < 2) return;
+    ctx.beginPath();
+    pairs.forEach(([p], i) => (i ? ctx.lineTo(p.x * hr, p.y * vr) : ctx.moveTo(p.x * hr, p.y * vr)));
+    for (let i = pairs.length - 1; i >= 0; i--) ctx.lineTo(pairs[i][1].x * hr, pairs[i][1].y * vr);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  };
+
+  const renderer = {
+    draw(target) {
+      const up = coords(seriesData.breakout ?? []);
+      const st = coords(seriesData.status ?? []);
+      const dn = coords(seriesData.breakdown ?? []);
+      if (!up || !st || !dn) return;
+      target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize }) => {
+        band(context, up, st, colors.up, hr, vr);
+        band(context, st, dn, colors.dn, hr, vr);
+        // Trennlinie „hier endet die Messung": ohne sie ist im Chart nicht zu
+        // sehen, wo die letzte echte Kerze steht und die Rechnung anfängt.
+        const x = chart?.timeScale()?.timeToCoordinate(colors.anchor);
+        if (x == null) return;
+        context.save();
+        context.beginPath();
+        context.setLineDash([4 * hr, 4 * hr]);
+        context.strokeStyle = colors.edge;
+        context.lineWidth = Math.max(1, hr);
+        context.moveTo(x * hr, 0);
+        context.lineTo(x * hr, bitmapSize.height);
+        context.stroke();
+        context.restore();
+      });
+    },
+  };
+  const view = { renderer: () => renderer, zOrder: () => 'bottom' };
+
+  return {
+    attached(param) { chart = param.chart; series = param.series; },
+    detached() { chart = null; series = null; },
+    updateAllViews() { /* Koordinaten entstehen beim Zeichnen */ },
+    paneViews() { return [view]; },
+  };
+}
+
+function forecastRow(s) {
+  const note = [
+    s.cap != null ? `Cap ${fmtNum(s.cap)}` : null,
+    s.brake != null ? `gebremst ${fmtNum(s.brake)}` : null,
+  ].filter(Boolean).join(' · ') || 'freier Lauf';
+  const cls = FC_CLS[s.key];
+  return `<div class="fc-row fc-row--${s.key}">
+    <span class="fc-row__dot fc-row__dot--${cls}"></span>
+    <div class="fc-row__id"><b>${s.label}</b><small>${note}</small></div>
+    <div class="fc-row__val"><b>${fmtNum(s.target)}</b><small class="${s.changePct >= 0 ? 'pos' : 'neg'}">${fmtPct(s.changePct)}</small></div>
+    <div class="fc-row__prob"><b>${s.prob == null ? '—' : `${Math.round(s.prob)}%`}</b><small>P</small></div>
+  </div>`;
+}
+
+function renderForecastTab(c, disp, fi) {
+  const tv = disp.tv;
+  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  if (!fi?.fc) {
+    return `<p class="pv-empty">Für die Projektion fehlt aus den TV-Daten die
+      Volatilität (ATRP/ATR) oder der Kurs.</p>`;
+  }
+  const { fc } = fi;
+  const cur = disp.cur;
+  const parts = [];
+
+  parts.push(`<div class="trade-head trade-head--fc">
+    <span class="fc-head__sig" title="Erwartete Streuung über die 6 Monate: Tages-σ aus ATRP × ${SIGMA_FROM_ATRP}, mit √t skaliert">σ <b>±${fmtNum(fc.horizonSigmaPct, 1)}%</b></span>
+    <span class="fc-head__sig" title="Ø-Monatswachstum aus Perf.1M/3M/6M (50/30/20), gedämpft ×${DRIFT_DAMPING}">ØGr/M <b>${fc.monthlyDrift == null ? '—' : fmtPct(fc.monthlyDrift)}</b></span>
+    <span class="fc-head__sig" title="Bias aus tv-sentiment.js – verlängert den Ast in seine Richtung">Bias <b>${Math.round(fc.bias)}</b></span>
+    ${curToggle(disp, 'trade-head__cur')}
+  </div>`);
+
+  // Chart: 3 Monate echte Kerzen + 6 Monate gestrichelte Szenarien. Braucht die
+  // Tageskerzen — ohne sie derselbe Ladeweg wie im Perf-Tab (ein Abruf versorgt
+  // beide Tabs, `swing_analysis` wird persistiert).
+  const canBars = Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2 && fi.barsF != null;
+  const barsLoadable = isUsTicker(c) || yahooChartSymbol(c) != null;
+  const barSrc = c.swing_analysis?.source === 'yahoo' ? 'Yahoo'
+    : c.swing_analysis?.source === 'twelvedata' ? 'TwelveData'
+    : isUsTicker(c) ? 'TwelveData' : 'Yahoo';
+
+  let chartBody;
+  if (canBars && window.LightweightCharts) {
+    chartBody = `<div id="fc-chart" class="ls-chart"></div>`;
+  } else if (Array.isArray(c.swing_analysis?.ohlc) && fi.barsF == null) {
+    chartBody = `<div class="ls-chart chart-loading">Kerzen liegen in
+      ${c.swing_analysis?.currency ?? '?'} vor, die Anzeige steht auf ${cur} —
+      umrechnen können wir nur USD↔EUR.</div>`;
+  } else if (c._swing_loading) {
+    chartBody = `<div class="ls-chart chart-loading"><span class="ls-loading"></span> Lade Tageskerzen (${barSrc}) …</div>`;
+  } else if (barsLoadable) {
+    chartBody = `<button class="ls-chart chart-loading chart-loading--btn" id="fc-load">${icons.candlestick} 1 Jahr Tageskerzen laden (${barSrc}) – für den Verlauf</button>`;
+  } else {
+    chartBody = `<div class="ls-chart chart-loading">Keine Kursquelle für diesen Titel –
+      die Szenarien unten rechnen trotzdem aus den TV-Daten.</div>`;
+  }
+  parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">3 Monate Verlauf + 6 Monate Projektion</h4></div>
+    ${chartBody}
+    <div class="fc-legend">
+      <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--pos"></i>Breakout</span>
+      <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--muted"></i>Status Quo</span>
+      <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--neg"></i>Breakdown</span>
+      ${fi.ath != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--ath"></i>ATH ${fmtNum(fi.ath)}</span>` : ''}
+      ${fi.fair != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--fair"></i>Fair Value ${fmtNum(fi.fair)}</span>` : ''}
+    </div>`);
+
+  parts.push(`<h4 class="pv-subhead">Szenarien in 6 Monaten (${cur})</h4>
+    <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}</div>
+    <p class="ph-note">Start ${fmtNum(fc.p0)} ${cur} (${fi.lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close'}) ·
+      P = Wahrscheinlichkeit unter derselben Lognormal-Annahme, die drei Werte ergänzen sich zu 100 %.</p>`);
+
+  // Kurzfristiges Gegengewicht: die 10-Tage-Heuristik aus der LS-Historie. Sie
+  // misst ein Setup von heute, nicht den 6-Monats-Pfad — deshalb eigener Block
+  // mit eigener Zeitangabe, nicht in die Szenario-Tabelle gemischt.
+  const cl = classifyCluster(c.tv_data);
+  parts.push(`<h4 class="pv-subhead">Kurzfrist-Setup (LS, nächste ~10 T)</h4>
+    ${probBar('Brk↑', detectBreakoutSetup(c.ls_history, cl?.avgVol), 'breakoutProbabilityPct', { extendedNarrowRange: 'Range', volumeConfirmation: 'Vol', moneyFlowBullish: 'Money-Flow', flatTopBullFlag: 'Flat-Top/Flag' }, c.ls_history, 'pos')}
+    ${probBar('Brk↓', detectBreakdownRisk(c.ls_history, cl?.avgVol), 'breakdownProbabilityPct', { volumeSpikeNoFollowThrough: 'Spike o. Follow-Through', distributionDay: 'Distribution-Day', nearRecentHigh: 'Nähe Hoch' }, c.ls_history, 'neg')}`);
+
+  return parts.join('');
+}
+
 /* ── Tab 3: Fundamentaldaten (TV) ─────────────────────────────────────────── */
 
 function kv(label, value, cls = '') {
@@ -1572,6 +1775,8 @@ export class CandidateDetail {
     this.chartZoom = 'ALL';    // TD-Chart Zoom-Preset (1M/3M/6M/ALL)
     this.showInd = localStorage.getItem('discovery_chart_ind') === '1'; // BB/Supertrend/CCI
     this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
+    this._fcChart = null;     // Forecast-Chart (Prog.-Tab), lazy beim Tab-Wechsel
+    this._fcCtx = null;       // { c, disp, fi } für die späte Chart-Erzeugung
     this.chartFs = false;     // Perf-Chart im Vollbild (LS wie TD)
     this._chartWrap = null;   // #chart-fs (auch wenn er gerade im <body> hängt)
     this._fsAnchor = null;    // Platzhalter, an den der Block zurückwandert
@@ -1581,6 +1786,8 @@ export class CandidateDetail {
   destroyChart() {
     try { this._chart?.remove(); } catch { /* already gone */ }
     this._chart = null;
+    try { this._fcChart?.remove(); } catch { /* already gone */ }
+    this._fcChart = null;
   }
 
   /* ── Chart-Vollbild ──────────────────────────────────────────────────────
@@ -1971,6 +2178,100 @@ export class CandidateDetail {
     this._chart = chart;
   }
 
+  /* ── Forecast-Chart (Prog.-Tab) ────────────────────────────────────────────
+   * 3 Monate echte Tageskerzen + 6 Monate gestrichelte Szenarien, dazu ATH und
+   * Fair Value als waagerechte Linien. Wird NICHT in `render()` gebaut, sondern
+   * erst wenn der Tab sichtbar ist: alle Tab-Panels liegen gleichzeitig im DOM,
+   * ein verstecktes hat Breite 0 — Lightweight Charts zeichnete dann ins Leere.
+   */
+  initForecastChart() {
+    const ctx = this._fcCtx;
+    if (!ctx || this._fcChart) return;
+    const el = this.el.querySelector('#fc-chart');
+    if (!el || !window.LightweightCharts) return;
+    const { c, disp, fi } = ctx;
+    const a = c.swing_analysis;
+    const f = fi?.barsF;
+    const fc = fi?.fc;
+    if (!fc || f == null || !Array.isArray(a?.ohlc) || a.ohlc.length < 2) return;
+
+    const css = getComputedStyle(document.documentElement);
+    const col = (n) => css.getPropertyValue(n).trim();
+    const chart = window.LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { color: 'transparent' }, textColor: col('--muted'), fontSize: 11 },
+      grid: { vertLines: { color: col('--surface-3') }, horzLines: { color: col('--surface-3') } },
+      rightPriceScale: { borderColor: col('--border') },
+      timeScale: { borderColor: col('--border'), timeVisible: false, rightOffset: 2 },
+      crosshair: { mode: 0 },
+    });
+
+    // Historie: die letzten ~3 Monate, strikt aufsteigend und dublettenfrei.
+    const seen = new Set();
+    const candles = [];
+    for (const b of a.ohlc) {
+      if (!b.date || seen.has(b.date) || b.o == null || b.h == null || b.l == null || b.c == null) continue;
+      seen.add(b.date);
+      candles.push({ time: b.date, open: b.o * f, high: b.h * f, low: b.l * f, close: b.c * f });
+    }
+    const hist = candles.slice(-FC_HISTORY_BARS);
+    if (hist.length < 2) { chart.remove(); return; }
+
+    const candle = chart.addCandlestickSeries({
+      upColor: col('--pos'), downColor: col('--neg'), borderVisible: false,
+      wickUpColor: col('--pos'), wickDownColor: col('--neg'),
+      priceLineVisible: false,
+    });
+    candle.setData(hist);
+
+    // Zukunft: Handelstage ab dem letzten Bar. Alle drei Pfade starten am
+    // selben Punkt (LS-Kurs bzw. TV-Close), damit die Naht zur Kerze sitzt.
+    const anchor = hist[hist.length - 1].time;
+    const dates = futureBusinessDays(anchor, fc.days);
+    const seriesData = {};
+    for (const s of fc.scenarios) {
+      const data = [{ time: anchor, value: fc.p0 }];
+      for (const p of s.points) {
+        if (p.t === 0) continue;
+        const d = dates[p.t - 1];
+        if (d) data.push({ time: d, value: p.value });
+      }
+      seriesData[s.key] = data;
+      chart.addLineSeries({
+        color: col(FC_COLOR[s.key]),
+        lineWidth: 2,
+        lineStyle: 2,                 // dashed = Projektion, keine Messung
+        // Nur der Name an der Achse, kein Wert: die drei Zielpreise stehen
+        // darunter in der Tabelle, an der Achse würden sie die Skala zupflastern.
+        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        title: s.label,
+      }).setData(data);
+    }
+
+    // Zusatzlinien: ATH als Deckel, Fair Value als Bewertungsanker.
+    if (fi.ath != null) {
+      candle.createPriceLine({ price: fi.ath, color: col('--warn'), lineWidth: 1, lineStyle: 2, title: 'ATH', axisLabelVisible: false });
+    }
+    if (fi.fair != null) {
+      candle.createPriceLine({ price: fi.fair, color: col('--ai'), lineWidth: 1, lineStyle: 0, title: 'Fair Value', axisLabelVisible: false });
+    }
+
+    /* Der Fächer: die Fläche zwischen Breakout- und Status-Quo-Pfad (grün) und
+       zwischen Status Quo und Breakdown (rot). Lightweight Charts kann keine
+       Band-Füllung zwischen zwei Serien — das übernimmt ein Series-Primitive,
+       das die drei Pfade bei jedem Neuzeichnen selbst in Pixel umrechnet
+       (Zoom/Scroll bleiben damit korrekt). Fehlt die API (ältere Version),
+       bleiben die drei Linien allein stehen. */
+    if (typeof candle.attachPrimitive === 'function') {
+      candle.attachPrimitive(forecastFanPrimitive(seriesData, {
+        up: `${col('--pos')}1f`, dn: `${col('--neg')}1f`, edge: col('--border'), anchor,
+      }));
+    }
+
+    chart.timeScale().fitContent();
+    this._fcChart = chart;
+  }
+
   // Display-currency context for the current candidate: converted tv_data,
   // active currency code and the EUR/USD rate (USD per 1 EUR).
   displayInfo(c) {
@@ -2021,6 +2322,9 @@ export class CandidateDetail {
     this.el.querySelectorAll('.detail-tabpanes > .tab-panel').forEach((p) => {
       p.classList.toggle('active', p.dataset.panel === tab);
     });
+    // Der Forecast-Chart entsteht erst hier: vorher ist sein Panel versteckt und
+    // damit 0 px breit (siehe initForecastChart).
+    if (tab === 'forecast') this.initForecastChart();
   }
 
   render() {
@@ -2032,9 +2336,11 @@ export class CandidateDetail {
     const disp = this.displayInfo(c);
     const pc = priceClustersDisp(c, disp);
     const tl = tradeLevels(c, disp);
+    const fi = forecastInput(c, disp);
     const tabPanels = {
       performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { zoom: this.chartZoom, showInd: this.showInd }),
       trend:       renderTrendTab(c),
+      forecast:    renderForecastTab(c, disp, fi),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       news:        renderNewsTab(c),
@@ -2187,6 +2493,13 @@ export class CandidateDetail {
 
     // Interactive price chart — LS-intraday (10T) or TD candles (1J) per horizon.
     this.initChart(c, disp, pc, tl);
+
+    // Forecast-Chart: Kontext merken, aber nur zeichnen, wenn sein Tab offen ist.
+    this._fcCtx = { c, disp, fi };
+    if (this.activeTab === 'forecast') this.initForecastChart();
+    // Tageskerzen aus dem Prog.-Tab nachladen — derselbe Abruf wie im Perf-Tab,
+    // ohne dort den Horizont umzuschalten.
+    this.el.querySelector('#fc-load')?.addEventListener('pointerup', () => this.onAction?.('tdQuote', c));
 
     // Vollbild-Umschalter (das Betreten selbst passiert am Ende von `render()`,
     // wenn alle Listener im Block hängen — danach verlässt er `this.el`).
