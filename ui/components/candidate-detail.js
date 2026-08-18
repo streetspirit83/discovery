@@ -1744,7 +1744,7 @@ export class CandidateDetail {
     // 1J-Chart zeichnet dieselben Mittel als Kurven. Farben aus der SMA-Rampe,
     // damit beide Charts dieselbe Sprache sprechen.
     const smaTv = disp?.tv ?? {};
-    line(smaTv.sma200, col('--sma-200'), 'SMA200', 0, 1);
+    line(smaTv.sma200, col('--sma-200'), 'SMA200', 0, 2);
     line(smaTv.sma50, col('--sma-50'), 'SMA50', 2, 1);
     line(smaTv.sma20, col('--sma-20'), 'SMA20', 1, 1);
 
@@ -1889,13 +1889,13 @@ export class CandidateDetail {
         return v == null ? { time: b.date } : { time: b.date, value: v * f };
       });
       if (data.some((p) => p.value != null)) {
-        // Kein `title`: Lightweight Charts hängt daraus ein Badge an die
-        // Preisachse, und vier davon würden die Zonen-/Kurs-Badges zudecken.
-        // Die Zuordnung trägt die Legende unter dem Chart.
+        // `title` = Beschriftung an der Preisachse, auf Höhe des letzten Werts
+        // der Kurve. Sie sagt direkt am Kurvenende, welche Periode dort liegt —
+        // die Legende unten ordnet zusätzlich die Farben zu.
         chart.addLineSeries({
-          color: col(`--sma-${n}`), lineWidth: n === 200 ? 2 : 1,
+          color: col(`--sma-${n}`), lineWidth: n === 200 ? 3 : 2,
           lastValueVisible: false, priceLineVisible: false,
-          crosshairMarkerVisible: false,
+          crosshairMarkerVisible: false, title: `SMA${n}`,
         }).setData(data);
       } else if (smaTv[`sma${n}`] != null) {
         candle.createPriceLine({ price: smaTv[`sma${n}`], color: col(`--sma-${n}`),
