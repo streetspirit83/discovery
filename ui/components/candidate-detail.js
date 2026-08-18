@@ -15,7 +15,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
-import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814n';
+import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814m';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -1221,8 +1221,8 @@ function renderFmpRow(c, tv, disp, { standalone = false } = {}) {
    Fund.-Tab nicht länger wird — wie die Ring-Legende im Trend-Tab.
    Der Balken ist bei ±150 % gekappt: die Spanne reicht real bis weit über
    +800 %, linear ungekappt wären alle unteren Zeilen unsichtbar. */
-function renderLadderDetails(tv, disp) {
-  const L = growthLadder(tv);
+function renderLadderDetails(tv, disp, price = null) {
+  const L = growthLadder(tv, price != null ? { price } : {});
   if (L.error || !L.rows?.length) return '';   // Fehler meldet schon der Hauptblock
 
   const CAP = 1.5;
@@ -1262,7 +1262,15 @@ function renderLadderDetails(tv, disp) {
    und ohne sichtbare Annahmen liest sich eine Rechnung wie eine Messung. */
 function renderReverseDcfBlock(c, tv, disp) {
   const head = `<h4 class="pv-subhead">Fairer Kurs · DCF</h4>`;
-  const f = fairValue(tv);
+  /* Referenzkurs ist der LS-Kurs — derselbe, den die Hero-Zeile und das Ticket
+     zeigen, und der Preis, den man auf TR tatsächlich zahlt. Er steht in EUR,
+     `lsDisplayFactor` bringt ihn in die Anzeigewährung (USD/EUR-Umschalter).
+     Ohne LS-Quote (oder ohne umrechenbaren Kurs) fällt es auf den TV-Close
+     zurück, der in `disp.tv` bereits in Anzeigewährung steht. */
+  const lsF = lsDisplayFactor(disp);
+  const lsPrice = (c.ls_quote?.price != null && lsF != null) ? c.ls_quote.price * lsF : null;
+  const f = fairValue(tv, lsPrice != null ? { price: lsPrice } : {});
+  const priceSrc = lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close';
 
   if (f.error === 'negative_fcf') {
     return head + `<p class="tb-hint">Der freie Cashflow ist negativ — jeder Wachstumspfad
@@ -1284,12 +1292,13 @@ function renderReverseDcfBlock(c, tv, disp) {
   /* Break-even je Stellschraube: welchen Wert müsste genau dieser Eingang
      annehmen, damit der faire Kurs auf den Marktkurs fällt? Nachprüfbare
      TV-Felder tragen ihren Namen aus dem Block „Bewertung & Rendite" darüber,
-     damit man sie dort direkt gegenlesen kann. */
+     damit man sie dort direkt gegenlesen kann. Die erklärende Zeile darüber ist
+     bewusst weg — „Break-even" steht deshalb in jeder Kachel selbst. */
   const driverCards = f.drivers.map((d) => {
     const fmtD = (v) => (v == null ? '—' : d.unit === '%' ? pct(v) : `${fmtNum(v, 2)}${d.unit}`);
     const quelle = d.verifiable ? 'TV-Feld' : 'Annahme';
     return trendStat(d.label, fmtD(d.breakeven),
-      `aktuell ${fmtD(d.current)} · ${quelle}`,
+      `Break-even · aktuell ${fmtD(d.current)} · ${quelle}`,
       d.verifiable ? '' : 'pv-muted');
   }).join('');
 
@@ -1297,7 +1306,7 @@ function renderReverseDcfBlock(c, tv, disp) {
     <div class="tb-stats">
       ${trendStat('Fairer Kurs', f.fair_price == null ? '—' : `${fmtNum(f.fair_price)} ${disp.cur}`,
         `bei ${pct(f.base_growth)} Wachstum`, upCls)}
-      ${trendStat('Kurs', f.price == null ? '—' : `${fmtNum(f.price)} ${disp.cur}`, 'aktuell')}
+      ${trendStat('Kurs', f.price == null ? '—' : `${fmtNum(f.price)} ${disp.cur}`, priceSrc)}
       ${trendStat('Abstand', upTxt, f.upside == null ? '' : f.upside >= 0 ? 'unterbewertet' : 'überbewertet', upCls)}
     </div>
     <p class="tb-hint">Wachstumsannahme ${pct(f.base_growth)}: ${{
@@ -1307,11 +1316,7 @@ function renderReverseDcfBlock(c, tv, disp) {
       observed: `entspricht dem beobachteten FCF YoY von ${pct(f.base_observed)}`,
     }[f.base_source] ?? ''}.</p>
 
-    <h4 class="pv-subhead">Was müsste sich ändern?</h4>
-    <p class="tb-hint">Jeder Wert unten ist der Break-even: nähme <b>allein dieser Eingang</b>
-      ihn an, entspräche der faire Kurs genau dem Marktkurs. Je weiter er vom aktuellen
-      Wert entfernt liegt, desto weniger hängt die Bewertung an ihm.</p>
-    <div class="tb-stats">${driverCards}</div>
+    <div class="tb-stats tb-stats--pairs">${driverCards}</div>
     ${f.leverage_warn ? `<p class="tb-hint is-warn">Debt/Equity über 1,5: gerechnet wird der
       gesamte FCF gegen die Marktkapitalisierung mit Eigenkapitalkosten. Bei dieser
       Verschuldung fällt der faire Kurs dadurch zu hoch aus — als Obergrenze lesen.</p>` : ''}
@@ -1321,7 +1326,7 @@ function renderReverseDcfBlock(c, tv, disp) {
       ${pct(f.terminal_share, 0)} des Werts aus der ewigen Rente.
       Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>
     ${renderFmpRow(c, tv, disp)}
-    ${renderLadderDetails(tv, disp)}`;
+    ${renderLadderDetails(tv, disp, lsPrice)}`;
 }
 
 function renderFundamentalTab(c, disp) {

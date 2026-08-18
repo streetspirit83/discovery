@@ -179,7 +179,11 @@ export function growthLadder(tv, opts = {}) {
   const base = reverseDcf(tv, o);
   if (base.error) return base;
 
-  const price = num(tv?.close_1m) ?? num(tv?.close);
+  // `opts.price` wie in fairValue(): der Referenzkurs darf von aussen kommen
+  // (LS-Live in Anzeigewährung), damit Leiter und Hauptblock denselben Kurs
+  // zeigen. Sonst der TV-Close.
+  const priceRaw = num(opts.price) ?? num(tv?.close_1m) ?? num(tv?.close);
+  const price = priceRaw != null && priceRaw > 0 ? priceRaw : null;
   const { fcf, market_cap: marketCap, rate } = base;
 
   const rows = growths.map((g) => {
@@ -264,6 +268,13 @@ function bisect(f, lo, hi, rising, steps = 60) {
  *
  * `breakeven` = Wert, bei dem fair_price === price. null, wenn ausserhalb des
  * sinnvollen Suchbereichs (dann ist dieser Eingang allein nicht der Hebel).
+ *
+ * `opts.price` überschreibt den Referenzkurs (TV-Close). Gedacht für den
+ * LS-Live-Kurs, den die UI in Anzeigewährung reicht: `fair_price` entsteht als
+ * `price × (Barwert / Marktkapitalisierung)` — das Verhältnis ist einheitenlos,
+ * also darf der Kurs in jeder Währung kommen, solange fair_price und price
+ * dieselbe tragen. Break-evens hängen nicht am Kurs (sie vergleichen Barwert
+ * gegen Marktkapitalisierung) und bleiben davon unberührt.
  */
 export function fairValue(tv, opts = {}) {
   const o = { ...DCF_DEFAULTS, ...opts };
@@ -271,7 +282,8 @@ export function fairValue(tv, opts = {}) {
   if (base.error) return base;
 
   const { fcf, market_cap: mc, rate, beta } = base;
-  const price = num(tv?.close_1m) ?? num(tv?.close);
+  const priceRaw = num(o.price) ?? num(tv?.close_1m) ?? num(tv?.close);
+  const price = priceRaw != null && priceRaw > 0 ? priceRaw : null;
   const gt = o.terminalGrowth;
   const N = o.years;
 
