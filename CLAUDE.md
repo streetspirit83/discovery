@@ -1,5 +1,33 @@
 # Discovery Workspace – Claude Code Notes
 
+## Interaktion: keine wiederholten Rückfrage-Modals (bindend, gilt in ALLEN Chats)
+
+Das Rückfrage-Modal (`AskUserQuestion` / Multiple-Choice-Popup) ist die absolute
+Ausnahme, nicht der Normalfall. Regeln:
+
+1. **Nie zweimal dasselbe fragen.** Was in dieser Session (oder in einer der
+   Anweisungen oben) schon beantwortet wurde, gilt als beantwortet – auch wenn
+   die Antwort weit oben im Verlauf steht, sinngemäß statt wörtlich gegeben
+   wurde, oder der Kontext zwischendurch zusammengefasst wurde. Erst im Verlauf
+   nachsehen, dann erst fragen. Eine Rückfrage darf **nie** wiederholt werden,
+   nur weil die Aufgabe erneut aufgerufen wird.
+2. **Kein Modal für Dinge, die im Code stehen.** Dateipfade, Feldnamen, Versionen,
+   bestehende Konventionen: selbst nachlesen (`ui/STYLEGUIDE.md`, `docs/`, der
+   Code) statt fragen.
+3. **Kein Modal für Standardentscheidungen.** Bei mehreren vertretbaren Varianten
+   die naheliegendste wählen, sie in einem Satz im Chat benennen und weiterbauen.
+   Annahmen dokumentieren schlägt nachfragen.
+4. **Kein Modal zur Bestätigung.** „Soll ich loslegen?", „Passt der Plan?",
+   „Fertig, oder noch etwas?" – nie als Modal. Einfach machen bzw. als normalen
+   Text schreiben.
+5. **Wenn wirklich etwas fehlt:** als normale Chat-Frage am Ende der Antwort
+   stellen – und vorher alles erledigen, was nicht von der Antwort abhängt.
+   Blockierend fragen nur, wenn jede Annahme die Arbeit unbrauchbar oder
+   gefährlich machen würde (z. B. Daten löschen, Geld/Credits ausgeben).
+6. **Höchstens ein Modal pro Auftrag**, und nur für den in (5) beschriebenen Fall.
+   Bei UI-Arbeit gilt weiterhin: Vorschlag/Plan als Text im Chat abstimmen, nicht
+   als Popup.
+
 ## Project Overview
 Stock/ETF candidate discovery tool. Scrapes signals from multiple sources (insider buying, trend lists, ETF changes), stores them in Netlify Blob Storage, and provides a UI for review + AI enrichment.
 
