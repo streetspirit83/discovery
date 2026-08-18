@@ -105,8 +105,9 @@ export function renderSettingsModal(onSave) {
           <input type="password" id="set-fmp-key" placeholder="site.financialmodelingprep.com → Dashboard"
             value="${settings.fmpKey}" autocomplete="off">
           <small>DCF-Fair-Value und Rating im Fund.-Tab. Free-Plan: 250 Anfragen/Tag und
-            <b>nur US-Titel</b> — für XETR &amp; Co. antwortet FMP mit 402. Der eigene
-            Reverse-DCF daneben funktioniert für alle Titel.</small>
+            ein <b>begrenzter Symbol-Umfang</b> — gemessen liefern Mega-Caps (AAPL, NVDA,
+            MSFT, GOOGL …) Daten, Small/Mid-Caps und alles ausserhalb der USA antworten
+            mit 402. Der eigene Reverse-DCF daneben funktioniert für alle Titel.</small>
         </div>
 
         <div class="form-group">

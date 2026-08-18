@@ -3,12 +3,19 @@
  *
  * Gegen den echten Free-Key vermessen (CI-Probe), nicht aus der Doku abgeleitet:
  *
- * ✅ frei, aber **nur US-Titel**:
+ * ✅ frei — aber nur für einen **begrenzten Symbol-Umfang**:
  *    stable/discounted-cash-flow?symbol=          → [{ symbol, date, dcf, "Stock Price" }]
  *    stable/levered-discounted-cash-flow?symbol=  → dito (nach Verschuldung)
  *    stable/ratings-snapshot?symbol=              → [{ rating, overallScore, …Score }]
- * ❌ jeder Nicht-US-Ticker (SAP.DE, ASML.AS, NESN.SW) → HTTP 402
- *    „Premium Query Parameter" — dieselbe US-Grenze wie bei TwelveData.
+ * ❌ HTTP 402 „Premium Query Parameter" für alles ausserhalb dieses Umfangs.
+ *
+ * Gemessen (10 US-Ticker, CI-Probe): AAPL · NVDA · MSFT · TSLA · AMD · GOOGL · F
+ * liefern 200, **SMCI · ENPH · PSKY antworten 402** — und jeder Nicht-US-Ticker
+ * ohnehin. Es ist also KEINE reine US-Grenze, sondern eine Symbol-Auswahl, die
+ * grob den Mega-Caps entspricht. Eine frühere Fassung dieses Kommentars behauptete
+ * „alle US-Titel"; das beruhte auf einer Stichprobe von genau einem Symbol (AAPL).
+ * Für die typischen Discovery-Kandidaten (Small/Mid-Caps aus OpenInsider und
+ * StockTwits-Trending) liefert FMP deshalb meistens nichts.
  * ❌ alles unter /api/v3 und /api/v4 → HTTP 403 „Legacy Endpoint", für Keys ab
  *    dem 31.08.2025 abgeschaltet. Nur /stable/ lebt.
  *
@@ -58,11 +65,15 @@ async function proxyGet(url, { backendUrl, secret }) {
   });
   const wrapper = await res.json();
   if (!wrapper?.ok) return { error: 'proxy' };
-  // 402 = Symbol nicht im Free-Plan, 403 = Legacy-Pfad, 401 = Key falsch.
-  if (wrapper.status === 402) return { error: 'premium_symbol' };
-  if (wrapper.status === 401 || wrapper.status === 403) return { error: 'key' };
-  if (wrapper.status === 429) return { error: 'quota' };
-  if (wrapper.status !== 200) return { error: 'http', status: wrapper.status };
+  /* FMPs Originaltext IMMER mitführen. Die erste Fassung bildete den Status auf
+     einen festen Satz ab — dadurch stand „nur US-Titel" auch bei einem US-Titel
+     und verwies auf die falsche Ursache. Eine gemappte Meldung darf die Quelle
+     ergänzen, nie ersetzen. */
+  const detail = String(wrapper.body ?? '').slice(0, 300).trim();
+  if (wrapper.status === 402) return { error: 'premium_symbol', status: 402, detail };
+  if (wrapper.status === 401 || wrapper.status === 403) return { error: 'key', status: wrapper.status, detail };
+  if (wrapper.status === 429) return { error: 'quota', status: 429, detail };
+  if (wrapper.status !== 200) return { error: 'http', status: wrapper.status, detail };
   try { return { data: JSON.parse(wrapper.body) }; }
   catch { return { error: 'parse' }; }
 }
@@ -96,7 +107,10 @@ export async function fetchFmpValuation(candidate, { backendUrl, secret }) {
   ]);
 
   // Der DCF trägt die Aussage — scheitert er, ist der Rest wertlos.
-  if (dcfRes.error) return { error: dcfRes.error, checked_at: now };
+  if (dcfRes.error) {
+    return { error: dcfRes.error, status: dcfRes.status ?? null, detail: dcfRes.detail ?? null,
+             symbol: sym, checked_at: now };
+  }
 
   const d = first(dcfRes.data);
   if (!d) return { error: 'empty', checked_at: now };
@@ -132,7 +146,7 @@ export function fmpErrorText(code) {
     case 'no_key':         return 'FMP-Key in den Einstellungen hinterlegen.';
     case 'key':            return 'FMP lehnt den Key ab (oder der Endpoint ist ein Legacy-Pfad).';
     case 'quota':          return 'FMP-Kontingent erschöpft (250 Anfragen/Tag) – morgen erneut.';
-    case 'premium_symbol': return 'Dieses Symbol ist im FMP-Free-Plan gesperrt (nur US-Titel).';
+    case 'premium_symbol': return 'FMP deckt dieses Symbol im Free-Plan nicht ab (HTTP 402) — der freie Umfang umfasst im Wesentlichen Mega-Caps.';
     case 'empty':          return 'FMP lieferte keine Bewertung für dieses Symbol.';
     default:               return 'FMP-Abruf fehlgeschlagen.';
   }

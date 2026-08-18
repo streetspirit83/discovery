@@ -4,8 +4,8 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260814e';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260814k';
-import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814g';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260814m';
+import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
@@ -24,7 +24,7 @@ import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260814j';
-import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260814j';
+import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260814m';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';

@@ -16,7 +16,7 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthDemandLabel, growthLadder, impliedGrowthForValue } from '../lib/tv-reverse-dcf.js?v=20260814j';
-import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814j';
+import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814m';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -1181,7 +1181,10 @@ function renderFmpRow(c, tv, disp, { standalone = false } = {}) {
   }
   if (f.unsupported) return '';
   if (f.error) {
-    return head + `<p class="tb-hint is-warn">${fmpErrorText(f.error)}
+    // Originalmeldung mitzeigen: die gemappte Fassung allein hat schon einmal
+    // in die falsche Richtung gewiesen.
+    return head + `<p class="tb-hint is-warn">${fmpErrorText(f.error)}${f.symbol ? ` (${f.symbol})` : ''}
+      ${f.detail ? `<br><span class="pv-muted">FMP: ${String(f.detail).replace(/[<>]/g, '')}</span>` : ''}
       <button class="btn btn-sm btn-secondary" id="fmp-load">${icons.refreshCw} Erneut</button></p>`;
   }
 
