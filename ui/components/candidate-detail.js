@@ -10,13 +10,13 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol } from '../lib/tv-swings.js?v=20260814j';
+import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
-import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
+import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814m';
+import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -527,6 +527,12 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
             title="Indikatoren ein-/ausblenden: Bollinger (20,2) · Supertrend (10,3) · CCI 20 (untere Skala)">ƒ Ind.</button>
         </div>`
       : '';
+    // Legende für die vier SMA-Kurven: vier Blautöne sind ohne Zuordnung nicht
+    // auseinanderzuhalten, und die Kurven tragen im Chart selbst keine Labels.
+    const smaLegend = (want1J && canTd)
+      ? `<div class="chart-smaleg">${SMA_PERIODS.map((n) =>
+          `<span class="chart-smaleg__it"><i style="background:var(--sma-${n})"></i>SMA${n}</span>`).join('')}</div>`
+      : '';
     // Kopf + Chart + Level-Bar + Zoom-Zeile liegen zusammen in `#chart-fs` —
     // dieser Block wandert im Vollbild als Ganzes in den <body> (siehe
     // `enterChartFs`), damit Titel, Horizont-Umschalter und Zoom mitkommen.
@@ -535,7 +541,7 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
         <div class="chart-head-row">
           <h4 class="pv-subhead"><span class="chart-fs__sym">${c.symbol}</span>${head}</h4>
           <div class="chart-fs__act">${toggle}${fsBtn}</div>
-        </div>${body}${zoomRow}
+        </div>${body}${zoomRow}${smaLegend}
       </div>${profile}`);
   } else {
     parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
@@ -1733,13 +1739,14 @@ export class CandidateDetail {
     if (mkE != null) line(mkE, mkCol, '★ Einstand', 0, 2);
 
     // SMA 20/50/200 (TV daily values, already display currency via disp.tv) —
-    // dark-blue ink, told apart by dash pattern: 200 solid, 50 dashed, 20
-    // dotted. True blue-900 ink vanishes on the dark theme → lighter ink there.
-    const smaCol = document.documentElement.dataset.theme === 'dark' ? '#6b8afd' : '#1e40af';
+    // hier bleiben es waagerechte Linien: zehn Tage Snapshots tragen keinen
+    // SMA-Verlauf (die 20er allein bräuchte doppelt so viel Historie). Der
+    // 1J-Chart zeichnet dieselben Mittel als Kurven. Farben aus der SMA-Rampe,
+    // damit beide Charts dieselbe Sprache sprechen.
     const smaTv = disp?.tv ?? {};
-    line(smaTv.sma200, smaCol, 'SMA200', 0, 1);
-    line(smaTv.sma50, smaCol, 'SMA50', 2, 1);
-    line(smaTv.sma20, smaCol, 'SMA20', 1, 1);
+    line(smaTv.sma200, col('--sma-200'), 'SMA200', 0, 1);
+    line(smaTv.sma50, col('--sma-50'), 'SMA50', 2, 1);
+    line(smaTv.sma20, col('--sma-20'), 'SMA20', 1, 1);
 
     // Auto-trendlines from the LS swing points (diagonal, dashed — distinct from
     // the horizontal SMA/cluster lines). Support green, resistance red.
@@ -1849,11 +1856,52 @@ export class CandidateDetail {
     (a.support ?? []).forEach((z) => zoneLine(z, col('--pos')));
     (a.resistance ?? []).forEach((z) => zoneLine(z, col('--neg')));
 
-    // TV SMAs (already display currency via disp.tv).
-    const smaCol = document.documentElement.dataset.theme === 'dark' ? '#6b8afd' : '#1e40af';
+    /* SMA 20/50/100/200 als Kurven statt als waagerechte Linien: der TV-Wert ist
+       ein Momentwert, gezeigt werden soll der Verlauf (läuft der Kurs auf die
+       SMA200 zu oder von ihr weg? kreuzt die 50 die 200?).
+       Quelle der Werte, in dieser Reihenfolge:
+       1. `analysis.sma` — beim Abruf über die VOLLEN ~500 Bars gerechnet und auf
+          das 180-Bar-Fenster beschnitten. Nur so steht auch die SMA200 über die
+          ganze Chartbreite (180 gespeicherte Bars allein reichen dafür nie).
+       2. Lokal aus den vorhandenen Bars — für Analysen, die vor dieser Änderung
+          gespeichert wurden. Die Kurve beginnt dann erst nach dem Vorlauf, die
+          SMA200 fehlt dort ganz.
+       3. Kein Vorlauf für eine Periode → der TV-Momentwert als waagerechte
+          Linie, ausdrücklich als „(TV)" markiert, damit nichts stillschweigend
+          verschwindet. */
     const smaTv = disp?.tv ?? {};
-    const sma = (price, title, style) => { if (price != null) candle.createPriceLine({ price, color: smaCol, lineWidth: 1, lineStyle: style, title }); };
-    sma(smaTv.sma200, 'SMA200', 0); sma(smaTv.sma50, 'SMA50', 2); sma(smaTv.sma20, 'SMA20', 1);
+    const smaStored = a.sma ?? null;
+    // analysis.sma ist index-gleich zu analysis.ohlc; die Chart-Bars sind davon
+    // die dublettenfreie Teilmenge → über das Datum zuordnen, nicht über i.
+    const storedByDate = (n) => {
+      const arr = smaStored?.[n];
+      if (!Array.isArray(arr) || arr.length !== a.ohlc.length) return null;
+      const m = new Map();
+      a.ohlc.forEach((b, i) => { if (b?.date && arr[i] != null) m.set(b.date, arr[i]); });
+      return m.size ? m : null;
+    };
+    for (const n of SMA_PERIODS) {
+      const stored = storedByDate(n);
+      const local = stored ? null : smaSeries(bars, n);
+      const data = bars.map((b, i) => {
+        const v = stored ? stored.get(b.date) : local[i];
+        // Whitespace-Punkt vor dem Vorlauf: hält die Zeitachse lückenlos.
+        return v == null ? { time: b.date } : { time: b.date, value: v * f };
+      });
+      if (data.some((p) => p.value != null)) {
+        // Kein `title`: Lightweight Charts hängt daraus ein Badge an die
+        // Preisachse, und vier davon würden die Zonen-/Kurs-Badges zudecken.
+        // Die Zuordnung trägt die Legende unter dem Chart.
+        chart.addLineSeries({
+          color: col(`--sma-${n}`), lineWidth: n === 200 ? 2 : 1,
+          lastValueVisible: false, priceLineVisible: false,
+          crosshairMarkerVisible: false,
+        }).setData(data);
+      } else if (smaTv[`sma${n}`] != null) {
+        candle.createPriceLine({ price: smaTv[`sma${n}`], color: col(`--sma-${n}`),
+          lineWidth: 1, lineStyle: 2, title: `SMA${n} (TV)` });
+      }
+    }
 
     // Live LS price (EUR → display) as a distinct marker line.
     const lsF = lsDisplayFactor(disp);

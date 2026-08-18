@@ -162,6 +162,43 @@ export function analyzeBars(bars, refPrice, { interval = 'daily', k = 3 } = {}) 
   };
 }
 
+/* ── SMA-Serien für den Detail-Chart ─────────────────────────────────────── */
+
+/** Perioden, die der 1J-Chart als Kurven zeichnet. */
+export const SMA_PERIODS = [20, 50, 100, 200];
+/** Persistierte Bar-Anzahl (Chart-Fenster) — auch das Raster der SMA-Serien. */
+export const KEEP_BARS = 180;
+
+/**
+ * smaTail(bars, periods, keep) → { 20:[…], 50:[…], … } | null
+ *
+ * Gerechnet über die **vollen** Bars (bis 500), zurückgegeben nur der Schwanz,
+ * der zu `analysis.ohlc` passt (gleiche Länge, gleiche Reihenfolge, gleicher
+ * Index). Genau darum geht es: eine SMA200 braucht 200 Bars Vorlauf, gespeichert
+ * werden aber nur 180 — aus den gespeicherten Bars allein liesse sie sich nie
+ * zeichnen. Werte in **Bar-Währung** (wie ohlc), null vor dem Vorlauf.
+ *
+ * Direkte Summe statt gleitendem Fenster: 4 Perioden × 500 Bars sind
+ * vernachlässigbar, und es entsteht keine Drift durch fortlaufendes Auf- und
+ * Abaddieren. Auf 6 signifikante Stellen gerundet — das hält den Blob klein
+ * (~4 KB je Titel) und liegt weit unter jeder zeichenbaren Auflösung.
+ */
+export function smaTail(bars, periods = SMA_PERIODS, keep = KEEP_BARS) {
+  const closes = bars.map((b) => b.close);
+  const out = {};
+  for (const n of periods) {
+    const vals = new Array(closes.length).fill(null);
+    for (let i = n - 1; i < closes.length; i++) {
+      let s = 0;
+      for (let j = i - n + 1; j <= i; j++) s += closes[j];
+      vals[i] = s / n;
+    }
+    const tail = vals.slice(-keep).map((v) => (v == null ? null : Number(v.toPrecision(6))));
+    if (tail.some((v) => v != null)) out[n] = tail;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /* ── Bar-Quellen: TwelveData (US) und Yahoo (alles andere) ──────────────── */
 
 /**
@@ -334,9 +371,16 @@ export async function fetchSwingAnalysis(candidate, {
   analysis.source = useTd ? 'twelvedata' : 'yahoo';
   analysis.currency = currency;
   analysis.ref_source = refSource;
-  // Keep a capped compact OHLCV series (USD) so the detail chart can draw daily
-  // candles without re-hitting TD. Short keys keep the blob small (~180 bars).
-  analysis.ohlc = bars.slice(-180).map((b) => ({ date: b.date, o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume }));
+  // Keep a capped compact OHLCV series (Bar-Währung, siehe analysis.currency) so
+  // the detail chart can draw daily candles without re-fetching. Short keys keep
+  // the blob small (~180 bars).
+  analysis.ohlc = bars.slice(-KEEP_BARS).map((b) => ({ date: b.date, o: b.open, h: b.high, l: b.low, c: b.close, v: b.volume }));
+  // SMA-Kurven zum selben Raster — aus den vollen Bars gerechnet, damit auch die
+  // SMA200 über das ganze Chart-Fenster steht (siehe smaTail).
+  if (interval === '1day') {
+    const sma = smaTail(bars);
+    if (sma) analysis.sma = sma;
+  }
 
   /* Bias-Historie aus den VOLLEN Bars — nicht aus den 180 gespeicherten: SMA200
      und die EMA250-Näherung brauchen ~260 Bars Vorlauf (WARMUP). Persistiert

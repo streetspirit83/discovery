@@ -23,6 +23,11 @@
    * Surfaces validiert (Helligkeitsband, Chroma, CVD-Abstand, Kontrast). */
   --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
   --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
+  /* SMA-Kurven im Detail-Chart: eine Blau-Rampe, kein kategoriales Set — die
+   * vier Linien sind dieselbe Grösse in vier Geschwindigkeiten. Je langsamer,
+   * desto kräftiger (die SMA200 trägt die Struktur, die SMA20 das Rauschen).
+   * Blau bleibt frei von --pos/--neg (Kerzen) und --accent (LS-Kurs). */
+  --sma-20:#9db8ee; --sma-50:#5a86e0; --sma-100:#2f5bc4; --sma-200:#16307c;
   --radius:8px; --radius-sm:4px;
 
   /* Spacing */
@@ -63,6 +68,8 @@
   /* Dieselben acht Hues, für die dunkle Fläche neu gestuft (kein Auto-Flip). */
   --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
   --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
+  /* Auf dunkler Fläche läuft die Rampe andersherum: kräftig = hell. */
+  --sma-20:#5578c2; --sma-50:#5d87dd; --sma-100:#8fb2f5; --sma-200:#c7dbff;
   --scrim:rgba(0,0,0,0.5);
 }
 
@@ -1550,6 +1557,12 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .chart-zoom { display:flex; gap:4px; align-items:center; margin:6px 0 2px; }
 .chart-zoom .seg-btn { padding:3px 10px; font-size:var(--fs-1); }
 .chart-zoom__ind { margin-left:auto; }
+/* Legende der SMA-Kurven unter dem 1J-Chart: schmaler Streifen, nimmt dem Chart
+   keinen Platz (Styleguide §5) — Strichfarbe + Periode, sonst nichts. */
+.chart-smaleg { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-3);
+  font-size:var(--fs-1); color:var(--muted); line-height:1.2; padding:2px 0 0; }
+.chart-smaleg__it { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.chart-smaleg__it i { width:14px; height:2px; border-radius:1px; }
 .tr-call { padding:8px 0 2px; }
 .tr-call__head { font-size:var(--fs-2); line-height:var(--lh); }
 .tr-call__actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px; }

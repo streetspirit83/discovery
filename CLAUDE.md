@@ -113,7 +113,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Die Analyse liegt in der **nativen Währung der Bars**; `analysis.currency` sagt
   welche, und die Anzeige rechnet über `barsDisplayFactor()` um. Nichts darf hier
   USD annehmen (alte, vor dem Umbau gespeicherte Analysen haben kein `currency`
-  und sind per Definition USD/TwelveData).
+  und sind per Definition USD/TwelveData). Persistiert werden die letzten 180
+  Bars (`analysis.ohlc`) **plus** `analysis.sma` — die SMA-Kurven 20/50/100/200
+  zum selben Raster, aber aus den vollen ~500 Bars gerechnet (`smaTail`). Ohne
+  diesen Vorlauf liesse sich aus 180 Bars nie eine SMA200 zeichnen; der 1J-Chart
+  im Perf-Tab zeichnet sie als Kurven, nicht als waagerechte Momentwerte.
 - Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter +
   `biasRingSVG` — die Ring-Grafik liegt dort, damit Tabelle und Detail-Sheet
   garantiert dieselbe zeigen; die anderen Scores sind ungerichtete

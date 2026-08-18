@@ -26,7 +26,7 @@
 
 // Der ?v=-Tag muss mit allen anderen tv-swings-Importen übereinstimmen, sonst
 // lädt der Browser das Modul ein zweites Mal (eigene Instanz pro URL).
-import { isUsTicker } from './tv-swings.js?v=20260814j';
+import { isUsTicker } from './tv-swings.js?v=20260818a';
 
 const ENDPOINT = 'https://api.stocktwits.com/api/2/symbols';
 

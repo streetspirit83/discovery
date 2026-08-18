@@ -13,6 +13,18 @@ const sma = (vals, i, n) => {
   return s / n;
 };
 
+/**
+ * Gleitender Durchschnitt über die Closes. → [number|null] in Chart-Reihenfolge.
+ *
+ * Fallback für Analysen ohne vorberechnete SMA-Serie: dort stehen nur die ~180
+ * persistierten Bars zur Verfügung, eine SMA200 bleibt deshalb komplett null.
+ * Das ist gewollt sichtbar — lieber keine Kurve als eine aus zu wenig Vorlauf.
+ */
+export function smaSeries(ohlc, n) {
+  const closes = ohlc.map((b) => b.c);
+  return closes.map((_, i) => sma(closes, i, n));
+}
+
 /** Bollinger-Bänder (SMA n ± mult·σ). → [{mid, upper, lower}|null] */
 export function bollinger(ohlc, n = 20, mult = 2) {
   const closes = ohlc.map((b) => b.c);

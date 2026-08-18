@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260814e';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260814o';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260818a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -16,15 +16,15 @@ import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
 import { renderControlModal } from './components/control-modal.js?v=20260814e';
-import { renderCompareModal } from './components/compare-modal.js?v=20260814j';
+import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260807a';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
-import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260814j';
-import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260814m';
+import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
+import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
@@ -35,7 +35,7 @@ import { icons } from './lib/icons.js?v=20260807a';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
-import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260814j';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260818a';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
