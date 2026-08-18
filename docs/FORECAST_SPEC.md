@@ -18,17 +18,19 @@ Alle drei Szenarien entstehen aus einer Formel, gerechnet im Log-Raum (damit
 −40 % und +67 % symmetrisch sind und kein Pfad negativ werden kann):
 
 ```
-p_s(t) = p0 · exp( μ·t  +  m_s · σ_d · √t )        t = 1 … 126 Handelstage
+p_s(t) = p0 · exp( D(t)  +  m_s · σ_d · √t )       t = 1 … 126 Handelstage
+D(t)   = μ · τ · (1 − e^(−t/τ))                    τ = 63 Handelstage (~3 Monate)
 ```
 
 | Größe | Bedeutung | Quelle |
 |---|---|---|
 | `p0` | Startpreis, für **alle drei** Szenarien derselbe | LS/TR-Kurs (EUR → Anzeigewährung), sonst TV-Close |
 | `μ` | Log-Drift je Handelstag | ØGr/M aus Perf.1M/3M/6M (50/30/20), gedämpft ×`DRIFT_DAMPING` (0,5) |
+| `D(t)` | aufsummierte Drift mit auslaufendem Momentum | `cumulativeDrift`, Halbwertszeit `DRIFT_PERSISTENCE_DAYS` (63) |
 | `σ_d` | Tages-Volatilität | ATRP/100 × `SIGMA_FROM_ATRP` (0,8); Fallbacks ATR/Preis, Volatility.M/D |
 | `m_s` | Sigma-Vielfaches des Szenarios | siehe unten, Bias-dynamisch |
 
-Zwei Entscheidungen, die den Unterschied machen:
+Drei Entscheidungen, die den Unterschied machen:
 
 - **`√t` statt `t` beim Vol-Term.** Der Fächer öffnet sich wie ein Diffusions-
   kegel. Linear skaliert wäre er nach 6 Monaten absurd breit (ATRP 2 % ⇒ ±250 %
@@ -36,6 +38,22 @@ Zwei Entscheidungen, die den Unterschied machen:
 - **Drift gedämpft ×0,5.** Dieselbe Dämpfung wie in `tv-upside.js`: Momentum
   kehrt zurück, eine ungedämpfte Fortschreibung von Perf.1M über ein halbes Jahr
   ist Unsinn.
+- **Drift läuft zusätzlich aus (`τ`).** Ohne das wächst die Drift linear mit `t`,
+  der Vol-Term aber nur mit `√t` — bei ØGr/M +6 % (also +43 % über 6 Monate)
+  frisst die Drift das ganze −1σ auf, und der **Breakdown-Ast dreht wieder nach
+  oben**. Genau dieser Fehler stand in der ersten Fassung live. Mit `τ` bleibt
+  kurzfristig `D(t) ≈ μ·t`, langfristig sättigt die Fortschreibung bei etwa drei
+  Monaten Momentum — mehr gibt ein Perf-Wert nicht her.
+
+### Zwei Garantien
+
+1. **Reihenfolge:** Breakout ≥ Status Quo ≥ Breakdown. Die Bremsleiter wird je
+   Punkt nach dem Vorzeichen von `raw − p0` gewählt (nicht nach dem Szenario) —
+   sonst bremst ein Breakout-Ast, der bei stark negativer Drift unter `p0`
+   liegt, an Resistances statt an Supports und unterläuft den Status Quo.
+2. **Namenstreue:** ein „Breakdown" endet nie über `p0`, ein „Breakout" nie
+   darunter. Bei extremer Drift und winziger Volatilität könnte die Rechnung das
+   sonst hergeben; der Ast ist dann flach — auffällig, aber ehrlich.
 
 ## 2. Die drei Szenarien
 
@@ -68,15 +86,22 @@ Fassung rechnete umgekehrt und meldete Bremslevel *oberhalb* des Ziels.)
 einem Titel mit sieben dicht liegenden Levels faktisch still (0,5⁷ ≈ 0,008).
 Eine Zone kostet Zeit, sie friert den Kurs nicht für ein halbes Jahr ein.
 
-| Seite | Bremslevel | harte Grenze |
+| Seite | Bremslevel | stärkste Bremse |
 |---|---|---|
 | aufwärts | Resistance-Zonen (`swing_analysis.resistance`), High 1M/3M/6M, 52W-Hoch | **ATH** (`high_all`) |
 | abwärts | Support-Zonen (`swing_analysis.support`), Low 1M/3M/6M | **52W-Tief** |
 
 Levels näher als `LEVEL_MERGE_PCT` (2 %) beieinander sind dieselbe Zone — sonst
 stapeln sich drei Schreibweisen desselben Hochs zu einer dreifachen Bremse.
-Liegt der Kurs bereits über dem ATH (Blue Sky), entfällt der Deckel; die
+Liegt der Kurs bereits über dem ATH (Blue Sky), entfällt die Grenze; die
 ATH-Linie bleibt als Referenz stehen.
+
+**ATH und 52W-Tief sind die stärkste Bremse, keine Wand** (`BEYOND_BOUND_SLOPE`
+= 0,1 ⇒ neues Terrain kostet die zehnfache Strecke). Ein harter Deckel klang
+richtig, war es aber nicht: bei einem Titel 1,6 % unter seinem ATH fror er
+*jedes* Aufwärtsszenario auf +1,6 % ein — Breakout und Status Quo klebten beide
+am selben Wert, und die Wahrscheinlichkeiten kippten (Status Quo 0 %). Dabei ist
+der Ausbruch über das ATH bei genau so einem Titel das eigentliche Szenario.
 
 ## 4. Wahrscheinlichkeiten
 
@@ -84,8 +109,13 @@ Aus derselben Lognormal-Annahme, auf die **angezeigten** (gebremsten) Ziele:
 
 ```
 P(Breakout)  = 1 − Φ(z_up)      P(Breakdown) = Φ(z_dn)
-P(Status Quo) = Rest            z = (ln(Ziel/p0) − μ·n) / (σ_d·√n)
+P(Status Quo) = Rest            z = (ln(Ziel/p0) − D(n)) / (σ_d·√n)
 ```
+
+`D(n)` ist dieselbe auslaufende Drift wie im Pfad — sonst passten Zahl und
+gezeichnete Kurve nicht zusammen. Die obere Grenze ist `max(Breakout, Status
+Quo)`, die untere `min(Breakdown, Status Quo)`: hängen zwei Ziele an derselben
+Bremse, fällt der mittlere Bereich auf 0 % zusammen statt negativ zu werden.
 
 Die drei Werte ergänzen sich damit zu 100 % und beantworten „wie weit trage ich
 das Ziel neben der Kurve?". Sie sind so gut wie ihre Eingänge — eine kalibrierte

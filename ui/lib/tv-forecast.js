@@ -46,6 +46,18 @@ export const DAYS_PER_MONTH = 21;
 export const SIGMA_FROM_ATRP = 0.8;
 /** Dämpfung der Drift — identisch zu `tv-upside.js`. */
 export const DRIFT_DAMPING = 0.5;
+/**
+ * Halbwertszeit des Momentums in Handelstagen (~3 Monate). Die Drift wirkt
+ * NICHT linear über die vollen 6 Monate, sondern läuft aus:
+ *   D(t) = μ · τ · (1 − e^(−t/τ))
+ *
+ * Ohne das Auslaufen wächst die Drift mit `t`, der Vol-Term aber nur mit `√t` —
+ * bei einem Titel mit ØGr/M +6 % (also +43 % über 6 Monate) frisst die Drift das
+ * ganze −1σ auf, und der *Breakdown*-Ast dreht wieder nach oben. Genau das war
+ * im ersten Wurf zu sehen. Kurzfristig bleibt D(t) ≈ μ·t, langfristig sättigt es
+ * bei μ·τ ≈ 3 Monaten Momentum — mehr Fortschreibung gibt ein Perf-Wert nicht her.
+ */
+export const DRIFT_PERSISTENCE_DAYS = 63;
 /** Sigma-Vielfaches der Extremszenarien ohne Bias-Zuschlag. */
 export const BASE_SIGMA_MULT = 1.0;
 /** Maximaler Bias-Zuschlag auf das Sigma-Vielfache (bei |Bias| = 100). */
@@ -60,6 +72,14 @@ export const LEVEL_COMPRESSION = 0.5;
 export const MIN_SLOPE = 0.25;
 /** Levels näher als 2 % beieinander sind dieselbe Zone (vgl. `buildZones`). */
 export const LEVEL_MERGE_PCT = 0.02;
+/**
+ * Steigung jenseits von ATH bzw. 52W-Tief. Diese beiden sind die **stärkste
+ * Bremse**, keine Wand: ein harter Deckel friert bei einem Titel dicht unter
+ * seinem ATH jedes Aufwärtsszenario auf ein paar Prozent ein — dabei ist der
+ * Ausbruch über das ATH bei genau so einem Titel das eigentliche Szenario.
+ * Mit 0,1 kostet neues Terrain die zehnfache Strecke, bleibt aber möglich.
+ */
+export const BEYOND_BOUND_SLOPE = 0.1;
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 
@@ -114,6 +134,16 @@ export function dailyLogDrift(monthlyPct) {
 }
 
 /**
+ * Aufsummierte Log-Drift bis Tag t, mit auslaufendem Momentum:
+ *   D(t) = μ · τ · (1 − e^(−t/τ)),  τ = DRIFT_PERSISTENCE_DAYS
+ * Für kleine t praktisch μ·t, für große t gesättigt bei μ·τ.
+ */
+export function cumulativeDrift(driftD, t) {
+  const tau = DRIFT_PERSISTENCE_DAYS;
+  return driftD * tau * (1 - Math.exp(-t / tau));
+}
+
+/**
  * Stückweise lineare Bremse. Gerechnet wird auf der **Ausgabeseite**: der
  * gezeigte Pfad läuft bis zum ersten Level ungebremst, für den Weg vom ersten
  * zum zweiten Level braucht er die doppelte Rohstrecke, danach die vierfache —
@@ -124,32 +154,38 @@ export function dailyLogDrift(monthlyPct) {
  * dass die gezeichnete Kurve diese 105,40 auch wirklich erreicht hat.
  *
  * `levels` sind aufsteigend nach Abstand von p0 sortiert, `dir` = +1 aufwärts |
- * −1 abwärts. Zurück kommt der gebremste Preis plus das letzte vom gezeigten
- * Pfad überschrittene Level.
+ * −1 abwärts. `boundIdx` markiert darin ATH bzw. 52W-Tief: jenseits davon gilt
+ * `BEYOND_BOUND_SLOPE` statt der Halbierungsleiter (−1 = kein solches Level).
+ *
+ * Zurück kommt der gebremste Preis, das letzte vom gezeigten Pfad erreichte
+ * Level und ob dieses Level die harte Grenze war.
  */
-export function applyBrakes(raw, p0, levels, dir) {
+export function applyBrakes(raw, p0, levels, dir, boundIdx = -1) {
   const dist = (raw - p0) * dir;          // Rohstrecke (ungebremst)
-  if (!(dist > 0)) return { value: raw, brake: null };
+  if (!(dist > 0)) return { value: raw, brake: null, atBound: false };
 
   let used = 0;        // verbrauchte Rohstrecke
   let out = 0;         // zurückgelegte Ausgabestrecke
   let passed = 0;      // tatsächlich erreichte Level (= Steigungs-Exponent)
   let brake = null;
-  const slopeAt = (k) => Math.max(Math.pow(LEVEL_COMPRESSION, k), MIN_SLOPE);
+  const slopeAt = (k) => (boundIdx >= 0 && k > boundIdx
+    ? BEYOND_BOUND_SLOPE
+    : Math.max(Math.pow(LEVEL_COMPRESSION, k), MIN_SLOPE));
+  const done = (value) => ({ value, brake, atBound: boundIdx >= 0 && passed > boundIdx });
   for (const lvl of levels) {
     const seg = (lvl - p0) * dir - out;                // Ausgabestrecke bis dahin
     if (seg <= 0) continue;                            // Level schon hinter uns
     const slope = slopeAt(passed);
     const cost = seg / slope;                          // nötige Rohstrecke
     if (used + cost >= dist) {                         // endet vor dem Level
-      return { value: p0 + dir * (out + (dist - used) * slope), brake };
+      return done(p0 + dir * (out + (dist - used) * slope));
     }
     used += cost;
     out += seg;
     passed++;
     brake = lvl;                                       // Level erreicht
   }
-  return { value: p0 + dir * (out + (dist - used) * slopeAt(passed)), brake };
+  return done(p0 + dir * (out + (dist - used) * slopeAt(passed)));
 }
 
 /* ── Wahrscheinlichkeit ───────────────────────────────────────────────────── */
@@ -163,10 +199,14 @@ export function normCdf(z) {
   return 0.5 * (1 + s * y);
 }
 
-/** z-Wert eines Zielpreises unter der Lognormal-Annahme des Modells. */
+/**
+ * z-Wert eines Zielpreises unter der Lognormal-Annahme des Modells. Die Drift
+ * geht als `cumulativeDrift` ein — dieselbe auslaufende Größe wie im Pfad,
+ * sonst passten Wahrscheinlichkeit und gezeichnete Kurve nicht zusammen.
+ */
 function zScore(target, p0, driftD, sigmaD, days) {
   if (!(target > 0) || !(p0 > 0) || !(sigmaD > 0) || !(days > 0)) return null;
-  return (Math.log(target / p0) - driftD * days) / (sigmaD * Math.sqrt(days));
+  return (Math.log(target / p0) - cumulativeDrift(driftD, days)) / (sigmaD * Math.sqrt(days));
 }
 
 /* ── Level-Aufbereitung ───────────────────────────────────────────────────── */
@@ -179,7 +219,7 @@ function zScore(target, p0, driftD, sigmaD, days) {
  */
 export function brakeLevels(raw, p0, dir, cap = null) {
   const seen = [];
-  return raw
+  const levels = raw
     .map(num)
     .filter((v) => v != null && v > 0 && (v - p0) * dir > 0)
     .filter((v) => cap == null || (v - cap) * dir < 0)
@@ -189,6 +229,9 @@ export function brakeLevels(raw, p0, dir, cap = null) {
       seen.push(v);
       return true;
     });
+  // Die harte Grenze hängt als letztes, stärkstes Bremslevel hinten dran.
+  const boundIdx = cap != null && (cap - p0) * dir > 0 ? levels.push(cap) - 1 : -1;
+  return { levels, boundIdx };
 }
 
 /* ── Hauptfunktion ────────────────────────────────────────────────────────── */
@@ -218,13 +261,13 @@ export function buildForecast({
   const driftD = dailyLogDrift(monthlyDrift);
   const k = Math.max(-1, Math.min(1, (num(biasScore) ?? 0) / 100));
 
-  // Harte Grenzen nur, wenn sie auf der richtigen Seite von p0 liegen. Kurs
-  // über ATH (Blue Sky) ⇒ kein Deckel, die ATH-Linie bleibt nur Referenz.
+  // Grenzen zählen nur auf der richtigen Seite von p0. Kurs bereits über dem
+  // ATH (Blue Sky) ⇒ keine Grenze, die ATH-Linie bleibt reine Referenz.
   const capUp   = num(cap)   != null && num(cap)   > price ? num(cap)   : null;
   const floorDn = num(floor) != null && num(floor) < price ? num(floor) : null;
 
-  const upLevels = brakeLevels(resistances, price, +1, capUp);
-  const dnLevels = brakeLevels(supports,    price, -1, floorDn);
+  const up = brakeLevels(resistances, price, +1, capUp);
+  const dn = brakeLevels(supports,    price, -1, floorDn);
 
   const defs = [
     { key: 'breakout',  label: 'Breakout',   mult: +(BASE_SIGMA_MULT + BIAS_SIGMA_BONUS * Math.max(k, 0)) },
@@ -233,29 +276,33 @@ export function buildForecast({
   ];
 
   const scenarios = defs.map(({ key, label, mult }) => {
-    const dir = mult > 0 ? +1 : mult < 0 ? -1 : (driftD >= 0 ? +1 : -1);
-    const levels = dir > 0 ? upLevels : dnLevels;
-    const bound = dir > 0 ? capUp : floorDn;
-
     const points = [{ t: 0, value: price }];
     let brake = null;
-    let capped = false;
+    let atBound = false;
     for (let t = 1; t <= days; t++) {
-      const raw = price * Math.exp(driftD * t + mult * sigmaD * Math.sqrt(t));
-      const br = applyBrakes(raw, price, levels, dir);
-      let v = br.value;
-      if (br.brake != null) brake = br.brake;
-      if (bound != null && (v - bound) * dir > 0) { v = bound; capped = true; }
+      const raw = price * Math.exp(cumulativeDrift(driftD, t) + mult * sigmaD * Math.sqrt(t));
+      /* Die Leiter richtet sich nach dem ROHPUNKT, nicht nach dem Szenario:
+         ein Breakout-Ast unter p0 (stark negative Drift) muss an Supports
+         bremsen, nicht an Resistances. Sonst laufen die Äste ineinander und
+         die Reihenfolge Breakout ≥ Status Quo ≥ Breakdown kippt. */
+      const dir = raw >= price ? +1 : -1;
+      const ladder = dir > 0 ? up : dn;
+      const br = applyBrakes(raw, price, ladder.levels, dir, ladder.boundIdx);
+      if (br.brake != null) { brake = br.brake; atBound = br.atBound; }
+      /* Namensgarantie: ein „Breakdown" endet nie über dem Startkurs und ein
+         „Breakout" nie darunter. Bei extremer Drift und kleinem σ könnte die
+         Rechnung das sonst hergeben — dann ist der Ast flach, aber ehrlich. */
+      const v = mult > 0 ? Math.max(br.value, price)
+        : mult < 0 ? Math.min(br.value, price)
+          : br.value;
       points.push({ t, value: v });
     }
 
     const target = points[points.length - 1].value;
-    const z = zScore(target, price, driftD, sigmaD, days);
     return {
-      key, label, mult, dir, points, target,
+      key, label, mult, points, target,
       changePct: (target / price - 1) * 100,
-      brake, cap: capped ? bound : null,
-      z,
+      brake, atBound,
     };
   });
 
@@ -263,19 +310,29 @@ export function buildForecast({
      zusammen 100 % ergeben: oberhalb des Breakout-Ziels, unterhalb des
      Breakdown-Ziels, Rest = Status Quo. Gerechnet wird auf die ANGEZEIGTEN
      (gebremsten) Ziele — der Leser soll die Zahl neben dem Ziel lesen können,
-     das im Chart steht. */
-  const [up, st, dn] = scenarios;
-  const pUp = up.z == null ? null : 1 - normCdf(up.z);
-  const pDn = dn.z == null ? null : normCdf(dn.z);
-  up.prob = pUp == null ? null : pUp * 100;
-  dn.prob = pDn == null ? null : pDn * 100;
-  st.prob = (pUp == null || pDn == null) ? null : Math.max(0, 1 - pUp - pDn) * 100;
+     das im Chart steht.
+
+     Die Grenzen werden vorher sortiert: liegen zwei Ziele gleichauf (beide an
+     derselben Bremse), fällt der mittlere Bereich auf 0 % zusammen statt
+     negativ zu werden. Genau das ging vorher schief, als Breakout und Status
+     Quo beide am ATH klebten. */
+  const [sUp, sSt, sDn] = scenarios;
+  const hi = Math.max(sUp.target, sSt.target);
+  const lo = Math.min(sDn.target, sSt.target);
+  const zUp = zScore(hi, price, driftD, sigmaD, days);
+  const zDn = zScore(lo, price, driftD, sigmaD, days);
+  const pUp = zUp == null ? null : 1 - normCdf(zUp);
+  const pDn = zDn == null ? null : normCdf(zDn);
+  sUp.prob = pUp == null ? null : pUp * 100;
+  sDn.prob = pDn == null ? null : pDn * 100;
+  sSt.prob = (pUp == null || pDn == null) ? null : Math.max(0, 1 - pUp - pDn) * 100;
 
   return {
     p0: price, sigmaD, driftD, monthlyDrift, days,
     bias: k * 100,
     horizonSigmaPct: sigmaD * Math.sqrt(days) * 100,
-    upLevels, dnLevels, cap: capUp, floor: floorDn,
+    horizonDriftPct: (Math.exp(cumulativeDrift(driftD, days)) - 1) * 100,
+    upLevels: up.levels, dnLevels: dn.levels, cap: capUp, floor: floorDn,
     scenarios,
   };
 }

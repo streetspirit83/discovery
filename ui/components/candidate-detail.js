@@ -16,7 +16,7 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { buildForecast, futureBusinessDays, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260818c';
+import { buildForecast, futureBusinessDays, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260818d';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -1285,10 +1285,11 @@ function forecastFanPrimitive(seriesData, colors) {
 }
 
 function forecastRow(s) {
-  const note = [
-    s.cap != null ? `Cap ${fmtNum(s.cap)}` : null,
-    s.brake != null ? `gebremst ${fmtNum(s.brake)}` : null,
-  ].filter(Boolean).join(' · ') || 'freier Lauf';
+  // `atBound` = der Pfad hat ATH bzw. 52W-Tief erreicht; dahinter läuft er nur
+  // noch im Zeitlupentempo weiter (BEYOND_BOUND_SLOPE), steht aber nicht still.
+  const note = s.brake == null ? 'freier Lauf'
+    : s.atBound ? `${s.mult >= 0 ? 'ATH' : '52W-Tief'} ${fmtNum(s.brake)} erreicht`
+      : `gebremst ${fmtNum(s.brake)}`;
   const cls = FC_CLS[s.key];
   return `<div class="fc-row fc-row--${s.key}">
     <span class="fc-row__dot fc-row__dot--${cls}"></span>
@@ -1340,14 +1341,25 @@ function renderForecastTab(c, disp, fi) {
     chartBody = `<div class="ls-chart chart-loading">Keine Kursquelle für diesen Titel –
       die Szenarien unten rechnen trotzdem aus den TV-Daten.</div>`;
   }
+  /* Der Chart skaliert auf Kerzen + Szenarien; waagerechte Linien zählen dabei
+     nicht mit. Ein Fair Value von 213 bei Kurs 92 liegt damit außerhalb des
+     Bildes — die Legende nennt ihn trotzdem, sagt aber dazu, dass er nicht zu
+     sehen ist. Sonst sucht man eine Linie, die es im Ausschnitt nicht gibt. */
+  const seen = canBars
+    ? c.swing_analysis.ohlc.slice(-FC_HISTORY_BARS).flatMap((b) => [b.l * fi.barsF, b.h * fi.barsF])
+      .concat(fc.scenarios.flatMap((s) => [s.points[s.points.length - 1].value, fc.p0]))
+    : [];
+  const lo = seen.length ? Math.min(...seen) : null;
+  const hi = seen.length ? Math.max(...seen) : null;
+  const offRange = (v) => (lo != null && (v < lo || v > hi) ? ' <small>(außerhalb)</small>' : '');
   parts.push(`<div class="chart-head-row"><h4 class="pv-subhead">3 Monate Verlauf + 6 Monate Projektion</h4></div>
     ${chartBody}
     <div class="fc-legend">
       <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--pos"></i>Breakout</span>
       <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--muted"></i>Status Quo</span>
       <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--neg"></i>Breakdown</span>
-      ${fi.ath != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--ath"></i>ATH ${fmtNum(fi.ath)}</span>` : ''}
-      ${fi.fair != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--fair"></i>Fair Value ${fmtNum(fi.fair)}</span>` : ''}
+      ${fi.ath != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--ath"></i>ATH ${fmtNum(fi.ath)}${offRange(fi.ath)}</span>` : ''}
+      ${fi.fair != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--fair"></i>Fair Value ${fmtNum(fi.fair)}${offRange(fi.fair)}</span>` : ''}
     </div>`);
 
   parts.push(`<h4 class="pv-subhead">Szenarien in 6 Monaten (${cur})</h4>
