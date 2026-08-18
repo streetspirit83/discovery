@@ -27,7 +27,7 @@
  * deshalb 24 h Cache (der DCF ändert sich ohnehin nur täglich).
  */
 
-import { isUsTicker } from './tv-swings.js?v=20260814f';
+import { isUsTicker } from './tv-swings.js?v=20260814j';
 
 const BASE = 'https://financialmodelingprep.com/stable';
 const TTL_MS = 24 * 60 * 60 * 1000;

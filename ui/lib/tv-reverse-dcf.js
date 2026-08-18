@@ -209,6 +209,26 @@ export function growthLadder(tv, opts = {}) {
 }
 
 /**
+ * impliedGrowthForValue(tv, targetValue, opts) → Wachstumsrate | null
+ *
+ * Macht einen fremden Fair Value mit unserem vergleichbar: welche Rate müsste
+ * der FCF haben, damit UNSER Modell auf genau diesen Wert kommt? Damit lassen
+ * sich FMPs DCF und die eingepreiste Marktrate auf derselben Skala lesen,
+ * statt einen Eurobetrag gegen eine Prozentzahl zu stellen.
+ *
+ * `targetValue` ist ein Eigenkapitalwert in derselben Währung wie market_cap.
+ */
+export function impliedGrowthForValue(tv, targetValue, opts = {}) {
+  const o = { ...DCF_DEFAULTS, ...opts };
+  const fcf = fcfAbsolute(tv);
+  if (fcf == null || fcf <= 0) return null;
+  if (!Number.isFinite(targetValue) || targetValue <= 0) return null;
+  const { rate } = discountRate(tv, o);
+  const { growth } = solveImpliedGrowth(fcf, targetValue, rate, o.terminalGrowth, o.years);
+  return growth;
+}
+
+/**
  * Einordnung der eingepreisten Rate. Bewusst grob und ohne Punktzahl: das hier
  * ist kein Score, sondern eine Lesehilfe („was muss passieren, damit der Kurs
  * aufgeht?"). Die Schwellen sind Erfahrungswerte, nicht kalibriert.

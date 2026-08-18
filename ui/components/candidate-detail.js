@@ -10,12 +10,13 @@ import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPS
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
-import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol } from '../lib/tv-swings.js?v=20260814b';
+import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol } from '../lib/tv-swings.js?v=20260814j';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
-import { reverseDcf, growthDemandLabel, growthLadder } from '../lib/tv-reverse-dcf.js?v=20260814i';
+import { reverseDcf, growthDemandLabel, growthLadder, impliedGrowthForValue } from '../lib/tv-reverse-dcf.js?v=20260814j';
+import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814j';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -1162,6 +1163,53 @@ function kv(label, value, cls = '') {
   return `<div class="tv-kv"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
 }
 
+/* FMP-Zweitmeinung: ein mechanischer DCF aus fremder Hand. Der Mehrwert liegt
+   nicht im absoluten Wert, sondern im Vergleich — deshalb wird FMPs Fair Value
+   durch UNSERE Bisektion zurückgerechnet: welches Wachstum müsste gelten,
+   damit unser Modell auf FMPs Zahl kommt? Erst dadurch stehen Markt, eigenes
+   Modell und FMP auf derselben Skala statt Betrag gegen Prozent. */
+function renderFmpRow(c, tv, disp) {
+  const f = c.fmp_valuation;
+  if (c._fmp_loading) return `<p class="tb-hint">Lade FMP-Bewertung …</p>`;
+
+  if (!f) {
+    if (!isUsTicker(c)) return '';                       // stumm: FMP kann Nicht-US nicht
+    return `<p class="tb-hint"><button class="btn btn-sm btn-secondary" id="fmp-load">${icons.scale} FMP-Zweitmeinung laden</button></p>`;
+  }
+  if (f.unsupported) return '';
+  if (f.error) {
+    return `<p class="tb-hint is-warn">${fmpErrorText(f.error)}
+      <button class="btn btn-sm btn-secondary" id="fmp-load">${icons.refreshCw} Erneut</button></p>`;
+  }
+
+  const pct = (v, dec = 1) => (v == null ? '—' : `${fmtNum(v * 100, dec)} %`);
+  const upCls = f.upside == null ? '' : f.upside >= 0 ? 'pos' : 'neg';
+  const upTxt = f.upside == null ? '—'
+    : `${f.upside >= 0 ? '+' : '−'}${fmtNum(Math.abs(f.upside) * 100, 0)} %`;
+
+  // FMPs Wert je Aktie → Eigenkapitalwert, damit unsere Rechnung greifen kann.
+  const rd = reverseDcf(tv);
+  const fmpValue = (!rd.error && f.upside != null) ? rd.market_cap * (1 + f.upside) : null;
+  const fmpGrowth = fmpValue == null ? null : impliedGrowthForValue(tv, fmpValue);
+
+  return `
+    <div class="tb-stats">
+      ${trendStat('FMP Fair Value', f.dcf == null ? '—' : `${fmtNum(f.dcf)} ${disp.cur}`,
+        f.date ? `Stand ${deDate(f.date)}` : 'mechanischer DCF')}
+      ${trendStat('zum Kurs', upTxt, f.price == null ? '' : `Kurs ${fmtNum(f.price)}`, upCls)}
+      ${trendStat('FMP-Rating', f.rating ?? '—',
+        f.scores?.overall == null ? '' : `${f.scores.overall} von 5`)}
+    </div>
+    <p class="tb-hint">${fmpGrowth == null ? ''
+      : `Auf unsere Skala gebracht: FMPs Wert entspräche <b>${fmtNum(fmpGrowth * 100, 1)} % Wachstum</b>,
+         der Markt preist ${fmtNum(rd.implied_growth * 100, 1)} % ein.
+         ${Math.abs(fmpGrowth - rd.implied_growth) > 0.05
+           ? 'Die beiden Modelle sind sich deutlich uneinig — die Differenz steckt in FMPs Annahmen, nicht in den Zahlen.'
+           : 'Beide Modelle liegen nah beieinander.'} `}
+      FMPs DCF ist mechanisch und mit konservativen Standardannahmen gerechnet, kein Analysten-Fair-Value.
+      <button class="btn btn-sm btn-secondary" id="fmp-load">${icons.refreshCw} Aktualisieren</button></p>`;
+}
+
 /* Szenario-Leiter: derselbe Rechenkern vorwärts. Eingeklappt, damit der
    Fund.-Tab nicht länger wird — wie die Ring-Legende im Trend-Tab.
    Der Balken ist bei ±150 % gekappt: die Spanne reicht real bis weit über
@@ -1245,6 +1293,7 @@ function renderReverseDcfBlock(c, tv, disp) {
     } · risikofrei ${pct(a.riskFree, 1)} · Risikoprämie ${pct(a.erp, 1)}) ·
       ewiges Wachstum ${pct(a.terminalGrowth, 1)} · FCF ${formatMarketCap(d.fcf)} ${cur}.
       Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>
+    ${renderFmpRow(c, tv, disp)}
     ${renderLadderDetails(tv, disp)}`;
 }
 
@@ -2084,6 +2133,11 @@ export class CandidateDetail {
     // ungefragt eine Proxy-Runde auslöst.
     this.el.querySelector('#st-load')?.addEventListener('pointerup', () => {
       this.onAction?.('stSentiment', c);
+    });
+
+    // FMP-Zweitmeinung (nur US-Titel, 250 Anfragen/Tag) — ebenfalls on demand.
+    this.el.querySelector('#fmp-load')?.addEventListener('pointerup', () => {
+      this.onAction?.('fmpValuation', c);
     });
 
     // Earnings-Call-Transcript: Laden + LLM-Copy (Prompt + Volltext).
