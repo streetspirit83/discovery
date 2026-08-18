@@ -228,6 +228,109 @@ export function impliedGrowthForValue(tv, targetValue, opts = {}) {
   return growth;
 }
 
+/* ── Fairer Kurs + Break-even je Stellschraube ───────────────────────────────
+   Eine eingepreiste Rate lässt sich schlecht gegen die Wirklichkeit halten,
+   ein Kurs schon. `fairValue()` dreht die Aussage deshalb um: ein fairer Kurs
+   aus einer benannten Wachstumsannahme — und je Eingang der Wert, den genau
+   dieser annehmen müsste, damit der faire Kurs dem Marktkurs entspricht.
+
+   Getrennt ausgewiesen wird, was **nachprüfbar** ist (TV-Felder, exakt so
+   benannt wie im Fundamental-Block: „P/FCF", „Beta") und was **Annahme** ist
+   (Wachstum, ewiges Wachstum, Diskontsatz-Bausteine). Nur die erste Gruppe
+   lässt sich gegen Geschäftsberichte prüfen; die zweite ist Setzung. */
+
+// Über zehn Jahre halten sehr wenige Firmen mehr als 15 % FCF-Wachstum durch.
+// Das beobachtete Wachstum wird deshalb gedeckelt statt fortgeschrieben.
+const BASE_GROWTH_CAP = 0.15;
+const BASE_GROWTH_FALLBACK = 0.08;
+
+/** Barwert je Einheit FCF — PV ist in FCF linear, das macht die Umkehr exakt. */
+function pvPerFcf(g, r, gt, years) { return presentValue(1, g, r, gt, years); }
+
+/** Allgemeine Bisektion für monotone Break-even-Suchen. */
+function bisect(f, lo, hi, rising, steps = 60) {
+  for (let i = 0; i < steps; i++) {
+    const mid = (lo + hi) / 2;
+    if (rising ? f(mid) < 0 : f(mid) > 0) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * fairValue(tv, opts) →
+ *   { fair_price, price, upside, base_growth, base_source, fcf, rate, beta,
+ *     drivers: [{ key, label, unit, current, breakeven, verifiable }] }
+ * | { error }
+ *
+ * `breakeven` = Wert, bei dem fair_price === price. null, wenn ausserhalb des
+ * sinnvollen Suchbereichs (dann ist dieser Eingang allein nicht der Hebel).
+ */
+export function fairValue(tv, opts = {}) {
+  const o = { ...DCF_DEFAULTS, ...opts };
+  const base = reverseDcf(tv, o);
+  if (base.error) return base;
+
+  const { fcf, market_cap: mc, rate, beta } = base;
+  const price = num(tv?.close_1m) ?? num(tv?.close);
+  const gt = o.terminalGrowth;
+  const N = o.years;
+
+  // Basisannahme: beobachtetes FCF-Wachstum, gedeckelt — die einzige empirische
+  // Grösse, die wir haben. Ohne sie ein neutraler Mittelwert.
+  const obs = base.observed_growth;
+  const baseGrowth = obs == null ? BASE_GROWTH_FALLBACK
+    : Math.min(Math.max(obs, 0), BASE_GROWTH_CAP);
+  /* Bausteine statt fertigem Satz: die Lib bleibt locale-frei, die deutsche
+     Formulierung samt Zahlenformat entsteht in der UI (fmtNum). */
+  const baseSource = obs == null ? 'none' : obs > BASE_GROWTH_CAP ? 'capped'
+    : obs < 0 ? 'floored' : 'observed';
+
+  const value = presentValue(fcf, baseGrowth, rate, gt, N);
+  const fairPrice = price == null ? null : price * (value / mc);
+
+  /* Break-even je Eingang, alles andere festgehalten. */
+  // Wachstum: exakt die eingepreiste Rate.
+  const beGrowth = base.implied_growth;
+
+  // Beta: PV fällt mit steigendem Beta (höherer Diskontsatz) ⇒ fallend.
+  const pvForBeta = (b) => presentValue(fcf, baseGrowth, o.riskFree + b * o.erp, gt, N) - mc;
+  const beBeta = (pvForBeta(0.1) < 0 || pvForBeta(5) > 0)
+    ? null : bisect(pvForBeta, 0.1, 5, false);
+
+  // P/FCF: PV ist linear in FCF ⇒ das nötige P/FCF ist genau der Barwert je
+  // FCF-Einheit. Keine Suche nötig.
+  const bePfcf = pvPerFcf(baseGrowth, rate, gt, N);
+
+  // Ewiges Wachstum: PV steigt mit gt, Definitionsbereich endet unter dem Zins.
+  const pvForGt = (x) => presentValue(fcf, baseGrowth, rate, x, N) - mc;
+  const beGt = (pvForGt(-0.05) > 0 || pvForGt(rate - 0.001) < 0)
+    ? null : bisect(pvForGt, -0.05, rate - 0.001, true);
+
+  return {
+    fair_price: fairPrice,
+    price,
+    upside: fairPrice == null ? null : fairPrice / price - 1,
+    base_growth: baseGrowth,
+    base_source: baseSource,      // 'none' | 'capped' | 'floored' | 'observed'
+    base_observed: obs,
+    base_cap: BASE_GROWTH_CAP,
+    fcf, market_cap: mc, rate, beta,
+    terminal_share: terminalShare(fcf, baseGrowth, rate, gt, N),
+    leverage_warn: base.leverage_warn,
+    assumptions: base.assumptions,
+    drivers: [
+      { key: 'growth', label: 'Wachstum', unit: '%', verifiable: false,
+        current: baseGrowth, breakeven: beGrowth },
+      { key: 'pfcf', label: 'P/FCF', unit: 'x', verifiable: true,
+        current: num(tv?.price_free_cash_flow_ttm), breakeven: bePfcf },
+      { key: 'beta', label: 'Beta', unit: '', verifiable: true,
+        current: num(tv?.beta) ?? num(tv?.beta_3_year), breakeven: beBeta },
+      { key: 'terminal', label: 'Ewige Rente', unit: '%', verifiable: false,
+        current: gt, breakeven: beGt },
+    ],
+  };
+}
+
 /**
  * Einordnung der eingepreisten Rate. Bewusst grob und ohne Punktzahl: das hier
  * ist kein Score, sondern eine Lesehilfe („was muss passieren, damit der Kurs

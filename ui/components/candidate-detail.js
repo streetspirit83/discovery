@@ -15,7 +15,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci } from '../lib/chart-indicators.js?v=20260807a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
-import { reverseDcf, growthDemandLabel, growthLadder, impliedGrowthForValue } from '../lib/tv-reverse-dcf.js?v=20260814j';
+import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814n';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260814m';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -1261,44 +1261,64 @@ function renderLadderDetails(tv, disp) {
    deutlich auf den Diskontsatz (ERP 4 statt 6 % verschiebt sie um rund 4 pp),
    und ohne sichtbare Annahmen liest sich eine Rechnung wie eine Messung. */
 function renderReverseDcfBlock(c, tv, disp) {
-  const head = `<h4 class="pv-subhead">Eingepreistes Wachstum · Reverse-DCF</h4>`;
-  const d = reverseDcf(tv);
+  const head = `<h4 class="pv-subhead">Fairer Kurs · DCF</h4>`;
+  const f = fairValue(tv);
 
-  if (d.error === 'negative_fcf') {
-    return head + `<p class="tb-hint">Der freie Cashflow ist negativ — ein Wachstumspfad
-      darauf ergäbe jeden Barwert negativ. Für diesen Titel lässt sich nichts einpreisen.</p>`;
+  if (f.error === 'negative_fcf') {
+    return head + `<p class="tb-hint">Der freie Cashflow ist negativ — jeder Wachstumspfad
+      darauf ergäbe einen negativen Barwert. Für diesen Titel lässt sich kein fairer
+      Kurs rechnen.</p>`;
   }
-  if (d.error) {
+  if (f.error) {
     return head + `<p class="tb-hint">Nicht berechenbar: es fehlen Marktkapitalisierung
       oder P/FCF aus den TV-Daten.</p>`;
   }
 
   const pct = (v, dec = 1) => (v == null ? '—' : `${fmtNum(v * 100, dec)} %`);
-  const label = growthDemandLabel(d.implied_growth);
-  // Liefert die Firma mehr, als der Kurs verlangt, ist die Lücke positiv gemeint.
-  const gapCls = d.gap == null ? '' : d.gap <= 0 ? 'pos' : 'neg';
-  const gapTxt = d.gap == null ? '—'
-    : `${d.gap >= 0 ? '+' : '−'}${fmtNum(Math.abs(d.gap) * 100, 1)} pp`;
-
   const cur = nativeCur(c);
-  const a = d.assumptions;
+  const a = f.assumptions;
+  const upCls = f.upside == null ? '' : f.upside >= 0 ? 'pos' : 'neg';
+  const upTxt = f.upside == null ? '—'
+    : `${f.upside >= 0 ? '+' : '−'}${fmtNum(Math.abs(f.upside) * 100, 0)} %`;
+
+  /* Break-even je Stellschraube: welchen Wert müsste genau dieser Eingang
+     annehmen, damit der faire Kurs auf den Marktkurs fällt? Nachprüfbare
+     TV-Felder tragen ihren Namen aus dem Block „Bewertung & Rendite" darüber,
+     damit man sie dort direkt gegenlesen kann. */
+  const driverCards = f.drivers.map((d) => {
+    const fmtD = (v) => (v == null ? '—' : d.unit === '%' ? pct(v) : `${fmtNum(v, 2)}${d.unit}`);
+    const quelle = d.verifiable ? 'TV-Feld' : 'Annahme';
+    return trendStat(d.label, fmtD(d.breakeven),
+      `aktuell ${fmtD(d.current)} · ${quelle}`,
+      d.verifiable ? '' : 'pv-muted');
+  }).join('');
 
   return head + `
     <div class="tb-stats">
-      ${trendStat('Eingepreist', pct(d.implied_growth),
-        `p. a. · ${a.years} J · ${label?.text ?? ''}${d.bounded ? ' · ausserhalb der Skala' : ''}`,
-        d.implied_growth > 0.20 ? 'neg' : d.implied_growth <= 0.05 ? 'pos' : '')}
-      ${trendStat('Beobachtet', pct(d.observed_growth), 'FCF TTM y/y')}
-      ${trendStat('Lücke', gapTxt,
-        d.gap == null ? '' : d.gap <= 0 ? 'Firma liefert mehr' : 'Firma liefert weniger', gapCls)}
+      ${trendStat('Fairer Kurs', f.fair_price == null ? '—' : `${fmtNum(f.fair_price)} ${disp.cur}`,
+        `bei ${pct(f.base_growth)} Wachstum`, upCls)}
+      ${trendStat('Kurs', f.price == null ? '—' : `${fmtNum(f.price)} ${disp.cur}`, 'aktuell')}
+      ${trendStat('Abstand', upTxt, f.upside == null ? '' : f.upside >= 0 ? 'unterbewertet' : 'überbewertet', upCls)}
     </div>
-    ${d.leverage_warn ? `<p class="tb-hint is-warn">Debt/Equity über 1,5: die Rechnung
-      diskontiert den gesamten FCF mit Eigenkapitalkosten. Bei dieser Verschuldung
-      fällt die eingepreiste Rate dadurch zu niedrig aus — als untere Grenze lesen.</p>` : ''}
-    <p class="tb-hint">Annahmen: Diskontsatz ${pct(d.rate)} (β ${fmtNum(d.beta, 2)}${
-      d.beta_raw != null && d.beta_raw !== d.beta ? ` · gedämpft von ${fmtNum(d.beta_raw, 2)}` : ''
-    } · risikofrei ${pct(a.riskFree, 1)} · Risikoprämie ${pct(a.erp, 1)}) ·
-      ewiges Wachstum ${pct(a.terminalGrowth, 1)} · FCF ${formatMarketCap(d.fcf)} ${cur}.
+    <p class="tb-hint">Wachstumsannahme ${pct(f.base_growth)}: ${{
+      none:     'kein FCF-Wachstum in den TV-Daten, deshalb ein neutraler Mittelwert',
+      capped:   `beobachtet sind ${pct(f.base_observed)} (FCF YoY), gedeckelt auf ${pct(f.base_cap, 0)} — über zehn Jahre halten wenige Firmen mehr durch`,
+      floored:  `beobachtet sind ${pct(f.base_observed)} (FCF YoY); Schrumpfung wird nicht fortgeschrieben, deshalb 0 %`,
+      observed: `entspricht dem beobachteten FCF YoY von ${pct(f.base_observed)}`,
+    }[f.base_source] ?? ''}.</p>
+
+    <h4 class="pv-subhead">Was müsste sich ändern?</h4>
+    <p class="tb-hint">Jeder Wert unten ist der Break-even: nähme <b>allein dieser Eingang</b>
+      ihn an, entspräche der faire Kurs genau dem Marktkurs. Je weiter er vom aktuellen
+      Wert entfernt liegt, desto weniger hängt die Bewertung an ihm.</p>
+    <div class="tb-stats">${driverCards}</div>
+    ${f.leverage_warn ? `<p class="tb-hint is-warn">Debt/Equity über 1,5: gerechnet wird der
+      gesamte FCF gegen die Marktkapitalisierung mit Eigenkapitalkosten. Bei dieser
+      Verschuldung fällt der faire Kurs dadurch zu hoch aus — als Obergrenze lesen.</p>` : ''}
+    <p class="tb-hint">Diskontsatz ${pct(f.rate)} (β ${fmtNum(f.beta, 2)} · risikofrei
+      ${pct(a.riskFree, 1)} · Risikoprämie ${pct(a.erp, 1)}) · ewiges Wachstum
+      ${pct(a.terminalGrowth, 1)} · FCF ${formatMarketCap(f.fcf)} ${cur} ·
+      ${pct(f.terminal_share, 0)} des Werts aus der ewigen Rente.
       Kein Score — steht neben den Kennzahlen, nicht in ihnen.</p>
     ${renderFmpRow(c, tv, disp)}
     ${renderLadderDetails(tv, disp)}`;
