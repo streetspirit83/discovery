@@ -94,7 +94,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
   geladener TD-Historie Bias-Verlauf, Regime-Statistik und Fragilität.
   Tab „Prog." (Forecast) zeigt zusätzlich das Analysten-Konsensziel als
-  gestrichelten Verlauf mit Fächer (Spalte „PTØ" in Standard- und Trade-Ansicht)
+  gestrichelten Verlauf mit Fächer (Spalte „PTØ" in der Trade-Ansicht neben „Target")
   und projiziert 6 Monate: 3 Monate echte Kerzen + drei
   gestrichelte Szenarien (Breakout/Status Quo/Breakdown) mit Fächer-Fläche, ATH
   und Fair Value als Linien — Rechnung in `tv-forecast.js`, Spec in

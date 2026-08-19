@@ -150,12 +150,14 @@ liefert seine Währung mit und wird über `curDisplayFactor` umgerechnet. Geht d
 nicht (wir haben nur USD↔EUR), fällt das Ziel mitsamt Linie weg und eine Notiz
 sagt warum — ein EUR-Ziel neben einem USD-Kurs wäre schlimmer als keins.
 
-In den Tabellen steht das Ziel als Spalte **PTØ** — in der Standard-Ansicht
-direkt rechts neben LS, in der Trade-Ansicht neben deren LS-Spalte. Zielpreis
-oben, Potenzial gegenüber dem LS-Kurs als kleinere zweite Zeile; **sortiert wird
-nach dem Potenzial**, nicht nach dem Zielpreis (340 sagt für sich nichts, „+18 %"
-ist über alle Titel vergleichbar). Die drei Leerfälle sind im Tooltip
-unterscheidbar: keine TV-Daten · TV-Daten älter als das Feld · TV führt kein Ziel.
+In der Tabelle steht das Ziel als Spalte **PTØ** in der **Trade-Ansicht direkt
+neben „Target"** — nur der Zielpreis, ohne Prozent-Unterzeile: zwei Prozentwerte
+nebeneinander lasen sich als Vergleich zweier Ziele, was sie nicht sind. Spanne,
+Anzahl Ratings und das Potenzial gegenüber dem LS-Kurs stehen im Zell-Tooltip.
+**Sortiert wird nach dem Potenzial**, nicht nach dem Zielpreis (340 sagt für sich
+nichts, „+18 %" ist über alle Titel vergleichbar) — der Spaltentooltip sagt das.
+Die drei Leerfälle sind unterscheidbar: keine TV-Daten · TV-Daten älter als das
+Feld · TV führt kein Ziel.
 
 Das Analysten-Ziel zieht die Preisskala des Charts mit (`autoscaleInfoProvider`),
 sonst läge die Linie oft knapp ausserhalb. ATH und Fair Value tun das bewusst
