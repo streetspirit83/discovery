@@ -111,6 +111,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Data: `tv-enrichment.js` (TV scanner bulk fetch + FX + indices),
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
   `stocktwits-sentiment.js` (Retail-Bull/Bear-Tagesreihe, on demand im Trend-Tab),
+  `analyst-targets.js` (Analysten-Kursziele: TV aus `tv_data`, Yahoo on demand
+  über `/api/yahoo-analyst` mit 12-h-localStorage-Cache),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
 - Bars/Swings: `tv-swings.js` holt die Tages-OHLC — **US → TwelveData, alles
   andere → Yahoo über die scrape-proxy** — und rechnet Zonen/Struktur/ATR daraus.
@@ -149,6 +151,14 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
 
 - **TradingView scanner** (`scanner.tradingview.com/{market}/scan`): bulk
   enrichment, screener, EUR/USD rate, and the DAX/NASDAQ/NIKKEI/VIX indices.
+  Liefert auch **Analysten-Kursziele**: `price_target_average/high/low/median`
+  plus `recommendation_total/buy/hold/sell` — für US- **und** XETR-Titel, ETFs
+  ausgenommen, in der Währung des Instruments. Zwei gemessene Eigenheiten:
+  unbekannte Spalten quittiert der Scanner mit **HTTP 200 und `null`** statt mit
+  einem Fehler (Existenz beweist nur ein Wert ≠ null über mehrere Titel), und
+  **Datum und Anzahl der Kursziel-Schätzungen gibt es nicht**
+  (`price_target_date`, `price_target_estimates_num` und vier weitere
+  Namensvarianten: immer null).
   **Field discipline:** in `tv-enrichment.js` the `TV_COLUMNS` array and the `COL`
   index-map must stay in matching order — a new field means adding it to *both*
   (same position) and mapping it in `buildUpdates()`.
@@ -170,6 +180,15 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   `discovery_twelvedata_key`; the public `demo` key only serves AAPL. Verified
   against a live call: a non-US symbol answers `404 "available starting with the
   Grow or Venture plan"` — there is no free workaround.
+- **Yahoo quoteSummary** (`/v10/finance/quoteSummary/{SYM}?modules=financialData`):
+  Analysten-Kursziele als **Fallback**, wenn TV für einen Titel keins hat — als
+  Einzige mit `numberOfAnalystOpinions`. Verlangt **Cookie + Crumb**
+  (`fc.yahoo.com` → `/v1/test/getcrumb`); ohne beides kommt `401 Invalid Crumb`,
+  gemessen für US- wie Nicht-US-Titel und mit mehreren User-Agents. Läuft
+  deshalb **nicht** über die scrape-proxy (die reicht nur den Body durch, kein
+  `Set-Cookie`), sondern über die eigene Funktion
+  `netlify/functions/yahoo-analyst.js`, die den Dreischritt serverseitig macht
+  und den Crumb 30 min cacht. Kursziele stehen in `financialCurrency`.
 - **Yahoo chart v8** (`query1.finance.yahoo.com/v8/finance/chart/{SYM}`): the
   free OHLC source for **non-US** titles (`range=2y` ≈ 507 daily bars, enough for
   swing zones AND the bias-history WARMUP). No key, no quota. Two hard rules:

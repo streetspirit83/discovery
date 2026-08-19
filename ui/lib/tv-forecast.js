@@ -337,6 +337,18 @@ export function buildForecast({
   };
 }
 
+/**
+ * probAtOrAbove(fc, target) → Wahrscheinlichkeit in % (oder null), dass der Kurs
+ * am Ende des Horizonts auf oder über `target` liegt — dieselbe Lognormal-
+ * Annahme wie die Szenarien, damit ein fremdes Ziel (z. B. das Analysten-
+ * Konsensziel) mit ihnen vergleichbar wird.
+ */
+export function probAtOrAbove(fc, target) {
+  if (!fc) return null;
+  const z = zScore(num(target), fc.p0, fc.driftD, fc.sigmaD, fc.days);
+  return z == null ? null : (1 - normCdf(z)) * 100;
+}
+
 /* ── Zeitachse ────────────────────────────────────────────────────────────── */
 
 /**

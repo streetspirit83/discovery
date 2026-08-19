@@ -121,7 +121,35 @@ Die drei Werte ergänzen sich damit zu 100 % und beantworten „wie weit trage i
 das Ziel neben der Kurve?". Sie sind so gut wie ihre Eingänge — eine kalibrierte
 Trefferquote ist das nicht.
 
-## 5. Kurzfrist-Setup (LS)
+## 5. Analysten-Konsens
+
+Als vierte Zeile unter den Szenarien und als Linie im Chart, mit der Spanne
+Tief–Hoch als Band über den Projektionsbereich (Ränder gestrichelt, sonst
+wäscht die Fläche über den sichtbaren Bereich hinaus aus).
+
+Quelle ist **TradingView** (`pt_average/high/low/median` aus `tv_data`, kommt im
+normalen Bulk-Abruf mit, kein Zusatzrequest). Hat TV für den Titel kein Ziel —
+ETFs, viele Small Caps —, lässt sich **Yahoo** on demand nachschlagen
+(`analyst-targets.js` → `/api/yahoo-analyst`); nur Yahoo kennt die Anzahl der
+Schätzungen. Bei TV steht daneben `recommendation_total` — das sind
+**Empfehlungen, nicht Kursziel-Schätzungen**, deshalb als „Ratings" beschriftet.
+
+Die Wahrscheinlichkeit der Zeile ist `probAtOrAbove(fc, Ziel)`, also dieselbe
+Lognormal-Annahme wie bei den Szenarien — nur so ist das Konsensziel mit ihnen
+vergleichbar statt bloss danebengestellt. Sie zählt bewusst **nicht** in die
+100 % der drei Szenarien hinein.
+
+Währung: TV-Werte stehen in `disp.tv` und sind damit schon umgerechnet; Yahoo
+liefert seine Währung mit und wird über `curDisplayFactor` umgerechnet. Geht das
+nicht (wir haben nur USD↔EUR), fällt das Ziel mitsamt Linie weg und eine Notiz
+sagt warum — ein EUR-Ziel neben einem USD-Kurs wäre schlimmer als keins.
+
+Das Analysten-Ziel zieht die Preisskala des Charts mit (`autoscaleInfoProvider`),
+sonst läge die Linie oft knapp ausserhalb. ATH und Fair Value tun das bewusst
+nicht: ein Fair Value von 329 bei Kurs 88 würde den Chart zusammenstauchen —
+sie werden stattdessen in der Legende als „(außerhalb)" markiert.
+
+## 6. Kurzfrist-Setup (LS)
 
 Unter der Szenario-Tabelle stehen die beiden Heuristiken aus
 `ls-history-signals.js` (`detectBreakoutSetup` / `detectBreakdownRisk`, 10 Tage
@@ -129,7 +157,7 @@ LS-Historie, max. 90 %). Sie messen **ein Setup von heute**, nicht den
 6-Monats-Pfad — deshalb eigener Block mit eigener Zeitangabe und bewusst nicht
 in die Szenario-Zeilen gemischt.
 
-## 6. Währung (die häufigste Fehlerquelle)
+## 7. Währung (die häufigste Fehlerquelle)
 
 `tv-forecast.js` rechnet währungsfrei: σ und μ sind relativ, alle absoluten
 Preise kommen **in einer Währung** herein. Die Umrechnung passiert in
@@ -144,7 +172,7 @@ Preise kommen **in einer Währung** herein. Die Umrechnung passiert in
 Ist die Bar-Währung nicht in die Anzeigewährung überführbar (wir haben nur
 USD↔EUR), fallen nur die Zonen weg — die Szenarien rechnen aus `tv_data` weiter.
 
-## 7. Chart
+## 8. Chart
 
 Lightweight Charts 4.2 (vendored). Der Chart entsteht **erst beim Öffnen des
 Tabs**: alle Tab-Panels liegen gleichzeitig im DOM, ein verstecktes ist 0 px

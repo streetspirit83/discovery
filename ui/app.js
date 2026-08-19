@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260814e';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260818d';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -15,16 +15,17 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
-import { renderControlModal } from './components/control-modal.js?v=20260814e';
+import { renderControlModal } from './components/control-modal.js?v=20260819a';
 import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260807a';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260819a';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
+import { fetchYahooTargets } from './lib/analyst-targets.js?v=20260819a';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260807a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
@@ -1002,6 +1003,29 @@ async function handleAction(action, candidate, extras = {}) {
       candidate.fmp_valuation = { error: 'http', checked_at: new Date().toISOString() };
     }
     candidate._fmp_loading = false;
+    rerender();
+    return;
+  }
+
+  /* Prog.-Tab: Analysten-Kursziel von Yahoo — nur als Fallback, wenn TV für den
+     Titel keins hat. Wie beim Sentiment nur im Speicher plus localStorage-Cache
+     (12 h) in `analyst-targets.js`; ein Kursziel im Blob würde nur veralten. */
+  if (action === 'yahooTargets') {
+    if (candidate._yh_loading) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._yh_loading = true; rerender();
+    try {
+      candidate.yh_targets = await fetchYahooTargets(candidate, { backendUrl, secret, force: extras?.force });
+      if (candidate.yh_targets?.error === 'none') toast('Yahoo kennt für diesen Titel kein Kursziel', 'info');
+      else if (candidate.yh_targets?.error) toast(`Yahoo-Kursziel fehlgeschlagen (${candidate.yh_targets.error})`, 'error');
+    } catch (err) {
+      console.warn('[yahoo-targets] fetch fehlgeschlagen:', err.message);
+      candidate.yh_targets = { error: 'http', detail: err.message };
+    }
+    candidate._yh_loading = false;
     rerender();
     return;
   }

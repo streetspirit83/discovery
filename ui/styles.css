@@ -2047,6 +2047,9 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .fc-row__dot--pos { background:var(--pos); }
 .fc-row__dot--neg { background:var(--neg); }
 .fc-row__dot--muted { background:var(--muted); }
+/* Analystenzeile: Fremdmeinung, deshalb abgesetzt statt wie ein viertes Szenario. */
+.fc-row--analyst { background:var(--surface-3); }
+.fc-row__dot--analyst { background:var(--accent); }
 .fc-row__id { min-width:0; }
 .fc-row__id b { display:block; font-size:var(--fs-2); font-weight:var(--fw-bold); }
 .fc-row__id small { display:block; font-size:var(--fs-1); color:var(--muted); }
@@ -2067,6 +2070,7 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .fc-legend__line { width:16px; height:2px; border-radius:1px; }
 .fc-legend__line--ath { background:var(--warn); }
 .fc-legend__line--fair { background:var(--ai); }
+.fc-legend__line--analyst { background:var(--accent); }
 
 /* Performance tab: 10-day LS band (price segments + volume-% bars) */
 .ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }

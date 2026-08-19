@@ -8,7 +8,7 @@ import { icons } from '../lib/icons.js?v=20260807a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260807a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260819a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
@@ -16,7 +16,8 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { buildForecast, futureBusinessDays, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260818d';
+import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
+import { analystTargets, yahooSymbol } from '../lib/analyst-targets.js?v=20260819a';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -75,6 +76,8 @@ const PRICE_FIELDS = [
   'pivot_demark_r1_1w', 'pivot_demark_s1_1w',
   'high_1m', 'low_1m', 'high_3m', 'low_3m', 'high_6m', 'low_6m',
   'price_52_week_high', 'price_52_week_low', 'high_all', 'low_all', 'high_52w',
+  // Analysten-Kursziele — stehen in Instrumentenwährung, skalieren also mit.
+  'pt_average', 'pt_high', 'pt_low', 'pt_median',
 ];
 
 function convertTv(tv, factor) {
@@ -185,17 +188,22 @@ function lsDisplayFactor(disp) {
   return disp.cur === 'EUR' ? 1 : (disp.cur === 'USD' && disp.fx ? disp.fx : null);
 }
 
+// Beliebige Fremdwährung → Anzeigewährung. null = nicht umrechenbar; wir haben
+// nur USD↔EUR als Kurs, alles andere bleibt nativ (siehe „LS = EUR" in CLAUDE.md).
+function curDisplayFactor(disp, native) {
+  const n = native ?? 'USD';
+  if (n === disp.cur) return 1;
+  if (n === 'USD' && disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
+  if (n === 'EUR' && disp.cur === 'USD' && disp.fx) return disp.fx;
+  return null;
+}
+
 // Bar-Währung → Anzeigewährung. Die Bars kommen je nach Titel von TwelveData
 // (USD) oder Yahoo (EUR/CHF/JPY/…), deshalb steht die Währung in der Analyse.
 // Ältere, vor dem Yahoo-Umbau gespeicherte Analysen haben kein `currency` —
 // die stammen zwangsläufig von TD und sind damit USD.
-// null = nicht umrechenbar (nur USD↔EUR haben wir als Kurs).
 function barsDisplayFactor(disp, analysis) {
-  const native = analysis?.currency ?? 'USD';
-  if (native === disp.cur) return 1;
-  if (native === 'USD' && disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
-  if (native === 'EUR' && disp.cur === 'USD' && disp.fx) return disp.fx;
-  return null;
+  return curDisplayFactor(disp, analysis?.currency);
 }
 
 // Which Performance-chart horizon can/should render: 10T LS-Intraday vs. 1J
@@ -1194,8 +1202,24 @@ function forecastInput(c, disp) {
   const supports    = [...zoneMids(a?.support),    tv.low_1m,  tv.low_3m,  tv.low_6m];
 
   const fv = fairValue(tv, lsPrice != null ? { price: lsPrice } : {});
+
+  /* Analysten-Kursziel: TV zuerst (steckt schon in `disp.tv`, also bereits in
+     Anzeigewährung), sonst ein nachgeladenes Yahoo-Ergebnis. Yahoo liefert
+     seine eigene Währung mit — die muss umgerechnet werden, sonst stünde ein
+     EUR-Ziel neben einem USD-Kurs. Geht das nicht (nur USD↔EUR haben wir),
+     fällt das Ziel weg statt falsch dazustehen. */
+  const raw = analystTargets(c, tv);
+  let analyst = null;
+  if (raw) {
+    const f = raw.source === 'tv' ? 1 : curDisplayFactor(disp, raw.currency);
+    if (f != null) {
+      const conv = (v) => (v == null ? null : v * f);
+      analyst = { ...raw, mean: conv(raw.mean), high: conv(raw.high), low: conv(raw.low), median: conv(raw.median) };
+    }
+  }
+
   return {
-    p0, lsPrice, barsF,
+    p0, lsPrice, barsF, analyst,
     fc: buildForecast({
       tv, p0,
       biasScore: computeBias(c.tv_data)?.score ?? 0,
@@ -1256,11 +1280,36 @@ function forecastFanPrimitive(seriesData, colors) {
       const dn = coords(seriesData.breakdown ?? []);
       if (!up || !st || !dn) return;
       target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize }) => {
+        const x = chart?.timeScale()?.timeToCoordinate(colors.anchor);
+        // Analysten-Spanne: waagerechtes Band vom Schnitt bis zum rechten Rand.
+        // Zuerst gezeichnet, damit der Fächer darüber liegt.
+        if (colors.analyst && x != null && series) {
+          const yHi = series.priceToCoordinate(colors.analyst.high);
+          const yLo = series.priceToCoordinate(colors.analyst.low);
+          if (yHi != null && yLo != null) {
+            context.fillStyle = colors.analyst.fill;
+            context.fillRect(x * hr, yHi * vr, bitmapSize.width - x * hr, (yLo - yHi) * vr);
+            /* Ränder als dünne Linien: die Fläche allein reicht über den
+               sichtbaren Bereich hinaus (Analystenspannen sind weit) und wäscht
+               dann zu einem gleichmässigen Schleier aus — erst die Kanten sagen,
+               wo Tief und Hoch wirklich liegen. */
+            context.save();
+            context.setLineDash([3 * hr, 3 * hr]);
+            context.strokeStyle = colors.analyst.edge;
+            context.lineWidth = Math.max(1, hr);
+            for (const y of [yHi, yLo]) {
+              context.beginPath();
+              context.moveTo(x * hr, y * vr);
+              context.lineTo(bitmapSize.width, y * vr);
+              context.stroke();
+            }
+            context.restore();
+          }
+        }
         band(context, up, st, colors.up, hr, vr);
         band(context, st, dn, colors.dn, hr, vr);
         // Trennlinie „hier endet die Messung": ohne sie ist im Chart nicht zu
         // sehen, wo die letzte echte Kerze steht und die Rechnung anfängt.
-        const x = chart?.timeScale()?.timeToCoordinate(colors.anchor);
         if (x == null) return;
         context.save();
         context.beginPath();
@@ -1348,6 +1397,9 @@ function renderForecastTab(c, disp, fi) {
   const seen = canBars
     ? c.swing_analysis.ohlc.slice(-FC_HISTORY_BARS).flatMap((b) => [b.l * fi.barsF, b.h * fi.barsF])
       .concat(fc.scenarios.flatMap((s) => [s.points[s.points.length - 1].value, fc.p0]))
+      // Das Analysten-Ziel zieht die Skala mit (siehe autoscaleInfoProvider),
+      // gilt hier also nie als „außerhalb".
+      .concat(fi.analyst?.mean != null ? [fi.analyst.mean] : [])
     : [];
   const lo = seen.length ? Math.min(...seen) : null;
   const hi = seen.length ? Math.max(...seen) : null;
@@ -1360,10 +1412,53 @@ function renderForecastTab(c, disp, fi) {
       <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--neg"></i>Breakdown</span>
       ${fi.ath != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--ath"></i>ATH ${fmtNum(fi.ath)}${offRange(fi.ath)}</span>` : ''}
       ${fi.fair != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--fair"></i>Fair Value ${fmtNum(fi.fair)}${offRange(fi.fair)}</span>` : ''}
+      ${fi.analyst?.mean != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--analyst"></i>Analysten Ø ${fmtNum(fi.analyst.mean)}${offRange(fi.analyst.mean)}</span>` : ''}
     </div>`);
 
+  /* Analystenzeile: dasselbe Format wie die Szenarien, aber sichtbar als
+     Fremdmeinung markiert (eigener Punkt, Quelle in der Unterzeile). Die
+     Wahrscheinlichkeit kommt aus derselben Lognormal-Annahme — nur so ist das
+     Konsensziel mit den drei Pfaden vergleichbar statt bloss danebengestellt. */
+  const a = fi.analyst;
+  const analystRow = a?.mean == null ? '' : (() => {
+    const spread = [a.low, a.high].every((v) => v != null)
+      ? `${fmtNum(a.low)}–${fmtNum(a.high)}` : null;
+    /* Kurz halten, damit die Zeile so hoch bleibt wie die drei Szenarien: die
+       Spanne steht als Band im Chart und hier im Tooltip, nicht im Klartext. */
+    const who = a.source === 'tv'
+      ? (a.ratings?.total != null ? `TV · ${a.ratings.total} Ratings` : 'TradingView')
+      : (a.analysts != null ? `Yahoo · ${a.analysts} Schätzungen` : 'Yahoo');
+    const prob = probAtOrAbove(fc, a.mean);
+    const chg = (a.mean / fc.p0 - 1) * 100;
+    const tip = `Analysten-Konsens${spread ? `, Spanne ${spread} ${cur}` : ''}`
+      + `${a.recommendation ? ` · Empfehlung ${a.recommendation}` : ''}`;
+    return `<div class="fc-row fc-row--analyst" title="${tip}">
+      <span class="fc-row__dot fc-row__dot--analyst"></span>
+      <div class="fc-row__id"><b>Analysten Ø</b><small>${who}</small></div>
+      <div class="fc-row__val"><b>${fmtNum(a.mean)}</b><small class="${chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</small></div>
+      <div class="fc-row__prob"><b>${prob == null ? '—' : `${Math.round(prob)}%`}</b><small>P</small></div>
+    </div>`;
+  })();
+
+  /* Kein TV-Ziel (ETFs, viele Small Caps) → Yahoo on demand nachladen. Kein
+     Button mehr, wenn Yahoo bereits geantwortet hat: „keins vorhanden" und
+     „liegt in einer Währung vor, die wir nicht umrechnen können" ändern sich
+     durch einen zweiten Klick nicht. */
+  const yhDone = c.yh_targets?.error === 'none' || (c.yh_targets?.mean != null && !a);
+  const yhLoad = (!a && !yhDone && yahooSymbol(c))
+    ? (c._yh_loading
+      ? `<button class="btn btn-sm btn-secondary" disabled>Yahoo wird gefragt …</button>`
+      : `<button class="btn btn-sm btn-secondary" id="yh-load">${icons.refreshCw} Analysten-Kursziel bei Yahoo suchen</button>`)
+    : '';
+  const yhMiss = !a && c.yh_targets?.error === 'none'
+    ? `<p class="ph-note">Auch Yahoo führt für diesen Titel kein Analysten-Kursziel.</p>`
+    : (!a && c.yh_targets?.mean != null
+      ? `<p class="ph-note">Yahoos Kursziel steht in ${c.yh_targets.currency ?? '?'} —
+         umrechnen können wir nur USD↔EUR, deshalb bleibt es hier weg.</p>` : '');
+
   parts.push(`<h4 class="pv-subhead">Szenarien in 6 Monaten (${cur})</h4>
-    <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}</div>
+    <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}${analystRow}</div>
+    ${yhMiss}${yhLoad}
     <p class="ph-note">Start ${fmtNum(fc.p0)} ${cur} (${fi.lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close'}) ·
       P = Wahrscheinlichkeit unter derselben Lognormal-Annahme, die drei Werte ergänzen sich zu 100 %.</p>`);
 
@@ -2229,10 +2324,26 @@ export class CandidateDetail {
     const hist = candles.slice(-FC_HISTORY_BARS);
     if (hist.length < 2) { chart.remove(); return; }
 
+    /* Die Preisskala richtet sich nach Kerzen + Szenarien. Das Analysten-Ziel
+       liegt oft knapp darüber und wäre dann unsichtbar — es wird deshalb in die
+       Skalierung einbezogen. ATH und Fair Value bewusst NICHT: ein Fair Value
+       von 329 bei Kurs 88 würde den ganzen Chart zusammenstauchen. */
+    const ptMean = fi.analyst?.mean ?? null;
     const candle = chart.addCandlestickSeries({
       upColor: col('--pos'), downColor: col('--neg'), borderVisible: false,
       wickUpColor: col('--pos'), wickDownColor: col('--neg'),
       priceLineVisible: false,
+      autoscaleInfoProvider: (original) => {
+        const res = original();
+        if (ptMean == null || !res?.priceRange) return res;
+        return {
+          ...res,
+          priceRange: {
+            minValue: Math.min(res.priceRange.minValue, ptMean),
+            maxValue: Math.max(res.priceRange.maxValue, ptMean),
+          },
+        };
+      },
     });
     candle.setData(hist);
 
@@ -2267,6 +2378,9 @@ export class CandidateDetail {
     if (fi.fair != null) {
       candle.createPriceLine({ price: fi.fair, color: col('--ai'), lineWidth: 1, lineStyle: 0, title: 'Fair Value', axisLabelVisible: false });
     }
+    if (fi.analyst?.mean != null) {
+      candle.createPriceLine({ price: fi.analyst.mean, color: col('--accent'), lineWidth: 2, lineStyle: 0, title: 'Analysten Ø', axisLabelVisible: false });
+    }
 
     /* Der Fächer: die Fläche zwischen Breakout- und Status-Quo-Pfad (grün) und
        zwischen Status Quo und Breakdown (rot). Lightweight Charts kann keine
@@ -2277,6 +2391,12 @@ export class CandidateDetail {
     if (typeof candle.attachPrimitive === 'function') {
       candle.attachPrimitive(forecastFanPrimitive(seriesData, {
         up: `${col('--pos')}1f`, dn: `${col('--neg')}1f`, edge: col('--border'), anchor,
+        // Analysten-Spanne (Tief…Hoch) als waagerechtes Band über den
+        // Projektionsbereich. Die Spanne ist die ehrlichere Aussage als der
+        // Mittelwert allein — bei SMCI reicht sie von 15 bis 60.
+        analyst: (fi.analyst?.low != null && fi.analyst?.high != null)
+          ? { low: fi.analyst.low, high: fi.analyst.high, fill: `${col('--accent')}14`, edge: `${col('--accent')}66` }
+          : null,
       }));
     }
 
@@ -2512,6 +2632,8 @@ export class CandidateDetail {
     // Tageskerzen aus dem Prog.-Tab nachladen — derselbe Abruf wie im Perf-Tab,
     // ohne dort den Horizont umzuschalten.
     this.el.querySelector('#fc-load')?.addEventListener('pointerup', () => this.onAction?.('tdQuote', c));
+    // Analysten-Kursziel bei Yahoo nachschlagen (nur wenn TV keins hat).
+    this.el.querySelector('#yh-load')?.addEventListener('pointerup', () => this.onAction?.('yahooTargets', c));
 
     // Vollbild-Umschalter (das Betreten selbst passiert am Ende von `render()`,
     // wenn alle Listener im Block hängen — danach verlässt er `this.el`).

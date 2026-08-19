@@ -248,6 +248,22 @@ const TV_COLUMNS = [
   'Pivot.M.Demark.S1|1W',                      // 121
   'DonchCh20.Upper',                           // 122 — high|20 (Tages-Timeframe)
   'DonchCh20.Lower',                           // 123 — low|20 (Tages-Timeframe)
+  /* Analysten-Kursziele. Gegen den Scanner vermessen (US + XETR), nicht aus
+     einer Doku übernommen: AAPL/F/SMCI/SAP/RHM liefern alle vier Werte, ETFs
+     (SPY) erwartungsgemäss nichts. Die Preise stehen in der **Währung des
+     Instruments** (SAP in EUR) — sie laufen deshalb durch dieselbe
+     `convertTv`-Umrechnung wie close/high/low.
+     Nicht vorhanden, trotz sechs geprüfter Namensvarianten: die Anzahl der
+     Kursziel-Schätzungen und ihr Datum (`price_target_estimates_num`,
+     `price_target_date` — beide immer null). Wie alt ein Ziel ist, sagt TV
+     nicht; für die Breite der Abdeckung steht `recommendation_total`. */
+  'price_target_average',                      // 124
+  'price_target_high',                         // 125
+  'price_target_low',                          // 126
+  'price_target_median',                       // 127
+  'recommendation_buy',                        // 128
+  'recommendation_hold',                       // 129
+  'recommendation_sell',                       // 130
 ];
 
 const COL = {
@@ -382,6 +398,14 @@ recommendMA1M: 53,
   pivotDemarkS1_1w:      121,
   donch20UpperD:         122,
   donch20LowerD:         123,
+  // Analysten-Kursziele + Empfehlungsverteilung
+  ptAverage:             124,
+  ptHigh:                125,
+  ptLow:                 126,
+  ptMedian:              127,
+  recBuy:                128,
+  recHold:               129,
+  recSell:               130,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -586,6 +610,14 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       high_3m:              d[COL.high3M]              ?? null,
       low_3m:               d[COL.low3M]               ?? null,
       recommendation_total: d[COL.recommendationTotal] ?? null,
+      // Analysten-Kursziele (Instrumentenwährung) + Empfehlungsverteilung
+      pt_average:           d[COL.ptAverage]           ?? null,
+      pt_high:              d[COL.ptHigh]              ?? null,
+      pt_low:               d[COL.ptLow]               ?? null,
+      pt_median:            d[COL.ptMedian]            ?? null,
+      rec_buy:              d[COL.recBuy]              ?? null,
+      rec_hold:             d[COL.recHold]             ?? null,
+      rec_sell:             d[COL.recSell]             ?? null,
       // Trade view fields (weekly/monthly pivots, Demark 1W, 20-day Donchian)
       pivot_r1_1w:          d[COL.pivotR1_1w]          ?? null,
       pivot_r2_1w:          d[COL.pivotR2_1w]          ?? null,
