@@ -454,7 +454,7 @@ function volStatsHTML(tv) {
 function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   const tv = disp.tv;
   const parts = [];
-  if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`);
+  if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten“ in der Tabelle laden.</p>`);
 
   // 1. Kurs + Δ + Quelle + R:R + €/$-Umschalter (die Level-Stationen liegen im
   //    Trade-Tab).
@@ -743,7 +743,7 @@ function probBar(label, r, pctKey, codeMap, hist, dir) {
 
 function renderTradeTab(c, disp, pc, tl, side) {
   const tv = disp.tv;
-  if (!tv || !tl) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  if (!tv || !tl) return `<p class="pv-empty">Keine TV-Daten – „TV Daten“ in der Tabelle laden.</p>`;
   const { cl, ex, kurs, target, entryL, stopL, rr, brk, lsF } = tl;
   const sup = pc?.nearestSup?.mid ?? null;
   const res = pc?.nearestRes?.mid ?? null;
@@ -1281,27 +1281,28 @@ function forecastFanPrimitive(seriesData, colors) {
       if (!up || !st || !dn) return;
       target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio: hr, verticalPixelRatio: vr, bitmapSize }) => {
         const x = chart?.timeScale()?.timeToCoordinate(colors.anchor);
-        // Analysten-Spanne: waagerechtes Band vom Schnitt bis zum rechten Rand.
-        // Zuerst gezeichnet, damit der Fächer darüber liegt.
-        if (colors.analyst && x != null && series) {
-          const yHi = series.priceToCoordinate(colors.analyst.high);
-          const yLo = series.priceToCoordinate(colors.analyst.low);
-          if (yHi != null && yLo != null) {
-            context.fillStyle = colors.analyst.fill;
-            context.fillRect(x * hr, yHi * vr, bitmapSize.width - x * hr, (yLo - yHi) * vr);
-            /* Ränder als dünne Linien: die Fläche allein reicht über den
-               sichtbaren Bereich hinaus (Analystenspannen sind weit) und wäscht
-               dann zu einem gleichmässigen Schleier aus — erst die Kanten sagen,
-               wo Tief und Hoch wirklich liegen. */
+        /* Analysten-Fächer zuerst, damit der Szenario-Fächer darüber liegt:
+           Fläche zwischen Tief- und Hoch-Pfad plus deren gestrichelte Kanten.
+           Ohne die Kanten wäscht die Fläche aus — Analystenspannen reichen oft
+           über den sichtbaren Bereich hinaus. */
+        if (colors.analyst) {
+          const hi = coords(seriesData.analystHi ?? []);
+          const lo = coords(seriesData.analystLo ?? []);
+          if (hi && lo) {
+            band(context, hi, lo, colors.analyst.fill, hr, vr);
             context.save();
             context.setLineDash([3 * hr, 3 * hr]);
             context.strokeStyle = colors.analyst.edge;
             context.lineWidth = Math.max(1, hr);
-            for (const y of [yHi, yLo]) {
+            for (const path of [hi, lo]) {
               context.beginPath();
-              context.moveTo(x * hr, y * vr);
-              context.lineTo(bitmapSize.width, y * vr);
-              context.stroke();
+              let started = false;
+              for (const pt of path) {
+                if (!pt) continue;
+                if (started) context.lineTo(pt.x * hr, pt.y * vr);
+                else { context.moveTo(pt.x * hr, pt.y * vr); started = true; }
+              }
+              if (started) context.stroke();
             }
             context.restore();
           }
@@ -1350,7 +1351,7 @@ function forecastRow(s) {
 
 function renderForecastTab(c, disp, fi) {
   const tv = disp.tv;
-  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.</p>`;
+  if (!tv) return `<p class="pv-empty">Keine TV-Daten – „TV Daten“ in der Tabelle laden.</p>`;
   if (!fi?.fc) {
     return `<p class="pv-empty">Für die Projektion fehlt aus den TV-Daten die
       Volatilität (ATRP/ATR) oder der Kurs.</p>`;
@@ -1412,7 +1413,7 @@ function renderForecastTab(c, disp, fi) {
       <span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--neg"></i>Breakdown</span>
       ${fi.ath != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--ath"></i>ATH ${fmtNum(fi.ath)}${offRange(fi.ath)}</span>` : ''}
       ${fi.fair != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--fair"></i>Fair Value ${fmtNum(fi.fair)}${offRange(fi.fair)}</span>` : ''}
-      ${fi.analyst?.mean != null ? `<span class="fc-legend__it"><i class="fc-legend__line fc-legend__line--analyst"></i>Analysten Ø ${fmtNum(fi.analyst.mean)}${offRange(fi.analyst.mean)}</span>` : ''}
+      ${fi.analyst?.mean != null ? `<span class="fc-legend__it"><i class="fc-legend__dash fc-legend__dash--analyst"></i>Analysten Ø ${fmtNum(fi.analyst.mean)}${offRange(fi.analyst.mean)}</span>` : ''}
     </div>`);
 
   /* Analystenzeile: dasselbe Format wie die Szenarien, aber sichtbar als
@@ -1450,7 +1451,7 @@ function renderForecastTab(c, disp, fi) {
   const staleHint = (!a && tvStale)
     ? `<p class="ph-note">Die gespeicherten TV-Daten stammen von vor dieser Funktion —
        Analysten-Kursziele kommen erst mit dem nächsten Abruf mit
-       („TV Daten" in der Tabelle).</p>` : '';
+       („TV Daten“ in der Tabelle).</p>` : '';
 
   /* Kein TV-Ziel (ETFs, viele Small Caps) → Yahoo on demand nachladen. Kein
      Button mehr, wenn Yahoo bereits geantwortet hat: „keins vorhanden" und
@@ -1663,7 +1664,7 @@ function renderFundamentalTab(c, disp) {
     // Kennzahlen, Reverse-DCF und Szenarien brauchen die TV-Felder (Marktkap.,
     // P/FCF). Die FMP-Zeile nicht — die fragt FMP direkt per Symbol und bleibt
     // deshalb sichtbar, statt mit auszusteigen.
-    return `<p class="pv-empty">Keine TV-Daten – „TV Daten" in der Tabelle laden.
+    return `<p class="pv-empty">Keine TV-Daten – „TV Daten“ in der Tabelle laden.
       Kennzahlen, Reverse-DCF und Szenarien brauchen sie (Marktkapitalisierung + P/FCF).</p>`
       + renderFmpRow(c, null, disp, { standalone: true });
   }
@@ -2383,15 +2384,36 @@ export class CandidateDetail {
       }).setData(data);
     }
 
+    /* Analysten-Konsens als eigener Verlauf statt als waagerechte Linie: der
+       Ø-Kurs als gestrichelte Mittellinie, Tief und Hoch als Fächer darum. Der
+       Pfad ist eine gleichmässige Rate von p0 zum Ziel (linear im Log-Raum) —
+       Analysten nennen ein Ziel auf Sicht 12 Monate ohne Pfad, mehr als „von
+       hier gleichmässig dorthin" lässt sich daraus ehrlich nicht machen.
+       Auf 6 Monate skaliert, weil der Chart 6 Monate zeigt. */
+    const ptPath = (target) => {
+      if (target == null || !(fc.p0 > 0) || !(target > 0)) return null;
+      const rate = Math.log(target / fc.p0) / fc.days;
+      const out = [{ time: anchor, value: fc.p0 }];
+      dates.forEach((dt, i) => out.push({ time: dt, value: fc.p0 * Math.exp(rate * (i + 1)) }));
+      return out;
+    };
+    const ptMid = ptPath(fi.analyst?.mean);
+    if (ptMid) {
+      seriesData.analystHi = ptPath(fi.analyst?.high);
+      seriesData.analystLo = ptPath(fi.analyst?.low);
+      chart.addLineSeries({
+        color: col('--accent'), lineWidth: 2, lineStyle: 2,
+        lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        title: 'Analyst',
+      }).setData(ptMid);
+    }
+
     // Zusatzlinien: ATH als Deckel, Fair Value als Bewertungsanker.
     if (fi.ath != null) {
       candle.createPriceLine({ price: fi.ath, color: col('--warn'), lineWidth: 1, lineStyle: 2, title: 'ATH', axisLabelVisible: false });
     }
     if (fi.fair != null) {
       candle.createPriceLine({ price: fi.fair, color: col('--ai'), lineWidth: 1, lineStyle: 0, title: 'Fair Value', axisLabelVisible: false });
-    }
-    if (fi.analyst?.mean != null) {
-      candle.createPriceLine({ price: fi.analyst.mean, color: col('--accent'), lineWidth: 2, lineStyle: 0, title: 'Analysten Ø', axisLabelVisible: false });
     }
 
     /* Der Fächer: die Fläche zwischen Breakout- und Status-Quo-Pfad (grün) und
@@ -2403,11 +2425,12 @@ export class CandidateDetail {
     if (typeof candle.attachPrimitive === 'function') {
       candle.attachPrimitive(forecastFanPrimitive(seriesData, {
         up: `${col('--pos')}1f`, dn: `${col('--neg')}1f`, edge: col('--border'), anchor,
-        // Analysten-Spanne (Tief…Hoch) als waagerechtes Band über den
-        // Projektionsbereich. Die Spanne ist die ehrlichere Aussage als der
-        // Mittelwert allein — bei SMCI reicht sie von 15 bis 60.
-        analyst: (fi.analyst?.low != null && fi.analyst?.high != null)
-          ? { low: fi.analyst.low, high: fi.analyst.high, fill: `${col('--accent')}14`, edge: `${col('--accent')}66` }
+        // Analysten-Fächer: Fläche zwischen Tief- und Hoch-Pfad, am Startkurs
+        // zusammenlaufend wie der Szenario-Fächer. Die Spanne ist die
+        // ehrlichere Aussage als der Mittelwert allein — bei SMCI reicht sie
+        // von 15 bis 60.
+        analyst: (seriesData.analystHi && seriesData.analystLo)
+          ? { fill: `${col('--accent')}14`, edge: `${col('--accent')}66` }
           : null,
       }));
     }

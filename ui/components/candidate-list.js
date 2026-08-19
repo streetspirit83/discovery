@@ -322,6 +322,9 @@ function sortValue(c, col) {
     case 'tv_h3m':      return tv?.high_3m ?? null;
     case 'tv_l3m':      return tv?.low_3m ?? null;
     case 'tv_analysts': return tv?.recommendation_total ?? null;
+    // Sortiert wird nach dem POTENZIAL, nicht nach dem Zielpreis: 340 sagt für
+    // sich nichts, „+18 % zum Kurs" ist über alle Titel hinweg vergleichbar.
+    case 'tv_pt':       return ptUpsidePct(c);
     case 'currency':    return nativeCurrency(c);
     case 'my_entry':    return c.my_entry ?? null;
     case 'my_target':   return c.my_target ?? null;
@@ -642,6 +645,7 @@ const VIEWS = {
     // Price cluster: nearest support zone — LS live price — nearest resistance zone
     { key:'trade_sup_cl', label:'Sup-Cl', title:'Nächstes Support-Cluster unter dem Kurs: Konfluenz-Zone aus allen Leveln (Extremes, SMAs, Pivots 1W/1M, Demark, Donchian, BB, LS-Tiefs) · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, groupStart:true, fmt:c=>renderClusterCell(c,'sup') },
     { key:'ls_price', label:'LS', title:'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) · „LS-Kurs“-Button in der Subbar', num:true, fmt:c=>lsPriceCell(c) },
+    { key:'tv_pt', label:'PT\u00d8', title:'Analysten-Konsensziel (TradingView) \u00b7 zweite Zeile = Potenzial gegen\u00fcber dem LS-Kurs', num:true, fmt:c=>ptCell(c) },
     { key:'trade_res_cl', label:'Res-Cl', title:'Nächstes Resistance-Cluster über dem Kurs: Konfluenz-Zone aus allen Leveln · Zellwert = Zonen-Mitte + Score · Tippen für Zone, Abstand & Quellen', num:true, fmt:c=>renderClusterCell(c,'res') },
     // Short Entry
     { key:'trade_brk20', label:'Brk20', title:'Short-Entry: high|20 + 0,01% (20-Tage-Breakout-Level)', num:true, groupStart:true, fmt:renderBrk20 },
@@ -1059,6 +1063,7 @@ export class CandidateList {
       //              Header und Zellen parit\u00e4tisch)
       cols += this.th('name', 'Name', 'title="Firmenname"');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
+      cols += this.thNum('tv_pt', 'PT\u00d8', 'Analysten-Konsensziel (TradingView) \u00b7 zweite Zeile = Potenzial gegen\u00fcber dem LS-Kurs \u00b7 sortiert nach Potenzial, nicht nach Zielpreis');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
       cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
@@ -1262,6 +1267,7 @@ export class CandidateList {
         dataCols =
           `<td class="col-name-fit">${nameCell(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
+          `<td class="num">${ptCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
           `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
@@ -1566,7 +1572,7 @@ function renderTrCheck(c) {
   if (!t) return btn('unknown', '?', `Ungeprüft – „TR-Check" in der Bulk-Leiste ausführen · ${copyHint}`);
   if (t.tradable) return btn('yes', '✓', `Handelbar${t.ls_name ? ' – ' + t.ls_name : ''} · ${copyHint}`);
   if (t.tradable === false) return btn('no', '✗', `Nicht über Trade Republic handelbar · ${copyHint}`);
-  if (t.no_isin) return btn('unknown', '?', `Keine ISIN – erst „TV Daten" laden · ${copyHint}`);
+  if (t.no_isin) return btn('unknown', '?', `Keine ISIN – erst „TV Daten“ laden · ${copyHint}`);
   return btn('unknown', '?', `Check fehlgeschlagen · ${copyHint}`);
 }
 
@@ -1582,6 +1588,42 @@ function lsPriceCell(c) {
   const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
   return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
+}
+
+/* ── Analysten-Kursziel (TV) ───────────────────────────────────────────────
+   `pt_average` kommt aus dem TV-Bulk-Abruf und steht in der Währung des
+   Instruments — also dieselbe Umrechnung wie ATH & Co. über `fmtPrice`.
+   Referenz für das Potenzial ist der LS-Kurs (EUR, der Preis auf TR), weil er
+   der aktuellste ist; ohne ihn der TV-Close. Beide werden vor dem Vergleich in
+   dieselbe Anzeigewährung gebracht, sonst käme Unsinn heraus. */
+function ptUpsidePct(c) {
+  const pt = c.tv_data?.pt_average;
+  if (pt == null) return null;
+  const target = pt * convFactor(c);
+  const ls = c.ls_quote?.price != null ? c.ls_quote.price * convFromEur() : null;
+  const ref = ls ?? (c.tv_data?.close_1m ?? c.tv_data?.close ?? null) * convFactor(c);
+  if (!(ref > 0)) return null;
+  return (target / ref - 1) * 100;
+}
+
+// Zielpreis oben, Potenzial als kleinere zweite Zeile darunter (§2 Styleguide).
+function ptCell(c) {
+  const tv = c.tv_data;
+  if (!tv) return '<span class="muted-dash" title="Keine TV-Daten – „TV Daten“ laden">—</span>';
+  if (!('pt_average' in tv)) {
+    return '<span class="muted-dash" title="TV-Daten sind älter als das Kursziel-Feld – „TV Daten“ neu laden">—</span>';
+  }
+  if (tv.pt_average == null) {
+    return '<span class="muted-dash" title="TradingView führt für diesen Titel kein Analysten-Kursziel (ETFs und viele Small Caps)">—</span>';
+  }
+  const up = ptUpsidePct(c);
+  const spread = (tv.pt_low != null && tv.pt_high != null)
+    ? ` · Spanne ${fmtPrice(c, tv.pt_low)}–${fmtPrice(c, tv.pt_high)}` : '';
+  const rat = tv.recommendation_total != null ? ` · ${tv.recommendation_total} Ratings` : '';
+  return `<span class="pt-cell" title="Analysten-Konsensziel (TradingView)${spread}${rat}">`
+    + `<b>${fmtPrice(c, tv.pt_average)}</b>`
+    + (up == null ? '' : `<small class="${posNegClass(up)}">${fmtPct(up)}</small>`)
+    + '</span>';
 }
 
 // LS change-vs-previous-close cell (Standard view).

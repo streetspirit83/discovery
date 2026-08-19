@@ -123,9 +123,15 @@ Trefferquote ist das nicht.
 
 ## 5. Analysten-Konsens
 
-Als vierte Zeile unter den Szenarien und als Linie im Chart, mit der Spanne
-Tief–Hoch als Band über den Projektionsbereich (Ränder gestrichelt, sonst
-wäscht die Fläche über den sichtbaren Bereich hinaus aus).
+Als vierte Zeile unter den Szenarien und im Chart als **eigener gestrichelter
+Verlauf** mit Achsenbeschriftung „Analyst": der Ø-Kurs als Mittellinie, Tief und
+Hoch als Fächer darum (Kanten gestrichelt, sonst wäscht die Fläche aus — die
+Spannen reichen oft über den sichtbaren Bereich hinaus).
+
+Der Pfad ist eine gleichmässige Rate von `p0` zum Ziel (linear im Log-Raum) und
+auf den 6-Monats-Horizont des Charts skaliert. Mehr gibt die Quelle nicht her:
+Analysten nennen ein Ziel auf Sicht 12 Monate, aber keinen Pfad dorthin — jede
+Krümmung wäre erfunden.
 
 Quelle ist **TradingView** (`pt_average/high/low/median` aus `tv_data`, kommt im
 normalen Bulk-Abruf mit, kein Zusatzrequest). Hat TV für den Titel kein Ziel —
@@ -143,6 +149,13 @@ Währung: TV-Werte stehen in `disp.tv` und sind damit schon umgerechnet; Yahoo
 liefert seine Währung mit und wird über `curDisplayFactor` umgerechnet. Geht das
 nicht (wir haben nur USD↔EUR), fällt das Ziel mitsamt Linie weg und eine Notiz
 sagt warum — ein EUR-Ziel neben einem USD-Kurs wäre schlimmer als keins.
+
+In den Tabellen steht das Ziel als Spalte **PTØ** — in der Standard-Ansicht
+direkt rechts neben LS, in der Trade-Ansicht neben deren LS-Spalte. Zielpreis
+oben, Potenzial gegenüber dem LS-Kurs als kleinere zweite Zeile; **sortiert wird
+nach dem Potenzial**, nicht nach dem Zielpreis (340 sagt für sich nichts, „+18 %"
+ist über alle Titel vergleichbar). Die drei Leerfälle sind im Tooltip
+unterscheidbar: keine TV-Daten · TV-Daten älter als das Feld · TV führt kein Ziel.
 
 Das Analysten-Ziel zieht die Preisskala des Charts mit (`autoscaleInfoProvider`),
 sonst läge die Linie oft knapp ausserhalb. ATH und Fair Value tun das bewusst

@@ -93,7 +93,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
   geladener TD-Historie Bias-Verlauf, Regime-Statistik und Fragilität.
-  Tab „Prog." (Forecast) projiziert 6 Monate: 3 Monate echte Kerzen + drei
+  Tab „Prog." (Forecast) zeigt zusätzlich das Analysten-Konsensziel als
+  gestrichelten Verlauf mit Fächer (Spalte „PTØ" in Standard- und Trade-Ansicht)
+  und projiziert 6 Monate: 3 Monate echte Kerzen + drei
   gestrichelte Szenarien (Breakout/Status Quo/Breakdown) mit Fächer-Fläche, ATH
   und Fair Value als Linien — Rechnung in `tv-forecast.js`, Spec in
   `docs/FORECAST_SPEC.md`.
