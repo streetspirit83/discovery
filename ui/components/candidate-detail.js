@@ -1440,6 +1440,18 @@ function renderForecastTab(c, disp, fi) {
     </div>`;
   })();
 
+  /* Wichtigster Unterschied für den Leser: „TV kennt kein Kursziel für diesen
+     Titel" ist etwas anderes als „die gespeicherten TV-Daten sind älter als das
+     Kursziel-Feld". Im zweiten Fall hilft kein Yahoo-Abruf, sondern ein neuer
+     TV-Abruf — die Spalten kommen erst mit dem nächsten Scan mit. Erkennbar an
+     der reinen KEY-Existenz: ein Titel ohne Kursziel hat `pt_average: null`,
+     ein alter Datenstand hat das Feld gar nicht. */
+  const tvStale = tv && !('pt_average' in tv);
+  const staleHint = (!a && tvStale)
+    ? `<p class="ph-note">Die gespeicherten TV-Daten stammen von vor dieser Funktion —
+       Analysten-Kursziele kommen erst mit dem nächsten Abruf mit
+       („TV Daten" in der Tabelle).</p>` : '';
+
   /* Kein TV-Ziel (ETFs, viele Small Caps) → Yahoo on demand nachladen. Kein
      Button mehr, wenn Yahoo bereits geantwortet hat: „keins vorhanden" und
      „liegt in einer Währung vor, die wir nicht umrechnen können" ändern sich
@@ -1458,7 +1470,7 @@ function renderForecastTab(c, disp, fi) {
 
   parts.push(`<h4 class="pv-subhead">Szenarien in 6 Monaten (${cur})</h4>
     <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}${analystRow}</div>
-    ${yhMiss}${yhLoad}
+    ${staleHint}${yhMiss}${yhLoad}
     <p class="ph-note">Start ${fmtNum(fc.p0)} ${cur} (${fi.lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close'}) ·
       P = Wahrscheinlichkeit unter derselben Lognormal-Annahme, die drei Werte ergänzen sich zu 100 %.</p>`);
 
