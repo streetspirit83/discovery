@@ -1,0 +1,14 @@
+name: Probe – Analysten-Kursziele (einmalig)
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/probe-analyst-targets.mjs
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
