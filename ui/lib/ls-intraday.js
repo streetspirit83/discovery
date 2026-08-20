@@ -45,8 +45,14 @@ async function proxyGet(url, { backendUrl, secret }) {
   return wrapper.body;
 }
 
+/* Die Instrument-ID ist bei LS stabil — sie einmal aufzulösen und danach
+   wiederzuverwenden spart JEDEN zweiten Request. Quellen in dieser Reihenfolge:
+   der TR-Check (der sucht ohnehin über die ISIN) und die letzte LS-Quote, die
+   ihre `instrument_id` längst mitliefert. Letztere wurde vorher nie gelesen —
+   ohne TR-Check zahlte damit jeder Abruf für jeden Titel dauerhaft zwei
+   Proxy-Runden statt einer. */
 async function resolveInstrumentId(candidate, auth) {
-  const cached = candidate.tr_check?.ls_id;
+  const cached = candidate.tr_check?.ls_id ?? candidate.ls_quote?.instrument_id;
   if (cached != null && cached !== '') return cached;
 
   const isin = String(candidate.isin ?? '').trim().toUpperCase();

@@ -7,7 +7,7 @@ import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260819a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260807a';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260819e';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260807a';
@@ -611,6 +611,19 @@ function renderBreakdownProb(c) {
 // ── Column definitions ───────────────────────────────────────────────────────
 
 // Setup situation (moved from the Preis view into the Trade view).
+/* Wie viele Netz-Abrufe gleichzeitig laufen dürfen (LS-Kurse, TR-Check). Sechs
+   ist der Kompromiss: genug, um die Wartezeit zu sechsteln, wenig genug, dass
+   weder die scrape-proxy noch LS eine Salve von dreißig Anfragen sieht.
+   Browser drosseln pro Host ohnehin bei ~6 gleichzeitigen Verbindungen. */
+const NET_BATCH = 6;
+
+/** Feste Portionen aus einer Liste — für die Wellen oben. */
+function chunked(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 const SETUP_COL = { key:'setup', label:'Setup', title:'Preis-Situation: 🚀 Blue-Sky · 🎯 Breakout-Nähe · 🔄 Pullback im Trend · 📉 unter Trend · ➖ Range · ⚠ Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'—';} };
 
 // Long-Entry pivot columns (jede Bullet/Sub-Bullet = eigene Spalte): classic
@@ -886,11 +899,14 @@ export class CandidateList {
   // Trade Republic / Lang & Schwarz tradability check for the given candidates.
   // Async (network via proxy); returns a bulk-update list for persistence.
   async runTrCheck(ids, opts) {
+    const idSet = new Set(ids);
+    const targets = this.candidates.filter((c) => idSet.has(c.id));
     const updates = [];
-    for (const c of this.candidates) {
-      if (!ids.includes(c.id)) continue;
-      c.tr_check = await checkTradeRepublic(c, opts);
-      updates.push({ candidate_id: c.id, updates: { tr_check: c.tr_check } });
+    for (const batch of chunked(targets, NET_BATCH)) {
+      await Promise.all(batch.map(async (c) => {
+        c.tr_check = await checkTradeRepublic(c, opts);
+        updates.push({ candidate_id: c.id, updates: { tr_check: c.tr_check } });
+      }));
     }
     this.renderRows();
     return updates;
@@ -909,11 +925,21 @@ export class CandidateList {
         : { loading: true };
     });
     this.renderRows();
+    /* Parallel in kleinen Wellen statt streng nacheinander. Vorher lief jeder
+       Titel einzeln und blockierte die anderen — bei 30 Kandidaten summierten
+       sich 30 Proxy-Runden (plus je eine ISIN-Suche ohne gecachte ID) zu einer
+       halben Minute. `NET_BATCH` gleichzeitig kürzt das auf ein Sechstel; die
+       Wellen halten zugleich die Last auf LS im Rahmen.
+       Gerendert wird je Welle statt je Titel: das erhält die kaskadierende
+       Füllanimation und spart bei 43 Spalten fünf Sechstel der Tabellen-
+       Neuaufbauten. */
     const updates = [];
-    for (const c of targets) {
-      c.ls_quote = await fetchLsQuote(c, opts);
-      updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
-      this.renderRows(); // resolve cell-by-cell → cascade fill animation
+    for (const batch of chunked(targets, NET_BATCH)) {
+      await Promise.all(batch.map(async (c) => {
+        c.ls_quote = await fetchLsQuote(c, opts);
+        updates.push({ candidate_id: c.id, updates: { ls_quote: c.ls_quote } });
+      }));
+      this.renderRows();
     }
     return updates;
   }

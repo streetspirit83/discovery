@@ -165,7 +165,11 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   index-map must stay in matching order — a new field means adding it to *both*
   (same position) and mapping it in `buildUpdates()`.
 - **Lang & Schwarz** (`www.ls-tc.de`, the Trade-Republic venue): live **EUR**
-  intraday quotes. Search: `/_rpc/json/.lstc/instrument/search/main` (WITH
+  intraday quotes. Bulk-Abrufe (LS-Kurse, TR-Check) laufen in Wellen von
+  `NET_BATCH` (6) parallel, nicht nacheinander — sequenziell kostete ein Lauf
+  über 30 Titel rund 12 s. Die **Instrument-ID wird wiederverwendet**
+  (`tr_check.ls_id` oder `ls_quote.instrument_id`); ohne sie zahlt jeder Titel
+  eine zusätzliche ISIN-Suche, also die doppelte Anzahl Proxy-Runden. Search: `/_rpc/json/.lstc/instrument/search/main` (WITH
   `.lstc`); chart: `/_rpc/json/instrument/chart/dataForInstrument` (NO `.lstc`,
   `series=intraday`|`history`). Any non-default UA works (`Mozilla/5.0`). Returns
   `[ts, price]` only — no OHLC, no volume. It is NOT IP-blocked; earlier 403/502s
