@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819f';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819g';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260819c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819g';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -15,7 +15,7 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
-import { renderControlModal } from './components/control-modal.js?v=20260819f';
+import { renderControlModal } from './components/control-modal.js?v=20260819g';
 import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -25,7 +25,7 @@ import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
-import { fetchYahooTargets } from './lib/analyst-targets.js?v=20260819a';
+import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
@@ -906,6 +906,10 @@ async function mockInsert(blobType, candidate) {
   target.updated_at = new Date().toISOString();
 }
 
+/* Yahoo-Kursziele im Anreicherungslauf: sechs gleichzeitig, wie bei den
+   LS-Abrufen — genug Tempo, ohne dass unsere Funktion eine Salve sieht. */
+const YH_BATCH = 6;
+
 async function handleAction(action, candidate, extras = {}) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
@@ -1530,6 +1534,34 @@ async function handleBulkAction(action, ids) {
       if (!candidate) continue;
       Object.assign(candidate, updates);
       bulkUpdates.push({ candidate_id: candidateId, updates });
+    }
+
+    /* Analysten-Kursziele von Yahoo gehören zur Anreicherung, nicht in einen
+       Notfallpfad: sie liefern als Einzige die Anzahl der Schätzungen und eine
+       zweite Meinung neben TV. Sie laufen deshalb hier mit — in Wellen von
+       YH_BATCH, und nur für Titel, deren letztes Ergebnis älter als 12 h ist
+       (auch eine Fehlanzeige zählt, sonst fragt jeder Lauf dieselben Titel
+       erneut). Ein Fehler bremst den TV-Lauf nicht aus: die Kursziele sind
+       Beiwerk, die TV-Daten sind der Zweck. */
+    const yhTargets = targets.filter((c) => yahooSymbol(c) && !yahooFresh(c));
+    if (yhTargets.length) {
+      toast(`🔎 Analysten-Kursziele (Yahoo) für ${yhTargets.length} Titel…`, 'info', 8000);
+      let done = 0;
+      for (let i = 0; i < yhTargets.length; i += YH_BATCH) {
+        await Promise.all(yhTargets.slice(i, i + YH_BATCH).map(async (c) => {
+          try {
+            const res = await fetchYahooTargets(c, { backendUrl, secret });
+            c.yh_targets = res;
+            if (res?.mean != null) done++;
+            const u = bulkUpdates.find((b) => b.candidate_id === c.id);
+            if (u) u.updates.yh_targets = res;
+            else bulkUpdates.push({ candidate_id: c.id, updates: { yh_targets: res } });
+          } catch (err) {
+            console.warn('[yahoo-targets]', c.symbol, err.message);
+          }
+        }));
+      }
+      console.log(`[yahoo-targets] ${done}/${yhTargets.length} mit Kursziel`);
     }
 
     // Feedback loop: record today's signals + evaluate matured ones, and let

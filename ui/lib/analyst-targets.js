@@ -110,6 +110,8 @@ export async function fetchYahooTargets(candidate, { backendUrl, secret, force =
   if (!wrapper?.ok) return { error: 'http', detail: wrapper?.error ?? 'unbekannt' };
   const d = wrapper.data;
   if (!d || d.target_mean == null) {
+    // Auch die Fehlanzeige trägt einen Zeitstempel: sonst fragt der nächste
+    // Anreicherungslauf denselben Titel wieder, obwohl Yahoo nichts hat.
     const miss = { error: 'none', checked_at: new Date().toISOString() };
     writeCache(sym, miss);        // auch die Fehlanzeige cachen, sonst fragt jeder Klick neu
     return miss;
@@ -133,9 +135,27 @@ export async function fetchYahooTargets(candidate, { backendUrl, secret, force =
 /**
  * analystTargets(candidate, tv) → das anzuzeigende Ziel-Objekt oder null.
  *
- * TV gewinnt, weil es ohne Zusatzabruf da ist. Ein bereits geladenes
- * Yahoo-Ergebnis (`candidate.yh_targets`) springt nur ein, wenn TV nichts hat.
+ * TV führt die Anzeige, weil es ohne Zusatzabruf da ist und für US wie XETR
+ * liefert. Yahoo steht als zweite Meinung daneben (siehe `yahooExtra`) und
+ * springt ein, wenn TV für den Titel nichts hat.
  */
 export function analystTargets(candidate, tv) {
   return tvTargets(tv) ?? (candidate?.yh_targets?.mean != null ? candidate.yh_targets : null);
+}
+
+/**
+ * yahooExtra(candidate, shown) → das Yahoo-Ergebnis, WENN es neben dem
+ * angezeigten Ziel etwas hinzufügt — also nur, wenn gerade TV angezeigt wird.
+ * Sonst null (dann IST Yahoo bereits das angezeigte Ziel).
+ */
+export function yahooExtra(candidate, shown) {
+  const y = candidate?.yh_targets;
+  if (!y || y.mean == null) return null;
+  return shown?.source === 'tv' ? y : null;
+}
+
+/** Ist ein gespeichertes Yahoo-Ergebnis noch frisch genug (12 h)? */
+export function yahooFresh(candidate) {
+  const at = Date.parse(candidate?.yh_targets?.checked_at ?? '');
+  return Number.isFinite(at) && Date.now() - at < TTL_MS;
 }

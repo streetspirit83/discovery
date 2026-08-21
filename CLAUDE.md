@@ -118,8 +118,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Data: `tv-enrichment.js` (TV scanner bulk fetch + FX + indices),
   `ls-intraday.js` (Lang & Schwarz quotes), `tr-check.js` (TR tradability),
   `stocktwits-sentiment.js` (Retail-Bull/Bear-Tagesreihe, on demand im Trend-Tab),
-  `analyst-targets.js` (Analysten-Kursziele: TV aus `tv_data`, Yahoo on demand
-  über `/api/yahoo-analyst` mit 12-h-localStorage-Cache),
+  `analyst-targets.js` (Analysten-Kursziele: TV aus `tv_data`, Yahoo **als Teil
+  der TV-Anreicherung** über `/api/yahoo-analyst` — in Wellen von 6, nur für
+  Titel, deren `yh_targets` älter als 12 h sind, Ergebnis wird im Blob
+  persistiert; auch eine Fehlanzeige trägt einen Zeitstempel),
   `symbol-search.js`, `exchange-map.js` (`normalizeExchange`), `storage-client.js`.
 - Bars/Swings: `tv-swings.js` holt die Tages-OHLC — **US → TwelveData, alles
   andere → Yahoo über die scrape-proxy** — und rechnet Zonen/Struktur/ATR daraus.

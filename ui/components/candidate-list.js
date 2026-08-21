@@ -42,6 +42,16 @@ function convFactor(c) {
   return 1;
 }
 
+// Wie convFactor, aber für eine explizit genannte Währung (Yahoo nennt seine).
+// null = nicht umrechenbar — dann wird der Wert weggelassen statt verfälscht.
+function convFactorFor(cur) {
+  const n = cur ?? 'USD';
+  if (n === displayCurrency) return 1;
+  if (n === 'USD' && displayCurrency === 'EUR' && fxEurUsd) return 1 / fxEurUsd;
+  if (n === 'EUR' && displayCurrency === 'USD' && fxEurUsd) return fxEurUsd;
+  return n === 'USD' || n === 'EUR' ? null : null;
+}
+
 function fmtPrice(c, v, dec = 2) {
   return v == null ? '—' : fmtNum(v * convFactor(c), dec);
 }
@@ -1623,36 +1633,62 @@ function lsPriceCell(c) {
    Referenz für das Potenzial ist der LS-Kurs (EUR, der Preis auf TR), weil er
    der aktuellste ist; ohne ihn der TV-Close. Beide werden vor dem Vergleich in
    dieselbe Anzeigewährung gebracht, sonst käme Unsinn heraus. */
+/* Das anzuzeigende Kursziel in Anzeigewährung — TV zuerst, sonst das
+   angereicherte Yahoo-Ergebnis (das seine eigene Währung mitbringt). */
+function ptTarget(c) {
+  const tv = c.tv_data;
+  if (tv?.pt_average != null) {
+    return { value: tv.pt_average * convFactor(c), src: 'TV',
+      low: tv.pt_low != null ? tv.pt_low * convFactor(c) : null,
+      high: tv.pt_high != null ? tv.pt_high * convFactor(c) : null,
+      note: tv.recommendation_total != null ? `${tv.recommendation_total} Ratings` : null };
+  }
+  const y = c.yh_targets;
+  if (y?.mean != null) {
+    const f = convFactorFor(y.currency);
+    if (f == null) return null;   // nur USD↔EUR — sonst lieber nichts zeigen
+    return { value: y.mean * f, src: 'Yahoo',
+      low: y.low != null ? y.low * f : null,
+      high: y.high != null ? y.high * f : null,
+      note: y.analysts != null ? `${y.analysts} Schätzungen` : null };
+  }
+  return null;
+}
+
 function ptUpsidePct(c) {
-  const pt = c.tv_data?.pt_average;
-  if (pt == null) return null;
-  const target = pt * convFactor(c);
+  const t = ptTarget(c);
+  if (!t) return null;
   const ls = c.ls_quote?.price != null ? c.ls_quote.price * convFromEur() : null;
   const ref = ls ?? (c.tv_data?.close_1m ?? c.tv_data?.close ?? null) * convFactor(c);
   if (!(ref > 0)) return null;
-  return (target / ref - 1) * 100;
+  return (t.value / ref - 1) * 100;
 }
 
 // Zielpreis oben, Potenzial als kleinere zweite Zeile darunter (§2 Styleguide).
 function ptCell(c) {
   const tv = c.tv_data;
-  if (!tv) return '<span class="muted-dash" title="Keine TV-Daten – „TV Daten“ laden">—</span>';
-  if (!('pt_average' in tv)) {
-    return '<span class="muted-dash" title="TV-Daten sind älter als das Kursziel-Feld – „TV Daten“ neu laden">—</span>';
-  }
-  if (tv.pt_average == null) {
-    return '<span class="muted-dash" title="TradingView führt für diesen Titel kein Analysten-Kursziel (ETFs und viele Small Caps)">—</span>';
+  const t = ptTarget(c);
+  if (!t) {
+    if (!tv) return '<span class="muted-dash" title="Keine TV-Daten – „TV Daten“ laden">—</span>';
+    if (!('pt_average' in tv)) {
+      return '<span class="muted-dash" title="TV-Daten sind älter als das Kursziel-Feld – „TV Daten“ neu laden">—</span>';
+    }
+    // Ein Yahoo-Ziel in fremder Währung ist kein fehlender Wert, sondern ein
+    // nicht umrechenbarer — das gehört benannt, sonst sucht man den Fehler.
+    if (c.yh_targets?.mean != null) {
+      return `<span class="muted-dash" title="Yahoos Kursziel steht in ${c.yh_targets.currency ?? '?'} – umrechenbar ist nur USD↔EUR">—</span>`;
+    }
+    const yhTried = c.yh_targets != null;
+    return `<span class="muted-dash" title="Weder TradingView noch Yahoo führen ein Analysten-Kursziel${yhTried ? '' : ' (Yahoo wurde für diesen Titel noch nicht gefragt – „TV Daten“ laden)'}">—</span>`;
   }
   /* Nur der Zielpreis — das Potenzial steht im Tooltip. In der Trade-Ansicht
      hängt die Spalte neben „Target"; zwei Prozentzeilen nebeneinander lasen
      sich als Vergleich zweier Ziele, was sie nicht sind. */
   const up = ptUpsidePct(c);
-  const spread = (tv.pt_low != null && tv.pt_high != null)
-    ? ` · Spanne ${fmtPrice(c, tv.pt_low)}–${fmtPrice(c, tv.pt_high)}` : '';
-  const rat = tv.recommendation_total != null ? ` · ${tv.recommendation_total} Ratings` : '';
-  const pot = up == null ? '' : ` · ${fmtPct(up)} zum LS-Kurs`;
-  return `<span title="Analysten-Konsensziel (TradingView)${pot}${spread}${rat}">`
-    + fmtPrice(c, tv.pt_average) + '</span>';
+  const spread = (t.low != null && t.high != null) ? ` · Spanne ${fmtNum(t.low, 2)}–${fmtNum(t.high, 2)}` : '';
+  const note = t.note ? ` · ${t.note}` : '';
+  const pot = up == null ? '' : ` · ${fmtPct(up)} zum ${c.ls_quote?.price != null ? 'LS-Kurs' : 'TV-Close'}`;
+  return `<span title="Analysten-Konsensziel (${t.src})${pot}${spread}${note}">${fmtNum(t.value, 2)}</span>`;
 }
 
 /* ── Fairer Kurs (Reverse-DCF) ─────────────────────────────────────────────

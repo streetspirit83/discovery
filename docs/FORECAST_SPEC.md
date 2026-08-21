@@ -133,11 +133,16 @@ auf den 6-Monats-Horizont des Charts skaliert. Mehr gibt die Quelle nicht her:
 Analysten nennen ein Ziel auf Sicht 12 Monate, aber keinen Pfad dorthin — jede
 Krümmung wäre erfunden.
 
-Quelle ist **TradingView** (`pt_average/high/low/median` aus `tv_data`, kommt im
-normalen Bulk-Abruf mit, kein Zusatzrequest). Hat TV für den Titel kein Ziel —
-ETFs, viele Small Caps —, lässt sich **Yahoo** on demand nachschlagen
-(`analyst-targets.js` → `/api/yahoo-analyst`); nur Yahoo kennt die Anzahl der
-Schätzungen. Bei TV steht daneben `recommendation_total` — das sind
+Quellen sind **beide**: **TradingView** (`pt_average/high/low/median` aus
+`tv_data`, kommt im normalen Bulk-Abruf mit) und **Yahoo**, das seit dem Umbau
+**Teil derselben Anreicherung** ist statt eines Notfallpfads — der „TV Daten"-Lauf
+holt es in Wellen von 6 für alle Titel mit `yahoo_symbol`, deren letztes Ergebnis
+älter als 12 h ist, und persistiert es als `yh_targets`.
+
+Angezeigt führt TV (Linie und Fächer im Chart); Yahoo steht als **zweite Zeile**
+darunter, weil es eine eigene Erhebung mit eigenem Stichtag ist und als Einzige
+die Anzahl der Schätzungen nennt. Hat TV für den Titel kein Ziel, rückt Yahoo an
+die erste Stelle — in Tabelle wie Chart. Bei TV steht daneben `recommendation_total` — das sind
 **Empfehlungen, nicht Kursziel-Schätzungen**, deshalb als „Ratings" beschriftet.
 
 Die Wahrscheinlichkeit der Zeile ist `probAtOrAbove(fc, Ziel)`, also dieselbe

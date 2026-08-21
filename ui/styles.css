@@ -2050,6 +2050,10 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 /* Analystenzeile: Fremdmeinung, deshalb abgesetzt statt wie ein viertes Szenario. */
 .fc-row--analyst { background:var(--surface-3); }
 .fc-row__dot--analyst { background:var(--accent); }
+/* Zweite Erhebung (Yahoo): dieselbe Zeile, aber sichtbar nachgeordnet. */
+.fc-row--analyst2 { background:var(--surface-2); }
+.fc-row--analyst2 .fc-row__id b { font-weight:var(--fw-med); }
+.fc-row__dot--analyst2 { background:var(--accent); opacity:.5; }
 .fc-row__id { min-width:0; }
 .fc-row__id b { display:block; font-size:var(--fs-2); font-weight:var(--fw-bold); }
 .fc-row__id small { display:block; font-size:var(--fs-1); color:var(--muted); }

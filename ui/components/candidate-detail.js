@@ -17,7 +17,7 @@ import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.j
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
-import { analystTargets, yahooSymbol } from '../lib/analyst-targets.js?v=20260819a';
+import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
@@ -1208,18 +1208,21 @@ function forecastInput(c, disp) {
      seine eigene Währung mit — die muss umgerechnet werden, sonst stünde ein
      EUR-Ziel neben einem USD-Kurs. Geht das nicht (nur USD↔EUR haben wir),
      fällt das Ziel weg statt falsch dazustehen. */
-  const raw = analystTargets(c, tv);
-  let analyst = null;
-  if (raw) {
+  const conv = (raw) => {
+    if (!raw) return null;
     const f = raw.source === 'tv' ? 1 : curDisplayFactor(disp, raw.currency);
-    if (f != null) {
-      const conv = (v) => (v == null ? null : v * f);
-      analyst = { ...raw, mean: conv(raw.mean), high: conv(raw.high), low: conv(raw.low), median: conv(raw.median) };
-    }
-  }
+    if (f == null) return null;
+    const x = (v) => (v == null ? null : v * f);
+    return { ...raw, mean: x(raw.mean), high: x(raw.high), low: x(raw.low), median: x(raw.median) };
+  };
+  const shown = analystTargets(c, tv);
+  const analyst = conv(shown);
+  // Yahoo als zweite Meinung — nur wenn oben gerade TV steht, sonst wäre es
+  // dieselbe Zahl zweimal.
+  const analystYh = conv(yahooExtra(c, shown));
 
   return {
-    p0, lsPrice, barsF, analyst,
+    p0, lsPrice, barsF, analyst, analystYh,
     fc: buildForecast({
       tv, p0,
       biasScore: computeBias(c.tv_data)?.score ?? 0,
@@ -1441,6 +1444,24 @@ function renderForecastTab(c, disp, fi) {
     </div>`;
   })();
 
+  /* Yahoo steht als zweite Meinung darunter, nicht statt TV: andere Panels,
+     anderer Stichtag — und als Einzige nennt Yahoo die Zahl der Schätzungen.
+     Eigene Zeile statt Zusatz in der TV-Zeile, damit klar bleibt, dass das zwei
+     Erhebungen sind und nicht eine mit zwei Zahlen. */
+  const y = fi.analystYh;
+  const yahooRow = y?.mean == null ? '' : (() => {
+    const prob = probAtOrAbove(fc, y.mean);
+    const chg = (y.mean / fc.p0 - 1) * 100;
+    const spread = [y.low, y.high].every((v) => v != null) ? `${fmtNum(y.low)}–${fmtNum(y.high)}` : null;
+    return `<div class="fc-row fc-row--analyst fc-row--analyst2"
+      title="Zweite Erhebung${spread ? `, Spanne ${spread} ${cur}` : ''}${y.recommendation ? ` · Empfehlung ${y.recommendation}` : ''}">
+      <span class="fc-row__dot fc-row__dot--analyst2"></span>
+      <div class="fc-row__id"><b>Analysten Ø</b><small>Yahoo${y.analysts != null ? ` · ${y.analysts} Schätzungen` : ''}</small></div>
+      <div class="fc-row__val"><b>${fmtNum(y.mean)}</b><small class="${chg >= 0 ? 'pos' : 'neg'}">${fmtPct(chg)}</small></div>
+      <div class="fc-row__prob"><b>${prob == null ? '—' : `${Math.round(prob)}%`}</b><small>P</small></div>
+    </div>`;
+  })();
+
   /* Wichtigster Unterschied für den Leser: „TV kennt kein Kursziel für diesen
      Titel" ist etwas anderes als „die gespeicherten TV-Daten sind älter als das
      Kursziel-Feld". Im zweiten Fall hilft kein Yahoo-Abruf, sondern ein neuer
@@ -1457,11 +1478,11 @@ function renderForecastTab(c, disp, fi) {
      Button mehr, wenn Yahoo bereits geantwortet hat: „keins vorhanden" und
      „liegt in einer Währung vor, die wir nicht umrechnen können" ändern sich
      durch einen zweiten Klick nicht. */
-  const yhDone = c.yh_targets?.error === 'none' || (c.yh_targets?.mean != null && !a);
-  const yhLoad = (!a && !yhDone && yahooSymbol(c))
+  const yhDone = c.yh_targets != null;
+  const yhLoad = (!yhDone && yahooSymbol(c))
     ? (c._yh_loading
       ? `<button class="btn btn-sm btn-secondary" disabled>Yahoo wird gefragt …</button>`
-      : `<button class="btn btn-sm btn-secondary" id="yh-load">${icons.refreshCw} Analysten-Kursziel bei Yahoo suchen</button>`)
+      : `<button class="btn btn-sm btn-secondary" id="yh-load">${icons.refreshCw} Analysten-Kursziel bei Yahoo holen</button>`)
     : '';
   const yhMiss = !a && c.yh_targets?.error === 'none'
     ? `<p class="ph-note">Auch Yahoo führt für diesen Titel kein Analysten-Kursziel.</p>`
@@ -1470,7 +1491,7 @@ function renderForecastTab(c, disp, fi) {
          umrechnen können wir nur USD↔EUR, deshalb bleibt es hier weg.</p>` : '');
 
   parts.push(`<h4 class="pv-subhead">Szenarien in 6 Monaten (${cur})</h4>
-    <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}${analystRow}</div>
+    <div class="fc-table">${fc.scenarios.map((s) => forecastRow(s)).join('')}${analystRow}${yahooRow}</div>
     ${staleHint}${yhMiss}${yhLoad}
     <p class="ph-note">Start ${fmtNum(fc.p0)} ${cur} (${fi.lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close'}) ·
       P = Wahrscheinlichkeit unter derselben Lognormal-Annahme, die drei Werte ergänzen sich zu 100 %.</p>`);
