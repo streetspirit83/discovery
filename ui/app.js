@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819h';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260819i';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819j';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -27,7 +27,7 @@ import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=202608
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819i';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819j';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';

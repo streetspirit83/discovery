@@ -18,11 +18,14 @@ function num(v, dec = 2) {
   return Number(v).toFixed(dec);
 }
 
-function mcap(v) {
+/* Währung als Parameter: EBITDA und Marktkapitalisierung stehen in der Währung
+   des Instruments — ein fest angehängtes „USD" wäre bei jedem XETR-Titel falsch.
+   Default bleibt USD, damit der bestehende Mehrfach-Prompt unverändert liest. */
+function mcap(v, cur = 'USD') {
   if (v == null) return 'n/a';
-  if (v >= 1e12) return (v / 1e12).toFixed(1) + 'T USD';
-  if (v >= 1e9)  return (v / 1e9).toFixed(1) + 'B USD';
-  if (v >= 1e6)  return (v / 1e6).toFixed(0) + 'M USD';
+  if (v >= 1e12) return `${(v / 1e12).toFixed(1)}T ${cur}`;
+  if (v >= 1e9)  return `${(v / 1e9).toFixed(1)}B ${cur}`;
+  if (v >= 1e6)  return `${(v / 1e6).toFixed(0)}M ${cur}`;
   return String(v);
 }
 
@@ -63,49 +66,44 @@ function candidateLine(c) {
 const NA = 'n/a';
 const money = (v, cur, dec = 2) => (v == null ? NA : `${num(v, dec)} ${cur}`);
 
-/* TV liefert das Earnings-Datum als Unix-Sekunden (so liest es auch der
-   Fundamental-Tab). Roh ausgegeben stünde eine zehnstellige Zahl im Prompt. */
-function isoDay(v) {
-  if (v == null) return NA;
-  const ms = typeof v === 'number' ? v * 1000 : Date.parse(v);
-  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : NA;
+/* Sektor/Industrie stehen in der Frage statt im Datenblock: sie sind der
+   Aufhänger für die Wettbewerbsanalyse, keine Kennzahl. */
+function sectorLine(c) {
+  const tv = c.tv_data ?? {};
+  const sec = c.sector ?? tv.sector;
+  const ind = tv.industry;
+  if (!sec && !ind) return 'unclassified';
+  return [sec, ind].filter(Boolean).join(' / ');
 }
 
+/* Der Datenblock ist bewusst kurz: nur was die KI selbst nicht besser weiss
+   oder nicht ohne Weiteres nachschlägt — mein Blick auf die jüngste Bewegung,
+   der Analysten-Konsens mit Spanne, und zwei Bewertungsanker. Alles Übrige
+   (52W-Spanne, ATH, Marktkapitalisierung …) findet jede Such-KI in Sekunden;
+   im Prompt kostet es nur Platz und lenkt von den Fragen ab. */
 function dataBlock(c, cur) {
   const tv = c.tv_data ?? {};
-  const ls = c.ls_quote?.price;
-  const a  = c.swing_analysis;
-  const sup = a?.support?.length ? a.support[a.support.length - 1].mid : null;
-  const res = a?.resistance?.length ? a.resistance[0].mid : null;
   const yh = c.yh_targets;
 
-  const rows = [
-    ['Price (Lang & Schwarz, the venue I trade on)', ls != null ? money(ls, 'EUR') : NA],
-    [`Price (TradingView close, ${cur})`, money(tv.close_1m ?? tv.close, cur)],
-    ['Change today / 1W / 1M / 3M / 6M',
-      [tv.change_1d, tv.perf_w, tv.perf_1m, tv.perf_3m, tv.perf_6m].map(pct).join(' / ')],
-    ['52-week range', `${money(tv.price_52_week_low, cur)} … ${money(tv.price_52_week_high, cur)}`],
-    ['All-time high', money(tv.high_all, cur)],
-    ['ATRP (avg daily range)', tv.atrp != null ? `${num(tv.atrp, 1)}%` : NA],
-    ['Market cap', mcap(tv.market_cap)],
-    ['Sector / industry (per TradingView)', `${c.sector ?? tv.sector ?? NA} / ${tv.industry ?? NA}`],
-    ['P/E (TTM) · P/FCF (TTM) · EV/EBITDA',
-      `${num(tv.pe_ttm, 1)} · ${num(tv.price_free_cash_flow_ttm, 1)} · ${num(tv.enterprise_value_ebitda_ttm, 1)}`],
-    ['ROIC · debt/equity', `${tv.return_on_invested_capital != null ? num(tv.return_on_invested_capital, 1) + '%' : NA} · ${num(tv.debt_to_equity, 2)}`],
-    ['Revenue YoY · FCF YoY', `${pct(tv.total_revenue_yoy_growth_ttm)} · ${pct(tv.free_cash_flow_yoy_growth_ttm)}`],
-    ['Analyst consensus target (TradingView)',
-      tv.pt_average != null
-        ? `${money(tv.pt_average, cur)} (range ${num(tv.pt_low)}–${num(tv.pt_high)}, ${tv.recommendation_total ?? '?'} ratings)`
-        : NA],
-    ['Analyst consensus target (Yahoo)',
-      yh?.mean != null
-        ? `${money(yh.mean, yh.currency ?? cur)} (${yh.analysts ?? '?'} estimates${yh.recommendation ? `, ${yh.recommendation}` : ''})`
-        : NA],
-    ['Nearest support / resistance (my swing analysis)',
-      sup != null || res != null ? `${num(sup)} / ${num(res)} (${a?.currency ?? cur})` : NA],
-    ['Next earnings', isoDay(tv.earnings_next_date)],
-  ];
-  return rows.map(([k, v]) => `- ${k}: ${v}`).join('\n');
+  // Analysten-Konsens: TV führt, Yahoo springt ein (wie in Tabelle und Sheet).
+  let consensus = NA;
+  if (tv.pt_average != null) {
+    const range = (tv.pt_low != null && tv.pt_high != null) ? `, range ${num(tv.pt_low)}–${num(tv.pt_high)}` : '';
+    const n = tv.recommendation_total != null ? `, ${tv.recommendation_total} ratings` : '';
+    consensus = `${money(tv.pt_average, cur)}${range}${n}`;
+  } else if (yh?.mean != null) {
+    const range = (yh.low != null && yh.high != null) ? `, range ${num(yh.low)}–${num(yh.high)}` : '';
+    const n = yh.analysts != null ? `, ${yh.analysts} estimates` : '';
+    consensus = `${money(yh.mean, yh.currency ?? cur)}${range}${n} (Yahoo)`;
+  }
+
+  return [
+    `Change today: ${pct(tv.change_1d)}`,
+    `Perf W/1M/3M/6M: ${[tv.perf_w, tv.perf_1m, tv.perf_3m, tv.perf_6m].map(pct).join(' / ')}`,
+    `Analyst consensus: ${consensus}`,
+    `P/E (TTM): ${num(tv.pe_ttm, 1)}`,
+    `EBITDA: ${mcap(tv.ebitda, cur)}`,
+  ].join(' · ');
 }
 
 /**
@@ -131,7 +129,7 @@ Ground rules: cite a source and a date for every claim. Where you find nothing, 
 What exactly does the company earn money with (revenue split by segment and region)? Where does the moat come from — network effects, switching costs, scale, patents, brand, regulation? Give evidence rather than assertions: pricing power, gross margin over time, retention/churn, unit economics. How durable is it — what would have to happen for the moat to be gone in three years?
 
 **2 · Sector, sub-sector & competition**
-Which sector and, more importantly, which **sub-sector / niche** does it actually compete in? Check whether the classification in my data below is the right one. Name the 3–5 most relevant competitors, listed **and private**, with rough size or market share. How does ${c.symbol} compare on growth, margin and valuation? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, capacity, pricing, inventories)?
+Which sector and, more importantly, which **sub-sector / niche** does it actually compete in? My data classifies it as ${sectorLine(c)} — check whether that is the right bucket. Name the 3–5 most relevant competitors, listed **and private**, with rough size or market share. How does ${c.symbol} compare on growth, margin and valuation? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, capacity, pricing, inventories)?
 
 **3 · Accounting quality & fraud risk**
 Look for gaps between cash flow and earnings (accruals), receivables and inventory versus revenue, capitalised costs, recurring "one-off" items. Auditor or CFO changes, late filings, restatements, SEC/BaFin proceedings, class actions. Dilution: share count over time, ATM programmes, convertibles, stock-based comp as a share of revenue.
