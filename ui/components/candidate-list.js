@@ -4,6 +4,7 @@ import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
+import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260819a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
@@ -325,6 +326,7 @@ function sortValue(c, col) {
     // Sortiert wird nach dem POTENZIAL, nicht nach dem Zielpreis: 340 sagt für
     // sich nichts, „+18 % zum Kurs" ist über alle Titel hinweg vergleichbar.
     case 'tv_pt':       return ptUpsidePct(c);
+    case 'tv_fair':     { const f = fairPriceDisp(c); return f?.upside != null ? f.upside * 100 : null; }
     case 'currency':    return nativeCurrency(c);
     case 'my_entry':    return c.my_entry ?? null;
     case 'my_target':   return c.my_target ?? null;
@@ -651,6 +653,7 @@ const VIEWS = {
     { key:'trade_trendscore', label:'TrdR', title:'Trend-Radar-Score 0–100 (kurzfristig ≤1M): LS-Regression 30% · Richtungs-Alignment Δ1T/PerfW/Perf1M 20% · SMA-Stack (Kurs>20>50) 15% · Beschleunigung 15% · Volumen 10% · frischer Kreuzungs-Trigger 10% · ⚡ = heute frisch gedreht', num:true, fmt:renderTrendRadarScore },
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     { key:'tv_pt', label:'PT\u00d8', title:'Analysten-Konsensziel (TradingView) \u00b7 \u00d8 der Kursziele \u00b7 Spanne, Ratings und Potenzial im Zell-Tooltip \u00b7 sortiert nach Potenzial, nicht nach Zielpreis', num:true, fmt:c=>ptCell(c) },
+    { key:'tv_fair', label:'Fair', title:'Fairer Kurs aus dem Reverse-DCF (dieselbe Rechnung wie im Fund.-Tab) \u00b7 Referenz ist der LS-Kurs \u00b7 Auf-/Abschlag und Annahmen im Zell-Tooltip \u00b7 sortiert nach Auf-/Abschlag, nicht nach dem Kurs', num:true, fmt:c=>fairCell(c) },
     SETUP_COL,
     // Aktuelles Volumen (letzter LS-Snapshot) im Verhältnis zum Ø-Volumen in %
     // (wie die Vol-Chips im Detail-Sheet). ≥150% = Spike, ≥100% = überdurchschn.
@@ -1650,6 +1653,43 @@ function ptCell(c) {
   const pot = up == null ? '' : ` · ${fmtPct(up)} zum LS-Kurs`;
   return `<span title="Analysten-Konsensziel (TradingView)${pot}${spread}${rat}">`
     + fmtPrice(c, tv.pt_average) + '</span>';
+}
+
+/* ── Fairer Kurs (Reverse-DCF) ─────────────────────────────────────────────
+   Dieselbe Rechnung wie im Fundamental-Tab des Detail-Sheets, inklusive
+   Referenzkurs: der LS-Kurs, wenn vorhanden — das ist der Preis, den man auf TR
+   zahlt. `fairValue` liefert den fairen Kurs in DERSELBEN Währung wie der
+   übergebene Kurs, deshalb wird hier schon in Anzeigewährung gerechnet und
+   danach NICHT noch einmal über `fmtPrice` umgerechnet. */
+function fairPriceDisp(c) {
+  const tv = c.tv_data;
+  if (!tv) return null;
+  const ls = c.ls_quote?.price != null ? c.ls_quote.price * convFromEur() : null;
+  const close = tv.close_1m ?? tv.close ?? null;
+  const price = ls ?? (close != null ? close * convFactor(c) : null);
+  if (!(price > 0)) return null;
+  const f = fairValue(tv, { price });
+  return f?.error ? null : f;
+}
+
+function fairCell(c) {
+  const tv = c.tv_data;
+  if (!tv) return '<span class="muted-dash" title="Keine TV-Daten – „TV Daten“ laden">—</span>';
+  const f = fairPriceDisp(c);
+  if (!f || f.fair_price == null) {
+    /* Negativer FCF ist kein fehlender Wert, sondern ein Ergebnis: darauf lässt
+       sich kein Barwert rechnen. Das gehört in den Tooltip, sonst sieht es wie
+       ein Datenloch aus. */
+    const why = fairValue(tv, {}).error === 'negative_fcf'
+      ? 'Freier Cashflow ist negativ – darauf lässt sich kein fairer Kurs rechnen'
+      : 'Marktkapitalisierung oder P/FCF fehlen in den TV-Daten';
+    return `<span class="muted-dash" title="${why}">—</span>`;
+  }
+  const up = f.upside * 100;
+  const tip = `Fairer Kurs (Reverse-DCF, wie im Fund.-Tab) · ${fmtPct(up)} zum `
+    + `${c.ls_quote?.price != null ? 'LS-Kurs' : 'TV-Close'} · Basiswachstum `
+    + `${fmtNum(f.base_growth * 100, 1)}% · Diskontsatz ${fmtNum(f.rate * 100, 1)}%`;
+  return `<span title="${tip}">${fmtNum(f.fair_price, 2)}</span>`;
 }
 
 // LS change-vs-previous-close cell (Standard view).

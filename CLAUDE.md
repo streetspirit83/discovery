@@ -88,7 +88,12 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 **components/** (UI):
 - `candidate-list.js` – the main table; 5 views (Standard / Performance / Price /
   Metrics / Fundamental), sorting, filters, column resize, bulk actions, currency
-  toggle. Largest file; header and cell order per view must stay in sync.
+  toggle. Largest file; header and cell order per view must stay in sync — die
+  Standard-Ansicht rendert Kopf und Zellen an zwei getrennten Stellen, ein
+  Versatz fällt sonst nicht auf. In der Trade-Ansicht stehen die drei „wohin
+  könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
+  **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
+  nach dem Potenzial, nicht nach dem angezeigten Preis.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
