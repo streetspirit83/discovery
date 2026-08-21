@@ -93,7 +93,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Versatz fällt sonst nicht auf. In der Trade-Ansicht stehen die drei „wohin
   könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
   **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
-  nach dem Potenzial, nicht nach dem angezeigten Preis.
+  nach dem Potenzial, nicht nach dem angezeigten Preis. In der Standard-Ansicht
+  zeigt „10T" (nach PerfW) den LS-Verlauf der letzten zehn Tage als Sparkline —
+  aus den Nacht-Snapshots plus Live-Kurs, sortiert nach dem Zuwachs über das
+  Fenster (`ls10Series` in `spark.js`).
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit

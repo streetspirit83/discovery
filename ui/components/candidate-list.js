@@ -11,7 +11,7 @@ import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260819e';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
-import { sparkCellHTML, atrpCellHTML } from '../lib/spark.js?v=20260807a';
+import { sparkCellHTML, atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20260819h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
@@ -335,6 +335,9 @@ function sortValue(c, col) {
     case 'tv_analysts': return tv?.recommendation_total ?? null;
     // Sortiert wird nach dem POTENZIAL, nicht nach dem Zielpreis: 340 sagt für
     // sich nichts, „+18 % zum Kurs" ist über alle Titel hinweg vergleichbar.
+    // 10T-LS-Sparkline: sortiert nach dem Zuwachs über das Fenster, nicht nach
+    // der Kurvenform — „höchster Zuwachs zuerst" ist die Frage dahinter.
+    case 'ls10':        return ls10Series(c)?.chgPct ?? null;
     case 'tv_pt':       return ptUpsidePct(c);
     case 'tv_fair':     { const f = fairPriceDisp(c); return f?.upside != null ? f.upside * 100 : null; }
     case 'currency':    return nativeCurrency(c);
@@ -1107,6 +1110,7 @@ export class CandidateList {
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
       cols += this.thNum('tv_chg1d', '\u03941T', 'Ver\u00e4nderung heute (1 Tag) laut TradingView-Schlusskursen \u2013 LS\u0394 daneben ist der Live-Stand von Lang & Schwarz');
       cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
+      cols += this.thNum('ls10', '10T', '10-Tage-Verlauf aus den LS-Nacht-Snapshots + heutigem Live-Kurs \u00b7 Referenzlinie = Kurs vor zehn Tagen \u00b7 sortiert nach dem Zuwachs \u00fcber das Fenster');
       cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
@@ -1310,6 +1314,7 @@ export class CandidateList {
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
           heatPctTd(tv?.change_1d) +
           heatPctTd(tv?.perf_w) +
+          `<td class="num">${ls10CellHTML(c, fmtNum, convFromEur())}</td>` +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +

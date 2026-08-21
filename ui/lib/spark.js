@@ -45,6 +45,59 @@ export function sparkCellHTML(c, fmtNum) {
   return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sparklineSVG(s, q.prev_close, q.change_pct)}</span>`;
 }
 
+/**
+ * 10-Tage-LS-Verlauf aus den Nacht-Snapshots (`ls_history`), plus dem heutigen
+ * Live-Kurs als letztem Punkt.
+ *
+ * Der Live-Kurs ersetzt einen Snapshot desselben Tages, statt ihn zu ergänzen —
+ * sonst stünde der heutige Tag doppelt in der Kurve (derselbe Griff wie im
+ * 10T-Chart des Detail-Sheets).
+ *
+ * → { prices, chgPct, from, to, days } | null (weniger als zwei Tage)
+ */
+export function ls10Series(c) {
+  const hist = (Array.isArray(c?.ls_history) ? c.ls_history : [])
+    .filter((s) => s?.close != null && s.date)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const live = c?.ls_quote?.price ?? null;
+  const liveDay = live != null ? String(c.ls_quote.checked_at ?? '').slice(0, 10) : null;
+  const prices = hist
+    .filter((s) => !(liveDay && String(s.date) >= liveDay))
+    .map((s) => s.close);
+  if (live != null) prices.push(live);
+
+  if (prices.length < 2) return null;
+  const from = prices[0];
+  const to = prices[prices.length - 1];
+  return {
+    prices,
+    from,
+    to,
+    days: prices.length,
+    chgPct: from ? (to / from - 1) * 100 : null,
+  };
+}
+
+/**
+ * Standard-Tabelle: der 10-Tage-Verlauf als Sparkline. Referenzlinie ist der
+ * ERSTE Kurs des Fensters (nicht der Vortagesschluss wie bei der Tages-
+ * Sparkline) — die Spalte beantwortet „wo steht der Titel gegenüber vor zehn
+ * Tagen", nicht „gegenüber gestern".
+ *
+ * `conv` bringt die EUR-Preise der Tooltip-Zeile in die Anzeigewährung; die
+ * Kurve selbst ist reine Form und braucht keine Umrechnung.
+ */
+export function ls10CellHTML(c, fmtNum, conv = 1) {
+  const s = ls10Series(c);
+  if (!s) {
+    return '<span class="muted-dash" title="Kein 10-Tage-Verlauf – die LS-Historie entsteht aus den nächtlichen Snapshots der Watchlist">—</span>';
+  }
+  const tip = `10 Tage LS: ${fmtNum(s.chgPct, 1)}% · ${s.days} Punkte · `
+    + `${fmtNum(s.from * conv, 2)} → ${fmtNum(s.to * conv, 2)}`;
+  return `<span title="${tip}">${sparklineSVG(s.prices, s.from, s.chgPct)}</span>`;
+}
+
 // Standard-table cell: ATRP value + a bar of today's move vs. the typical ATR move.
 export function atrpCellHTML(c, fmtNum) {
   const a = c.tv_data?.atrp ?? null;
