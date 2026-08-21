@@ -2076,6 +2076,16 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .fc-legend__line--fair { background:var(--ai); }
 .fc-legend__dash--analyst { border-color:var(--accent); }
 
+/* Research-Prompt: Knopf quittiert das Kopieren kurz grün, Textfeld im
+   Bearbeiten-Menü über die volle Breite. */
+.link-chip--prompt.is-ok { color:var(--pos); border-color:var(--pos); }
+.link-url-row--wide { grid-column:1 / -1; }
+.link-url-row--wide textarea {
+  width:100%; font-family:var(--font-mono); font-size:var(--fs-1);
+  padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); resize:vertical;
+}
+
 
 /* Performance tab: 10-day LS band (price segments + volume-% bars) */
 .ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }

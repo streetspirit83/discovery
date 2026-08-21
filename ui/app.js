@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819h';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260819g';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819i';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -27,7 +27,7 @@ import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=202608
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20260807a';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819i';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
@@ -1263,16 +1263,33 @@ async function handleAction(action, candidate, extras = {}) {
   }
 
   if (action === 'saveLinks') {
+    // Der eigene Research-Prompt reitet auf demselben Speichern wie die Links —
+    // beides steht im selben Bearbeiten-Feld, also gehört es in einen Request.
     candidate.links = extras.links;
+    const patch = { links: extras.links };
+    if ('research_prompt' in extras) {
+      candidate.research_prompt = extras.research_prompt;
+      patch.research_prompt = extras.research_prompt;
+    }
     if (!useMock) {
       try {
-        await storageClient.updateCandidate(currentBlobType, candidate.id, { links: extras.links });
+        await storageClient.updateCandidate(currentBlobType, candidate.id, patch);
       } catch (err) {
-        toast(`Links speichern fehlgeschlagen: ${err.message}`, 'error');
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
     }
-    toast('Links aktualisiert', 'success', 1500);
+    toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
+  }
+
+  // Rückmeldung des Teleskop-Knopfs im Detail-Sheet.
+  if (action === 'promptCopied') {
+    toast(`🔭 Research-Prompt kopiert (${Math.round((extras.chars ?? 0) / 1000)}k Zeichen)`, 'success', 2500);
+    return;
+  }
+  if (action === 'promptCopyFailed') {
+    toast('Kopieren fehlgeschlagen – Zwischenablage nicht verfügbar', 'error');
+    return;
   }
 
   if (action === 'openTrigger') {
