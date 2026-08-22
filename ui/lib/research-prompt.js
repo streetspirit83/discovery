@@ -55,8 +55,16 @@ function candidateLine(c) {
  * Peer-Zahlen und Earnings-Calls liegen fast alle auf Englisch vor — eine
  * deutsche Frage erzwingt beim Modell nur eine Übersetzungsschleife.
  *
- * Der Ton ist bewusst skeptisch und verlangt Quelle + Datum. Ohne das liefert
- * eine Such-KI die freundliche Zusammenfassung der IR-Seite zurück.
+ * Die Rolle ist bewusst NEUTRAL („evidence researcher"), nicht skeptisch und
+ * nicht werbend: gesammelt und gewichtet werden Belege, argumentiert wird
+ * nicht. Was den Ton trotzdem hart macht, sind die Grundregeln — Quelle plus
+ * Datum, ein ausdrückliches „no evidence found" statt einer plausibel
+ * klingenden Lücke, und die Trennung von Fakten, Schätzungen und Meinungen.
+ * Ohne die liefert eine Such-KI die freundliche Zusammenfassung der IR-Seite.
+ *
+ * Der Abschluss fragt keinen Bull/Base/Bear-Fall und keine Kaufentscheidung ab,
+ * sondern einen 3-Monats-Ausblick mit EINER Kursspanne plus Risiken und Chancen
+ * — die Entscheidung trifft der Leser, nicht das Modell.
  *
  * Währungen werden benannt statt umgerechnet: der LS-Kurs ist EUR, die
  * TV-Kennzahlen stehen in der Währung des Instruments. Eine stille Umrechnung
@@ -118,12 +126,12 @@ export function buildStockPrompt(c, { fair = null, impliedGrowth = null, currenc
   const valuation = fair != null
     ? `My own reverse-DCF puts fair value at ${num(fair)} ${currency}`
       + (impliedGrowth != null ? `, i.e. the market is pricing in ~${num(impliedGrowth * 100, 1)}% p.a. free-cash-flow growth` : '')
-      + '. Which of those assumptions is the most fragile?'
-    : 'What growth and margin path does the current price imply, and which of those assumptions is the most fragile?';
+      + '. Which assumptions is that price most sensitive to?'
+    : 'What growth and margin path does the current price imply, and which assumptions is it most sensitive to?';
 
-  return `You are a skeptical equity analyst. Research ${name}(${c.symbol} @ ${c.exchange}${isin}) using current web sources (today: ${date}).
+  return `You are a neutral evidence researcher. Compile what is documented about ${name}(${c.symbol} @ ${c.exchange}${isin}) using current web sources (today: ${date}). Do not argue for or against the stock — gather and weigh evidence.
 
-Ground rules: cite a source and a date for every claim. Where you find nothing, write "no evidence found" — do not fill the gap with something that merely sounds plausible. Flag anything that is company-provided (IR deck, press release) as such.
+Ground rules: cite a source and a date for every claim. Where you find nothing, write "no evidence found" — do not fill the gap with something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions clearly apart.
 
 **1 · Business & moat**
 What exactly does the company earn money with (revenue split by segment and region)? Where does the moat come from — network effects, switching costs, scale, patents, brand, regulation? Give evidence rather than assertions: pricing power, gross margin over time, retention/churn, unit economics. How durable is it — what would have to happen for the moat to be gone in three years?
@@ -135,7 +143,7 @@ Which sector and, more importantly, which **sub-sector / niche** does it actuall
 Look for gaps between cash flow and earnings (accruals), receivables and inventory versus revenue, capitalised costs, recurring "one-off" items. Auditor or CFO changes, late filings, restatements, SEC/BaFin proceedings, class actions. Dilution: share count over time, ATM programmes, convertibles, stock-based comp as a share of revenue.
 
 **4 · Short sellers & positioning**
-Are there **short-seller reports** (Hindenburg, Muddy Waters, Kerrisdale, Culper, Scorpion, Fuzzy Panda, Grizzly, Blue Orca …)? If so: the core allegations, the date, the company's response, and what has since been substantiated or refuted. Current **short interest** (% of float), days-to-cover and the trend — with the as-of date. State the short thesis in two sentences: squeeze candidate or justified skepticism?
+Are there **short-seller reports** (Hindenburg, Muddy Waters, Kerrisdale, Culper, Scorpion, Fuzzy Panda, Grizzly, Blue Orca …)? If so: the core allegations, the date, the company's response, and what has since been substantiated or refuted. Current **short interest** (% of float), days-to-cover and the trend — with the as-of date. Summarise the short thesis in two sentences, and the company's counter-arguments in two more.
 
 **5 · Insiders & major holders**
 Insider buys and sells over the last 6–12 months: who, how much, and whether these were genuine open-market purchases or scheduled 10b5-1 sales. Management ownership, changes among institutional holders, buybacks in progress.
@@ -146,15 +154,16 @@ What explains the move over the last 1 / 3 / 6 months — concrete events, not "
 **7 · What is priced in**
 ${valuation}
 
-**Close with**
-- Bull / base / bear case, three bullets each, with a 12-month price range per case.
-- The three questions I would need answered before buying.
-- One sentence: what would disprove your own thesis?
+**Outlook — next 3 months**
+- One price range for the next three months, with the reasoning in a single line and the two or three factors it hinges on.
+- Risks: 3–5 short bullets, each with the evidence behind it and how likely/near-term it is.
+- Opportunities: 3–5 short bullets, same standard.
+- Where the evidence is thin or contradictory, say so instead of resolving it.
 
 My screening data (as of ${date} — please sanity-check against live market data):
 ${dataBlock(c, currency)}
 
-Answer in English, in bullet points, no preamble.`;
+Answer in English. Short bullets only — no prose paragraphs, no preamble, no restating of the questions.`;
 }
 
 export function buildResearchPrompt(candidates) {

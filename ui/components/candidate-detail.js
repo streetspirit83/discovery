@@ -5,7 +5,7 @@ import {
 } from '../lib/price-viz.js?v=20260807a';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260807a';
 import { icons } from '../lib/icons.js?v=20260807a';
-import { buildStockPrompt } from '../lib/research-prompt.js?v=20260819j';
+import { buildStockPrompt } from '../lib/research-prompt.js?v=20260819k';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
