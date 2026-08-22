@@ -5,7 +5,6 @@ import {
 } from '../lib/price-viz.js?v=20260807a';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260807a';
 import { icons } from '../lib/icons.js?v=20260807a';
-import { buildStockPrompt } from '../lib/research-prompt.js?v=20260819k';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
@@ -154,7 +153,7 @@ function renderToolbar(c) {
       ${chipLink(links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView', 'link-chip--tv')}
       ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
       ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
-      ${chipBtn('detail-prompt', icons.telescope, 'Research-Prompt kopieren (KI-Recherche)', 'link-chip--prompt')}
+      ${chipBtn('detail-prompt', icons.sparkles, 'KI-Research-Prompts', 'link-chip--prompt')}
       ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
       ${chipLink(tfUrl, icons.barChart2, 'TraderFox Visualisierung', 'link-chip--tf')}
       ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
@@ -2773,30 +2772,9 @@ export class CandidateDetail {
       });
     }
 
-    /* Research-Prompt: ein hier gespeicherter Text ersetzt die Vorlage für genau
-       diesen Titel. Der Reverse-DCF wird einmal gerechnet und als Zahl in den
-       Prompt gegeben — die Rechnung soll nicht in zwei Dateien existieren. */
-    this.el.querySelector('#detail-prompt')?.addEventListener('pointerup', async (e) => {
-      const btn = e.currentTarget;
-      const f = fairValue(c.tv_data ?? {}, c.ls_quote?.price != null ? { price: c.ls_quote.price } : {});
-      const text = (c.research_prompt ?? '').trim() || buildStockPrompt(c, {
-        fair: f?.error ? null : f.fair_price,
-        impliedGrowth: f?.error ? null : f.base_growth,
-        currency: nativeCur(c),
-      });
-      let ok = false;
-      try { await navigator.clipboard.writeText(text); ok = true; } catch { /* Fallback unten */ }
-      if (!ok) {
-        // Ohne sicheren Kontext (http, ältere Browser) gibt es kein Clipboard-API.
-        const ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        ok = document.execCommand('copy'); ta.remove();
-      }
-      btn.classList.toggle('is-ok', ok);
-      btn.title = ok ? `Prompt kopiert (${Math.round(text.length / 1000)}k Zeichen)` : 'Kopieren fehlgeschlagen';
-      this.onAction?.(ok ? 'promptCopied' : 'promptCopyFailed', c, { chars: text.length });
-      setTimeout(() => { btn.classList.remove('is-ok'); btn.title = 'Research-Prompt kopieren (KI-Recherche)'; }, 2000);
+    // KI-Prompts: eigenes Modal (vier Bausteine + ggf. eigener Prompt).
+    this.el.querySelector('#detail-prompt')?.addEventListener('pointerup', () => {
+      this.onAction?.('openPrompts', c, { currency: nativeCur(c) });
     });
 
     // Toolbar: edit-toggle + quick actions

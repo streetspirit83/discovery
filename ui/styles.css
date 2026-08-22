@@ -2076,9 +2076,33 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .fc-legend__line--fair { background:var(--ai); }
 .fc-legend__dash--analyst { border-color:var(--accent); }
 
-/* Research-Prompt: Knopf quittiert das Kopieren kurz grün, Textfeld im
-   Bearbeiten-Menü über die volle Breite. */
-.link-chip--prompt.is-ok { color:var(--pos); border-color:var(--pos); }
+/* KI-Prompt-Modal: eine Karte je Prompt, Text eingeklappt hinter <details>,
+   damit der Dialog auf dem Handy nicht zur Textwüste wird. */
+.aip-modal { max-width:640px; }
+/* Icon und Titel in einer Zeile — sonst steht das Sparkles-SVG allein oben. */
+.aip-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); }
+.aip-modal .modal-header h2 svg { flex:0 0 auto; }
+.aip-intro { font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-3); }
+.aip-card {
+  border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2);
+  padding:var(--s-3); margin-bottom:var(--s-3);
+}
+.aip-card__head { display:flex; align-items:center; gap:var(--s-3); }
+.aip-card__title { min-width:0; flex:1; }
+.aip-card__title b { display:block; font-size:var(--fs-2); }
+.aip-card__title small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.aip-copy { flex:0 0 auto; white-space:nowrap; }
+.aip-copy.is-ok { color:var(--pos); border-color:var(--pos); }
+.aip-card__more { margin-top:var(--s-2); }
+.aip-card__more summary { font-size:var(--fs-1); color:var(--muted); cursor:pointer; }
+.aip-card__text {
+  margin-top:var(--s-2); max-height:260px; overflow:auto; white-space:pre-wrap;
+  font-family:var(--font-mono); font-size:var(--fs-1); line-height:1.45;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1);
+  padding:var(--s-2); color:var(--text);
+}
+
+/* Research-Prompt: Textfeld im Bearbeiten-Menü über die volle Breite. */
 .link-url-row--wide { grid-column:1 / -1; }
 .link-url-row--wide textarea {
   width:100%; font-family:var(--font-mono); font-size:var(--fs-1);

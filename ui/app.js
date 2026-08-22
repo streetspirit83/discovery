@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819h';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260819k';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819l';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -12,6 +12,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260819l';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
@@ -27,7 +28,7 @@ import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=202608
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819k';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819l';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
@@ -1282,13 +1283,9 @@ async function handleAction(action, candidate, extras = {}) {
     toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
   }
 
-  // Rückmeldung des Teleskop-Knopfs im Detail-Sheet.
-  if (action === 'promptCopied') {
-    toast(`🔭 Research-Prompt kopiert (${Math.round((extras.chars ?? 0) / 1000)}k Zeichen)`, 'success', 2500);
-    return;
-  }
-  if (action === 'promptCopyFailed') {
-    toast('Kopieren fehlgeschlagen – Zwischenablage nicht verfügbar', 'error');
+  // ✨-Knopf im Detail-Sheet: Modal mit den Recherche-Prompts.
+  if (action === 'openPrompts') {
+    openAiPromptModal(candidate, { currency: extras?.currency });
     return;
   }
 

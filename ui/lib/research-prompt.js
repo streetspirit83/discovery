@@ -114,56 +114,103 @@ function dataBlock(c, cur) {
   ].join(' · ');
 }
 
-/**
- * buildStockPrompt(candidate, { fair, impliedGrowth }) → Recherche-Prompt für
- * EINEN Titel. `fair`/`impliedGrowth` kommen aus dem Reverse-DCF des Aufrufers
- * (die Rechnung liegt in `tv-reverse-dcf.js` und soll nicht doppelt existieren).
+/* ── Vier Prompts statt einem ───────────────────────────────────────────────
+ * Ein einziger Riesen-Prompt liefert bei Such-KIs regelmässig eine dünne
+ * Antwort pro Block — vier gezielte Fragen bringen je Block mehr. Sie teilen
+ * sich Kopf (wer fragt, über welchen Titel) und Formatregeln.
+ *
+ * Die Signal-Marker im Format-Block sind Emoji: das ist bewusst KEIN Verstoss
+ * gegen die „nur Lucide"-Regel des Styleguides — sie erscheinen nie in unserer
+ * Oberfläche, sondern nur im Text, den eine fremde KI ausgibt. Dort sind sie
+ * das einzige Mittel, das in jedem Chatfenster gleich aussieht.
  */
-export function buildStockPrompt(c, { fair = null, impliedGrowth = null, currency = 'USD' } = {}) {
-  const date = new Date().toISOString().slice(0, 10);
+
+function head(c, date) {
   const name = c.name ? `${c.name} ` : '';
   const isin = c.isin ? `, ISIN ${c.isin}` : '';
-  const valuation = fair != null
-    ? `My own reverse-DCF puts fair value at ${num(fair)} ${currency}`
-      + (impliedGrowth != null ? `, i.e. the market is pricing in ~${num(impliedGrowth * 100, 1)}% p.a. free-cash-flow growth` : '')
-      + '. Which assumptions is that price most sensitive to?'
-    : 'What growth and margin path does the current price imply, and which assumptions is it most sensitive to?';
+  return `You are a neutral evidence researcher. Subject: ${name}(${c.symbol} @ ${c.exchange}${isin}). Use current web sources (today: ${date}). Gather and weigh evidence — do not argue for or against the stock.
 
-  return `You are a neutral evidence researcher. Compile what is documented about ${name}(${c.symbol} @ ${c.exchange}${isin}) using current web sources (today: ${date}). Do not argue for or against the stock — gather and weigh evidence.
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.`;
+}
 
-Ground rules: cite a source and a date for every claim. Where you find nothing, write "no evidence found" — do not fill the gap with something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions clearly apart.
+const FORMAT = `Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`;
 
-**1 · Business & moat**
-What exactly does the company earn money with (revenue split by segment and region)? Where does the moat come from — network effects, switching costs, scale, patents, brand, regulation? Give evidence rather than assertions: pricing power, gross margin over time, retention/churn, unit economics. How durable is it — what would have to happen for the moat to be gone in three years?
+/** Die vier Bausteine. `build` bekommt den Kandidaten und den Kontext. */
+export const STOCK_PROMPTS = [
+  {
+    key: 'moat',
+    label: 'Moat & Wettbewerb',
+    hint: 'Geschäftsmodell, Burggraben, Sub-Sektor, Konkurrenz',
+    build: (c, { date }) => `${head(c, date)}
 
-**2 · Sector, sub-sector & competition**
-Which sector and, more importantly, which **sub-sector / niche** does it actually compete in? My data classifies it as ${sectorLine(c)} — check whether that is the right bucket. Name the 3–5 most relevant competitors, listed **and private**, with rough size or market share. How does ${c.symbol} compare on growth, margin and valuation? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, capacity, pricing, inventories)?
+**Business & moat**
+What exactly does the company earn money with (revenue split by segment and region)? Where does the moat come from — network effects, switching costs, scale, patents, brand, regulation? Give evidence rather than assertions. How durable is it — what would have to happen for the moat to be gone in three years?
 
-**3 · Accounting quality & fraud risk**
-Look for gaps between cash flow and earnings (accruals), receivables and inventory versus revenue, capitalised costs, recurring "one-off" items. Auditor or CFO changes, late filings, restatements, SEC/BaFin proceedings, class actions. Dilution: share count over time, ATM programmes, convertibles, stock-based comp as a share of revenue.
+**Sector, sub-sector & competition**
+Which sector and, more importantly, which sub-sector / niche does it actually compete in? My data classifies it as ${sectorLine(c)}. Name the 3–5 most relevant competitors, listed and private, with rough size or market share. How does ${c.symbol} compare on growth? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, economy, interest rates, geopolitical stress)?
 
-**4 · Short sellers & positioning**
-Are there **short-seller reports** (Hindenburg, Muddy Waters, Kerrisdale, Culper, Scorpion, Fuzzy Panda, Grizzly, Blue Orca …)? If so: the core allegations, the date, the company's response, and what has since been substantiated or refuted. Current **short interest** (% of float), days-to-cover and the trend — with the as-of date. Summarise the short thesis in two sentences, and the company's counter-arguments in two more.
+${FORMAT}`,
+  },
+  {
+    key: 'redflags',
+    label: 'Red Flags',
+    hint: 'Bilanzqualität, Betrugsrisiko, Short-Seller, Positionierung',
+    build: (c, { date }) => `${head(c, date)}
 
-**5 · Insiders & major holders**
-Insider buys and sells over the last 6–12 months: who, how much, and whether these were genuine open-market purchases or scheduled 10b5-1 sales. Management ownership, changes among institutional holders, buybacks in progress.
+**Red flags**
+Accounting: gaps between cash flow and earnings (accruals), receivables and inventory versus revenue, capitalised costs, recurring "one-off" items, aggressive revenue recognition. Governance: auditor or CFO changes, late filings, restatements, related-party transactions, SEC/BaFin proceedings, class actions. Dilution: share count over time, ATM programmes, convertibles, stock-based comp as a share of revenue. Balance sheet: debt maturities, covenants, cash runway.
 
-**6 · Recent price action & catalysts**
-What explains the move over the last 1 / 3 / 6 months — concrete events, not "market conditions"? What is coming up: earnings, guidance, approvals, contract decisions, lock-up expiries, index changes? How does the price sit relative to the analyst consensus and to its 52-week range?
+**Short sellers**
+Are there short-seller reports (Hindenburg, Muddy Waters, Kerrisdale, Culper, Scorpion, Fuzzy Panda, Grizzly, Blue Orca …)? If so: the core allegations, the date, the company's response, and what has since been substantiated or refuted. Current short interest (% of float), days-to-cover and the trend — with the as-of date. Summarise the short thesis in two sentences, and the counter-arguments in two more.
 
-**7 · What is priced in**
-${valuation}
+${FORMAT}`,
+  },
+  {
+    key: 'insiders',
+    label: 'Insider & Großaktionäre',
+    hint: 'Käufe/Verkäufe, Beteiligungen, Rückkäufe',
+    build: (c, { date }) => `${head(c, date)}
+
+**Insiders & major holders**
+Insider buys and sells over the last 6–12 months: who, how much, at what price, and whether these were genuine open-market purchases or scheduled 10b5-1 sales. Cluster buying by several insiders at once? Management ownership in absolute terms and as a share of their pay. Changes among the largest institutional holders, new activist positions, buybacks in progress (announced vs. actually executed).
+
+${FORMAT}`,
+  },
+  {
+    key: 'news',
+    label: 'News, Katalysatoren & Ausblick',
+    hint: 'Bewegung erklären, Termine, 3-Monats-Ausblick mit Spanne',
+    build: (c, { date, currency, fair, impliedGrowth }) => `${head(c, date)}
+
+**Recent news & catalysts**
+What explains the price move over the last 1 / 3 / 6 months — concrete events, not "market conditions"? What is coming up: earnings, guidance, approvals, contract decisions, lock-up expiries, index changes, capital measures? How does the price sit relative to the analyst consensus and to its 52-week range?${fair != null ? `\n\nMy own reverse-DCF puts fair value at ${num(fair)} ${currency}${impliedGrowth != null ? `, i.e. the market is pricing in ~${num(impliedGrowth * 100, 1)}% p.a. free-cash-flow growth` : ''}. Which assumptions is that price most sensitive to?` : ''}
 
 **Outlook — next 3 months**
 - One price range for the next three months, with the reasoning in a single line and the two or three factors it hinges on.
-- Risks: 3–5 short bullets, each with the evidence behind it and how likely/near-term it is.
-- Opportunities: 3–5 short bullets, same standard.
+- Risks: 3–5 bullets, each with the evidence behind it and how near-term it is.
+- Opportunities: 3–5 bullets, same standard.
 - Where the evidence is thin or contradictory, say so instead of resolving it.
 
-My screening data (as of ${date} — please sanity-check against live market data):
+My screening data (as of ${date}):
 ${dataBlock(c, currency)}
 
-Answer in English. Short bullets only — no prose paragraphs, no preamble, no restating of the questions.`;
+${FORMAT}`,
+  },
+];
+
+/**
+ * stockPrompts(candidate, opts) → [{ key, label, hint, text }]
+ * `fair`/`impliedGrowth` kommen aus dem Reverse-DCF des Aufrufers (die Rechnung
+ * liegt in `tv-reverse-dcf.js` und soll nicht doppelt existieren).
+ */
+export function stockPrompts(c, { fair = null, impliedGrowth = null, currency = 'USD' } = {}) {
+  const ctx = { date: new Date().toISOString().slice(0, 10), fair, impliedGrowth, currency };
+  return STOCK_PROMPTS.map(({ key, label, hint, build }) => ({ key, label, hint, text: build(c, ctx) }));
 }
 
 export function buildResearchPrompt(candidates) {

@@ -114,13 +114,17 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - `nachkauf-modal.js` – Nachkauf/Teilverkauf calculator for ★ portfolio tickers
   (Standard view row action). Pure calculator, EUR only — it reads `mk_entry` /
   `mk_shares` (merkliste) + the LS quote and persists nothing.
-  Die Toolbar trägt neben den Icon-Links einen **Teleskop-Knopf**: er kopiert
-  einen englischen Recherche-Prompt für genau diesen Titel (`buildStockPrompt`
-  in `research-prompt.js` — Moat, Sub-Sektor & Wettbewerb, Bilanz/Fraud,
-  Short-Seller & Short-Interest, Insider, Kursentwicklung, eingepreiste
-  Erwartung, dazu die Screening-Daten). Ein im Bearbeiten-Menü hinterlegter
-  Text (`candidate.research_prompt`) ersetzt die Vorlage für diesen Titel;
-  leeren stellt sie wieder her.
+  Die Toolbar trägt neben den Icon-Links einen **✨-Knopf**, der
+  `ai-prompt-modal.js` öffnet: vier einzeln kopierbare englische Recherche-
+  Prompts (Moat & Wettbewerb · Red Flags inkl. Short-Seller · Insider ·
+  News/Katalysatoren mit 3-Monats-Ausblick), gebaut von `stockPrompts` in
+  `research-prompt.js`. Alle vier teilen Kopf (neutral evidence researcher,
+  Quelle + Datum) und Formatregeln (kurze Bullets, Fettung sparsam,
+  Signal-Marker 🔴🟢🟡⚪, Abschlusszeile „⚠ Watch"). Ein im Bearbeiten-Menü
+  hinterlegter Text (`candidate.research_prompt`) kommt als zusätzliche erste
+  Karte dazu — er ersetzt die vier nicht.
+- `ai-prompt-modal.js` – die vier Recherche-Prompts eines Titels zum Kopieren
+  (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 
