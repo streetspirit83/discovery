@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819h';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260819m';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260819l';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260819m';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260819l';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
-import { renderControlModal } from './components/control-modal.js?v=20260819h';
+import { renderControlModal } from './components/control-modal.js?v=20260819m';
 import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -28,6 +28,8 @@ import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=202608
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
+import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
+import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260819m';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819l';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
@@ -911,6 +913,7 @@ async function mockInsert(blobType, candidate) {
    LS-Abrufen — genug Tempo, ohne dass unsere Funktion eine Salve sieht. */
 const YH_BATCH = 6;
 
+
 async function handleAction(action, candidate, extras = {}) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
@@ -1281,6 +1284,84 @@ async function handleAction(action, candidate, extras = {}) {
       }
     }
     toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
+  }
+
+  /* Detail-Sheet geöffnet: still nachladen, was fehlt oder veraltet ist.
+     Bewusst OHNE Toasts — der Nutzer hat nichts angefordert, er hat nur ein
+     Sheet geöffnet; die Ladezustände stehen in den Tabs selbst. Fehler landen
+     in der Konsole, nicht auf dem Bildschirm.
+     Jede Quelle hat ihre eigene Frist, weil sie unterschiedlich schnell altern:
+     der LS-Kurs ist ein Live-Preis, die Tageskerzen ändern sich einmal je
+     Handelstag, TR-Handelbarkeit praktisch nie, Kursziele alle paar Tage. */
+  if (action === 'detailOpened') {
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    const c = candidate;
+    const plan = autoFetchPlan(c, {
+      hasBackend: !!(backendUrl && secret),
+      isMock: useMock,
+      isUs: isUsTicker(c),
+      hasTdKey: !!localStorage.getItem('discovery_twelvedata_key'),
+      hasYahooSymbol: !!yahooSymbol(c),
+    });
+    if (plan.skip) return;
+    c._auto_at = Date.now();
+
+    const rerender = () => { if (candidateDetail.candidate?.id === c.id) candidateDetail.render(); };
+    const patch = {};
+    const jobs = [];
+
+    if (plan.ls) {
+      jobs.push((async () => {
+        c.ls_quote = { ...(c.ls_quote ?? {}), _fetching: true };
+        const q = await fetchLsQuote(c, { backendUrl, secret });
+        c.ls_quote = q;
+        if (q?.price != null) patch.ls_quote = q;
+      })());
+    }
+
+    if (plan.bars) {
+      jobs.push((async () => {
+        c._swing_loading = true;
+        try {
+          const r = await fetchSwingAnalysis(c, { eurUsd: resolveFxRate(), backendUrl, secret });
+          if (!r?.error) { c.swing_analysis = r; patch.swing_analysis = r; }
+        } finally { c._swing_loading = false; }
+      })());
+    }
+
+    if (plan.tr) {
+      jobs.push((async () => {
+        const t = await checkTradeRepublic(c, { backendUrl, secret });
+        if (t) { c.tr_check = t; patch.tr_check = t; }
+      })());
+    }
+
+    if (plan.yh) {
+      jobs.push((async () => {
+        c._yh_loading = true;
+        try {
+          const r = await fetchYahooTargets(c, { backendUrl, secret });
+          c.yh_targets = r;
+          patch.yh_targets = r;
+        } finally { c._yh_loading = false; }
+      })());
+    }
+
+    if (!jobs.length) return;
+    rerender();   // Ladezustände sichtbar machen, bevor gewartet wird
+    const done = await Promise.allSettled(jobs);
+    done.filter((d) => d.status === 'rejected')
+      .forEach((d) => console.warn('[auto-fetch]', c.symbol, d.reason?.message ?? d.reason));
+    rerender();
+    candidateList.renderRows();
+
+    // Ein Schreibvorgang für alles, was sich geändert hat.
+    if (Object.keys(patch).length) {
+      try { await storageClient.updateCandidate(currentBlobType, c.id, patch); }
+      catch (err) { console.warn('[auto-fetch] speichern fehlgeschlagen:', err.message); }
+    }
+    return;
   }
 
   // ✨-Knopf im Detail-Sheet: Modal mit den Recherche-Prompts.

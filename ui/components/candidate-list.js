@@ -1,4 +1,5 @@
 import { icons } from '../lib/icons.js?v=20260807a';
+import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
 import { computeEntryPrices } from '../lib/tv-entry-prices.js';
@@ -785,7 +786,7 @@ VIEWS.meta = [
   { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:nameCell },
   { key:'sector',      label:'Sektor',         title:'Sektor', num:false, fmt:c=>`<span class="sector-cell">${c.sector ?? '—'}</span>` },
   { key:'sources',     label:'Quellen',        title:'Signal-Quellen', num:false, fmt:c=>renderSourceBadges(c.sources) },
-  { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(c.links?.tradingview,TV_LOGO,'TradingView','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
+  { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(tvChartUrl(c) ?? c.links?.tradingview,TV_LOGO,'TradingView-Chart','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
   { key:'discovered',  label:'in',             title:'Erstmals entdeckt', num:false, fmt:c=>`<span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>` },
   { key:'signal_text', label:'Letztes Signal', title:'Letztes Signal aus den Quellen', num:false, fmt:c=>`<span class="signal-text">${getLatestSignal(c)}</span>` },
   { key:'currency',    label:'Wä',        title:'Börsenwährung', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
@@ -1275,7 +1276,7 @@ export class CandidateList {
       const symHtml = `<div class="sym-cell">
         <div class="sym-cell__top">
           <span class="sym-strong">${c.symbol}</span>
-          ${chipLink(links.tradingview, TV_LOGO, 'TradingView', 'link-chip--tv')}
+          ${chipLink(tvChartUrl(c) ?? links.tradingview, TV_LOGO, 'TradingView-Chart', 'link-chip--tv')}
           ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
         </div>
         <span class="exch-tag exch-tag--sub">${c.exchange}</span>

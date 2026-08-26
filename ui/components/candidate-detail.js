@@ -5,6 +5,7 @@ import {
 } from '../lib/price-viz.js?v=20260807a';
 import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260807a';
 import { icons } from '../lib/icons.js?v=20260807a';
+import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
@@ -150,7 +151,7 @@ function renderToolbar(c) {
   // children so they shrink to fit one line even on a narrow phone (§5).
   return `
     <div class="detail-toolbar">
-      ${chipLink(links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView', 'link-chip--tv')}
+      ${chipLink(tvChartUrl(c) ?? links.tradingview, `<img src="${TV_LOGO}" alt="">`, 'TradingView-Chart', 'link-chip--tv')}
       ${chipLink(links.stocktwits,  `<img src="${ST_LOGO}" alt="">`, 'StockTwits',  'link-chip--st')}
       ${chipLink(links.yahoo,       `<img src="${YH_LOGO}" alt="">`, 'Yahoo Finance', 'link-chip--yahoo')}
       ${chipBtn('detail-prompt', icons.sparkles, 'KI-Research-Prompts', 'link-chip--prompt')}
@@ -2490,13 +2491,18 @@ export class CandidateDetail {
   }
 
   show(candidate) {
-    if (this.candidate?.id !== candidate.id) {
+    const switched = this.candidate?.id !== candidate.id;
+    if (switched) {
       this.activeTab = 'performance'; // Tab 1 onload
       this.chartHorizon = '10T';      // reset chart horizon per candidate
       this.exitChartFs();             // Vollbild nicht auf den nächsten Ticker mitnehmen
     }
     this.candidate = candidate;
     this.render();
+    /* Beim Öffnen still nachladen, was fehlt oder veraltet ist (LS · Kerzen ·
+       TR · Yahoo-Kursziele). Nur beim Titelwechsel, nicht bei jedem `show()`
+       desselben Titels — sonst löste jedes erneute Öffnen dieselbe Runde aus. */
+    if (switched) this.onAction?.('detailOpened', candidate);
   }
 
   hide() {

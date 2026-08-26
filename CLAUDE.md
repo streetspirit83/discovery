@@ -163,7 +163,13 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.
 - Viz/metrics: `price-viz.js` (range ladder), `spark.js`, `dashboard-metrics.js`,
   `alerts.js` (alert model + evaluation).
-- Misc: `research-prompt.js`, `link-builder.js`, `import-parser.js`,
+- Misc: `research-prompt.js`, `link-builder.js` (**`tvChartUrl`** baut den
+  TradingView-**Chart**-Link `/chart/?symbol=XETR:SAP&interval=1D`; Detail-Sheet
+  und Tabelle leiten ihn zur Laufzeit ab, damit auch Kandidaten mit alter
+  gespeicherter `/symbols/`-URL im Chart landen),
+  `detail-autofetch.js` (`autoFetchPlan` — entscheidet beim Öffnen eines
+  Detail-Sheets, welche Quelle fällig ist: LS 2 min · Kerzen 20 h · TR 7 Tage ·
+  Yahoo-Kursziele 12 h, plus 2-min-Sperre gegen Doppelläufe beim Blättern), `import-parser.js`,
   `merkliste-import.js`/`merkliste-export.js`, `schema.js`, `icons.js`.
 
 ## Data Sources & External APIs
