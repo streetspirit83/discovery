@@ -17,6 +17,7 @@ import { computeEntryPrices }        from './tv-entry-prices.js';
 import { computeOverallScore }       from './tv-overall-score.js';
 import { computeMomentumCheck }      from './tv-momentum-check.js';
 import { normalizeExchange }         from './exchange-map.js';
+import { assetTypeFromTv }           from './instrument-type.js?v=20260831a';
 
 const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
 
@@ -264,6 +265,12 @@ const TV_COLUMNS = [
   'recommendation_buy',                        // 128
   'recommendation_hold',                       // 129
   'recommendation_sell',                       // 130
+  /* Instrumententyp. `type` ist grob ("stock" | "fund" | "dr" | …), die
+     Feinheit steckt in `typespecs` (["etf"] / ["common"] / ["reit"] …) —
+     erst beide zusammen trennen ETF von Einzelwert zuverlässig. Auswertung
+     in `instrument-type.js`. */
+  'type',                                      // 131
+  'typespecs',                                 // 132
 ];
 
 const COL = {
@@ -406,6 +413,9 @@ recommendMA1M: 53,
   recBuy:                128,
   recHold:               129,
   recSell:               130,
+  // Instrumententyp
+  instrumentType:        131,
+  typespecs:             132,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -490,8 +500,15 @@ function formatEarningsDate(ts) {
 }
 
 function buildUpdates(d, candidate) {
+  // Instrumententyp aus dem Scanner statt der früheren Konstante 'Stock' —
+  // die Tabelle beschriftet damit ETF vs. Aktie. Liefert der Scanner nichts
+  // (unbekannte Spalte ⇒ null, siehe CLAUDE.md), fällt `instrumentType()`
+  // später auf die Namensheuristik zurück.
+  const tvType  = d[COL.instrumentType] ?? null;
+  const tvSpecs = d[COL.typespecs] ?? null;
+
   const updates = {
-    asset_type: 'Stock',
+    asset_type: assetTypeFromTv(tvType, tvSpecs),
     scan_date:  new Date().toISOString().split('T')[0],
     // Backfill ISIN from TV so the Trade Republic / LS check can match reliably.
     isin: d[COL.isin] || candidate.isin || null,
@@ -631,6 +648,10 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       pivot_demark_s1_1w:   d[COL.pivotDemarkS1_1w]    ?? null,
       high_20d:             d[COL.donch20UpperD]       ?? null,
       low_20d:              d[COL.donch20LowerD]       ?? null,
+      // Rohwerte des Typs mitschreiben, damit sich die Einordnung später
+      // nachvollziehen (und ohne neuen Abruf verfeinern) lässt.
+      instrument_type:      tvType,
+      typespecs:            Array.isArray(tvSpecs) ? tvSpecs : tvSpecs ? [tvSpecs] : null,
       fetched_at:   new Date().toISOString(),
     },
   };

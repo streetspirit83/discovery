@@ -6,7 +6,7 @@ import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260819a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260831a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260819e';
@@ -21,6 +21,8 @@ import { trendScore } from '../lib/trend-radar.js?v=20260807a';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260807a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
+import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
+import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -31,6 +33,23 @@ let fxEurUsd = null; // USD per 1 EUR
 
 function nativeCurrency(c) {
   return EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? 'USD';
+}
+
+/* ── ETF/Aktie-Label ─────────────────────────────────────────────────────────
+ * Sitzt in der zweiten Zeile der Symbol-Zelle neben der Börse — dort ist schon
+ * kleine, gedämpfte Typo, das Label kostet also keine eigene Spalte und keine
+ * Zeilenhöhe. „Aktie" bleibt bewusst gedämpft, „ETF" trägt Farbe: der Korb ist
+ * der Ausnahmefall, den man beim Scannen sehen will.
+ * Ist der Typ nur aus dem Namen geraten (noch keine TV-Anreicherung), sagt das
+ * der Tooltip — die Zelle selbst tut nicht so, als wäre sie sicher.
+ */
+function typeTag(c) {
+  const t   = instrumentType(c);
+  const src = instrumentTypeSource(c);
+  const tip = src === 'tv'
+    ? `Instrumententyp laut TradingView: ${TYPE_LABEL[t]}`
+    : `Instrumententyp aus dem Namen abgeleitet: ${TYPE_LABEL[t]} · „TV Daten“ laden für die gesicherte Angabe`;
+  return `<span class="type-tag type-tag--${t}${src === 'name' ? ' type-tag--guess' : ''}" title="${tip}">${TYPE_LABEL[t]}</span>`;
 }
 
 // Conversion factor native → display. Only USD↔EUR is convertible;
@@ -381,6 +400,9 @@ function sortValue(c, col) {
     }
     case 'signal':      return c.momentum_check?.total ?? (c.tv_data?.recommend_all_1m ?? null);
     case 'bias':        return computeBias(c.tv_data)?.score ?? null;
+    // Sortiert nach dem Ø-Wachstum (der angezeigten Zahl), nicht nach der
+    // Pfeilrichtung — sonst fielen alle „seitwärts"-Zeilen in einen Topf.
+    case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
@@ -640,6 +662,14 @@ function chunked(arr, size) {
   return out;
 }
 
+/* SMA200-Trend-Spalte. Steht in Standard UND Trade, deshalb einmal definiert:
+   Renderer in `renderSma200Trend` (weiter unten, Funktionsdeklaration). */
+const SMA200_COL = {
+  key: 'sma200_trend', label: 'S200Ø', num: true,
+  title: 'SMA200-Trend aus den geladenen Tageskerzen (TwelveData US / Yahoo sonst): Ø Wachstum der 200-Tage-Linie je Monat (geometrisch über das ganze Fenster) · Pfeil = Richtung der letzten ~21 Handelstage (▲ steigend · ▼ fallend · → seitwärts, Totband ±0,5%) · sortiert nach dem Ø-Wachstum',
+  fmt: (c) => renderSma200Trend(c),
+};
+
 const SETUP_COL = { key:'setup', label:'Setup', title:'Preis-Situation: 🚀 Blue-Sky · 🎯 Breakout-Nähe · 🔄 Pullback im Trend · 📉 unter Trend · ➖ Range · ⚠ Earnings im 1M-Fenster', num:false, fmt:c=>{const s=priceSituation(c.tv_data);return s?`<span class="setup-icon" title="${s.label}">${s.icon}</span>`:'—';} };
 
 // Long-Entry pivot columns (jede Bullet/Sub-Bullet = eigene Spalte): classic
@@ -665,6 +695,7 @@ const VIEWS = {
     { key:'trade_cluster', label:'Cluster', title:'Trade-Cluster aus ATRP (2× gewichtet) + MCap: Stable (<4% · >50B) · Moderate (4–6% · 10–50B) · Momentum (6,1–10% · 2–10B) · Hyper (>10% · <2B) — bestimmt ATR-Multiplier, Gewinnziel & Volumen-Basis', num:false, fmt:renderCluster },
     { key:'trade_lstrend', label:'LS-Tr', title:'LS-10T-Trend: Steigung der Regressionsgeraden durch die Tages-Schlusskurse in %/Tag (gleiches Fenster wie der 10T-Chart) · ↗ = Kurs hat die Trendlinie nach oben gekreuzt, ↘ = nach unten', num:true, fmt:renderLsTrend },
     { key:'trade_trendscore', label:'TrdR', title:'Trend-Radar-Score 0–100 (kurzfristig ≤1M): LS-Regression 30% · Richtungs-Alignment Δ1T/PerfW/Perf1M 20% · SMA-Stack (Kurs>20>50) 15% · Beschleunigung 15% · Volumen 10% · frischer Kreuzungs-Trigger 10% · ⚡ = heute frisch gedreht', num:true, fmt:renderTrendRadarScore },
+    SMA200_COL,
     { key:'trade_target', label:'Target', title:'Kursziel: Kurs + 1 × Cluster-Gewinnziel (Stable +5% · Moderate +10% · Momentum +18% · Hyper +30%)', num:true, fmt:renderTradeTarget },
     { key:'tv_pt', label:'PT\u00d8', title:'Analysten-Konsensziel (TradingView) \u00b7 \u00d8 der Kursziele \u00b7 Spanne, Ratings und Potenzial im Zell-Tooltip \u00b7 sortiert nach Potenzial, nicht nach Zielpreis', num:true, fmt:c=>ptCell(c) },
     { key:'tv_fair', label:'Fair', title:'Fairer Kurs aus dem Reverse-DCF (dieselbe Rechnung wie im Fund.-Tab) \u00b7 Referenz ist der LS-Kurs \u00b7 Auf-/Abschlag und Annahmen im Zell-Tooltip \u00b7 sortiert nach Auf-/Abschlag, nicht nach dem Kurs', num:true, fmt:c=>fairCell(c) },
@@ -1096,7 +1127,8 @@ export class CandidateList {
       // Reihenfolge in vier Bl\u00f6cken (Trenner via col-group-start):
       //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 \u03941T \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W
       //              (heute \u2192 5T \u2192 6M \u2192 1J)
-      //   Qualit\u00e4t : Score \u00b7 Bias   (Bias hat die fr\u00fchere \u201eSignal"-Spalte ersetzt \u2014
+      //   Qualit\u00e4t : Score \u00b7 Bias \u00b7 S200\u00d8 \u00b7 Dauer
+      //              (Bias hat die fr\u00fchere \u201eSignal"-Spalte ersetzt \u2014
       //              es sagt dasselbe gerichtet und umfassender; die Momentum-
       //              Ampel f\u00fcr sich steht weiter in der Score-Ansicht)
       //   Substanz : ROIC \u00b7 Div% \u00b7 EBITDA            (Kurzfassung der Fundamental-
@@ -1116,6 +1148,7 @@ export class CandidateList {
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
+      cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
       cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
       cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
@@ -1279,9 +1312,13 @@ export class CandidateList {
           ${chipLink(tvChartUrl(c) ?? links.tradingview, TV_LOGO, 'TradingView-Chart', 'link-chip--tv')}
           ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
         </div>
-        <span class="exch-tag exch-tag--sub">${c.exchange}</span>
+        <div class="sym-cell__sub">
+          <span class="exch-tag exch-tag--sub">${c.exchange}</span>
+          ${typeTag(c)}
+        </div>
       </div>`;
 
+      const isEtfRow = instrumentType(c) === 'etf';
       const alertCount = Array.isArray(c.alerts) ? c.alerts.filter((a) => a && a.enabled !== false).length : 0;
       const trigSet = alertCount > 0;
       // Nachkauf-Kalkulator: nur für Portfolio-Ticker (★) in der Standard-Ansicht.
@@ -1320,6 +1357,7 @@ export class CandidateList {
           `<td class="num">${render52wRange(tv)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
+          `<td class="num">${renderSma200Trend(c)}</td>` +
           `<td class="num">${renderTrendAge(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
           `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
@@ -1338,7 +1376,12 @@ export class CandidateList {
 
       const tr = document.createElement('tr');
       const dupBucket = this.dupMap?.get(dupKey(c));
-      tr.className = `candidate-row state-${c.workspace_state}${isSelected ? ' is-selected' : ''}${dupBucket ? ' row-dup' : ''}`;
+      // row-etf: ETF-Zeilen bekommen eine eigene, schwächere Flächentönung —
+      // beim Scannen der Tabelle sieht man so sofort, welche Zeilen Körbe sind,
+      // ohne das Label lesen zu müssen. Welcher Marker bei mehreren gewinnt,
+      // entscheidet die Reihenfolge der CSS-Regeln (row-etf steht dort vor
+      // is-selected/row-dup), nicht die Reihenfolge hier im String.
+      tr.className = `candidate-row state-${c.workspace_state}${isEtfRow ? ' row-etf' : ''}${isSelected ? ' is-selected' : ''}${dupBucket ? ' row-dup' : ''}`;
       if (dupBucket) tr.title = `Bereits in ${dupBucket}`;
       tr.dataset.id = c.id;
       tr.setAttribute('tabindex', '0');
@@ -1749,6 +1792,38 @@ function renderLsTrend(c) {
     : t.crossedDown ? ' <b title="Kurs hat die Trendlinie nach unten gekreuzt">↘</b>' : '';
   const sign = t.ratePct > 0 ? '+' : '';
   return `<span class="${posNegClass(t.ratePct)}" title="Regressions-Steigung über ${t.days} LS-Tage · Kurs ${t.above ? 'über' : 'unter'} der Linie">${sign}${t.ratePct.toFixed(2)}%/T${cross}</span>`;
+}
+
+/* ── SMA200-Trend (Ø-Wachstum + Richtungspfeil) ──────────────────────────────
+ * Hauptwert: Ø Wachstum der 200-Tage-Linie je Monat (geometrisch über das
+ * ganze geladene Fenster). Pfeil: Richtung der LETZTEN ~21 Handelstage —
+ * ▲ steigend · ▼ fallend · → seitwärts (Totband ±0,5 %, siehe sma-trend.js).
+ *
+ * Braucht die persistierten SMA-Serien aus dem 1J-Kerzenabruf (TD/YF); der
+ * TV-Scanner liefert nur den Momentwert `sma200`, aus dem sich kein Wachstum
+ * rechnen lässt. Ohne geladene Kerzen also bewusst „—" mit Hinweis im Tooltip.
+ */
+function renderSma200Trend(c) {
+  const t = sma200Trend(c.swing_analysis);
+  if (!t) {
+    return `<span class="muted-dash" title="Braucht die Tageskerzen – im Detail-Sheet „1J TD/YF“ (Perf.-Tab) laden">—</span>`;
+  }
+  const cls = t.dir === 'up' ? 'pos' : t.dir === 'down' ? 'neg' : 'sma-tr--side';
+  // Signiert und deutsch formatiert wie jede andere Prozentspalte (fmtNum).
+  const sPct = (v, dec = 2) =>
+    (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmtNum(Math.abs(v), dec)}%`);
+  const val = sPct(t.avgMonthlyPct);
+  const src = t.source === 'yahoo' ? 'Yahoo' : t.source === 'twelvedata' ? 'TwelveData' : 'Kerzen';
+  const tip = [
+    `SMA200 ${SMA_DIR_LABEL[t.dir] ?? '—'} im letzten Monat (${MONTH_BARS} Handelstage)`,
+    t.chg1mPct != null ? `1M ${sPct(t.chg1mPct)}` : null,
+    t.chg3mPct != null ? `3M ${sPct(t.chg3mPct)}` : null,
+    `Ø ${val}/Monat über ${t.days} Handelstage (${sPct(t.totalPct, 1)} gesamt)`,
+    `Seitwärts-Band ±${fmtNum(SIDE_BAND_PCT, 1)}%`,
+    `${src}${t.fromDate && t.toDate ? ` · ${isoDate(t.fromDate)}–${isoDate(t.toDate)}` : ''}`,
+  ].filter(Boolean).join(' · ');
+
+  return `<span class="sma-tr ${cls}" title="${tip}"><span class="sma-tr__arrow" aria-label="${SMA_DIR_LABEL[t.dir] ?? ''}">${SMA_DIR_GLYPH[t.dir] ?? '·'}</span>${val}</span>`;
 }
 
 // Trend-Radar-Score 0–100 (kurzfristig), ⚡ = frischer Kreuzungs-Trigger heute.

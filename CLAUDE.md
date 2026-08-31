@@ -96,11 +96,16 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   nach dem Potenzial, nicht nach dem angezeigten Preis. In der Standard-Ansicht
   zeigt „10T" (nach PerfW) den LS-Verlauf der letzten zehn Tage als Sparkline —
   aus den Nacht-Snapshots plus Live-Kurs, sortiert nach dem Zuwachs über das
-  Fenster (`ls10Series` in `spark.js`).
+  Fenster (`ls10Series` in `spark.js`). Jede Zeile trägt in der zweiten Zeile der
+  Symbol-Zelle ein **ETF/Aktie-Label** (`instrument-type.js`); ETF-Zeilen
+  bekommen zusätzlich die Flächentönung `.row-etf`. Die Spalte **„S200Ø"**
+  (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`).
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
-  geladener TD-Historie Bias-Verlauf, Regime-Statistik und Fragilität.
+  geladener TD-Historie Bias-Verlauf, Regime-Statistik, den **SMA200-Trend**
+  (Ø-Wachstum je Monat, Richtung 1M/3M, Fenster) und Fragilität.
   Tab „Prog." (Forecast) zeigt zusätzlich das Analysten-Konsensziel als
   gestrichelten Verlauf mit Fächer (Spalte „PTØ" in der Trade-Ansicht neben „Target")
   und projiziert 6 Monate: 3 Monate echte Kerzen + drei
@@ -163,6 +168,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.
 - Viz/metrics: `price-viz.js` (range ladder), `spark.js`, `dashboard-metrics.js`,
   `alerts.js` (alert model + evaluation).
+- Typ/Trend-Helfer: `instrument-type.js` (ETF vs. Aktie — erst `tv_data.type`/
+  `typespecs` aus dem Scanner, sonst Namensheuristik; `asset_type` am Kandidaten
+  ist das persistierte Ergebnis), `sma-trend.js` (Ø-Wachstum und Richtung einer
+  SMA-Reihe; **braucht `swing_analysis.sma`** — der Scanner-Wert `sma200` ist nur
+  ein Momentwert und trägt keine Richtung).
 - Misc: `research-prompt.js`, `link-builder.js` (**`tvChartUrl`** baut den
   TradingView-**Chart**-Link `/chart/?symbol=XETR:SAP&interval=1D`; Detail-Sheet
   und Tabelle leiten ihn zur Laufzeit ab, damit auch Kandidaten mit alter

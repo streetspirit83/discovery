@@ -9,7 +9,7 @@ import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260819a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260831a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
@@ -20,6 +20,8 @@ import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../l
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
+import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
+import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';
@@ -992,6 +994,47 @@ function trendSummary(b, age, frag, st) {
   return `${s}${tail ? ` — ${tail}` : ''}.`;
 }
 
+/* ── SMA200-Trend (Trend-Tab) ────────────────────────────────────────────────
+ * Ø-Wachstum der 200-Tage-Linie plus Richtungspfeil für den letzten Monat.
+ * Währungsfrei — jede Zahl hier ist ein Verhältnis zweier Punkte derselben
+ * Reihe, die Bar-Währung kürzt sich weg (deshalb kein barsDisplayFactor).
+ */
+function renderSma200Block(c) {
+  const a = c.swing_analysis;
+  const t = sma200Trend(a);
+  const headline = '<h4 class="pv-subhead">SMA200-Trend</h4>';
+
+  if (!t) {
+    const src = isUsTicker(c) ? 'TD' : 'YF';
+    return `${headline}
+      <p class="tb-hint">Noch keine Tageskerzen geladen. Der 1-Jahres-Abruf im
+      <b>Perf.</b>-Tab („1J ${src}") liefert die SMA-Reihen — erst daraus lässt sich
+      das Wachstum der 200-Tage-Linie rechnen. Der TradingView-Wert in der
+      Preis-Ansicht ist nur der Momentwert und trägt keine Richtung.</p>`;
+  }
+
+  // fmtN formatiert deutsch (Komma) wie überall sonst im Sheet.
+  const pct = (v, d = 2) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmtN(Math.abs(v), d)}%`);
+  const tone = t.dir === 'up' ? 'pos' : t.dir === 'down' ? 'neg' : '';
+  const arrow = SMA_DIR_GLYPH[t.dir] ?? '·';
+  const srcTxt = t.source === 'yahoo' ? 'Yahoo' : t.source === 'twelvedata' ? 'TwelveData' : 'Kerzen';
+
+  return `${headline}
+    <div class="tb-stats">
+      ${trendStat('Richtung 1M', `${arrow} ${SMA_DIR_LABEL[t.dir] ?? '—'}`,
+        `${pct(t.chg1mPct)} über ${MONTH_BARS} Handelstage · Band ±${fmtN(SIDE_BAND_PCT)}%`, tone)}
+      ${trendStat('Ø Wachstum', `${pct(t.avgMonthlyPct)}`,
+        `je Monat · ${pct(t.avgDailyPct, 3)} je Handelstag`, t.avgMonthlyPct >= 0 ? 'pos' : 'neg')}
+      ${trendStat('3 Monate', pct(t.chg3mPct), 'Veränderung der SMA200')}
+      ${trendStat('Fenster', `${t.days} T`,
+        `${pct(t.totalPct, 1)} gesamt · ${srcTxt}${t.fromDate ? ` ab ${deDate(t.fromDate)}` : ''}`)}
+    </div>
+    <p class="tb-hint">Der Ring oben fragt nur, ob der Kurs <b>über</b> der SMA200 steht.
+    Diese Zeile fragt, wohin die Linie selbst läuft: eine steigende SMA200 unter dem Kurs
+    ist ein getragener Aufwärtstrend, eine fallende dieselbe Kursposition in einem
+    absteigenden Regime.</p>`;
+}
+
 function renderTrendTab(c) {
   const tv = c.tv_data;
   const b = tv ? computeBias(tv) : null;
@@ -1102,7 +1145,13 @@ function renderTrendTab(c) {
       Performance-Fenstern.</p>`;
   }
 
-  /* 5 · Fragilität */
+  /* 5 · SMA200-Trend — die langsamste der drei Bias-Ebenen als Zahl.
+     Das Regime-Segment im Ring sagt nur „Kurs über/unter der SMA200"; hier
+     steht, ob die Linie selbst steigt, fällt oder liegt und wie schnell.
+     Quelle sind dieselben Tageskerzen wie oben (analysis.sma). */
+  const smaBlock = renderSma200Block(c);
+
+  /* 6 · Fragilität */
   const frag = fragilityItems(c, tv, bars);
   const fragBlock = frag.length
     ? `<h4 class="pv-subhead">Fragilität</h4>
@@ -1111,7 +1160,7 @@ function renderTrendTab(c) {
        <p class="tb-summary">${trendSummary(b, age, frag, st)}</p>`
     : `<p class="tb-summary">${trendSummary(b, age, [], st)}</p>`;
 
-  return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + fragBlock
+  return head + `<div class="tb-levels">${levels}${meta}</div>` + legend + histBlock + smaBlock + fragBlock
     + renderStocktwitsBlock(c);
 }
 
@@ -2554,7 +2603,16 @@ export class CandidateDetail {
             ${c.mk_entry != null
               ? `<span class="detail-star is-active" title="Im Portfolio (Merkliste) · Einstand ${fmtNum(c.mk_entry)} €${c.mk_shares ? ` · ${c.mk_shares} Stk` : ''}">${icons.starFilled}</span>`
               : `<button class="detail-star${c.in_portfolio ? ' is-active' : ''}" id="detail-star" title="${c.in_portfolio ? 'Portfolio-Marker entfernen' : 'Als Portfolio-Ticker markieren'}">${c.in_portfolio ? icons.starFilled : icons.starEmpty}</button>`}
-            <span class="exchange-tag">${c.exchange}</span></h2>
+            <span class="exchange-tag">${c.exchange}</span>
+            ${(() => {
+              // Gleiches ETF/Aktie-Label wie in der Tabelle — der Typ soll auch
+              // hier ohne Umweg über den Namen ablesbar sein.
+              const t = instrumentType(c);
+              const guess = instrumentTypeSource(c) === 'name';
+              return `<span class="type-tag type-tag--${t}${guess ? ' type-tag--guess' : ''}" title="${
+                guess ? `Instrumententyp aus dem Namen abgeleitet: ${TYPE_LABEL[t]}`
+                      : `Instrumententyp laut TradingView: ${TYPE_LABEL[t]}`}">${TYPE_LABEL[t]}</span>`;
+            })()}</h2>
           <p class="detail-name">${c.tv_data?.description ?? c.name}</p>
           ${c.isin ? `<small class="isin isin--copy" id="detail-isin" role="button" tabindex="0" title="ISIN kopieren">ISIN: ${c.isin} ${icons.clipboard}</small>` : ''}
           <div class="detail-tags">

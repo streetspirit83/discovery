@@ -11,6 +11,11 @@
   --pos:#348535; --pos-weak:#dcfce7;
   --neg:#EF4242; --neg-weak:#fee2e2;
   --warn:#b45309; --ai:#7c3aed; --ai-weak:#ede9fe;
+  /* Instrumententyp: ETF (Korb) vs. Aktie. Teal statt Amber, damit sich die
+     ETF-Zeilentönung nicht mit dem Dubletten-Marker (row-dup) verwechseln
+     lässt; --etf-tint ist die Flächentönung der Zeile, --etf-tint-2 der
+     Hover-Zustand. */
+  --etf:#0f766e; --etf-weak:#ccfbf1; --etf-tint:#0f766e0f; --etf-tint-2:#0f766e1f;
   --scrim:rgba(0,23,31,0.32);
 
   /* Compat aliases (old token names still used by modal/enrichment code) */
@@ -65,6 +70,7 @@
   --pos:#4ade80; --pos-weak:#0f2a1a;
   --neg:#f87171; --neg-weak:#3a1414;
   --warn:#fbbf24; --ai:#a78bfa; --ai-weak:#241a3d;
+  --etf:#5eead4; --etf-weak:#123c38; --etf-tint:#2dd4bf14; --etf-tint-2:#2dd4bf29;
   /* Dieselben acht Hues, für die dunkle Fläche neu gestuft (kein Auto-Flip). */
   --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
   --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
@@ -327,6 +333,12 @@ td.col-anchor, th.col-anchor { box-shadow:inset 0 -1px 0 var(--border), inset -1
 .candidate-row { cursor:pointer; }
 .candidate-row td { background:var(--surface); height:44px; }
 .candidate-row:hover td { background:var(--surface-2); }
+/* ETF-Marker: eigene, schwächere Flächentönung — beim Scannen soll sofort
+   auffallen, welche Zeilen Körbe statt Einzelwerte sind. Steht bewusst ganz
+   vorn: Auswahl, Dublette und „dismissed" sind aussagekräftiger und sollen
+   bei gleicher Spezifität gewinnen. */
+.candidate-row.row-etf td { background:var(--etf-tint); }
+.candidate-row.row-etf:hover td { background:var(--etf-tint-2); }
 .candidate-row.is-active td { background:var(--accent-weak); }
 .candidate-row.is-selected td,
 .candidate-row.selected td { background:var(--accent-weak); }
@@ -350,6 +362,24 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* Exchange as a small plain sub-line under the symbol */
 .exch-tag--sub { background:none; border:none; padding:0; font-size:var(--fs-1);
   color:var(--muted); letter-spacing:.02em; }
+/* Zweite Zeile der Symbol-Zelle: Börse + Instrumententyp nebeneinander. */
+.sym-cell__sub { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+
+/* ETF/Aktie-Label. „Aktie" bleibt gedämpft wie die Börse daneben, „ETF" trägt
+   Farbe — der Korb ist der Ausnahmefall, den man beim Scannen sehen will.
+   type-tag--guess = nur aus dem Namen abgeleitet, noch nicht von TV bestätigt. */
+.type-tag {
+  font-size:var(--fs-1); line-height:1.3; letter-spacing:.03em;
+  padding:0 4px; border-radius:var(--r-1); white-space:nowrap;
+}
+.type-tag--stock { color:var(--muted); background:none; padding:0; }
+/* „Aktie" ist reiner Text neben der Börse — ohne Trenner klebte „NASDAQ Aktie"
+   zu einem Wort zusammen. Der ETF-Chip trägt eine Fläche und braucht keinen. */
+.sym-cell__sub .type-tag--stock::before { content:'·'; margin-right:3px; }
+.type-tag--etf   { color:var(--etf); background:var(--etf-weak); font-weight:var(--fw-bold); }
+.type-tag--guess { opacity:.7; }
+/* Im Detail-Header steht das Label neben dem Börsen-Tag und braucht dessen Luft. */
+.detail-title .type-tag { margin-left:var(--s-1); vertical-align:middle; }
 .symbol-cell strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
 
 /* Exchange tag */
@@ -2497,6 +2527,13 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .bias-val.pos  { color:var(--pos); }
 .bias-val.neg  { color:var(--neg); }
 .bias-val.flat { color:var(--muted); }
+/* SMA200-Trend (Spalte S200Ø): Pfeil + Ø-Wachstum je Monat. Der Pfeil trägt die
+   Richtung des letzten Monats, die Zahl das Tempo über das ganze Fenster. */
+.sma-tr { display:inline-flex; align-items:baseline; gap:3px; white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+.sma-tr__arrow { font-size:var(--fs-1); line-height:1; }
+.sma-tr--side { color:var(--muted); }
+
 /* Trenddauer (eigene Spalte): gemessene Werte stehen kräftiger als die
    Näherungen — der Unterschied zwischen „47T gemessen" und „≥3M geschätzt"
    muss ohne Tooltip sichtbar sein. */
