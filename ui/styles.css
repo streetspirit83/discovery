@@ -6,17 +6,33 @@
 :root {
   /* Colors */
   --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --surface-3:#e2e8f0;
-  --sheet-bg:#ffffff; --border:#cbd5e1; --text:#0f172a; --muted:#475569;
-  --accent:#2563eb; --accent-weak:#e3edfd;
-  --pos:#15803d; --pos-weak:#dcfce7;
-  --neg:#b91c1c; --neg-weak:#fee2e2;
+  --sheet-bg:#ffffff; --border:#D9D7D7; --text:#00171F; --muted:#6b7378;
+  --accent:#00A8E8; --accent-weak:#e2f4fc;
+  --pos:#348535; --pos-weak:#dcfce7;
+  --neg:#EF4242; --neg-weak:#fee2e2;
   --warn:#b45309; --ai:#7c3aed; --ai-weak:#ede9fe;
+  /* Instrumententyp: ETF (Korb) vs. Aktie. Teal statt Amber, damit sich die
+     ETF-Zeilentönung nicht mit dem Dubletten-Marker (row-dup) verwechseln
+     lässt; --etf-tint ist die Flächentönung der Zeile, --etf-tint-2 der
+     Hover-Zustand. */
+  --etf:#0f766e; --etf-weak:#ccfbf1; --etf-tint:#0f766e0f; --etf-tint-2:#0f766e1f;
   --scrim:rgba(0,23,31,0.32);
 
   /* Compat aliases (old token names still used by modal/enrichment code) */
   --text-muted:var(--muted); --success:var(--pos); --danger:var(--neg);
   --warning:var(--warn); --tv:var(--accent); --accent2:var(--accent);
   --bg2:var(--surface-2); --bg3:var(--surface-3);
+  /* Kategoriale Serien-Palette (Vergleichs-Charts): feste Reihenfolge, nie
+   * zyklisch. Getrennt von --pos/--neg/--warn, die Status bedeuten und nicht
+   * als "Serie 4" zweckentfremdet werden dürfen. Beide Modi gegen die eigenen
+   * Surfaces validiert (Helligkeitsband, Chroma, CVD-Abstand, Kontrast). */
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
+  --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
+  /* SMA-Kurven im Detail-Chart: eine Blau-Rampe, kein kategoriales Set — die
+   * vier Linien sind dieselbe Grösse in vier Geschwindigkeiten. Je langsamer,
+   * desto kräftiger (die SMA200 trägt die Struktur, die SMA20 das Rauschen).
+   * Blau bleibt frei von --pos/--neg (Kerzen) und --accent (LS-Kurs). */
+  --sma-20:#5b8ae2; --sma-50:#2f6ad6; --sma-100:#1a44a8; --sma-200:#0b2467;
   --radius:8px; --radius-sm:4px;
 
   /* Spacing */
@@ -26,14 +42,14 @@
   --r-1:4px; --r-2:8px; --r-pill:999px;
 
   /* Typography */
-  --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  --font-mono:ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
-  --fs-1:11px; --fs-2:12px; --fs-3:13px; --fs-4:14px; --fs-5:16px; --fs-6:18px;
+  --font-ui:"DM Sans",-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:"DM Mono",ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
+  --fs-1:14px; --fs-2:15px; --fs-3:16px; --fs-4:17px; --fs-5:19px; --fs-6:21px;
   --fw-reg:400; --fw-med:500; --fw-bold:700; --lh:1.45;
 
   /* Bar heights */
   --h-topbar:52px; --h-subbar:44px; --h-filterbar:48px;
-  --h-bulkbar:52px; --h-botnav:56px;
+  --h-bulkbar:60px; --h-botnav:56px;
 
   /* Motion */
   --t-fast:0.12s; --t-sheet:0.2s; --ease:ease; --flash:1.2s;
@@ -44,16 +60,22 @@
   --z-scrim:40; --z-sheet:50; --z-toast:60;
 
   /* Table */
-  --col-check-w:40px; --col-name-w:160px;
+  --col-check-w:30px; --col-name-w:120px;
 }
 
 [data-theme="dark"] {
   --bg:#0b1220; --surface:#111827; --surface-2:#0f172a; --surface-3:#1e293b;
   --sheet-bg:#0a0f1a; --border:#334155; --text:#e2e8f0; --muted:#94a3b8;
-  --accent:#3b82f6; --accent-weak:#16243f;
+  --accent:#38bdf8; --accent-weak:#16243f;
   --pos:#4ade80; --pos-weak:#0f2a1a;
   --neg:#f87171; --neg-weak:#3a1414;
   --warn:#fbbf24; --ai:#a78bfa; --ai-weak:#241a3d;
+  --etf:#5eead4; --etf-weak:#123c38; --etf-tint:#2dd4bf14; --etf-tint-2:#2dd4bf29;
+  /* Dieselben acht Hues, für die dunkle Fläche neu gestuft (kein Auto-Flip). */
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
+  /* Auf dunkler Fläche läuft die Rampe andersherum: kräftig = hell. */
+  --sma-20:#5b82cc; --sma-50:#7fa6ef; --sma-100:#a5c4ff; --sma-200:#d8e7ff;
   --scrim:rgba(0,0,0,0.5);
 }
 
@@ -62,6 +84,13 @@
    ════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
 html, body { height:100%; }
+/* Kein horizontaler Seiten-Scroll: die geschlossenen Sheets (position:fixed,
+   translateX(100%)) und breite Panels (Subbar/Tabelle) dürfen das Layout-
+   Viewport nicht aufblähen — sonst verankert sich das rechts andockende
+   Detail-Sheet an einer zu breiten Fläche und rutscht auf dem Handy fast aus
+   dem Bild. `clip` verhindert das, ohne (anders als `hidden`) einen Scroll-
+   Container zu erzeugen, der position:sticky in der Tabelle stören würde. */
+html, body { overflow-x:clip; }
 body {
   font-family:var(--font-ui); background:var(--bg); color:var(--text);
   font-size:var(--fs-4); line-height:var(--lh);
@@ -79,6 +108,12 @@ svg { display:block; }
    ════════════════════════════════════════════════════════════════ */
 #app {
   display:grid;
+  /* Eine Spalte, die exakt die Viewport-Breite füllt (minmax(0,1fr)) — NICHT
+     die implizite auto-Spalte, die sich sonst auf die Breite des breitesten
+     Inhalts (Tabelle ~650px) aufbläht und damit alle Reihen (Topbar, Subbar,
+     Botnav) über den Bildschirm hinausschiebt. Das schnitt auf dem Handy das
+     Monitor-Icon ab; jetzt füllt die Botnav genau die Breite → alle 5 Slots. */
+  grid-template-columns:minmax(0,1fr);
   grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) 1fr var(--h-botnav);
   height:100dvh;
 }
@@ -89,7 +124,27 @@ svg { display:block; }
   padding:0 var(--s-4); background:var(--surface-2);
   border-bottom:1px solid var(--border); z-index:var(--z-topbar);
 }
-.topbar__title { font-size:var(--fs-6); font-weight:var(--fw-bold); color:var(--accent); flex:1; }
+/* Topbar-Suche (ersetzt den Discovery-Titel): schlanke Pille links, nimmt den
+   Platz vor den Icon-Buttons ein und schrumpft auf schmalen Screens. */
+.topbar__search {
+  flex:1; min-width:0; max-width:320px;
+  display:flex; align-items:center; gap:var(--s-1);
+  height:32px; padding:0 var(--s-2);
+  background:var(--surface-3); border:1px solid var(--border);
+  border-radius:var(--r-pill);
+}
+.topbar__search:focus-within { border-color:var(--accent); }
+.topbar__search-icon { display:flex; color:var(--muted); flex:none; }
+.topbar__search input {
+  flex:1; min-width:0; border:none; background:none; outline:none;
+  color:var(--text); font-size:var(--fs-2); font-family:var(--font-ui);
+}
+.topbar__search input::-webkit-search-cancel-button { display:none; }
+.topbar__search-clear {
+  flex:none; border:none; background:none; color:var(--muted);
+  font-size:var(--fs-4); line-height:1; cursor:pointer; padding:0 2px;
+}
+.topbar__search-clear:hover { color:var(--text); }
 .topbar__actions { display:flex; align-items:center; gap:var(--s-1); }
 
 .icon-btn {
@@ -147,8 +202,48 @@ svg { display:block; }
   height:32px; padding:0 var(--s-2); background:var(--surface-3);
   border:1px solid var(--border); color:var(--text); border-radius:var(--r-pill);
   font-size:var(--fs-2); font-family:var(--font-ui);
+  max-width:104px; text-overflow:ellipsis;
 }
 .filter-select--active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+/* Multi-Select-Filter-Button: sieht aus wie .filter-select, öffnet ein
+   Checkbox-Popover (filter-multiselect.js). Label + Chevron in einer Zeile. */
+.fms-btn {
+  flex-shrink:0; display:inline-flex; align-items:center; gap:var(--s-1);
+  cursor:pointer; white-space:nowrap;
+  /* Etwas breiter als .filter-select, damit der „· N"-Zähler nicht abgeschnitten
+     wird; die Filterbar scrollt horizontal, Platz ist also unkritisch. */
+  max-width:150px;
+}
+.fms-btn__text { overflow:hidden; text-overflow:ellipsis; }
+.fms-btn svg { flex:none; opacity:.7; }
+/* Popover (am <body>, position:fixed) mit den Checkbox-Optionen. */
+.fms-pop {
+  /* Über allem, auch über Modals (z-index 100) — das Kontroll-Modal nutzt
+     dieselben Multi-Select-Buttons. */
+  position:fixed; z-index:110; min-width:160px; max-width:min(280px,92vw);
+  max-height:60vh; overflow-y:auto; padding:var(--s-1);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-2);
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.fms-opt {
+  display:flex; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-2); border-radius:var(--r-1); cursor:pointer;
+  font-size:var(--fs-2); color:var(--text); white-space:nowrap;
+}
+.fms-opt:hover { background:var(--surface-3); }
+.fms-opt input { flex:none; width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
+/* ★ portfolio toggle, moved into the filterbar left of the Score dropdown */
+.filter-star {
+  height:32px; min-width:32px; padding:0 var(--s-2); flex-shrink:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--muted);
+  border-radius:var(--r-pill); font-size:14px; line-height:1; cursor:pointer;
+}
+.filter-star.is-active { background:var(--accent-weak); border-color:var(--accent); color:#f5a623; }
+/* Dubletten-Filter: amber, passend zum row-dup-Marker. */
+.filter-dup { font-size:15px; }
+.filter-dup.is-active { background:#f59e0b26; border-color:#f59e0b; color:#b45309; }
+[data-theme="dark"] .filter-dup.is-active { background:#f59e0b33; border-color:#f59e0b; color:#fbbf24; }
 .pill--reset {
   display:inline-flex; align-items:center; gap:var(--s-1);
   background:var(--accent-weak); border-color:var(--accent); color:var(--accent);
@@ -171,11 +266,11 @@ svg { display:block; }
    ════════════════════════════════════════════════════════════════ */
 .candidate-table {
   width:100%; border-collapse:separate; border-spacing:0;
-  font-family:var(--font-mono); font-size:var(--fs-3);
+  font-family:var(--font-mono); font-size:15px;
 }
 .candidate-table th,
 .candidate-table td {
-  padding:var(--s-2) var(--s-3); text-align:left; white-space:nowrap;
+  padding:6px 7px; text-align:left; white-space:nowrap;
   box-shadow:inset 0 -1px 0 var(--border);
 }
 .candidate-table thead th {
@@ -206,6 +301,8 @@ svg { display:block; }
 th.num .sort-btn { flex-direction:row-reverse; }
 .pos { color:var(--pos); }
 .neg { color:var(--neg); }
+/* Volumen-Spike (aktuelles Vol ≥150% des Ø): hervorgehoben wie im Detail-Sheet. */
+.vol-spike { color:var(--warn); font-weight:var(--fw-bold); }
 /* Compat aliases */
 .tv-pos { color:var(--pos); }
 .tv-neg { color:var(--neg); }
@@ -236,9 +333,21 @@ td.col-anchor, th.col-anchor { box-shadow:inset 0 -1px 0 var(--border), inset -1
 .candidate-row { cursor:pointer; }
 .candidate-row td { background:var(--surface); height:44px; }
 .candidate-row:hover td { background:var(--surface-2); }
+/* ETF-Marker: eigene, schwächere Flächentönung — beim Scannen soll sofort
+   auffallen, welche Zeilen Körbe statt Einzelwerte sind. Steht bewusst ganz
+   vorn: Auswahl, Dublette und „dismissed" sind aussagekräftiger und sollen
+   bei gleicher Spezifität gewinnen. */
+.candidate-row.row-etf td { background:var(--etf-tint); }
+.candidate-row.row-etf:hover td { background:var(--etf-tint-2); }
 .candidate-row.is-active td { background:var(--accent-weak); }
 .candidate-row.is-selected td,
 .candidate-row.selected td { background:var(--accent-weak); }
+/* Dup-Marker: Wert liegt bereits in einem anderen Bucket (nur Inbox/Archiv). */
+.candidate-row.row-dup td { background:#f59e0b14; }
+.candidate-row.row-dup:hover td { background:#f59e0b26; }
+[data-theme="dark"] .candidate-row.row-dup td { background:#f59e0b1f; }
+[data-theme="dark"] .candidate-row.row-dup:hover td { background:#f59e0b33; }
+.candidate-row.row-dup.is-selected td { background:var(--accent-weak); }
 .candidate-row.state-dismissed { opacity:0.5; }
 .candidate-row.state-dismissed .sym-strong,
 .candidate-row.state-dismissed .symbol-cell strong { text-decoration:line-through; }
@@ -246,8 +355,31 @@ td.col-anchor, th.col-anchor { box-shadow:inset 0 -1px 0 var(--border), inset -1
 input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
 
 /* Symbol cell */
-.sym-cell, .symbol-cell { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
-.sym-strong { font-weight:var(--fw-bold); }
+.symbol-cell { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+.sym-cell { display:flex; flex-direction:column; align-items:flex-start; gap:1px; }
+.sym-cell__top { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+.sym-strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
+/* Exchange as a small plain sub-line under the symbol */
+.exch-tag--sub { background:none; border:none; padding:0; font-size:var(--fs-1);
+  color:var(--muted); letter-spacing:.02em; }
+/* Zweite Zeile der Symbol-Zelle: Börse + Instrumententyp nebeneinander. */
+.sym-cell__sub { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+
+/* ETF/Aktie-Label. „Aktie" bleibt gedämpft wie die Börse daneben, „ETF" trägt
+   Farbe — der Korb ist der Ausnahmefall, den man beim Scannen sehen will.
+   type-tag--guess = nur aus dem Namen abgeleitet, noch nicht von TV bestätigt. */
+.type-tag {
+  font-size:var(--fs-1); line-height:1.3; letter-spacing:.03em;
+  padding:0 4px; border-radius:var(--r-1); white-space:nowrap;
+}
+.type-tag--stock { color:var(--muted); background:none; padding:0; }
+/* „Aktie" ist reiner Text neben der Börse — ohne Trenner klebte „NASDAQ Aktie"
+   zu einem Wort zusammen. Der ETF-Chip trägt eine Fläche und braucht keinen. */
+.sym-cell__sub .type-tag--stock::before { content:'·'; margin-right:3px; }
+.type-tag--etf   { color:var(--etf); background:var(--etf-weak); font-weight:var(--fw-bold); }
+.type-tag--guess { opacity:.7; }
+/* Im Detail-Header steht das Label neben dem Börsen-Tag und braucht dessen Luft. */
+.detail-title .type-tag { margin-left:var(--s-1); vertical-align:middle; }
 .symbol-cell strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
 
 /* Exchange tag */
@@ -304,11 +436,22 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 /* Name column (hidden mobile) */
 .col-name-data, .col-name { overflow:hidden; text-overflow:ellipsis; max-width:var(--col-name-w); }
 
+/* Standard-Ansicht: Name auf die Breite der Symbol-Spalte kappen (beide nutzen
+   --col-name-w), Überlauf mit … abschneiden. Die Begrenzung muss am inneren
+   Span sitzen — ein max-width auf der <td> ignoriert die Tabelle bei
+   table-layout:auto. Kein display:none: die Spalte bleibt auf jeder Breite
+   sichtbar (anders als die Alt-Klassen darüber). */
+.col-name-fit { width:var(--col-name-w); max-width:var(--col-name-w); }
+.col-name-fit .name-cell {
+  display:block; max-width:var(--col-name-w);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
 /* Link cluster (table) */
 .link-cluster { display:flex; align-items:center; gap:var(--s-1); }
 .link-chip {
   display:inline-flex; align-items:center; justify-content:center;
-  width:28px; height:28px; border-radius:6px;
+  width:20px; height:20px; border-radius:5px;
   border:1px solid var(--border); background:var(--surface-3);
   color:var(--muted); text-decoration:none; cursor:pointer;
   transition:background var(--t-fast), border-color var(--t-fast);
@@ -321,6 +464,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .link-chip--st:hover    { color:var(--pos); border-color:var(--pos); }
 .link-chip--yahoo:hover { color:var(--ai); border-color:var(--ai); }
 .link-chip--edit:hover  { color:var(--accent); border-color:var(--accent); }
+.link-chip--tf:hover    { color:#f97316; border-color:#f97316; }
 .link-chip--missing { opacity:0.25; cursor:default; pointer-events:none; }
 .link-logo    { width:14px; height:14px; border-radius:3px; object-fit:cover; display:block; pointer-events:none; }
 .link-btn-logo{ width:18px; height:18px; border-radius:3px; object-fit:cover; flex-shrink:0; }
@@ -349,6 +493,15 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .act-btn--promote:hover, .btn-icon--promote:hover { background:var(--pos-weak); }
 .act-btn--dismiss, .btn-icon--dismiss { color:var(--neg); }
 .act-btn--dismiss:hover, .btn-icon--dismiss:hover { background:var(--neg-weak); }
+.act-btn--star { color:var(--muted); }
+.act-btn--star:hover { background:rgba(234,179,8,0.12); color:#ca8a04; }
+.act-btn--star.is-active { color:#ca8a04; }
+.act-btn--broker { color:var(--muted); opacity:.45; }
+.act-btn--broker:hover { background:rgba(46,204,113,0.12); color:#27ae60; opacity:1; }
+.act-btn--broker.is-active { color:#27ae60; opacity:1; }
+.act-btn--watch { color:var(--muted); opacity:.5; }
+.act-btn--watch:hover { background:var(--accent-weak); color:var(--accent); opacity:1; }
+.act-btn--watch.is-active { color:var(--accent); opacity:1; }
 .btn-icon--delete { color:var(--neg); }
 .btn-icon--delete:hover { background:var(--neg-weak); }
 .btn-icon svg { display:block; width:15px; height:15px; }
@@ -382,6 +535,27 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .health-score--SOUND  { background:rgba(52,152,219,.15);  color:#2980b9; }
 .health-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
 .health-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
+
+/* Dynamic cluster-alert chips: dashed border signals a moving (recomputed)
+   level, distinct from the solid static predefined-level chips. */
+.chip-btn--dyn { border-style:dashed; }
+
+/* Trigger editor: briefly highlight the manual-price group when the level was
+   pre-filled from a chart tap. */
+.alert-add__group.is-prefilled { animation: prefillPulse 1.6s ease-out 1; border-radius:var(--r-1); }
+@keyframes prefillPulse { 0%,40% { box-shadow:0 0 0 2px var(--accent) inset; } 100% { box-shadow:none; } }
+@media (prefers-reduced-motion: reduce) { .alert-add__group.is-prefilled { animation:none; } }
+
+/* Multi-Timeframe-Alignment (MTFA): three dots Daily · Weekly · Monthly. */
+.mtfa-cell { display:inline-flex; gap:3px; align-items:center; padding:2px 4px; border-radius:var(--r-1); }
+.mtfa-cell--aligned { background:rgba(52,133,53,.12); }
+.mtfa-dot {
+  width:8px; height:8px; border-radius:50%; display:inline-block;
+  border:1.5px solid var(--muted); box-sizing:border-box;
+}
+.mtfa-dot--bull    { background:var(--pos); border-color:var(--pos); }
+.mtfa-dot--bear    { background:var(--neg); border-color:var(--neg); }
+.mtfa-dot--neutral { background:transparent; }
 
 /* Price Cycle & Historical Position Score badge (0–100) */
 .cycle-score {
@@ -423,6 +597,171 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .trend-strength-score--MODERATE { background:rgba(52,152,219,.15);  color:#2980b9; }
 .trend-strength-score--WEAK     { background:rgba(231,76,60,.15);   color:var(--neg); }
 
+/* Overall Score badge (0–100, composite over all standard-view metrics) */
+.overall-score {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.overall-score--STRONG { background:rgba(46,204,113,.15);  color:#27ae60; }
+.overall-score--GOOD   { background:rgba(52,152,219,.15);  color:#2980b9; }
+.overall-score--MIXED  { background:rgba(243,156,18,.15);  color:#d68910; }
+.overall-score--WEAK   { background:rgba(231,76,60,.15);   color:var(--neg); }
+
+/* User price inputs (Mein Entry / Mein Ziel) + currency tag */
+.price-input {
+  width: 72px; padding: 2px 4px; text-align: right;
+  font: inherit; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: transparent;
+  border: 1px solid var(--line, rgba(128,128,128,.35)); border-radius: var(--r-1);
+}
+.price-input:focus { outline: none; border-color: var(--accent); background: var(--accent-weak); }
+.currency-tag { font-size: var(--fs-1); color: var(--muted); letter-spacing: .03em; }
+.seg-btn--momentum { margin-left: auto; display: inline-flex; align-items: center; }
+.seg-btn--momentum svg { display: block; }
+.seg-btn--currency { font-variant-numeric: tabular-nums; margin-left: auto; }
+.seg-btn--portfolio { font-size: 14px; line-height: 1; }
+.seg-btn--portfolio.seg-btn--active { background: var(--accent); border-color: var(--accent); color: #ffd34d; }
+
+/* Momentum-Check Ampel + Setup-Icon */
+.momcheck { font-size: 14px; line-height: 1; cursor: default; }
+.momcheck--green  { color: #27ae60; }
+.momcheck--yellow { color: #d68910; }
+.momcheck--red    { color: var(--neg); }
+.momcheck--badge {
+  display:inline-block; min-width:26px; text-align:center;
+  padding:1px 5px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap;
+}
+.momcheck--badge.momcheck--green  { background:rgba(46,204,113,.15); }
+.momcheck--badge.momcheck--yellow { background:rgba(243,156,18,.15); }
+.momcheck--badge.momcheck--red    { background:rgba(231,76,60,.15); }
+.setup-icon { font-size: 13px; cursor: default; }
+
+/* Trade view: cluster badge + bottom-stabilization tag */
+.cluster-badge {
+  display:inline-block; padding:1px 6px; border-radius:var(--r-1);
+  font-weight:var(--fw-bold); font-size:var(--fs-1); white-space:nowrap;
+}
+.cluster-badge--stable   { background:rgba(41,128,185,.15);  color:#2980b9; }
+.cluster-badge--moderate { background:rgba(46,204,113,.15);  color:#27ae60; }
+.cluster-badge--momentum { background:rgba(243,156,18,.15);  color:#d68910; }
+.cluster-badge--hyper    { background:rgba(231,76,60,.15);   color:var(--neg); }
+/* Price-cluster cell (Trade view): value + score chip, tap opens the popover */
+.cell-tip {
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  background:none; border:none; padding:2px var(--s-1); margin:-2px calc(-1 * var(--s-1));
+  font:inherit; color:inherit; font-variant-numeric:tabular-nums;
+  border-radius:var(--r-1); cursor:pointer; white-space:nowrap;
+}
+.cell-tip:hover { background:var(--surface-3); }
+.clu--sup { color:var(--pos); }
+.clu--res { color:var(--neg); }
+.clu--strong { font-weight:var(--fw-bold); }
+.clu-score {
+  font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold);
+  background:var(--surface-3); border-radius:var(--r-1); padding:0 4px;
+}
+.clu--strong .clu-score { background:var(--accent-weak); color:var(--accent); }
+
+/* Tap/click popover for data cells — replaces title tooltips on touch */
+.cell-tip-pop {
+  position:fixed; z-index:var(--z-toast); max-width:min(300px, calc(100vw - 16px));
+  background:var(--surface); color:var(--text); border:1px solid var(--border);
+  border-radius:var(--r-2); padding:var(--s-2) var(--s-3);
+  font-size:var(--fs-1); line-height:1.5; white-space:pre-line;
+  box-shadow:0 10px 30px rgba(0,0,0,0.18); pointer-events:none;
+}
+
+/* Group separator in wide views (Trade): subtle line at each group start */
+.candidate-table th.col-group-start,
+.candidate-table td.col-group-start { box-shadow:inset 2px 0 0 var(--border), inset 0 -1px 0 var(--border); }
+.bottom-tag {
+  display:inline-block; margin-left:var(--s-1); padding:0 5px; border-radius:var(--r-1);
+  background:var(--pos-weak); color:var(--pos);
+  font-weight:var(--fw-bold); font-size:var(--fs-1); white-space:nowrap;
+}
+
+/* ── Decision-view visuals (Score gauge · 52W range · Signal · P/L) ─────────── */
+/* Score gauge: thin bar under the score number, filled by the score's own color */
+.score-gauge { display:block; height:3px; margin-top:1px; border-radius:2px;
+  background:rgba(128,128,128,.25); overflow:hidden; }
+.score-gauge__fill { display:block; height:100%; background:currentColor; border-radius:2px; }
+
+/* 52W-range: track with a dot marking where the price sits low → high */
+/* 52W-Position: Track + Füllung bis zur Position + Punkt + Prozentzahl.
+   Die Füllung trägt die Ablesbarkeit (Punkt allein war zu kontrastarm),
+   der Rahmen grenzt den Track gegen die weiße Zellfläche ab. */
+.range52 { display:inline-flex; align-items:center; gap:var(--s-2); justify-content:flex-end; }
+/* Bar = Bezugsrahmen für den Punkt; der Track darunter klippt nur die Füllung,
+   damit der Punkt an den Enden (0 % / 100 %) nicht angeschnitten wird. */
+.range52__bar { position:relative; display:inline-block; width:44px; height:8px; flex:0 0 auto; }
+.range52__track { position:absolute; inset:0; border-radius:var(--r-pill);
+  background:var(--surface-3); border:1px solid var(--border);
+  box-sizing:border-box; overflow:hidden; }
+/* Füllung deutlich gegen den Track abgesetzt – --accent-weak lag zu nah an
+   --surface-3, dadurch war der Füllstand kaum zu erkennen. */
+.range52__fill { position:absolute; left:0; top:0; bottom:0;
+  background:color-mix(in srgb, var(--accent) 40%, var(--surface-3)); }
+.range52__dot { position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 0 1.5px var(--surface); transform:translate(-50%,-50%); }
+.range52__pct { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums;
+  min-width:2ch; text-align:right; }
+
+/* Signal chip: momentum traffic-light dot + trend arrow */
+.signal { display:inline-flex; align-items:center; gap:4px; justify-content:flex-end; }
+.signal__dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.signal__dot--green  { background:#27ae60; }
+.signal__dot--yellow { background:#d68910; }
+.signal__dot--red    { background:var(--neg); }
+.signal__dot--none   { background:var(--surface-3); border:1px solid var(--border); }
+
+/* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
+.pl { font-variant-numeric:tabular-nums; }
+/* Trigger "+" / "✓" — same look as the Intra-Day modal's .id-trigger */
+.act-btn--trigger {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px; border-radius:var(--r-1); cursor:pointer;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  font-size:var(--fs-3); line-height:1;
+}
+.act-btn--trigger:hover { border-color:var(--text); }
+.act-btn--trigger.is-active { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+/* LS fetch skeleton — pulsing placeholder while a quote loads */
+.ls-loading { display:inline-block; width:40px; height:12px; border-radius:4px;
+  background:var(--surface-3); animation:ls-pulse 1.1s ease-in-out infinite; }
+@keyframes ls-pulse { 0%,100% { opacity:.35; } 50% { opacity:1; } }
+/* Refreshing over an existing value: keep it readable, just pulse it. */
+.is-fetching { animation:ls-refresh 1.1s ease-in-out infinite; }
+@keyframes ls-refresh { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+
+.detail-hint { margin-top:6px; font-size:var(--fs-1); color:var(--muted); line-height:1.4; }
+
+/* Portfolio-only columns (Einstand, P/L): visible only under the ★ filter */
+.candidate-table:not(.show-portfolio-cols) .col-portfolio { display:none; }
+/* Trade Republic / LS tradability check */
+.tr-check {
+  display:inline-block; min-width:20px; text-align:center;
+  font-weight:var(--fw-bold); font-size:var(--fs-2); text-decoration:none;
+  border-radius:var(--r-1); padding:0 4px;
+}
+.tr-check--yes     { color:#27ae60; background:rgba(46,204,113,.15); }
+.tr-check--no      { color:var(--neg); background:rgba(231,76,60,.15); }
+.tr-check--unknown { color:var(--muted); }
+.tr-check         { cursor:pointer; }
+.tr-check:hover    { text-decoration:none; opacity:.8; }
+.price-input.is-suggested { color: var(--muted); font-style: italic; }
+
+/* Column resizing (drag on header edge) */
+.candidate-table th { position: relative; }
+.col-resizer {
+  position: absolute; top: 0; right: -4px; width: 8px; height: 100%;
+  cursor: col-resize; z-index: 3; touch-action: none;
+}
+.col-resizer:hover, .col-resizer:active { background: rgba(52,152,219,.35); }
+.candidate-table--fixed { table-layout: fixed; }
+.candidate-table--fixed td { overflow: hidden; text-overflow: ellipsis; }
+
 /* Data-flash animation */
 @keyframes data-flash { from { background:var(--accent-weak); } to { background:transparent; } }
 .cell--updated { animation:data-flash var(--flash) var(--ease); }
@@ -437,21 +776,30 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .bulkbar {
   position:sticky; bottom:0; z-index:var(--z-bulkbar);
   display:flex; align-items:center; gap:var(--s-2);
-  height:var(--h-bulkbar); padding:0 var(--s-4);
-  background:var(--surface-2); border-top:1px solid var(--accent);
+  height:var(--h-bulkbar); padding:0 var(--s-3);
+  background:var(--surface-2); border-top:1px solid var(--border);
+  box-shadow:0 -2px 6px rgba(0,23,31,0.05);
   transform:translateY(100%); transition:transform var(--t-sheet) var(--ease);
 }
 .bulkbar.is-open { transform:translateY(0); }
-.bulk-count { color:var(--accent); font-weight:var(--fw-bold); font-size:var(--fs-3); white-space:nowrap; }
-.bulk-actions { display:flex; align-items:center; gap:var(--s-1); margin-left:auto; overflow-x:auto; }
+.bulk-count { color:var(--muted); font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-2); white-space:nowrap; }
+.bulk-actions { display:flex; align-items:center; gap:var(--s-1); flex:1; overflow-x:auto; }
+.bulk-spacer { flex:1; min-width:var(--s-2); }
+/* Compact icon-only action buttons (merkliste style) with hover tooltips */
 .bulk-btn {
-  display:inline-flex; align-items:center; gap:var(--s-1);
-  height:36px; padding:0 var(--s-3); border-radius:var(--r-1);
-  border:1px solid var(--border); background:var(--surface-3);
-  color:var(--text); font-size:var(--fs-2); white-space:nowrap;
-  transition:opacity var(--t-fast) var(--ease);
+  display:inline-flex; align-items:center; justify-content:center; gap:4px; flex-shrink:0;
+  height:46px; padding:0 var(--s-2); border-radius:var(--r-1);
+  border:1px solid var(--border); background:var(--surface);
+  color:var(--muted); font-size:var(--fs-2); white-space:nowrap;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
+.bulk-btn--icon { width:46px; padding:0; }
+.bulk-btn svg { width:30px; height:30px; }
+.bulk-btn:hover { background:var(--surface-3); border-color:var(--text); color:var(--text); }
 .bulk-btn:active { opacity:0.7; }
+.bulk-btn--del { color:var(--neg); }
+.bulk-btn--del:hover { background:var(--neg); border-color:var(--neg); color:#fff; }
+.bulk-tvlogo { width:30px; height:30px; border-radius:5px; display:block; }
 .bulk-btn--neg    { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
 .bulk-btn--pos    { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
 .bulk-btn--ai     { background:var(--ai-weak);  border-color:var(--ai);  color:var(--ai); }
@@ -471,7 +819,7 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .botnav__slot {
   flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:2px; border:none; background:none; color:var(--muted);
-  font-size:var(--fs-1); min-height:44px;
+  font-size:var(--fs-1); min-height:44px; text-decoration:none;
   transition:color var(--t-fast) var(--ease);
 }
 .botnav__slot:hover { color:var(--text); }
@@ -496,6 +844,12 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .sheet.is-open { transform:translateX(0); }
 .sheet--detail { width:min(480px,86vw); }
 @media (max-width:767px) { .sheet--detail { width:100vw; } }
+/* The sheet is a column flexbox: once content is taller than the viewport, its
+   direct children shrink by default (flex-shrink:1) — and rows that set
+   overflow-x or min-width:0 have a ZERO minimum size, so they collapse to
+   slivers (toolbar icons "disappear", tag row turns into a clipped frame).
+   Rows must keep their natural height; the sheet itself scrolls. */
+.sheet--detail > * { flex-shrink:0; }
 
 .sheet__header {
   display:flex; align-items:flex-start; justify-content:space-between;
@@ -522,10 +876,22 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 }
 
 /* Detail state bar */
-.detail-state-bar, .detail-state {
+.detail-state-bar {
   padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border);
   display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap; font-size:var(--fs-3);
 }
+/* Action row (Promoten/Ablehnen/Export): always one line (STYLEGUIDE.md §5) — on
+   narrow phones the buttons shrink via .btn-sm rather than wrap. */
+.detail-state {
+  padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap; font-size:var(--fs-3);
+}
+/* flex-basis:auto (not 0): free space is shared but wide labels ("Promoten")
+   keep more room than short ones ("Export"), so labels fit at phone widths. */
+.detail-state .btn { flex:1 1 auto; min-width:0; justify-content:center; padding:var(--s-1) var(--s-2); }
+.detail-state .btn svg { flex-shrink:0; }
+/* Label truncates with … instead of spilling out of a shrunken button. */
+.detail-state .btn .btn__label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Detail sections */
 .detail-section { padding:var(--s-4); border-bottom:1px solid var(--border); }
@@ -748,6 +1114,11 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   display:flex; align-items:center; justify-content:space-between;
 }
 .modal-header h2 { font-size:var(--fs-5); }
+/* Right-aligned action cluster in a modal header (icon-only link + close) */
+.modal-header-actions { display:flex; align-items:center; gap:var(--s-2); }
+/* Lucide title icon in the Markets modal header */
+.markets-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); }
+.markets-modal .modal-header h2 svg { width:20px; height:20px; }
 .modal-close { background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; padding:0; }
 .modal-body  { padding:20px; overflow-y:auto; flex:1; }
 .modal-footer {
@@ -852,9 +1223,1407 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .export-modal { width:min(640px,100%); }
 
 /* ════════════════════════════════════════════════════════════════
+   SCREENER STUDIO
+   ════════════════════════════════════════════════════════════════ */
+.screener-modal { width:min(760px,100%); }
+.scr-presetbar {
+  display:flex; gap:var(--s-2); align-items:center; margin-bottom:var(--s-4);
+  padding-bottom:var(--s-3); border-bottom:1px solid var(--border); flex-wrap:wrap;
+}
+.scr-presetbar #scr-preset { flex:1; min-width:160px; }
+.scr-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); margin-bottom:var(--s-3); }
+.scr-grid--3 { grid-template-columns:1fr 1fr 1fr; margin-top:var(--s-3); }
+.scr-field { display:flex; flex-direction:column; gap:4px; font-size:var(--fs-2); color:var(--muted); }
+.scr-field > span { font-weight:var(--fw-bold); }
+.scr-field input {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2) var(--s-3); border-radius:var(--r-1); font-size:var(--fs-3); font-family:inherit;
+}
+.scr-section-title { font-size:var(--fs-2); font-weight:var(--fw-bold); color:var(--muted); margin:var(--s-3) 0 var(--s-2); text-transform:uppercase; letter-spacing:0.04em; }
+.scr-filters { display:flex; flex-direction:column; gap:var(--s-2); margin-bottom:var(--s-2); }
+.scr-filter-row { display:grid; grid-template-columns:1.4fr 1.2fr 1fr 1fr auto; gap:var(--s-2); align-items:center; }
+.scr-filter-row input {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2); border-radius:var(--r-1); font-size:var(--fs-3); width:100%;
+}
+.scr-f-del { color:var(--neg); }
+.scr-results { margin-top:var(--s-3); }
+.scr-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-1); }
+.scr-table { width:100%; border-collapse:collapse; font-size:var(--fs-2); }
+.scr-table th, .scr-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--border); }
+.scr-table th { background:var(--surface-3); color:var(--muted); font-weight:var(--fw-bold); position:sticky; top:0; }
+.scr-table tr:last-child td { border-bottom:none; }
+.scr-table .scr-name { color:var(--muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:640px) {
+  .scr-grid, .scr-grid--3 { grid-template-columns:1fr 1fr; }
+  .scr-filter-row { grid-template-columns:1fr 1fr; }
+}
+
+/* Intra-Day modal */
+.intraday-modal { width:min(720px,100%); }
+/* Markets modal: indices on top, the Markets sub-page embedded below */
+.markets-modal { width:min(960px,98vw); height:90vh; }
+.markets-modal .modal-body { display:flex; flex-direction:column; gap:var(--s-3); padding:16px; }
+.markets-frame { flex:1; width:100%; min-height:300px; border:0; border-radius:var(--r-1); background:var(--surface); }
+.id-indicators { display:flex; gap:var(--s-2); flex-wrap:wrap; margin-bottom:var(--s-3); }
+.id-ind {
+  display:flex; flex-direction:column; gap:2px; align-items:center;
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-1);
+  padding:6px 12px; min-width:72px;
+}
+.id-ind--link { text-decoration:none; color:inherit; cursor:pointer; }
+.id-ind--link:hover { border-color:var(--accent); }
+.isin--copy { cursor:pointer; }
+.isin--copy:hover { color:var(--accent); }
+.id-ind__label { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; }
+.id-ind__val { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
+
+/* Markets modal: the 4 index blocks always sit in ONE non-wrapping row as equal,
+   shrinking columns (STYLEGUIDE.md §5). Narrow stacked chips (label / today / 1M)
+   keep each column slim so all four fit even on a phone; 1M line is one font step
+   smaller (§2). Scoped to the Markets modal so the Intra-Day chips stay unchanged. */
+.markets-modal .id-indicators { flex-wrap:nowrap; gap:var(--s-1); margin-bottom:0; }
+.markets-modal .id-ind { flex:1 1 0; min-width:0; gap:0; padding:2px; border-radius:var(--r-2); overflow:hidden; }
+.markets-modal .id-ind__label,
+.markets-modal .id-ind__val,
+.markets-modal .id-ind__m1 { white-space:nowrap; }
+/* Fill the cell: minimal padding, content sized up to use the width/height
+   (STYLEGUIDE.md §0.6). Label below the smallest token so NASDAQ still fits four
+   columns even on a ~320px phone. */
+.markets-modal .id-ind__label { letter-spacing:0; font-size:12px; }
+.markets-modal .id-ind__val { font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1.25; }
+.markets-modal .id-ind__m1 { display:inline-flex; align-items:baseline; gap:2px; font-size:var(--fs-2); font-variant-numeric:tabular-nums; line-height:1.25; }
+.markets-modal .id-ind__m1tag { font-size:11px; color:var(--muted); font-weight:var(--fw-bold); }
+.id-toolbar { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
+.id-refresh {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--accent-weak); border:1px solid var(--accent); color:var(--accent);
+  border-radius:var(--r-1); padding:6px; cursor:pointer;
+}
+.id-refresh.is-loading svg { animation:id-spin 0.8s linear infinite; }
+@keyframes id-spin { to { transform:rotate(360deg); } }
+.id-star-filter {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  border-radius:var(--r-1); padding:6px 12px; cursor:pointer; font-size:var(--fs-2);
+}
+.id-star-filter.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.id-hint { color:var(--muted); font-size:var(--fs-1); margin-left:auto; }
+.id-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-1); }
+.id-table { width:100%; border-collapse:collapse; font-size:var(--fs-2); }
+.id-table th, .id-table td { padding:8px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--border); }
+.id-table th { background:var(--surface-3); color:var(--muted); font-weight:var(--fw-bold); position:sticky; top:0; }
+.id-table th.id-sorted { color:var(--accent); }
+.id-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.id-table tr:last-child td { border-bottom:none; }
+.id-sort { background:none; border:none; color:inherit; font:inherit; font-weight:var(--fw-bold); cursor:pointer; padding:0; }
+.id-sym { font-weight:var(--fw-bold); }
+.id-sym--link { cursor:pointer; }
+.id-sym--link:hover { color:var(--accent); text-decoration:underline; }
+.id-star { color:var(--warn); margin-right:2px; }
+.id-exch { color:var(--muted); font-size:var(--fs-1); }
+.id-empty { text-align:center; color:var(--muted); padding:20px; }
+.id-atrp { display:flex; align-items:center; gap:8px; }
+.id-bar { flex:1; min-width:60px; height:10px; background:var(--surface-3); border-radius:99px; overflow:hidden; }
+.id-bar__fill { height:100%; border-radius:99px; }
+.id-bar__fill.id-bar--pos { background:var(--pos); }
+.id-bar__fill.id-bar--neg { background:var(--neg); }
+.id-atrp__val { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; min-width:38px; }
+.id-spark { display:block; cursor:crosshair; }
+.id-spark__line { stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.id-spark--pos .id-spark__line { stroke:var(--pos); }
+.id-spark--neg .id-spark__line { stroke:var(--neg); }
+.id-spark__ref { stroke:var(--muted); stroke-dasharray:2 2; opacity:0.5; vector-effect:non-scaling-stroke; }
+.id-spark__dot { stroke:var(--surface-1); stroke-width:0.5; }
+.id-spark--pos .id-spark__dot { fill:var(--pos); }
+.id-spark--neg .id-spark__dot { fill:var(--neg); }
+.id-spark-tip {
+  position:fixed; z-index:1000; transform:translate(-50%,-100%);
+  background:var(--surface-1); border:1px solid var(--border); color:var(--text);
+  border-radius:var(--r-1); padding:2px 6px; font-size:var(--fs-1);
+  font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none;
+  display:none; box-shadow:0 2px 6px rgba(0,0,0,0.25);
+}
+.id-trigger {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  width:24px; height:24px; border-radius:var(--r-1); cursor:pointer; font-size:var(--fs-3); line-height:1;
+}
+.id-trigger.is-set { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+/* Ticker-by-ticker refresh animation */
+.id-row--updating { animation:id-pulse 1s ease-in-out infinite; }
+@keyframes id-pulse { 0%,100% { background:transparent; } 50% { background:var(--accent-weak); } }
+.id-cell-last, .id-cell-chg { transition:color 0.25s ease; border-radius:var(--r-1); }
+.id-flash--up   { animation:id-flash-up   0.9s ease-out; }
+.id-flash--down { animation:id-flash-down 0.9s ease-out; }
+@keyframes id-flash-up   { 0% { background:var(--pos-weak); } 100% { background:transparent; } }
+@keyframes id-flash-down { 0% { background:var(--neg-weak); } 100% { background:transparent; } }
+@media (prefers-reduced-motion:reduce) {
+  .id-row--updating, .id-flash--up, .id-flash--down, .id-refresh.is-loading svg { animation:none; }
+}
+.id-trigger-modal { width:min(420px,100%); }
+.id-trigger-modal textarea, .id-trigger-modal select {
+  width:100%; background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2) var(--s-3); border-radius:var(--r-1); font-size:var(--fs-3); font-family:inherit;
+}
+
+/* ════════════════════════════════════════════════════════════════
    RESPONSIVE
    ════════════════════════════════════════════════════════════════ */
 .col-name-data { display:none; }
 @media (min-width:768px) { .col-name-data { display:table-cell; } }
-@media (max-width:767px) { .topbar__title { font-size:var(--fs-5); } }
+
+/* ── Detail-Sheet: Kopf scrollt weg, Icons+Tabs bleiben oben kleben ────────
+   Der Sheet-Kopf (Symbol/ISIN/Tags) ist nicht mehr sticky, sondern scrollt
+   beim Runterscrollen aus dem Bild. Stattdessen klebt die Menü-Leiste
+   (Toolbar-Icons + Tabs) am oberen Rand — überall, nicht nur mobil. */
+.sheet--detail .sheet__header { position:static; }
+.detail-sticky {
+  position:sticky; top:0; z-index:3; background:var(--sheet-bg);
+  box-shadow:0 1px 0 var(--border);
+}
+
+/* ── Mobile-Shell (≤767px) ────────────────────────────────────────────────
+   1) Topbar horizontal scrollbar: Suchfeld bleibt nutzbar breit, alle Aktions-
+      Icons sind per Seitwärts-Scrollen erreichbar (vorher rechts abgeschnitten).
+   2) Beim Runterscrollen in der Tabelle klappen Topbar + Subbar ein (die
+      obersten zwei Leisten), die Filterbar bleibt. Scroll hoch → wieder da. */
+@media (max-width:767px) {
+  .topbar__search { max-width:none; flex:0 0 55vw; }
+  .topbar {
+    overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+    scroll-behavior:smooth;
+  }
+  .topbar::-webkit-scrollbar { display:none; }
+  .topbar__actions { flex:0 0 auto; }
+
+  #app { transition:grid-template-rows var(--t-fast) var(--ease); }
+  #app.is-compact {
+    grid-template-rows:0 0 var(--h-filterbar) 1fr var(--h-botnav);
+  }
+  #app.is-compact .topbar,
+  #app.is-compact .subbar { overflow:hidden; border-bottom:none; pointer-events:none; }
+}
+
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
+
+/* ── Alerts: editor + overview ─────────────────────────────────────────── */
+.chip-btn { display:inline-flex; align-items:center; gap:.25rem;
+  padding:.35rem .6rem; font-size:var(--fs-2); border:1px solid var(--border);
+  border-radius:999px; background:var(--surface-2); color:var(--text);
+  cursor:pointer; white-space:nowrap; }
+.chip-btn:hover { background:var(--surface-3); }
+
+.alert-entry-row { font-size:var(--fs-2); color:var(--text); margin-bottom:.5rem; }
+.alert-entry-row .muted { color:var(--muted); }
+
+.alert-list { list-style:none; margin:0 0 .75rem; padding:0; display:flex; flex-direction:column; gap:.35rem; }
+.alert-item { display:flex; align-items:center; gap:.5rem; padding:.4rem .55rem;
+  border:1px solid var(--border); border-radius:var(--r-1); background:var(--surface); }
+.alert-item.is-off { opacity:.5; }
+.alert-item.is-trig { border-color:var(--accent); background:var(--accent-weak); }
+.alert-item .alert-text { flex:1; font-size:var(--fs-2); }
+.alert-toggle, .alert-del { background:none; border:none; cursor:pointer;
+  font-size:var(--fs-3); line-height:1; color:var(--muted); padding:.1rem .25rem; }
+.alert-toggle:hover, .alert-del:hover { color:var(--text); }
+.alert-badge { font-size:var(--fs-2); }
+.alert-trig-tag { font-size:var(--fs-1); font-weight:600; color:var(--accent);
+  border:1px solid var(--accent); border-radius:999px; padding:.05rem .4rem; }
+.alert-empty { padding:.5rem; text-align:center; }
+
+.alert-add { display:flex; flex-direction:column; gap:.6rem; padding-top:.5rem;
+  border-top:1px dashed var(--border); }
+.alert-add__group { display:flex; flex-direction:column; gap:.3rem; }
+.alert-add__group > label { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+.alert-add__group select, .alert-add__manual input { padding:.5rem .6rem; border:1px solid var(--border);
+  border-radius:var(--r-1); background:var(--surface); color:var(--text); font-size:var(--fs-2); }
+.alert-add__manual { display:flex; gap:.4rem; align-items:stretch; }
+.alert-add__manual .dir-select { flex:0 0 3.25rem; width:3.25rem; text-align:center;
+  font-size:var(--fs-3); padding:.5rem .3rem; }
+.alert-add__manual input { flex:1 1 auto; min-width:0; font-size:var(--fs-3); }
+.alert-add__manual .btn { flex:0 0 auto; padding:.5rem 1rem; font-size:var(--fs-3); }
+.alert-add__presets { display:flex; flex-wrap:wrap; gap:.4rem; }
+.alert-tier { font-size:var(--fs-1); font-weight:600; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.03em; margin:.5rem 0 .1rem; }
+.alert-tier:first-child { margin-top:0; }
+
+/* Kind selector (Watch · Buy · Stop-Loss) — one explicit intent per alert */
+.alert-kind { display:flex; gap:var(--s-1); margin-bottom:var(--s-3); }
+.alert-kind__btn {
+  flex:1 1 0; min-width:0; display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  padding:var(--s-2) var(--s-1); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted); font-size:var(--fs-2); font-weight:var(--fw-bold);
+  white-space:nowrap; cursor:pointer;
+}
+.alert-kind__btn.is-active.alert-kind__btn--watch { background:var(--surface-3); border-color:var(--muted); color:var(--text); }
+.alert-kind__btn.is-active.alert-kind__btn--buy   { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.alert-kind__btn.is-active.alert-kind__btn--stop  { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+
+/* Per-alert kind tag in the list */
+.alert-kind-tag { flex-shrink:0; font-size:var(--fs-1); font-weight:var(--fw-bold); padding:1px 6px;
+  border-radius:var(--r-pill); white-space:nowrap; }
+.alert-kind-tag--watch { background:var(--surface-3); color:var(--muted); }
+.alert-kind-tag--buy   { background:var(--pos-weak); color:var(--pos); }
+.alert-kind-tag--stop  { background:var(--neg-weak); color:var(--neg); }
+.alert-note { display:block; font-size:var(--fs-1); color:var(--muted); margin-top:2px; }
+
+/* Predefined level chips + inline manual % */
+.chip-btn--lvl { font-variant-numeric:tabular-nums; }
+.alert-add__inline { display:inline-flex; align-items:center; gap:.3rem; }
+.alert-add__inline .pct-input { width:6.5rem; font-size:var(--fs-2);
+  padding:.4rem .5rem; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); }
+#idt-note { width:100%; font-size:var(--fs-2); padding:.5rem .6rem; border:1px solid var(--border);
+  border-radius:var(--r-1); background:var(--surface); color:var(--text); }
+
+/* Overview modal */
+.alert-modal__bar { display:flex; align-items:center; gap:.75rem;
+  padding:.6rem var(--s-4); border-bottom:1px solid var(--border); }
+.alert-modal__bar .muted { margin-left:auto; font-size:var(--fs-2); color:var(--muted); }
+.alert-modal__body { display:flex; flex-direction:column; gap:.75rem; }
+.alert-card { border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.alert-card.is-muted { opacity:.55; }
+.alert-card__head { display:flex; align-items:center; justify-content:space-between;
+  gap:.5rem; padding:.5rem .6rem; background:var(--surface-2); }
+.alert-card__px { font-size:var(--fs-1); color:var(--muted); margin-top:.1rem; }
+.alert-card .alert-list { margin:0; padding:.5rem .6rem; }
+
+/* ════════════════════════════════════════════════════════════════
+   MONITOR / DASHBOARD MODAL
+   ════════════════════════════════════════════════════════════════ */
+.dash-modal { width:min(460px,100%); }
+.dash-title { display:flex; align-items:center; gap:8px; }
+.dash-title svg { color:var(--accent); width:18px; height:18px; }
+.dash-body { padding:14px; display:flex; flex-direction:column; gap:var(--s-3); background:var(--surface); }
+
+/* Pulse header */
+.dash-pulse {
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-2);
+  padding:10px 12px; display:flex; flex-direction:column; gap:6px; font-size:var(--fs-2);
+  flex-shrink:0;
+}
+.dash-pulse__top, .dash-pulse__bot {
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+}
+.dash-pulse__top b { font-weight:var(--fw-bold); }
+.dash-pulse__delta { display:inline-flex; align-items:center; gap:9px; font-weight:var(--fw-bold); }
+.dash-pulse__delta span { display:inline-flex; align-items:center; gap:1px; }
+.dash-pulse__delta svg { width:13px; height:13px; }
+.dash-pulse__alerts { display:inline-flex; align-items:center; gap:6px; }
+.dash-alert { padding:1px 8px; border-radius:var(--r-pill); font-weight:var(--fw-bold); font-size:var(--fs-1); }
+.dash-alert--buy  { background:var(--pos-weak); color:var(--pos); }
+.dash-alert--sell { background:var(--neg-weak); color:var(--neg); }
+.dash-muted { color:var(--muted); }
+.dash-pulse .pos { color:var(--pos); }
+.dash-pulse .neg { color:var(--neg); }
+
+/* Cards */
+.dash-card { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; flex-shrink:0; }
+.dash-card__head {
+  display:flex; align-items:center; gap:7px; padding:9px 12px;
+  border-bottom:1px solid var(--border); background:var(--surface-3);
+}
+.dash-card__head h3 { font-size:var(--fs-2); font-weight:var(--fw-bold); letter-spacing:.01em; flex:1; }
+.dash-card__icon { display:inline-flex; color:var(--accent); }
+.dash-card__icon svg { width:15px; height:15px; }
+.dash-card__body { padding:4px 6px; }
+
+/* Candidate rows */
+.dash-row {
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:8px; background:none; border:none; border-left:3px solid transparent;
+  border-radius:var(--r-1); color:var(--text); cursor:pointer; text-align:left; font:inherit;
+}
+.dash-row:hover { background:var(--accent-weak); }
+.dash-row--up   { border-left-color:var(--pos); }
+.dash-row--down { border-left-color:var(--neg); }
+.dash-row__sym { display:flex; align-items:baseline; gap:6px; min-width:0; }
+.dash-sym { font-weight:var(--fw-bold); font-size:var(--fs-3); }
+.dash-ex  { font-size:var(--fs-1); color:var(--muted); }
+.dash-row__val { display:flex; align-items:center; gap:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dash-prev { color:var(--muted); font-size:var(--fs-2); }
+.dash-badge { padding:1px 7px; border-radius:var(--r-1); font-weight:var(--fw-bold); font-size:var(--fs-2); }
+.dash-badge.pos { background:var(--pos-weak); color:var(--pos); }
+.dash-badge.neg { background:var(--neg-weak); color:var(--neg); }
+.dash-num { font-weight:var(--fw-bold); font-size:var(--fs-3); }
+.dash-num.pos { color:var(--pos); }
+.dash-num.neg { color:var(--neg); }
+.dash-perfs { font-size:var(--fs-1); color:var(--muted); }
+/* SMA-cross rows: stacked block — symbol on top, cross label as smaller 2nd line */
+.dash-cross-stack { display:flex; flex-direction:column; align-items:flex-start; gap:1px; min-width:0; }
+.dash-cross { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--fs-1); color:var(--muted); }
+/* Signal-Scoreboard rows (non-interactive stacked blocks) */
+.dash-row--sb { cursor:default; }
+.dash-row--sb:hover { background:none; }
+.dash-sb-line { display:flex; gap:12px; flex-wrap:wrap; font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+.dash-sb-h i { font-style:normal; color:var(--muted); opacity:.7; margin-right:2px; }
+.dash-sb-h b { font-weight:var(--fw-bold); }
+.dash-sb-h b.pos { color:var(--pos); }
+.dash-sb-h b.neg { color:var(--neg); }
+/* Firmenprofil unter dem Detail-Chart */
+.id-profile { margin:8px 0 2px; }
+.id-profile--loading { font-size:var(--fs-1); color:var(--muted); display:flex; align-items:center; gap:6px; }
+.id-profile__text {
+  margin:0; font-size:var(--fs-2); line-height:var(--lh); color:var(--text);
+  display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden;
+}
+.id-profile__text.is-open { display:block; -webkit-line-clamp:unset; overflow:visible; }
+.id-profile__facts { margin:4px 0 0; font-size:var(--fs-1); color:var(--muted); }
+.id-profile__foot { display:flex; align-items:center; gap:10px; margin-top:3px; }
+.id-profile__more { background:none; border:none; padding:0; color:var(--accent); font-size:var(--fs-1); cursor:pointer; font-family:inherit; }
+.id-profile__src { font-size:var(--fs-1); color:var(--muted); margin-left:auto; }
+.id-profile__src a { color:var(--muted); }
+/* News-Tab im Detail-Modal */
+.news-item { padding:8px 0; border-bottom:1px solid var(--border); }
+.news-item:last-of-type { border-bottom:none; }
+.news-item__meta { font-size:var(--fs-1); color:var(--muted); margin-bottom:2px; }
+.news-item__title { font-size:var(--fs-2); font-weight:var(--fw-bold); line-height:var(--lh); }
+.news-item__title a { color:var(--text); }
+.news-item__text {
+  margin:3px 0 0; font-size:var(--fs-1); color:var(--muted); line-height:var(--lh);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.news-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
+.news-empty { display:flex; flex-direction:column; gap:6px; align-items:flex-start; padding:6px 0; }
+/* TD-Chart: Zoom-Presets + Indikator-Toggle · Earnings-Call-Sektion */
+.chart-zoom { display:flex; gap:4px; align-items:center; margin:6px 0 2px; }
+.chart-zoom .seg-btn { padding:3px 10px; font-size:var(--fs-1); }
+.chart-zoom__ind { margin-left:auto; }
+/* Legende der SMA-Kurven unter dem 1J-Chart: schmaler Streifen, nimmt dem Chart
+   keinen Platz (Styleguide §5) — Strichfarbe + Periode, sonst nichts. */
+.chart-smaleg { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-3);
+  font-size:var(--fs-1); color:var(--muted); line-height:1.2; padding:2px 0 0; }
+.chart-smaleg__it { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.chart-smaleg__it i { width:14px; height:3px; border-radius:2px; }
+.tr-call { padding:8px 0 2px; }
+.tr-call__head { font-size:var(--fs-2); line-height:var(--lh); }
+.tr-call__actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+.tr-call__actions .pv-muted { font-size:var(--fs-1); }
+/* Portfolio-Stern im Detail-Header + Einstand-Zeile im Trade-Ticket */
+.detail-star { background:none; border:none; padding:0 2px; cursor:pointer; color:var(--muted); vertical-align:-2px; display:inline-flex; }
+.detail-star.is-active { color:#f59e0b; }
+.detail-star svg { width:18px; height:18px; }
+span.detail-star { cursor:default; }
+
+/* Watch-Label toggle under the score donut (Watch-Bucket only) */
+.detail-score-stack { display:flex; flex-direction:column; align-items:center; gap:var(--s-1); }
+.detail-watch { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface);
+  color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); font-family:var(--font-ui); }
+.detail-watch svg { width:15px; height:15px; }
+.detail-watch:hover { background:var(--surface-3); color:var(--text); }
+.detail-watch.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.ticket__row--mk .ticket__lbl { color:#9333ea; font-weight:var(--fw-bold); }
+[data-theme="dark"] .ticket__row--mk .ticket__lbl { color:#c084fc; }
+/* Detail-Tabs: 5 Tabs müssen ohne Overflow auf 390px passen */
+.detail-tabs .tab-btn { padding:8px 9px; font-size:var(--fs-2); }
+/* Fundamental-Tab: Health-Kopf, Meter-Zeilen, Stat-Kacheln */
+.fund-head { display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+.fund-head__info { min-width:0; }
+.fund-head__title { font-weight:var(--fw-bold); font-size:var(--fs-3); }
+.fund-head__label { font-weight:var(--fw-reg, 400); color:var(--muted); }
+.fund-head__meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:3px 0; }
+.fund-earn { font-size:var(--fs-1); color:var(--muted); }
+.fund-head__sub { font-size:var(--fs-1); color:var(--muted); }
+.fm-row { display:flex; align-items:center; gap:8px; padding:3px 0; }
+.fm-label { flex:0 0 96px; font-size:var(--fs-1); color:var(--muted); }
+.fm-bar { position:relative; flex:1; height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
+.fm-bar--signed::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--border); }
+.fm-bar i { position:absolute; top:0; bottom:0; border-radius:4px; opacity:.8; }
+.fm-bar i.pos { background:var(--pos); }
+.fm-bar i.neg { background:var(--neg); }
+.fm-bar i.mid { background:#d97706; }
+.fm-val { flex:0 0 64px; text-align:right; font-size:var(--fs-2); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fm-val.pos { color:var(--pos); }
+.fm-val.neg { color:var(--neg); }
+.fm-val.mid { color:#d97706; }
+/* Szenario-Leiter (Reverse-DCF): nutzt die Fundamental-Meter, braucht aber
+   eigene Spaltenbreiten — .fm-label ist mit 96px zu breit für „10 %" und der
+   faire Kurs bekommt eine eigene, rechtsbündige Spalte. */
+.dcf-ladder .fm-label { flex:0 0 auto; width:46px; white-space:nowrap; }
+.dcf-ladder .fm-price { flex:0 0 72px; text-align:right; font-size:var(--fs-2);
+  color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* +891 % braucht mehr als die 64px der Fundamental-Meter — sonst bricht die
+   Prozentzahl auf eine zweite Zeile und die Zeilenhöhen springen. */
+.dcf-ladder .fm-val { flex:0 0 62px; white-space:nowrap; }
+
+.fund-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.fund-stat { display:flex; flex-direction:column; gap:1px; align-items:center; padding:7px 4px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); text-align:center; }
+.fund-stat b { font-size:var(--fs-3); font-variant-numeric:tabular-nums; }
+.fund-stat b.pos { color:var(--pos); }
+.fund-stat b.neg { color:var(--neg); }
+.fund-stat b.mid { color:#d97706; }
+.fund-stat span { font-size:var(--fs-1); color:var(--muted); }
+.dash-sep { height:1px; background:var(--border); margin:4px 8px; }
+.dash-empty { padding:14px 10px; color:var(--muted); font-size:var(--fs-2); text-align:center; line-height:var(--lh); }
+
+/* Performance window toggle */
+.dash-seg {
+  display:inline-flex; gap:2px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-pill); padding:2px;
+}
+.dash-seg__btn {
+  border:none; background:none; color:var(--muted); font:inherit; font-size:var(--fs-1);
+  font-weight:var(--fw-bold); padding:2px 9px; border-radius:var(--r-pill); cursor:pointer;
+}
+.dash-seg__btn.is-active { background:var(--accent); color:#fff; }
+
+/* Signals & extremes */
+.dash-sig { padding:7px 8px; display:flex; flex-direction:column; gap:5px; }
+.dash-sig + .dash-sig { border-top:1px solid var(--border); }
+.dash-sig__label { font-size:var(--fs-1); font-weight:var(--fw-bold); text-transform:uppercase; letter-spacing:.04em; }
+.dash-sig__label--mom { color:var(--accent); }
+.dash-sig__label--os  { color:var(--accent); }
+.dash-sig__label--ob  { color:var(--neg); }
+.dash-sig__label--sky { color:var(--ai); }
+.dash-sig__items { display:flex; flex-wrap:wrap; gap:6px; }
+.dash-chip {
+  border:1px solid var(--border); background:var(--surface); border-radius:var(--r-pill);
+  padding:3px 9px; font:inherit; font-size:var(--fs-2); color:var(--text); cursor:pointer;
+  font-variant-numeric:tabular-nums;
+}
+.dash-chip b { font-weight:var(--fw-bold); }
+.dash-chip svg { width:12px; height:12px; vertical-align:-1px; }
+.dash-chip:hover { background:var(--accent-weak); }
+.dash-chip--mom { border-color:var(--accent); }
+.dash-chip--mom b { color:var(--accent); }
+.dash-chip--os b  { color:var(--accent); }
+.dash-chip--ob b  { color:var(--neg); }
+.dash-chip--sky   { border-color:var(--ai); }
+.dash-chip--sky b { color:var(--ai); }
+.dash-sig__label--up   { color:var(--pos); }
+.dash-sig__label--down { color:var(--neg); }
+.dash-chip--up   { border-color:var(--pos); }
+.dash-chip--up b { color:var(--pos); }
+.dash-chip--down   { border-color:var(--neg); }
+.dash-chip--down b { color:var(--neg); }
+.dash-none { color:var(--muted); font-size:var(--fs-2); }
+
+/* Expand toggle / hints / sub-labels */
+.dash-more {
+  width:100%; background:none; border:none; color:var(--accent); font:inherit;
+  font-size:var(--fs-1); font-weight:var(--fw-bold); padding:7px 8px; cursor:pointer;
+  text-align:center; border-radius:var(--r-1);
+}
+.dash-more:hover { background:var(--accent-weak); }
+.dash-hint { padding:6px 8px 2px; color:var(--muted); font-size:var(--fs-1); }
+.dash-sub {
+  padding:5px 8px 2px; font-size:var(--fs-1); font-weight:var(--fw-bold);
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.dash-sub--pos { color:var(--pos); }
+.dash-sub--neg { color:var(--neg); }
+
+/* ════════════════════════════════════════════════════════════════
+   DETAIL MODAL — SCORE RING + PRICE VISUALIZATIONS
+   ════════════════════════════════════════════════════════════════ */
+.detail-header-right { display:flex; align-items:flex-start; gap:var(--s-2); flex-shrink:0; }
+
+.score-ring { position:relative; width:52px; height:52px; flex-shrink:0; }
+.score-ring svg { display:block; }
+.score-ring__track { fill:none; stroke:var(--surface-3); stroke-width:5; }
+.score-ring__val { fill:none; stroke-width:5; stroke-linecap:round; transition:stroke-dashoffset .4s ease; }
+.score-ring__num {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-weight:var(--fw-bold); font-size:var(--fs-4); font-variant-numeric:tabular-nums;
+}
+.score-ring--STRONG .score-ring__val { stroke:#27ae60; } .score-ring--STRONG .score-ring__num { color:#27ae60; }
+.score-ring--GOOD   .score-ring__val { stroke:#2980b9; } .score-ring--GOOD   .score-ring__num { color:#2980b9; }
+.score-ring--MIXED  .score-ring__val { stroke:#d68910; } .score-ring--MIXED  .score-ring__num { color:#d68910; }
+.score-ring--WEAK   .score-ring__val { stroke:var(--neg); } .score-ring--WEAK .score-ring__num { color:var(--neg); }
+.score-ring--empty  .score-ring__num { color:var(--muted); }
+
+/* Detail prev/next navigation strip */
+.detail-nav {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:6px 4px 2px;
+}
+.detail-nav__btn {
+  display:inline-flex; align-items:center; gap:4px; padding:5px 12px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-pill);
+  color:var(--text); font:inherit; font-size:var(--fs-1); font-weight:var(--fw-bold); cursor:pointer;
+}
+.detail-nav__btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+.detail-nav__btn:disabled { opacity:.4; cursor:default; }
+.detail-nav__btn svg { display:block; }
+.detail-nav__pos { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+
+/* Ladder row: chart + colour legend to the right */
+.pv-ladder-row { display:flex; gap:8px; align-items:flex-start; }
+.pv-ladder-wrap { flex:1 1 auto; min-width:0; }
+.pv-legend { flex:0 0 auto; width:96px; display:flex; flex-direction:column; gap:7px; padding-top:6px; }
+.pv-leg__item { display:flex; align-items:center; gap:6px; font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.pv-leg__sw { width:12px; height:3px; border-radius:2px; flex-shrink:0; }
+.pv-leg__sw--cur     { height:0; border-top:3px solid var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.pv-leg__sw--anchor  { background:var(--muted); }
+.pv-leg__sw--ma      { background:#2980b9; }
+.pv-leg__sw--band    { background:var(--ai); }
+.pv-leg__sw--resist  { background:var(--neg); }
+.pv-leg__sw--support { background:var(--pos); }
+.pv-leg__sw--clu-sup { background:var(--pos); opacity:.3; height:7px; }
+.pv-leg__sw--clu-res { background:var(--neg); opacity:.3; height:7px; }
+
+/* Return-per-period diverging bars */
+.pv-perf { display:flex; flex-direction:column; gap:7px; }
+.pv-perf__row {
+  display:grid; grid-template-columns:38px 1fr 58px; align-items:center; gap:8px;
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums;
+}
+.pv-perf__lbl { font-weight:var(--fw-bold); color:var(--muted); }
+.pv-perf__track { position:relative; height:12px; background:var(--surface-3); border-radius:var(--r-1); overflow:hidden; }
+.pv-perf__zero { position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--border); }
+.pv-perf__bar { position:absolute; top:2px; bottom:2px; border-radius:2px; }
+.pv-perf__bar.pos { background:var(--pos); }
+.pv-perf__bar.neg { background:var(--neg); }
+.pv-perf__val { text-align:right; font-weight:var(--fw-bold); }
+.pv-perf__val.pos { color:var(--pos); }
+.pv-perf__val.neg { color:var(--neg); }
+
+/* Vertical price ladder (SVG) */
+.pv-ladder { display:block; overflow:visible; }
+.pv-hband-wrap { width:100%; min-width:0; margin-top:var(--s-1); }
+.pv-hband { display:block; overflow:visible; width:100%; }
+.pv-hband .pv-lbl { font-size:9px; }
+.pv-bar { fill:var(--surface-3); }
+.pv-cap { fill:var(--ai-weak); }
+.pv-bb  { fill:var(--accent); opacity:.12; }
+.pv-tick { stroke-width:2; }
+.pv-tick--anchor  { stroke:var(--muted); }
+.pv-tick--ma      { stroke:#2980b9; }
+.pv-tick--band    { stroke:var(--ai); }
+.pv-tick--resist  { stroke:var(--neg); }
+.pv-tick--support { stroke:var(--pos); }
+.pv-leader { stroke:var(--border); stroke-width:1; }
+.pv-lbl { font-size:13px; fill:var(--text); font-family:var(--font-ui); }
+.pv-lbl--anchor { fill:var(--muted); }
+.pv-lbl--ma     { fill:#2980b9; }
+.pv-lbl--cur    { fill:var(--accent); font-weight:700; }
+.pv-cur { stroke:var(--accent); stroke-width:2.5; }
+.pv-cur-dot { fill:var(--accent); }
+/* Price-cluster confluence bands in the ladder (opacity set inline by score) */
+.pv-clu--sup { fill:var(--pos); }
+.pv-clu--res { fill:var(--neg); }
+.pv-clu--at  { fill:var(--accent); }
+.pv-foot { font-size:var(--fs-1); color:var(--muted); margin-top:8px; line-height:1.6; text-align:center; }
+.pv-foot b { color:var(--text); }
+.pv-foot .pos { color:var(--pos); } .pv-foot .neg { color:var(--neg); }
+.pv-empty { color:var(--muted); font-size:var(--fs-2); }
+
+/* Performance chart horizon toggle (10T LS ⟷ 1J TD candles) */
+.chart-head-row { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.chart-horizon { display:inline-flex; gap:2px; background:var(--surface-3); border-radius:var(--r-1); padding:2px; }
+.chart-horizon .seg-btn {
+  border:none; background:transparent; color:var(--muted); cursor:pointer;
+  font-size:var(--fs-1); font-weight:var(--fw-bold); padding:3px 9px; border-radius:calc(var(--r-1) - 1px);
+}
+.chart-horizon .seg-btn.active { background:var(--sheet-bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.12); }
+
+/* Chart-Vollbild (Perf-Tab, LS wie TD). Der Block `#chart-fs` wird dafür per JS
+   in den <body> verschoben – die Detail-Sheet trägt ein `transform`, ein
+   `position:fixed`-Kind bliebe sonst auf die Sheet-Breite eingesperrt. */
+.chart-fs__act { display:inline-flex; align-items:center; gap:var(--s-2); }
+/* Im Vollbild fehlt der Sheet-Kopf – der Ticker steht dann im Chart-Titel. */
+.chart-fs__sym { display:none; }
+.chart-fs.is-fs .chart-fs__sym { display:inline; color:var(--text); margin-right:var(--s-2); }
+.chart-fs__btn { flex:0 0 auto; }
+.chart-fs.is-fs {
+  position:fixed; inset:0; z-index:var(--z-toast);
+  display:flex; flex-direction:column; gap:var(--s-2);
+  height:100dvh; overflow:hidden; background:var(--sheet-bg);
+  padding:var(--s-3) var(--s-3) max(var(--s-3), env(safe-area-inset-bottom));
+}
+.chart-fs.is-fs > * { flex:0 0 auto; margin:0; }
+.chart-fs.is-fs .pv-subhead { margin:0; }
+.chart-fs.is-fs .ls-chart { flex:1 1 auto; height:auto; min-height:0; }
+body.has-chart-fs { overflow:hidden; }
+
+/* "Level" bar under the chart: pointer-tracked price readout + set-alert button */
+.chart-level { display:flex; align-items:center; gap:8px; margin-top:6px; padding:6px 8px; background:var(--surface-3); border-radius:var(--r-1); }
+.chart-level__lbl { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.chart-level__price { font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; color:var(--accent); flex:1; }
+.chart-level #chart-level-add { white-space:nowrap; }
+.chart-level #chart-level-add:disabled { opacity:.5; }
+/* 1J-candle load prompt / spinner placeholder (same height as the chart) */
+.chart-loading {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  min-height:160px; color:var(--muted); font-size:var(--fs-2);
+  border:1px dashed var(--border); border-radius:var(--r-1); text-align:center;
+}
+.chart-loading--btn { width:100%; background:transparent; cursor:pointer; font-weight:var(--fw-bold); color:var(--accent); }
+.chart-loading--btn:hover { background:var(--surface-3); }
+
+/* Swing-Analyse (TwelveData) zone ladder */
+.ph-card--swing { padding-bottom:6px; }
+.sw-viz { margin:4px 0; }
+.sw-ladder { max-width:320px; margin:0 auto; display:block; }
+.sw-bar { fill:var(--surface-3); }
+.sw-zone--res { fill:var(--neg); }   /* opacity set inline by touches */
+.sw-zone--sup { fill:var(--pos); }
+.sw-cur { stroke:var(--accent); stroke-width:2.5; }
+.sw-cur-dot { fill:var(--accent); }
+.sw-lbl { font-size:10px; }
+.sw-lbl--res { fill:var(--neg); } .sw-lbl--sup { fill:var(--pos); }
+.sw-lbl--cur { fill:var(--accent); font-weight:700; }
+.sw-stale {
+  margin-left:6px; font-size:var(--fs-1); color:var(--neg);
+  border:1px solid var(--neg); border-radius:var(--r-1); padding:0 5px;
+}
+.pv-muted { color:var(--muted); }
+.pv-subhead {
+  font-size:var(--fs-1); text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+  margin:14px 0 6px; font-weight:var(--fw-bold);
+}
+
+/* Range bands per timeframe */
+.pv-ranges { display:flex; flex-direction:column; gap:7px; }
+.pv-range {
+  display:grid; grid-template-columns:30px 48px 1fr 48px 34px; align-items:center; gap:6px;
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums;
+}
+.pv-range__lbl { font-weight:var(--fw-bold); color:var(--muted); }
+.pv-range__lo, .pv-range__hi { color:var(--muted); }
+.pv-range__hi { text-align:right; }
+.pv-range__pos { text-align:right; font-weight:var(--fw-bold); color:var(--text); }
+.pv-range__track { position:relative; height:8px; background:var(--surface-3); border-radius:var(--r-pill); }
+.pv-range__fill { position:absolute; left:0; top:0; bottom:0; background:var(--accent-weak); border-radius:var(--r-pill); }
+.pv-range__dot {
+  position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  background:var(--accent); transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-2);
+}
+
+/* Bollinger / volatility gauge */
+.pv-gauge { display:flex; flex-direction:column; gap:5px; font-size:var(--fs-1); }
+.pv-gauge__head { display:flex; justify-content:space-between; align-items:baseline; }
+.pv-gauge__head b { font-weight:var(--fw-bold); color:var(--text); }
+.pv-gauge__head .pos { color:var(--pos); } .pv-gauge__head .neg { color:var(--neg); }
+.pv-bb-track { position:relative; height:10px; background:var(--surface-3); border-radius:var(--r-pill); }
+.pv-bb__atr { position:absolute; top:0; bottom:0; background:var(--accent-weak); border-radius:var(--r-pill); }
+.pv-bb__dot {
+  position:absolute; top:50%; width:11px; height:11px; border-radius:50%;
+  background:var(--accent); transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-2);
+}
+.pv-bb-scale { display:flex; justify-content:space-between; color:var(--muted); }
+
+/* ════════════════════════════════════════════════════════════════
+   DETAIL SHEET REWORK — header tags · toolbar · tabs · trade mockup
+   ════════════════════════════════════════════════════════════════ */
+.detail-title { min-width:0; }
+/* Cluster/Sector tags: one line, no wrap (STYLEGUIDE.md §5). If too narrow the
+   row pans horizontally, but without a visible scrollbar/frame. */
+.detail-tags {
+  display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-top:var(--s-2);
+  overflow-x:auto; scrollbar-width:none;
+}
+.detail-tags::-webkit-scrollbar { display:none; }
+.detail-tags .tag { flex-shrink:0; white-space:nowrap; }
+.tag--ph { background:var(--surface-3); border:1px dashed var(--border); color:var(--muted); }
+.isin--copy svg { display:inline-block; width:12px; height:12px; vertical-align:-2px; }
+
+/* Sub-header: icon-only links · edit · | · quick actions — ALWAYS one row.
+   Chips are equal flex columns that shrink on narrow phones (down to the
+   32px styleguide floor) so all of them stay visible without scrolling. */
+.detail-toolbar {
+  display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap;
+  padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border);
+}
+/* Large touch targets on roomy screens (capped 44px), shrinking to fit. */
+.detail-toolbar .link-chip {
+  flex:1 1 0; min-width:32px; max-width:44px; height:44px; border-radius:var(--r-2);
+}
+.detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:22px; height:22px; }
+.detail-toolbar__sep { flex:0 0 1px; align-self:stretch; margin:4px 2px; background:var(--border); }
+button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.link-chip--mock { opacity:0.45; }
+.detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }
+
+/* Currency toggle — sits inline next to the price in the Performance hero and
+   the Trade head (compact pill, tap to switch native ↔ USD/EUR). */
+.cur-toggle {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:28px; height:26px; padding:0 var(--s-2); flex-shrink:0;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  border-radius:var(--r-1); font-size:var(--fs-3); font-weight:var(--fw-bold); line-height:1;
+  transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.cur-toggle:hover { border-color:var(--accent); }
+.cur-toggle.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.cur-toggle--off { opacity:0.45; cursor:default; }
+/* Both R:R and the currency pill anchor right (two margin-left:auto collapse
+   so they sit adjacent at the row's right edge). */
+.hero__cur { margin-left:auto; }
+
+/* Tab bar + panels inside the sheet */
+.detail-tabs { padding:0 var(--s-4); margin-bottom:0; background:var(--sheet-bg); }
+.detail-tabpanes > .tab-panel { padding:var(--s-4); border-bottom:1px solid var(--border); }
+.detail-tabpanes .pv-subhead:first-child { margin-top:0; }
+
+/* Performance tab: LS intraday stat block (value line > meta line, §2) */
+.pv-volstats { display:flex; gap:var(--s-4); font-size:var(--fs-1); color:var(--muted); margin:var(--s-2) 0; }
+.pv-volstats b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* ── Detail hero panel: price → stop/sup/res/target → volume at a glance ── */
+.hero {
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2);
+  padding:var(--s-3); margin-bottom:var(--s-3);
+  display:flex; flex-direction:column; gap:var(--s-2);
+}
+.hero__price-row { display:flex; align-items:baseline; gap:var(--s-2); flex-wrap:nowrap; min-width:0; }
+.hero__price { font-family:var(--font-mono); font-size:var(--fs-6); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__chg { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.hero__src { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hero__rr { margin-left:auto; font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.hero__rr b { font-size:var(--fs-4); color:var(--accent); font-variant-numeric:tabular-nums; }
+/* 5 stations, ALWAYS one row (§5): equal shrinking columns, stacked values */
+.hero__stations { display:flex; flex-wrap:nowrap; gap:var(--s-1); }
+.hero__st { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:1px; align-items:center; text-align:center; padding:2px; border-radius:var(--r-1); }
+.hero__st-lbl { font-size:11px; color:var(--muted); font-weight:var(--fw-bold); letter-spacing:.02em; white-space:nowrap; }
+.hero__st-val { font-size:var(--fs-2); font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__st-delta { font-size:var(--fs-1); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hero__st--kurs { background:var(--accent-weak); }
+.hero__st--kurs .hero__st-val { font-weight:var(--fw-bold); color:var(--accent); }
+.hero__st--stop .hero__st-lbl { color:var(--neg); }
+.hero__st--target .hero__st-lbl { color:var(--pos); }
+.hero__track { position:relative; height:8px; background:var(--surface-3); border-radius:var(--r-pill); }
+.hero__dot { position:absolute; top:50%; width:8px; height:8px; border-radius:50%; background:var(--muted); transform:translate(-50%,-50%); }
+.hero__dot.hero__st--kurs { background:var(--accent); width:11px; height:11px; box-shadow:0 0 0 2px var(--surface-2); }
+.hero__dot.hero__st--stop { background:var(--neg); }
+.hero__dot.hero__st--target { background:var(--pos); }
+.hero__vol { display:flex; align-items:center; gap:var(--s-2); flex-wrap:nowrap; }
+.hero__vol-lbl { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); }
+.hero__vol-chip {
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums; padding:1px 7px;
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-pill); white-space:nowrap;
+}
+.hero__vol-chip small { color:var(--muted); }
+.hero__vol-chip.is-spike { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.hero__spike { font-size:11px; font-weight:var(--fw-bold); color:var(--pos); letter-spacing:.06em; }
+
+/* Interactive LS chart container (Lightweight Charts) */
+.ls-chart { height:240px; width:100%; }
+
+/* Collapsed detail ladder / trend-band price-levels table */
+.pv-ladder-details summary,
+.pv-levels-details summary { cursor:pointer; list-style:revert; }
+.pv-levels-details { margin-top:var(--s-1); }
+.pv-levels-details summary { font-size:var(--fs-1); color:var(--muted); }
+.pv-levels-details[open] summary { margin-bottom:var(--s-1); }
+
+.pv-levels { width:100%; border-collapse:collapse; font-size:var(--fs-1); }
+.pv-levels th {
+  text-align:right; font-weight:var(--fw-bold); color:var(--muted);
+  padding:2px 6px; border-bottom:1px solid var(--border);
+}
+.pv-levels th:first-child { text-align:left; }
+.pv-levels td { padding:3px 6px; border-bottom:1px solid var(--surface-3); }
+.pv-lvl-name { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.pv-lvl-val, .pv-lvl-delta { text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pv-lvl-delta.pos { color:var(--pos); } .pv-lvl-delta.neg { color:var(--neg); }
+.pv-lvl-row--cur { background:var(--accent-weak); font-weight:var(--fw-bold); }
+.pv-lvl-row--cur .pv-lvl-val { color:var(--accent); }
+.pv-lvl-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.pv-lvl-dot--anchor  { background:var(--muted); }
+.pv-lvl-dot--ma      { background:#2980b9; }
+.pv-lvl-dot--band    { background:var(--ai); }
+.pv-lvl-dot--resist  { background:var(--neg); }
+.pv-lvl-dot--support { background:var(--pos); }
+.pv-lvl-dot--cur     { background:var(--accent); border-radius:50%; }
+
+/* ── Trade ticket: vertical scale + segmented Long|Short + prob bars ── */
+.ticket__seg { margin:var(--s-2) 0 var(--s-3); }
+.ticket { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.ticket__row {
+  display:grid; grid-template-columns:1fr auto 64px; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-3); border-bottom:1px solid var(--border);
+  background:var(--surface-2); font-size:var(--fs-2);
+}
+.ticket__row:last-child { border-bottom:none; }
+.ticket__lbl { color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ticket__val { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:var(--fw-med); white-space:nowrap; }
+.ticket__delta { text-align:right; font-size:var(--fs-1); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ticket__row--kurs { background:var(--accent-weak); }
+.ticket__row--kurs .ticket__val { font-weight:var(--fw-bold); color:var(--accent); font-size:var(--fs-3); }
+.ticket__row--kurs .ticket__lbl { color:var(--accent); font-weight:var(--fw-bold); }
+.ticket__row--target .ticket__lbl { color:var(--pos); font-weight:var(--fw-bold); }
+.ticket__row--stop .ticket__lbl { color:var(--neg); font-weight:var(--fw-bold); }
+.ticket__row--entry .ticket__lbl { color:var(--text); font-weight:var(--fw-med); }
+.ticket__chips { display:flex; flex-wrap:wrap; gap:var(--s-1); }
+.ticket__chip {
+  font-size:var(--fs-1); padding:2px 8px; border-radius:var(--r-pill);
+  background:var(--surface-3); border:1px solid var(--border); color:var(--muted); white-space:nowrap;
+}
+.ticket__chip b { color:var(--text); font-variant-numeric:tabular-nums; }
+.prob-row { display:grid; grid-template-columns:44px 1fr 48px; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
+.prob-row__lbl { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+.prob-row__track { height:10px; background:var(--surface-3); border-radius:var(--r-pill); overflow:hidden; }
+.prob-row__fill { height:100%; border-radius:var(--r-pill); }
+.prob-row__fill.pos { background:var(--pos); }
+.prob-row__fill.neg { background:var(--neg); }
+.prob-row__val { text-align:right; font-size:var(--fs-2); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.prob-row__val.pos { color:var(--pos); }
+.prob-row__val.neg { color:var(--neg); }
+.prob-row__note { grid-column:2 / 4; font-size:var(--fs-1); color:var(--muted); }
+
+/* ── Forecast-Tab: Szenario-Tabelle + Chart-Legende ────────────────────────
+   Eine Zeile je Szenario: Farbpunkt · Name/Bremse · Ziel+Δ · Wahrscheinlichkeit.
+   Zweite Zeile je Block immer eine Stufe kleiner als der Wert darüber. */
+.trade-head--fc { flex-wrap:wrap; gap:var(--s-2) var(--s-3); }
+.fc-head__sig { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.fc-head__sig b { color:var(--text); font-size:var(--fs-2); font-variant-numeric:tabular-nums; }
+.fc-table { display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--r-2); overflow:hidden; }
+.fc-row {
+  display:grid; grid-template-columns:8px 1fr auto 46px; align-items:center; gap:var(--s-2);
+  padding:var(--s-2) var(--s-3); border-bottom:1px solid var(--border); background:var(--surface-2);
+}
+.fc-row:last-child { border-bottom:none; }
+.fc-row__dot { width:8px; height:8px; border-radius:50%; }
+.fc-row__dot--pos { background:var(--pos); }
+.fc-row__dot--neg { background:var(--neg); }
+.fc-row__dot--muted { background:var(--muted); }
+/* Analystenzeile: Fremdmeinung, deshalb abgesetzt statt wie ein viertes Szenario. */
+.fc-row--analyst { background:var(--surface-3); }
+.fc-row__dot--analyst { background:var(--accent); }
+/* Zweite Erhebung (Yahoo): dieselbe Zeile, aber sichtbar nachgeordnet. */
+.fc-row--analyst2 { background:var(--surface-2); }
+.fc-row--analyst2 .fc-row__id b { font-weight:var(--fw-med); }
+.fc-row__dot--analyst2 { background:var(--accent); opacity:.5; }
+.fc-row__id { min-width:0; }
+.fc-row__id b { display:block; font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.fc-row__id small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.fc-row__val { text-align:right; }
+.fc-row__val b { display:block; font-family:var(--font-mono); font-size:var(--fs-3);
+  font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fc-row__val small { display:block; font-size:var(--fs-2); font-variant-numeric:tabular-nums; }
+.fc-row__prob { text-align:right; }
+.fc-row__prob b { display:block; font-size:var(--fs-3); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.fc-row__prob small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.fc-legend { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-3);
+  margin-top:var(--s-2); font-size:var(--fs-1); color:var(--muted); }
+.fc-legend__it { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.fc-legend__dash { width:16px; height:0; border-top:2px dashed var(--muted); }
+.fc-legend__dash--pos { border-color:var(--pos); }
+.fc-legend__dash--neg { border-color:var(--neg); }
+.fc-legend__dash--muted { border-color:var(--muted); }
+.fc-legend__line { width:16px; height:2px; border-radius:1px; }
+.fc-legend__line--ath { background:var(--warn); }
+.fc-legend__line--fair { background:var(--ai); }
+.fc-legend__dash--analyst { border-color:var(--accent); }
+
+/* KI-Prompt-Modal: eine Karte je Prompt, Text eingeklappt hinter <details>,
+   damit der Dialog auf dem Handy nicht zur Textwüste wird. */
+.aip-modal { max-width:640px; }
+/* Icon und Titel in einer Zeile — sonst steht das Sparkles-SVG allein oben. */
+.aip-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); }
+.aip-modal .modal-header h2 svg { flex:0 0 auto; }
+.aip-intro { font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-3); }
+.aip-card {
+  border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2);
+  padding:var(--s-3); margin-bottom:var(--s-3);
+}
+.aip-card__head { display:flex; align-items:center; gap:var(--s-3); }
+.aip-card__title { min-width:0; flex:1; }
+.aip-card__title b { display:block; font-size:var(--fs-2); }
+.aip-card__title small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.aip-copy { flex:0 0 auto; white-space:nowrap; }
+.aip-copy.is-ok { color:var(--pos); border-color:var(--pos); }
+.aip-card__more { margin-top:var(--s-2); }
+.aip-card__more summary { font-size:var(--fs-1); color:var(--muted); cursor:pointer; }
+.aip-card__text {
+  margin-top:var(--s-2); max-height:260px; overflow:auto; white-space:pre-wrap;
+  font-family:var(--font-mono); font-size:var(--fs-1); line-height:1.45;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1);
+  padding:var(--s-2); color:var(--text);
+}
+
+/* Research-Prompt: Textfeld im Bearbeiten-Menü über die volle Breite. */
+.link-url-row--wide { grid-column:1 / -1; }
+.link-url-row--wide textarea {
+  width:100%; font-family:var(--font-mono); font-size:var(--fs-1);
+  padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); resize:vertical;
+}
+
+
+/* Performance tab: 10-day LS band (price segments + volume-% bars) */
+.ls10d { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-1); }
+.ls10d__line { fill:none; stroke:var(--muted); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.ls10d__line.ls10d--pos { stroke:var(--pos); }
+.ls10d__line.ls10d--neg { stroke:var(--neg); }
+.ls10d__vol { fill:var(--surface-3); }
+.ls10d__vol.ls10d--pos { fill:var(--pos); opacity:.45; }
+.ls10d__vol.ls10d--neg { fill:var(--neg); opacity:.45; }
+.ls10d__ref { stroke:var(--border); stroke-dasharray:3 3; vector-effect:non-scaling-stroke; }
+
+/* Trade tab: cluster + target head line above the setup box */
+.trade-head { display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-3); }
+.trade-head__target { font-size:var(--fs-2); color:var(--muted); }
+.trade-head__target b { color:var(--pos); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
+.trade-head__cur { margin-left:auto; }
+.trade-val--set { color:var(--text); border-style:solid; font-weight:var(--fw-med); }
+.ph-card--live { border-style:solid; background:var(--surface); }
+.prob-val { margin-left:auto; font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; font-size:var(--fs-3); }
+.prob-val.pos { color:var(--pos); }
+.prob-val.neg { color:var(--neg); }
+
+/* Trade tab: Long/Short setup mockup box */
+.trade-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
+@media (max-width:479px) { .trade-grid { grid-template-columns:1fr; } }
+.trade-col { border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2); padding:var(--s-3); min-width:0; }
+.trade-col__head {
+  font-size:var(--fs-2); font-weight:var(--fw-bold); text-transform:uppercase;
+  letter-spacing:0.04em; margin-bottom:var(--s-2);
+}
+.trade-col--long  .trade-col__head { color:var(--pos); }
+.trade-col--short .trade-col__head { color:var(--neg); }
+.trade-sub {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  margin:var(--s-3) 0 var(--s-1);
+}
+.trade-sub small { font-weight:var(--fw-reg); }
+.trade-col__head + .trade-sub { margin-top:0; }
+.trade-row { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); padding:2px 0; font-size:var(--fs-2); }
+.trade-row span:first-child { min-width:0; overflow-wrap:anywhere; }
+.trade-val {
+  font-family:var(--font-mono); font-variant-numeric:tabular-nums; color:var(--muted);
+  background:var(--surface-3); border:1px dashed var(--border); border-radius:var(--r-1);
+  padding:0 var(--s-2); min-width:56px; text-align:right; flex-shrink:0;
+}
+
+/* Placeholder cards (Breakout/Breakdown/Swing-Check/Analyst Targets) */
+.ph-card { border:1px dashed var(--border); border-radius:var(--r-2); background:var(--surface-2); padding:var(--s-3); margin-top:var(--s-3); }
+.ph-card__head { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.ph-tag {
+  font-size:var(--fs-1); font-weight:var(--fw-reg); color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--r-pill); padding:0 var(--s-2);
+}
+.ph-card p { margin-top:var(--s-1); font-size:var(--fs-1); color:var(--muted); }
+.ph-note { font-size:var(--fs-1); color:var(--muted); margin-top:var(--s-2); }
+
+/* ── Sub-nav alert button + badge ──────────────────────────────────────── */
+.subnav-alert { position:relative; display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:30px; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted); cursor:pointer; flex-shrink:0; margin-right:.4rem; }
+.subnav-alert:hover { background:var(--surface-3); color:var(--text); }
+.subnav-alert[hidden] { display:none; }
+#subnav-watch.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.alert-badge-count { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:999px; background:var(--neg); color:#fff; font-size:10px; font-weight:700;
+  line-height:16px; text-align:center; box-shadow:0 0 0 2px var(--surface-2); }
+.alert-badge-count[hidden] { display:none; }
+
+/* ── Compact Alert-Overview table (one row per symbol) ─────────────────── */
+.alert-table { width:100%; border-collapse:collapse; table-layout:auto; }
+.alert-table td { padding:.45rem .4rem; border-bottom:1px solid var(--border);
+  white-space:nowrap; font-size:var(--fs-2); }
+.alrow { cursor:pointer; }
+.alrow:hover { background:var(--surface-2); }
+.alrow.is-trig { background:var(--neg-weak); }
+.alrow.is-off { opacity:.5; }
+.alrow__symbtn { background:none; border:none; padding:0; cursor:pointer; font-weight:700;
+  color:var(--accent); font-size:var(--fs-2); }
+.alrow__symbtn:hover { text-decoration:underline; }
+.alrow__name { color:var(--muted); max-width:9rem; overflow:hidden; text-overflow:ellipsis; }
+.alrow__trig { font-variant-numeric:tabular-nums; }
+.alrow__delta { font-variant-numeric:tabular-nums; }
+.alrow__delta.pos { color:var(--pos); }
+.alrow__delta.neg { color:var(--neg); }
+.adv-badge { display:inline-block; padding:.1rem .45rem; border-radius:999px; font-size:var(--fs-1);
+  font-weight:700; }
+.adv-pos   { background:var(--pos-weak); color:var(--pos); }
+.adv-neg   { background:var(--neg-weak); color:var(--neg); }
+.adv-watch { background:var(--surface-3); color:var(--muted); }
+.alrow__plusminus { width:26px; height:26px; border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text); cursor:pointer; font-size:var(--fs-3); line-height:1; }
+.alrow__plusminus:hover { background:var(--surface-3); }
+
+/* ── News tab (Markets modal): Märkte / Portfolio / Quellen ─────────────── */
+.markets-modal .mk-tabs { margin-bottom:0; }
+.mk-tabpanes { flex:1; display:flex; flex-direction:column; min-height:0; }
+.mk-tabpanes > .tab-panel { display:none; }
+.mk-tabpanes > .tab-panel.active { display:flex; flex-direction:column; flex:1; min-height:0; }
+
+.news-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
+.news-subtabs { margin-bottom:var(--s-3); }
+.news-subtabs .tab-btn { padding:var(--s-2) var(--s-3); font-size:var(--fs-2); }
+.news-pane { display:none; }
+.news-pane.active { display:block; flex:1; min-height:0; overflow-y:auto; }
+
+.news-chips { display:flex; flex-wrap:wrap; gap:var(--s-1); margin-bottom:var(--s-3); }
+.news-chips .pill { cursor:pointer; font-size:var(--fs-1); padding:var(--s-1) var(--s-2); }
+
+.news-hint {
+  display:flex; align-items:center; gap:var(--s-2); padding:var(--s-2) var(--s-3);
+  margin-bottom:var(--s-3); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface-2); color:var(--muted); font-size:var(--fs-1);
+}
+.news-hint svg { flex:none; }
+.news-item__tag { border:1px solid var(--border); border-radius:var(--r-pill); padding:0 var(--s-2); }
+.news-src-count { margin-bottom:var(--s-2); }
+/* Live-Feed: Refresh rechts in der Chip-Zeile + Statuszeile (Stand/Fehler) */
+.news-spacer { flex:1; }
+.news-refresh { width:28px; height:28px; flex:none; }
+.news-status { margin-bottom:var(--s-2); }
+.news-status__err { color:var(--warn); }
+
+/* Sub-tab Quellen: add form + source list */
+.news-src-form { display:flex; gap:var(--s-2); margin-bottom:var(--s-3); }
+.news-src-form select, .news-src-form input {
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  padding:var(--s-2) var(--s-3); border-radius:var(--r-1); font-size:var(--fs-2); font-family:inherit;
+  min-width:0;
+}
+.news-src-form input[type="url"] { flex:1; }
+.news-src-form #ns-label { flex:0 1 30%; }
+.news-src-item { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-2) 0; border-bottom:1px solid var(--border); }
+.news-src-item:last-child { border-bottom:none; }
+.news-src-item__icon { display:flex; color:var(--muted); flex:none; }
+.news-src-item__label { font-size:var(--fs-2); font-weight:var(--fw-med); white-space:nowrap; }
+.news-src-item__url { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:var(--fs-1); }
+
+/* ── Kontroll-Modal: Kriterien-Auswahl für Bulk-Aktionen ─────────────────── */
+.control-modal { width:min(560px,100%); }
+.control-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-5); }
+.ctl-bucket { font-size:var(--fs-2); color:var(--muted); font-weight:var(--fw-reg); }
+.ctl-row { display:flex; align-items:center; gap:var(--s-3); margin-bottom:var(--s-2); }
+.ctl-label { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); letter-spacing:0.03em; min-width:44px; }
+.ctl-range__val { font-size:var(--fs-3); font-variant-numeric:tabular-nums; min-width:58px; text-align:right; }
+.ctl-noscore { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); color:var(--muted); margin-bottom:var(--s-4); cursor:pointer; }
+.ctl-noscore input { accent-color:var(--accent); width:16px; height:16px; }
+.ctl-drops { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-bottom:var(--s-4); }
+.ctl-drops .fms-btn { max-width:none; }
+.ctl-hits { font-size:var(--fs-2); color:var(--muted); padding:var(--s-2) var(--s-3); background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-1); }
+.ctl-hits b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Dual-Range-Slider: zwei überlagerte native Slider; nur die Daumen fangen
+   Pointer-Events, Track + Füllung sind eigene Elemente darunter. */
+.ctl-range { position:relative; flex:1; height:32px; min-width:0; }
+.ctl-range__track {
+  position:absolute; top:50%; left:0; right:0; height:4px; transform:translateY(-50%);
+  background:var(--surface-3); border:1px solid var(--border); border-radius:var(--r-pill);
+}
+.ctl-range__fill {
+  position:absolute; top:50%; height:6px; transform:translateY(-50%);
+  background:var(--accent); border-radius:var(--r-pill);
+}
+.ctl-range input[type="range"] {
+  position:absolute; inset:0; width:100%; height:32px; margin:0;
+  -webkit-appearance:none; appearance:none; background:none; pointer-events:none;
+}
+.ctl-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; pointer-events:auto; cursor:pointer;
+  width:22px; height:22px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--surface);
+  box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+.ctl-range input[type="range"]::-moz-range-thumb {
+  pointer-events:auto; cursor:pointer; width:18px; height:18px; border-radius:50%;
+  background:var(--accent); border:2px solid var(--surface);
+  box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+.ctl-range input[type="range"]::-moz-range-track { background:none; }
+
+/* ── Indices-Tab (Markets-Modal): Sub-Tabs Branchen / Länder + Tabelle ───── */
+.idx-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
+.idx-head { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-2); }
+.idx-subtabs { margin-bottom:0; border-bottom:none; }
+.idx-subtabs .tab-btn { padding:var(--s-2) var(--s-3); font-size:var(--fs-2); }
+.idx-spacer { flex:1; }
+.idx-refresh { width:28px; height:28px; flex:none; }
+.idx-status { color:var(--muted); font-size:var(--fs-1); margin-bottom:var(--s-2); }
+.idx-panes { flex:1; min-height:0; display:flex; }
+.idx-pane { display:none; }
+.idx-pane.active { display:block; flex:1; min-height:0; overflow-y:auto; }
+
+.idx-tablewrap { overflow-x:auto; }
+.idx-table { width:100%; border-collapse:collapse; font-size:var(--fs-1); }
+.idx-table th, .idx-table td { padding:var(--s-1) var(--s-2); border-bottom:1px solid var(--border); text-align:left; }
+.idx-table thead th {
+  position:sticky; top:0; z-index:1; background:var(--surface);
+  color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); letter-spacing:0.03em; white-space:nowrap;
+}
+.idx-table td.num, .idx-table th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.idx-table tbody tr:hover { background:var(--surface-2); }
+.idx-table .pos { color:var(--pos); }
+.idx-table .neg { color:var(--neg); }
+.idx-code { white-space:nowrap; }
+.idx-code__txt { font-weight:var(--fw-bold); font-family:var(--font-mono); }
+/* Name + Indexstand gestapelt; zweite Zeile eine Stufe kleiner (STYLEGUIDE §2) */
+.idx-name { min-width:0; }
+.idx-name__row { display:flex; align-items:center; gap:var(--s-1); min-width:0; }
+.idx-name__txt { font-size:var(--fs-1); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
+/* Zahlen stammen vom Stellvertreter-ETF, nicht vom Index – muss auffallen. */
+.idx-etf {
+  flex:none; font-size:11px; font-weight:var(--fw-bold); line-height:1.4; white-space:nowrap;
+  padding:0 var(--s-1); border-radius:var(--r-pill);
+  background:var(--warn); color:var(--surface);
+}
+.idx-name__sub { display:block; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:26ch; }
+.idx-link { width:1%; white-space:nowrap; }
+
+/* ── Sektoren-Heatmap (Markets-Modal): 5 Mega-Cluster × 4 Horizonte ──────── */
+.heat-loading { color:var(--muted); font-size:var(--fs-2); padding:var(--s-4) 0; }
+.heat-grid { display:flex; flex-direction:column; gap:var(--s-1); }
+.heat-row { display:flex; gap:var(--s-1); align-items:stretch; flex-wrap:nowrap; }
+.heat-name {
+  flex:0 0 128px; min-width:0; display:flex; flex-direction:column; justify-content:center;
+  font-size:var(--fs-2); font-weight:var(--fw-med); line-height:1.2;
+}
+.heat-name small { color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-reg); }
+/* Feste kleine Spaltenzahl → eine Zeile, gleich breite, schrumpfende Zellen (§5) */
+.heat-col, .heat-cell { flex:1 1 0; min-width:0; text-align:center; white-space:nowrap; }
+.heat-row--head .heat-col { color:var(--muted); font-size:var(--fs-1); font-weight:var(--fw-bold); letter-spacing:0.03em; }
+.heat-cell {
+  padding:var(--s-3) var(--s-1); border-radius:var(--r-1); background:var(--surface-3);
+  font-size:var(--fs-3); font-weight:var(--fw-med); font-variant-numeric:tabular-nums;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.heat-note { color:var(--muted); font-size:var(--fs-1); margin-top:var(--s-3); }
+@media (max-width:479px) { .heat-name { flex-basis:96px; font-size:var(--fs-1); } }
+
+/* ── Vergleichs-Modal (Bulk-Auswahl → Waage-Icon) ─────────────────────────── */
+.cmp-modal { max-width:760px; width:100%; }
+.cmp-count {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  background:var(--surface-3); border-radius:var(--r-pill); padding:1px 7px; margin-left:var(--s-1);
+}
+.cmp-warn {
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap;
+  padding:var(--s-2); margin-bottom:var(--s-2);
+  background:var(--warn-weak, var(--surface-2)); border:1px solid var(--border);
+  border-radius:var(--r-2); font-size:var(--fs-1); color:var(--muted);
+}
+.cmp-tabs { margin-bottom:var(--s-2); }
+.cmp-pane { min-width:0; }
+.cmp-note { font-size:var(--fs-1); color:var(--muted); line-height:1.5; margin-top:var(--s-2); }
+.cmp-note--cap { margin:0 0 var(--s-2); }
+.cmp-load {
+  display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap;
+  margin-bottom:var(--s-2); font-size:var(--fs-1); color:var(--muted);
+}
+
+/* Gewinner-Leiste: gleich breite Blöcke in EINER Zeile (Styleguide §5) */
+.cmp-winners { display:flex; flex-wrap:nowrap; gap:var(--s-1); margin-bottom:var(--s-2); }
+.cmp-win {
+  flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:0; padding:var(--s-1);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2);
+  line-height:1.2; overflow:hidden;
+}
+.cmp-win__lbl { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.cmp-win__sym { font-size:var(--fs-3); font-weight:var(--fw-bold); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.cmp-win__val { font-size:var(--fs-2); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+/* Matrix: erste Spalte fixiert, Rest horizontal scrollbar */
+.cmp-matrix-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.cmp-matrix { border-collapse:separate; border-spacing:0; font-size:var(--fs-1); width:max-content; min-width:100%; }
+.cmp-matrix th, .cmp-matrix td { padding:var(--s-1) var(--s-2); border-bottom:1px solid var(--border); white-space:nowrap; }
+.cmp-matrix td.num { text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+.cmp-th { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-bold); text-align:right;
+  background:var(--surface); position:sticky; top:0; z-index:1; }
+.cmp-th--group { border-left:2px solid var(--border); }
+.cmp-th--sym {
+  position:sticky; left:0; z-index:2; background:var(--surface); text-align:left;
+  display:flex; align-items:center; gap:var(--s-1);
+}
+.cmp-matrix thead .cmp-th--sym { z-index:3; }
+.cmp-sym { font-weight:var(--fw-bold); }
+.cmp-exch { font-size:11px; color:var(--muted); }
+.cmp-best { font-weight:var(--fw-bold); }
+.cmp-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; display:inline-block; }
+
+/* Legende – Text in Text-Tokens, Farbe trägt nur das Kästchen */
+.cmp-legend { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-bottom:var(--s-2); }
+.cmp-leg { display:inline-flex; align-items:center; gap:var(--s-1); font-size:var(--fs-1); color:var(--text); }
+
+/* Charts */
+.cmp-svg { display:block; width:100%; height:auto; overflow:visible; }
+.cmp-axis { stroke:var(--border); stroke-width:1; }
+.cmp-median { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.5; }
+.cmp-base { stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; opacity:.6; }
+.cmp-axlbl { font-size:9px; fill:var(--muted); font-family:var(--font-ui); }
+.cmp-dot__c { stroke:var(--surface); stroke-width:2; }
+.cmp-dot__lbl { font-size:10px; fill:var(--text); font-family:var(--font-ui); font-weight:var(--fw-bold); }
+.cmp-endlbl { font-size:10px; font-family:var(--font-ui); font-weight:var(--fw-bold); }
+.cmp-line { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+
+@media (max-width:479px) {
+  .cmp-win__sym { font-size:var(--fs-2); }
+  .cmp-win__val { font-size:var(--fs-1); }
+}
+
+/* ── Nachkauf-Kalkulator (Standard-Ansicht, ★-Zeilen) ────────────────────── */
+
+/* Zeilenaktion: neutral, wird erst beim Hover zum Akzent — der Rechner ist ein
+   Werkzeug, kein Statusmarker wie ★ / ✓. */
+.act-btn--calc { color:var(--muted); }
+.act-btn--calc:hover { background:var(--accent-weak); color:var(--accent); }
+
+.nk-modal { max-width:440px; }
+
+/* Kontextzeile: Einstand · Stück · Live — eine Zeile, gleich breite Spalten,
+   kein Umbruch (STYLEGUIDE §5). */
+.nk-context {
+  display:flex; flex-wrap:nowrap; gap:var(--s-2);
+  margin-bottom:var(--s-4);
+  padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface-2);
+  font-size:var(--fs-1); color:var(--muted);
+}
+.nk-context > span { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:1px; white-space:nowrap; }
+.nk-context b { font-size:var(--fs-2); color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Buy/Sell-Umschalter */
+.nk-seg { display:flex; gap:var(--s-1); margin-bottom:var(--s-3); }
+.nk-seg__btn {
+  flex:1 1 0; min-width:0; padding:var(--s-2) var(--s-1);
+  border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--muted);
+  font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; cursor:pointer;
+}
+.nk-seg__btn.is-active.nk-seg__btn--buy  { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.nk-seg__btn.is-active.nk-seg__btn--sell { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+
+.nk-fields { display:flex; gap:var(--s-2); margin-bottom:var(--s-3); }
+.nk-field { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:var(--s-1); }
+.nk-field label { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+.nk-field input {
+  width:100%; padding:var(--s-2); border:1px solid var(--border); border-radius:var(--r-1);
+  background:var(--surface); color:var(--text);
+  font-family:var(--font-mono); font-size:var(--fs-3); font-variant-numeric:tabular-nums;
+}
+
+/* Ergebnis: zweispaltige Stat-Blöcke, Nebenwert immer eine Stufe kleiner (§2) */
+.nk-out {
+  display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3);
+  padding:var(--s-3); border-radius:var(--r-1); background:var(--surface-2);
+}
+.nk-out__row { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.nk-out__lbl { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); letter-spacing:.02em; }
+.nk-out__val {
+  font-size:var(--fs-4); font-weight:var(--fw-bold);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.nk-out__sub { display:block; font-size:var(--fs-2); font-weight:var(--fw-reg); color:var(--muted); }
+.nk-out__val.pos { color:var(--pos); }
+.nk-out__val.neg { color:var(--neg); }
+.nk-out__val.pos .nk-out__sub, .nk-out__val.neg .nk-out__sub { color:inherit; }
+.nk-out__hint { grid-column:1 / -1; font-size:var(--fs-2); color:var(--muted); }
+
+/* ── Bias-Zelle (Standard-Ansicht) ───────────────────────────────────────────
+   Ring mit drei Segmenten (Regime · Trend · Momentum) um das Bulle/Bär-Icon,
+   rechts der signierte Score mit dem Trendalter als kleinerer zweiter Zeile
+   (STYLEGUIDE §2: Nebenwert immer eine Stufe kleiner als der Hauptwert). */
+.bias-cell { display:flex; align-items:center; gap:var(--s-2); justify-content:flex-end; }
+.bias-ring { flex:0 0 auto; }
+.bias-ring--pos  { color:var(--pos); }
+.bias-ring--neg  { color:var(--neg); }
+.bias-ring--flat { color:var(--muted); }
+
+.bias-seg { stroke:currentColor; }
+.bias-seg--up   { stroke:var(--pos); }
+.bias-seg--dn   { stroke:var(--neg); }
+.bias-seg--flat { stroke:var(--muted); opacity:.25; }
+
+.bias-val { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.bias-val.pos  { color:var(--pos); }
+.bias-val.neg  { color:var(--neg); }
+.bias-val.flat { color:var(--muted); }
+/* SMA200-Trend (Spalte S200Ø): Pfeil + Ø-Wachstum je Monat. Der Pfeil trägt die
+   Richtung des letzten Monats, die Zahl das Tempo über das ganze Fenster. */
+.sma-tr { display:inline-flex; align-items:baseline; gap:3px; white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+.sma-tr__arrow { font-size:var(--fs-1); line-height:1; }
+.sma-tr--side { color:var(--muted); }
+
+/* Trenddauer (eigene Spalte): gemessene Werte stehen kräftiger als die
+   Näherungen — der Unterschied zwischen „47T gemessen" und „≥3M geschätzt"
+   muss ohne Tooltip sichtbar sein. */
+.tage { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tage--td { font-weight:var(--fw-bold); }
+.tage--approx { color:var(--muted); }
+
+/* ── Trend-Tab (Detail-Sheet) ────────────────────────────────────────────── */
+
+.tb-head { display:flex; align-items:center; gap:var(--s-4); margin-bottom:var(--s-4); }
+.tb-head__txt { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.tb-head__val { font-size:var(--fs-6); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; line-height:1.1; }
+.tb-head__val.pos { color:var(--pos); } .tb-head__val.neg { color:var(--neg); }
+.tb-head__val.flat { color:var(--muted); }
+.tb-head__lbl { font-size:var(--fs-4); font-weight:var(--fw-med); }
+.tb-head__age { font-size:var(--fs-2); color:var(--muted); }
+
+.tb-levels { display:flex; flex-direction:column; gap:var(--s-3);
+  padding:var(--s-3); border:1px solid var(--border); border-radius:var(--r-2);
+  background:var(--surface-2); margin-bottom:var(--s-4); }
+.tb-level__top { display:flex; align-items:center; gap:var(--s-2); }
+.tb-level__dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto;
+  background:currentColor; }
+/* Der Punkt greift dieselben Segment-Klassen wie der Ring — die Farbe der
+   Ebene ist damit garantiert identisch mit ihrem Ring-Segment. */
+.tb-level__dot.bias-seg--up   { color:var(--pos); }
+.tb-level__dot.bias-seg--dn   { color:var(--neg); }
+.tb-level__dot.bias-seg--flat { color:var(--muted); opacity:.4; }
+.tb-level__name { font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; }
+.tb-level__val { font-size:var(--fs-2); font-weight:var(--fw-bold); flex:0 0 auto;
+  font-variant-numeric:tabular-nums; text-align:right; }
+.tb-level__val.pos { color:var(--pos); } .tb-level__val.neg { color:var(--neg); }
+.tb-level__w { font-size:var(--fs-1); color:var(--muted); flex:0 0 auto; text-align:right; }
+.tb-level__checks { font-size:var(--fs-1); color:var(--muted); margin-top:2px; padding-left:18px; }
+
+/* Signierter Balken: Nulllinie in der Mitte, Ausschlag nach beiden Seiten */
+.tb-bar { position:relative; flex:1 1 30px; min-width:0; height:6px;
+  border-radius:var(--r-pill); background:var(--surface-3); }
+.tb-bar::after { content:''; position:absolute; left:50%; top:-2px; bottom:-2px;
+  width:1px; background:var(--border); }
+.tb-bar__fill { position:absolute; top:0; bottom:0; border-radius:var(--r-pill); }
+.tb-bar__fill.pos { background:var(--pos); } .tb-bar__fill.neg { background:var(--neg); }
+.tb-bar--empty { opacity:.4; }
+
+.tb-meta { font-size:var(--fs-1); color:var(--muted); border-top:1px solid var(--border);
+  padding-top:var(--s-2); }
+
+/* Legende: standardmäßig zu — die Erklärung braucht man einmal, danach nicht
+   mehr. Summary wie .pv-levels-details, damit die Aufklapper im Sheet gleich
+   aussehen. */
+.tb-legend { margin-bottom:var(--s-4); }
+.tb-legend > summary { cursor:pointer; list-style:revert;
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em; }
+.tb-legend[open] > summary { margin-bottom:var(--s-2); }
+.tb-legend p { font-size:var(--fs-2); color:var(--muted); line-height:var(--lh); margin:0; }
+.tb-legend b { color:var(--text); }
+
+.tb-spark { width:100%; height:56px; display:block; }
+.tb-spark__pos { fill:var(--pos); opacity:.55; stroke:none; }
+.tb-spark__neg { fill:var(--neg); opacity:.55; stroke:none; }
+.tb-spark__zero { stroke:var(--border); stroke-width:1; vector-effect:non-scaling-stroke; }
+.tb-spark__axis { display:flex; justify-content:space-between;
+  font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-3); }
+
+.tb-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:var(--s-3); margin-bottom:var(--s-4); }
+/* Vier gleichrangige Kacheln (Break-even je Stellschraube): feste 2×2-Aufteilung
+   statt auto-fit — sonst bleibt bei drei Spalten die vierte allein in Zeile 2,
+   und die Unterzeilen brechen in den schmalen Kacheln dreizeilig um. */
+.tb-stats--pairs { grid-template-columns:repeat(2,1fr); }
+.tb-stat { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.tb-stat__lbl { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em;
+  /* Ein langes Einzelwort (z. B. „WACHSTUMSANNAHME") kann nicht an Leerzeichen
+     umbrechen und lief sonst in die Nachbarkachel. */
+  overflow-wrap:break-word; min-width:0; }
+.tb-stat__val { font-size:var(--fs-4); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; }
+.tb-stat__sub { font-size:var(--fs-2); color:var(--muted); }
+
+.tb-frag { list-style:none; margin:0 0 var(--s-2); padding:0;
+  display:flex; flex-direction:column; gap:var(--s-1); }
+.tb-frag li { font-size:var(--fs-2); color:var(--muted); }
+.tb-frag li.is-warn { color:var(--warn); font-weight:var(--fw-med); }
+
+.tb-hint { font-size:var(--fs-2); color:var(--muted); line-height:var(--lh); margin:0 0 var(--s-3); }
+
+/* Fazit-Satz: fasst Ebenen, Verlauf und Fragilität zusammen. Etwas kräftiger
+   als die Hinweistexte darüber — er ist die Aussage, nicht die Fußnote. */
+.tb-summary { font-size:var(--fs-2); line-height:var(--lh); margin:var(--s-2) 0 0;
+  padding:var(--s-2) var(--s-3); border-left:3px solid var(--border);
+  background:var(--surface-2); border-radius:0 var(--r-1) var(--r-1) 0; }
+.tb-hint.is-warn { color:var(--warn); }

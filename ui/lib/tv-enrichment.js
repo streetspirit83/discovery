@@ -14,8 +14,65 @@ import { computeCycleScore }         from './tv-cycle-score.js';
 import { computeTrendStrengthScore } from './tv-trend-strength-score.js';
 import { computeEntryScore }         from './tv-entry-score.js';
 import { computeEntryPrices }        from './tv-entry-prices.js';
+import { computeOverallScore }       from './tv-overall-score.js';
+import { computeMomentumCheck }      from './tv-momentum-check.js';
+import { normalizeExchange }         from './exchange-map.js';
+import { assetTypeFromTv }           from './instrument-type.js?v=20260831a';
 
-const EXCHANGE_TO_MARKET = {
+const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
+
+/* MACD histogram (macd − signal) — the value whose sign-flip we track. */
+function macdHist(tv) {
+  return tv.macd != null && tv.macd_signal != null ? +(tv.macd - tv.macd_signal).toFixed(4) : null;
+}
+
+/* Build the per-day closing record from the freshly computed tv_data. Every
+ * tracked score is captured so the dashboard can derive a gapless day-over-day
+ * time series for each of them (the last fetch of a day is the closing value). */
+function snapshotRecord(tv) {
+  const overall = computeOverallScore({
+    perfW:         tv.perf_w,
+    perf1M:        tv.perf_1m,
+    change1D:      tv.change_1d,
+    ebitdaGrowth:  tv.ebitda_yoy_growth_fy ?? tv.ebitda_yoy_growth_ttm,
+    rating1M:      tv.recommend_all_1m,
+    trendStrength: tv.trend_strength_score?.total,
+    entry:         tv.entry_score?.total,
+    health:        tv.health_score?.total,
+    cycle:         tv.cycle_score?.total,
+  })?.total ?? null;
+  return {
+    d:              (tv.fetched_at ?? new Date().toISOString()).slice(0, 10),
+    overall,
+    trend_strength: tv.trend_strength_score?.total ?? null,
+    entry:          tv.entry_score?.total ?? null,
+    health:         tv.health_score?.total ?? null,
+    cycle:          tv.cycle_score?.total ?? null,
+    trend:          tv.trend_score?.total ?? null,
+    mom:            computeMomentumCheck(tv)?.total ?? null,
+    rsi:            tv.rsi ?? null,
+    macd_hist:      macdHist(tv),
+    close:          tv.close  ?? null,
+    sma20:          tv.sma20  ?? null,
+    sma50:          tv.sma50  ?? null,
+    sma100:         tv.sma100 ?? null,
+    sma200:         tv.sma200 ?? null,
+  };
+}
+
+const dayOf = (s) => s?.d ?? (s?.at ? String(s.at).slice(0, 10) : null);
+
+/* Upsert today's closing record into the per-day series (newest first). A later
+ * same-day fetch replaces the head ("letzter Wert zählt"); a new day prepends.
+ * Capped at SNAPSHOT_MAX so consecutive days net into a gapless time series. */
+function upsertSnapshot(history, rec) {
+  const hist = Array.isArray(history) ? history.slice() : [];
+  if (hist[0] && dayOf(hist[0]) === rec.d) hist[0] = rec;
+  else hist.unshift(rec);
+  return hist.slice(0, SNAPSHOT_MAX);
+}
+
+export const EXCHANGE_TO_MARKET = {
   NASDAQ:   'america',
   NYSE:     'america',
   AMEX:     'america',
@@ -24,14 +81,15 @@ const EXCHANGE_TO_MARKET = {
   EURONEXT: 'france',
   MIL:      'italy',
   BME:      'spain',
+  VIE:      'austria',
   OMXSTO:   'sweden',
   SIX:      'switzerland',
-  OMXCO:    'denmark',
-  OMXNO:    'norway',
+  OMXCOP:   'denmark',
+  OSL:      'norway',
   OMXHEX:   'finland',
 };
 
-const TV_PREFIX_MAP = {
+export const TV_PREFIX_MAP = {
   NASDAQ:   'NASDAQ',
   NYSE:     'NYSE',
   AMEX:     'AMEX',
@@ -40,19 +98,21 @@ const TV_PREFIX_MAP = {
   EURONEXT: 'EURONEXT',
   MIL:      'MIL',
   BME:      'BME',
+  VIE:      'VIE',
   OMXSTO:   'OMXSTO',
   SIX:      'SIX',
-  OMXCO:    'OMXCO',
-  OMXNO:    'OMXNO',
+  OMXCOP:   'OMXCOP',
+  OSL:      'OSL',
   OMXHEX:   'OMXHEX',
 };
 
 const EXCHANGE_CURRENCY = {
   NASDAQ: 'USD', NYSE: 'USD', AMEX: 'USD',
-  XETR: 'EUR', EURONEXT: 'EUR', MIL: 'EUR', BME: 'EUR',
-  OMXSTO: 'SEK', OMXCO: 'DKK', OMXNO: 'NOK', OMXHEX: 'EUR',
+  XETR: 'EUR', EURONEXT: 'EUR', MIL: 'EUR', BME: 'EUR', VIE: 'EUR',
+  OMXSTO: 'SEK', OMXCOP: 'DKK', OSL: 'NOK', OMXHEX: 'EUR',
   LSE: 'GBP', SIX: 'CHF',
 };
+export { EXCHANGE_CURRENCY };
 
 const TV_COLUMNS = [
   'description',               // 0
@@ -159,6 +219,58 @@ const TV_COLUMNS = [
   'Pivot.M.Classic.S1',                        // 94
   'Pivot.M.Classic.R1',                        // 95
   'ATR',                                       // 96
+  // Intraday price fields
+  'close|1',                                   // 97 — 1-Minuten Intraday-Kurs
+  'open',                                      // 98 — heutiger Open
+  'change_from_open',                          // 99 — Intraday-Performance seit Open
+  // Upside v2 fields
+  'Volatility.M',                              // 100 — Ø Tagesvolatilität über 1 Monat (%)
+  'ATRP',                                      // 101 — ATR in Prozent
+  'Perf.3M',                                   // 102
+  'Perf.6M',                                   // 103
+  'Pivot.M.Classic.R2',                        // 104
+  'Pivot.M.Classic.S2',                        // 105
+  'High.3M',                                   // 106
+  'Low.3M',                                    // 107
+  'recommendation_total',                      // 108 — Anzahl Analysten
+  'isin',                                      // 109 — ISIN (für TR/LS-Abgleich)
+  'SMA20',                                     // 110 — SMA 20 (Preis-Tabelle)
+  'SMA100',                                    // 111 — SMA 100 (Preis-Tabelle)
+  // Trade view: weekly + monthly classic pivots, Demark 1W, 20-day Donchian (daily)
+  'Pivot.M.Classic.R1|1W',                     // 112
+  'Pivot.M.Classic.R2|1W',                     // 113
+  'Pivot.M.Classic.R3|1W',                     // 114
+  'Pivot.M.Classic.S1|1W',                     // 115
+  'Pivot.M.Classic.S2|1W',                     // 116
+  'Pivot.M.Classic.S3|1W',                     // 117
+  'Pivot.M.Classic.R3',                        // 118 — 1M R3 (R1/R2/S1/S2 existieren schon)
+  'Pivot.M.Classic.S3',                        // 119 — 1M S3
+  'Pivot.M.Demark.R1|1W',                      // 120 — Breakout-Referenz
+  'Pivot.M.Demark.S1|1W',                      // 121
+  'DonchCh20.Upper',                           // 122 — high|20 (Tages-Timeframe)
+  'DonchCh20.Lower',                           // 123 — low|20 (Tages-Timeframe)
+  /* Analysten-Kursziele. Gegen den Scanner vermessen (US + XETR), nicht aus
+     einer Doku übernommen: AAPL/F/SMCI/SAP/RHM liefern alle vier Werte, ETFs
+     (SPY) erwartungsgemäss nichts. Die Preise stehen in der **Währung des
+     Instruments** (SAP in EUR) — sie laufen deshalb durch dieselbe
+     `convertTv`-Umrechnung wie close/high/low.
+     Nicht vorhanden, trotz sechs geprüfter Namensvarianten: die Anzahl der
+     Kursziel-Schätzungen und ihr Datum (`price_target_estimates_num`,
+     `price_target_date` — beide immer null). Wie alt ein Ziel ist, sagt TV
+     nicht; für die Breite der Abdeckung steht `recommendation_total`. */
+  'price_target_average',                      // 124
+  'price_target_high',                         // 125
+  'price_target_low',                          // 126
+  'price_target_median',                       // 127
+  'recommendation_buy',                        // 128
+  'recommendation_hold',                       // 129
+  'recommendation_sell',                       // 130
+  /* Instrumententyp. `type` ist grob ("stock" | "fund" | "dr" | …), die
+     Feinheit steckt in `typespecs` (["etf"] / ["common"] / ["reit"] …) —
+     erst beide zusammen trennen ETF von Einzelwert zuverlässig. Auswertung
+     in `instrument-type.js`. */
+  'type',                                      // 131
+  'typespecs',                                 // 132
 ];
 
 const COL = {
@@ -263,6 +375,47 @@ recommendMA1M: 53,
   pivotS1:               94,
   pivotR1:               95,
   atr:                   96,
+  // Intraday price fields
+  close1m:               97,
+  openD:                 98,
+  changeFromOpen:        99,
+  // Upside v2 fields
+  volatilityM:           100,
+  atrp:                  101,
+  perf3M:                102,
+  perf6M:                103,
+  pivotR2:               104,
+  pivotS2:               105,
+  high3M:                106,
+  low3M:                 107,
+  recommendationTotal:   108,
+  isin:                  109,
+  sma20:                 110,
+  sma100:                111,
+  // Trade view fields
+  pivotR1_1w:            112,
+  pivotR2_1w:            113,
+  pivotR3_1w:            114,
+  pivotS1_1w:            115,
+  pivotS2_1w:            116,
+  pivotS3_1w:            117,
+  pivotR3:               118,
+  pivotS3:               119,
+  pivotDemarkR1_1w:      120,
+  pivotDemarkS1_1w:      121,
+  donch20UpperD:         122,
+  donch20LowerD:         123,
+  // Analysten-Kursziele + Empfehlungsverteilung
+  ptAverage:             124,
+  ptHigh:                125,
+  ptLow:                 126,
+  ptMedian:              127,
+  recBuy:                128,
+  recHold:               129,
+  recSell:               130,
+  // Instrumententyp
+  instrumentType:        131,
+  typespecs:             132,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -347,9 +500,18 @@ function formatEarningsDate(ts) {
 }
 
 function buildUpdates(d, candidate) {
+  // Instrumententyp aus dem Scanner statt der früheren Konstante 'Stock' —
+  // die Tabelle beschriftet damit ETF vs. Aktie. Liefert der Scanner nichts
+  // (unbekannte Spalte ⇒ null, siehe CLAUDE.md), fällt `instrumentType()`
+  // später auf die Namensheuristik zurück.
+  const tvType  = d[COL.instrumentType] ?? null;
+  const tvSpecs = d[COL.typespecs] ?? null;
+
   const updates = {
-    asset_type: 'Stock',
+    asset_type: assetTypeFromTv(tvType, tvSpecs),
     scan_date:  new Date().toISOString().split('T')[0],
+    // Backfill ISIN from TV so the Trade Republic / LS check can match reliably.
+    isin: d[COL.isin] || candidate.isin || null,
     tv_data: {
       rating:        d[COL.rating]       ?? null,
       pe_ttm:        d[COL.pe]           ?? null,
@@ -439,7 +601,9 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       // Trend Strength Score fields
       aroon_up:   d[COL.aroonUpD]   ?? null,
       aroon_down: d[COL.aroonDownD] ?? null,
+      sma20:      d[COL.sma20]      ?? null,
       sma50:      d[COL.sma50]      ?? null,
+      sma100:     d[COL.sma100]     ?? null,
       sma200:     d[COL.sma200]     ?? null,
       ema10:      d[COL.ema10]      ?? null,
       volume:     d[COL.volume]     ?? null,
@@ -449,6 +613,45 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       pivot_s1:   d[COL.pivotS1]   ?? null,
       pivot_r1:   d[COL.pivotR1]   ?? null,
       atr:        d[COL.atr]       ?? null,
+      // Intraday price fields
+      close_1m:         d[COL.close1m]        ?? null,
+      open:             d[COL.openD]          ?? null,
+      change_from_open: d[COL.changeFromOpen] ?? null,
+      // Upside v2 fields
+      volatility_m:         d[COL.volatilityM]         ?? null,
+      atrp:                 d[COL.atrp]                ?? null,
+      perf_3m:              d[COL.perf3M]              ?? null,
+      perf_6m:              d[COL.perf6M]              ?? null,
+      pivot_r2:             d[COL.pivotR2]             ?? null,
+      pivot_s2:             d[COL.pivotS2]             ?? null,
+      high_3m:              d[COL.high3M]              ?? null,
+      low_3m:               d[COL.low3M]               ?? null,
+      recommendation_total: d[COL.recommendationTotal] ?? null,
+      // Analysten-Kursziele (Instrumentenwährung) + Empfehlungsverteilung
+      pt_average:           d[COL.ptAverage]           ?? null,
+      pt_high:              d[COL.ptHigh]              ?? null,
+      pt_low:               d[COL.ptLow]               ?? null,
+      pt_median:            d[COL.ptMedian]            ?? null,
+      rec_buy:              d[COL.recBuy]              ?? null,
+      rec_hold:             d[COL.recHold]             ?? null,
+      rec_sell:             d[COL.recSell]             ?? null,
+      // Trade view fields (weekly/monthly pivots, Demark 1W, 20-day Donchian)
+      pivot_r1_1w:          d[COL.pivotR1_1w]          ?? null,
+      pivot_r2_1w:          d[COL.pivotR2_1w]          ?? null,
+      pivot_r3_1w:          d[COL.pivotR3_1w]          ?? null,
+      pivot_s1_1w:          d[COL.pivotS1_1w]          ?? null,
+      pivot_s2_1w:          d[COL.pivotS2_1w]          ?? null,
+      pivot_s3_1w:          d[COL.pivotS3_1w]          ?? null,
+      pivot_r3:             d[COL.pivotR3]             ?? null,
+      pivot_s3:             d[COL.pivotS3]             ?? null,
+      pivot_demark_r1_1w:   d[COL.pivotDemarkR1_1w]    ?? null,
+      pivot_demark_s1_1w:   d[COL.pivotDemarkS1_1w]    ?? null,
+      high_20d:             d[COL.donch20UpperD]       ?? null,
+      low_20d:              d[COL.donch20LowerD]       ?? null,
+      // Rohwerte des Typs mitschreiben, damit sich die Einordnung später
+      // nachvollziehen (und ohne neuen Abruf verfeinern) lässt.
+      instrument_type:      tvType,
+      typespecs:            Array.isArray(tvSpecs) ? tvSpecs : tvSpecs ? [tvSpecs] : null,
       fetched_at:   new Date().toISOString(),
     },
   };
@@ -546,10 +749,138 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
   const currency = EXCHANGE_CURRENCY[candidate.exchange];
   if (currency) updates.currency = currency;
 
+  // Append today's closing scores to the per-day series so the dashboard can
+  // derive a gapless day-over-day time series (deltas) for every score.
+  updates.tv_data.snapshot = upsertSnapshot(candidate.tv_data?.snapshot, snapshotRecord(updates.tv_data));
+
   return updates;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
+
+/**
+ * Fetches the current EUR/USD rate (USD per 1 EUR) via the TV forex scanner.
+ * Verified response shape: {"totalCount":1,"data":[{"s":"FX_IDC:EURUSD","d":[1.15588]}]}
+ * @returns {Promise<number|null>}
+ */
+export async function fetchFxRate({ backendUrl, secret }) {
+  try {
+    const bodyStr = await proxyPost(backendUrl, secret,
+      'https://scanner.tradingview.com/forex/scan',
+      { symbols: { tickers: ['FX_IDC:EURUSD'] }, columns: ['close'] },
+    );
+    const rate = JSON.parse(bodyStr)?.data?.[0]?.d?.[0];
+    return typeof rate === 'number' && rate > 0 ? rate : null;
+  } catch (err) {
+    console.warn('[TV] FX rate fetch failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Market indicators for the Intra-Day header. Verified TV tickers:
+ *   XETR:DAX · NASDAQ:IXIC (Composite) · TVC:NI225 · TVC:VIX
+ * `change` is today's move %, `perf1m` the trailing 1-month performance %.
+ * @returns {Promise<{label:string,value:number|null,change:number|null,perf1m:number|null}[]>}
+ */
+const MARKET_INDICATORS = [
+  { label: 'DAX',    ticker: 'XETR:DAX' },
+  { label: 'NASDAQ', ticker: 'NASDAQ:IXIC' },
+  { label: 'SOX',    ticker: 'NASDAQ:SOX' },   // PHLX Semiconductor Index
+  { label: 'NIKKEI', ticker: 'TVC:NI225' },
+  { label: 'VIX',    ticker: 'TVC:VIX' },
+];
+
+export async function fetchMarketIndicators({ backendUrl, secret }) {
+  const fallback = MARKET_INDICATORS.map(({ label }) => ({ label, value: null, change: null, perf1m: null }));
+  try {
+    const bodyStr = await proxyPost(backendUrl, secret,
+      'https://scanner.tradingview.com/global/scan',
+      { symbols: { tickers: MARKET_INDICATORS.map((i) => i.ticker), query: { types: [] } }, columns: ['close', 'change', 'Perf.1M'] },
+    );
+    const rows = JSON.parse(bodyStr)?.data ?? [];
+    const byTicker = new Map(rows.map((r) => [r.s, r.d]));
+    return MARKET_INDICATORS.map(({ label, ticker }) => {
+      const d = byTicker.get(ticker);
+      return { label, value: d?.[0] ?? null, change: d?.[1] ?? null, perf1m: d?.[2] ?? null };
+    });
+  } catch (err) {
+    console.warn('[TV] market indicators fetch failed:', err.message);
+    return fallback;
+  }
+}
+
+/**
+ * German regional venue (original exchange code) → TV prefix, all in the
+ * "germany" market. Used as a fallback when the Xetra-normalised lookup
+ * returns no data (value listed only on a regional exchange). Verified
+ * against the TV scanner: FWB, SWB, MUN, DUS, GETTEX, TRADEGATE.
+ */
+const GERMAN_REGIONAL_TV = {
+  FWB: 'FWB', XFRA: 'FWB', FRA: 'FWB', F: 'FWB',
+  STU: 'SWB', XSTU: 'SWB', SWB: 'SWB',
+  MUN: 'MUN', XMUN: 'MUN',
+  DUS: 'DUS', XDUS: 'DUS',
+  GETTEX: 'GETTEX', GAT: 'TRADEGATE', TRADEGATE: 'TRADEGATE',
+  HAM: 'HAM', XHAM: 'HAM', HAN: 'HAN', XHAN: 'HAN',
+};
+
+/**
+ * Euronext is one TV prefix (EURONEXT) spanning several national scanner
+ * markets. A symbols.tickers lookup is scoped to the market in the URL, so
+ * the primary `france` lookup only resolves Paris listings. Amsterdam,
+ * Brussels and Lisbon listings must be retried against their own markets.
+ * Order roughly follows listing volume; the first market that returns data
+ * wins. (`france` is the primary lookup and is intentionally omitted here.)
+ */
+const EURONEXT_FALLBACK_MARKETS = ['netherlands', 'belgium', 'portugal'];
+
+
+/**
+ * Fetches one market group and writes hits into `results`.
+ * @returns {Promise<object[]>} candidates that returned no data
+ */
+async function fetchMarketGroup(market, entries, { backendUrl, secret }, onProgress, results, label) {
+  const tvTickers   = entries.map((e) => e.tvTicker);
+  const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
+  onProgress?.(`📊 ${label} – ${market}: ${tvTickers.join(', ')}…`);
+
+  const requestBody = { markets: [market], symbols: { tickers: tvTickers }, columns: TV_COLUMNS };
+
+  let bodyStr;
+  try {
+    bodyStr = await proxyPost(backendUrl, secret, `https://scanner.tradingview.com/${market}/scan`, requestBody);
+  } catch (err) {
+    console.warn(`[TV] ${market} failed:`, err.message);
+    onProgress?.(`⚠️ ${market}: ${err.message}`);
+    return entries.map((e) => e.candidate);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    console.warn(`[TV] ${market}: JSON parse error on body:`, bodyStr?.slice(0, 300));
+    onProgress?.(`⚠️ ${market}: JSON parse fehlgeschlagen`);
+    return entries.map((e) => e.candidate);
+  }
+
+  const rows = parsed?.data ?? [];
+  console.log(`[TV] ${market} (${label}): totalCount=${parsed?.totalCount}, rows=${rows.length}`);
+  onProgress?.(`✅ ${market}: ${rows.length} Treffer für ${tvTickers.length} Ticker`);
+
+  for (const row of rows) {
+    const candidate = tvTickerMap.get(row.s);
+    if (candidate) results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
+    else console.warn('[TV] No candidate for ticker:', row.s);
+  }
+
+  const missing = entries.filter((e) => !rows.find((r) => r.s === e.tvTicker));
+  if (missing.length) {
+    console.warn('[TV] No TV data for:', missing.map((e) => e.tvTicker));
+  }
+  return missing.map((e) => e.candidate);
+}
 
 /**
  * @param {object[]} candidates
@@ -565,8 +896,12 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
   const noMarket = [];
 
   for (const c of candidates) {
-    const market = EXCHANGE_TO_MARKET[c.exchange];
-    const prefix = TV_PREFIX_MAP[c.exchange];
+    // Normalise legacy/regional codes (e.g. FWB, XSTU) so already-stored
+    // candidates resolve without re-import. Original c.exchange is kept for
+    // the regional fallback below.
+    const ex = normalizeExchange(c.exchange);
+    const market = EXCHANGE_TO_MARKET[ex];
+    const prefix = TV_PREFIX_MAP[ex];
     if (!market || !prefix) {
       console.warn('[TV] Unknown exchange:', c.exchange, 'for', c.symbol);
       noMarket.push(`${c.symbol}(${c.exchange ?? '?'})`);
@@ -585,77 +920,41 @@ export async function fetchTVEnrichment(candidates, { backendUrl, secret, onProg
   }
 
   const results = new Map();
+  const stillMissing = [];
   let marketIdx = 0;
 
   for (const [market, entries] of groups) {
     marketIdx++;
-    const tvTickers = entries.map((e) => e.tvTicker);
-    onProgress?.(`📊 ${marketIdx}/${groups.size} – ${market}: ${tvTickers.join(', ')}…`);
+    const missing = await fetchMarketGroup(
+      market, entries, { backendUrl, secret }, onProgress, results, `${marketIdx}/${groups.size}`,
+    );
+    stillMissing.push(...missing);
+  }
 
-    // Build lookup: tvTicker → candidate
-    const tvTickerMap = new Map(entries.map((e) => [e.tvTicker, e.candidate]));
+  // Fallback: values that returned no data on (Xetra-normalised) lookup but
+  // are listed on a German regional venue → retry with the correct TV prefix.
+  const fbEntries = [];
+  for (const c of stillMissing) {
+    if (results.has(c.id)) continue;
+    const prefix = GERMAN_REGIONAL_TV[String(c.exchange ?? '').toUpperCase()];
+    if (prefix) fbEntries.push({ candidate: c, tvTicker: `${prefix}:${c.symbol}` });
+  }
+  if (fbEntries.length) {
+    onProgress?.(`↩︎ Fallback Regionalbörse: ${fbEntries.length} Ticker…`);
+    await fetchMarketGroup('germany', fbEntries, { backendUrl, secret }, onProgress, results, 'Fallback');
+  }
 
-    const requestBody = {
-      markets: [market],
-      symbols: { tickers: tvTickers },
-      columns: TV_COLUMNS,
-    };
-
-    let bodyStr;
-    try {
-      bodyStr = await proxyPost(backendUrl, secret,
-        `https://scanner.tradingview.com/${market}/scan`,
-        requestBody,
-      );
-    } catch (err) {
-      console.warn(`[TV] ${market} failed:`, err.message);
-      onProgress?.(`⚠️ ${market}: ${err.message}`);
-      continue;
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(bodyStr);
-    } catch (parseErr) {
-      console.warn(`[TV] ${market}: JSON parse error on body:`, bodyStr?.slice(0, 300));
-      onProgress?.(`⚠️ ${market}: JSON parse fehlgeschlagen`);
-      continue;
-    }
-
-    console.group(`[TV] ${market} response`);
-    console.log('[TV] totalCount:', parsed?.totalCount);
-    console.log('[TV] data rows:', parsed?.data?.length ?? 0);
-    // Per-column dump for the first row so we can verify which fields return data
-    const firstRow = parsed?.data?.[0];
-    if (firstRow?.d) {
-      console.group(`[TV] columns for ${firstRow.s}`);
-      TV_COLUMNS.forEach((name, i) => {
-        const v = firstRow.d[i];
-        console.log(`  ${name}: ${v === null ? 'null' : v === undefined ? 'undefined' : JSON.stringify(v)}`);
-      });
-      console.groupEnd();
-    }
-    console.groupEnd();
-
-    const rows = parsed?.data ?? [];
-    onProgress?.(`✅ ${market}: ${rows.length} Treffer für ${tvTickers.length} Ticker`);
-
-    let matched = 0;
-    for (const row of rows) {
-      const candidate = tvTickerMap.get(row.s);
-      if (candidate) {
-        results.set(candidate.id, buildUpdates(row.d ?? [], candidate));
-        matched++;
-      } else {
-        console.warn('[TV] No candidate for ticker:', row.s);
-      }
-    }
-
-    if (matched < tvTickers.length) {
-      const missing = tvTickers.filter((t) => !rows.find((r) => r.s === t));
-      console.warn('[TV] No TV data for:', missing);
-      onProgress?.(`⚠️ ${market}: ${missing.length} Ticker ohne Daten: ${missing.join(', ')}`);
-    }
+  // Fallback: Euronext listings missing after the primary `france` lookup are
+  // likely Amsterdam/Brussels/Lisbon — retry against those markets in turn.
+  let euronextMissing = stillMissing.filter(
+    (c) => !results.has(c.id) && normalizeExchange(c.exchange) === 'EURONEXT',
+  );
+  for (const mkt of EURONEXT_FALLBACK_MARKETS) {
+    if (!euronextMissing.length) break;
+    const fb = euronextMissing.map((c) => ({ candidate: c, tvTicker: `EURONEXT:${c.symbol}` }));
+    onProgress?.(`↩︎ Euronext-Fallback ${mkt}: ${fb.length} Ticker…`);
+    await fetchMarketGroup(mkt, fb, { backendUrl, secret }, onProgress, results, `Euronext/${mkt}`);
+    euronextMissing = euronextMissing.filter((c) => !results.has(c.id));
   }
 
   if (results.size === 0) {

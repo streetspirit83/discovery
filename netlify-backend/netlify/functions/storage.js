@@ -11,7 +11,35 @@ const BLOB_NAMES = {
   inbox: 'discovery-inbox',
   archive: 'discovery-archive',
   export: 'discovery-export',
+  watch: 'discovery-watch',
 };
+
+// Tombstone list: symbol:exchange keys of candidates the user hard-deleted
+// from the inbox. Keeps the scheduled adapters from re-adding them WITHOUT
+// polluting the archive bucket (which is reserved for manual dismissals).
+const TOMBSTONE_KEY = 'discovery-tombstone';
+async function readTombstone(store) {
+  try {
+    const data = await store.get(TOMBSTONE_KEY, { type: 'json' });
+    return Array.isArray(data?.keys) ? data.keys : [];
+  } catch {
+    return [];
+  }
+}
+async function writeTombstone(store, keys) {
+  await store.setJSON(TOMBSTONE_KEY, { updated_at: new Date().toISOString(), keys });
+}
+
+// Server-side config blob (screener presets etc.) – synced across devices.
+const CONFIG_KEY = 'discovery-config';
+function emptyConfig() {
+  return {
+    schema_version: 'discovery-config-1.0',
+    updated_at: new Date().toISOString(),
+    presets: [],
+    alerts_muted: false,
+  };
+}
 
 function log(level, msg, data = {}) {
   process.stdout.write(
@@ -93,6 +121,47 @@ export default async function handler(req) {
 
   const store = getStore({ name: 'discovery-data', consistency: 'strong' });
 
+  // --- op: read_config ---
+  if (op === 'read_config') {
+    log('info', 'storage: read_config');
+    let doc;
+    try {
+      doc = await store.get(CONFIG_KEY, { type: 'json' });
+    } catch {
+      doc = null;
+    }
+    return respond(200, { ok: true, data: doc ?? emptyConfig() });
+  }
+
+  // --- op: write_config ---
+  if (op === 'write_config') {
+    const { config } = body;
+    if (!config || typeof config !== 'object') {
+      return respond(400, { ok: false, error: 'Missing config' });
+    }
+    // Merge with existing so a partial write (e.g. only alerts_muted from the
+    // Alert-Overview) doesn't clobber presets, and vice-versa.
+    let existing;
+    try { existing = await store.get(CONFIG_KEY, { type: 'json' }); } catch { existing = null; }
+    existing = existing ?? emptyConfig();
+    const doc = {
+      schema_version: 'discovery-config-1.0',
+      presets: Array.isArray(config.presets) ? config.presets : (existing.presets ?? []),
+      alerts_muted: typeof config.alerts_muted === 'boolean' ? config.alerts_muted : (existing.alerts_muted ?? false),
+      updated_at: new Date().toISOString(),
+    };
+    await store.setJSON(CONFIG_KEY, doc);
+    log('info', 'storage: write_config', { presets: doc.presets.length, alerts_muted: doc.alerts_muted });
+    return respond(200, { ok: true });
+  }
+
+  // --- op: read_ls_history (nightly LS intraday snapshots, 10-day rolling) ---
+  if (op === 'read_ls_history') {
+    let doc;
+    try { doc = await store.get('discovery-ls-history', { type: 'json' }); } catch { doc = null; }
+    return respond(200, { ok: true, data: doc ?? { history: {}, updated_at: null } });
+  }
+
   // --- op: read ---
   if (op === 'read') {
     if (!blobType || !BLOB_NAMES[blobType]) {
@@ -127,35 +196,9 @@ export default async function handler(req) {
     const exch = (candidate.exchange || 'UNKNOWN').toUpperCase();
     candidate.exchange = exch; // normalise before writing
 
-    // Check archive and export first – no resurrection
-    for (const bt of ['archive', 'export']) {
-      const doc = await readBlobDoc(store, bt);
-      const found = doc.candidates.find(
-        (c) => c.symbol.toUpperCase() === sym && c.exchange.toUpperCase() === exch,
-      );
-      if (found) {
-        log('info', 'storage: append_candidate skipped (in archive/export)', { sym, exch, bt });
-        return respond(200, { ok: true, action: 'skipped', id: found.id });
-      }
-    }
-
-    // Check inbox for merge
+    // Inbox is a raw capture: always add, never merge or skip on import.
+    // Dedup/merge happens only when a candidate is moved to archive/watch/export.
     const inbox = await readBlobDoc(store, 'inbox');
-    const existing = inbox.candidates.find(
-      (c) => c.symbol.toUpperCase() === sym && c.exchange.toUpperCase() === exch,
-    );
-
-    if (existing) {
-      // Merge sources
-      const newSources = candidate.sources ?? [];
-      existing.sources.push(...newSources);
-      existing.last_updated_at = new Date().toISOString();
-      await writeBlobDoc(store, 'inbox', inbox);
-      log('info', 'storage: append_candidate merged', { sym, exch, id: existing.id });
-      return respond(200, { ok: true, action: 'merged', id: existing.id });
-    }
-
-    // New candidate
     inbox.candidates.push(candidate);
     await writeBlobDoc(store, 'inbox', inbox);
     log('info', 'storage: append_candidate added', { sym, exch, id: candidate.id });
@@ -169,14 +212,26 @@ export default async function handler(req) {
       return respond(400, { ok: false, error: 'Missing or empty candidates array' });
     }
 
-    const [archiveDoc, exportDoc, inbox] = await Promise.all([
+    // Bulk path is used by the scheduled adapters (run daily). It keeps
+    // dedup + tombstone-skip so repeated daily runs don't pile up duplicates
+    // or resurrect dismissed values. The manual UI import uses the singular
+    // append_candidate op, which always adds.
+    const [archiveDoc, exportDoc, watchDoc, inbox] = await Promise.all([
       readBlobDoc(store, 'archive'),
       readBlobDoc(store, 'export'),
+      readBlobDoc(store, 'watch'),
       readBlobDoc(store, 'inbox'),
     ]);
 
-    const archiveKeys = new Set(archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
-    const exportKeys  = new Set(exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`));
+    const tombstoneKeys = new Set(await readTombstone(store));
+    const archiveKeys = new Set([
+      ...archiveDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+      ...tombstoneKeys,
+    ]);
+    const exportKeys  = new Set([
+      ...exportDoc.candidates.map((c) => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+      ...watchDoc.candidates.map((c)  => `${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`),
+    ]);
     const inboxMap    = new Map(inbox.candidates.map((c) => [`${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`, c]));
 
     const now = new Date().toISOString();
@@ -298,6 +353,86 @@ export default async function handler(req) {
     await writeBlobDoc(store, blobType, doc);
     log('info', 'storage: delete_candidate', { blobType, candidateId });
     return respond(200, { ok: true, id: candidateId });
+  }
+
+  // --- op: delete_and_tombstone (bulk hard-delete + re-add-Schutz ohne Archiv) ---
+  // Ersetzt das frühere „Inbox-Löschen = ins Archiv verschieben": löscht die
+  // Kandidaten wirklich und merkt sich nur ihren Symbol:Exchange-Schlüssel als
+  // Tombstone, damit die geplanten Adapter sie nicht neu anlegen. Das Archiv
+  // bleibt sauber (nur manuell verworfene Werte).
+  if (op === 'delete_and_tombstone') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const ids = body.candidate_ids;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idSet = new Set(ids);
+    const removed = doc.candidates.filter((c) => idSet.has(c.id));
+    doc.candidates = doc.candidates.filter((c) => !idSet.has(c.id));
+
+    const tomb = new Set(await readTombstone(store));
+    for (const c of removed) {
+      if (c.symbol && c.exchange) tomb.add(`${c.symbol.toUpperCase()}:${c.exchange.toUpperCase()}`);
+    }
+    await writeBlobDoc(store, blobType, doc);
+    await writeTombstone(store, [...tomb]);
+    log('info', 'storage: delete_and_tombstone', { blobType, requested: ids.length, removed: removed.length });
+    return respond(200, { ok: true, removed: removed.length });
+  }
+
+  // --- op: delete_candidates (bulk: ein Read + ein Write statt N Roundtrips) ---
+  if (op === 'delete_candidates') {
+    if (!blobType || !BLOB_NAMES[blobType]) {
+      return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
+    }
+    const ids = body.candidate_ids;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+
+    const doc = await readBlobDoc(store, blobType);
+    const idSet = new Set(ids);
+    const before = doc.candidates.length;
+    doc.candidates = doc.candidates.filter((c) => !idSet.has(c.id));
+    const removed = before - doc.candidates.length;
+    await writeBlobDoc(store, blobType, doc);
+    log('info', 'storage: delete_candidates', { blobType, requested: ids.length, removed });
+    return respond(200, { ok: true, removed });
+  }
+
+  // --- op: move_candidates (bulk: je ein Read/Write pro Blob für alle IDs) ---
+  if (op === 'move_candidates') {
+    const { candidate_ids: ids, from_blob: fromBlob, to_blob: toBlob } = body;
+    if (!Array.isArray(ids) || !ids.length) return respond(400, { ok: false, error: 'Missing candidate_ids' });
+    if (!fromBlob || !BLOB_NAMES[fromBlob]) return respond(400, { ok: false, error: `Unknown from_blob: ${fromBlob}` });
+    if (!toBlob || !BLOB_NAMES[toBlob]) return respond(400, { ok: false, error: `Unknown to_blob: ${toBlob}` });
+
+    const fromDoc = await readBlobDoc(store, fromBlob);
+    const toDoc = await readBlobDoc(store, toBlob);
+    const idSet = new Set(ids);
+    const moving = fromDoc.candidates.filter((c) => idSet.has(c.id));
+    fromDoc.candidates = fromDoc.candidates.filter((c) => !idSet.has(c.id));
+
+    const now = new Date().toISOString();
+    for (const candidate of moving) {
+      candidate.last_updated_at = now;
+      const dupIdx = toDoc.candidates.findIndex(
+        (c) => c.symbol.toUpperCase() === candidate.symbol.toUpperCase() &&
+               c.exchange.toUpperCase() === candidate.exchange.toUpperCase(),
+      );
+      if (dupIdx !== -1) {
+        // Already in target – merge sources, don't duplicate
+        toDoc.candidates[dupIdx].sources.push(...(candidate.sources ?? []));
+        toDoc.candidates[dupIdx].last_updated_at = now;
+      } else {
+        toDoc.candidates.push(candidate);
+      }
+    }
+
+    await writeBlobDoc(store, fromBlob, fromDoc);
+    await writeBlobDoc(store, toBlob, toDoc);
+    log('info', 'storage: move_candidates', { fromBlob, toBlob, requested: ids.length, moved: moving.length });
+    return respond(200, { ok: true, moved: moving.length });
   }
 
   // --- op: move_candidate ---

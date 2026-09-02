@@ -4,15 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Discovery Workspace</title>
-  <link rel="stylesheet" href="styles.css?v=20260605d">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260831a">
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <span class="topbar__title">Discovery</span>
+    <div class="topbar__search" role="search">
+      <span class="topbar__search-icon" id="topbar-search-icon" aria-hidden="true"></span>
+      <input type="search" id="global-search" placeholder="Suchen…" autocomplete="off" spellcheck="false"
+        aria-label="Aktiven Bucket durchsuchen: Symbol, Name, ISIN, Sektor, Industrie, Börse, Quelle, Health, Notizen">
+      <button class="topbar__search-clear" id="global-search-clear" aria-label="Suche leeren" hidden>×</button>
+    </div>
     <div class="topbar__actions">
       <button class="icon-btn" id="btn-refresh" aria-label="Aktualisieren"></button>
       <button class="icon-btn" id="btn-run" aria-label="Adapter ausführen" aria-haspopup="dialog"></button>
+      <button class="icon-btn" id="btn-screener" aria-label="Screener Studio" aria-haspopup="dialog"></button>
       <button class="icon-btn" id="btn-upload" aria-label="Import"></button>
       <button class="icon-btn" id="btn-theme" aria-label="Theme umschalten"></button>
       <button class="icon-btn" id="btn-export" aria-label="Export"></button>
@@ -21,6 +30,18 @@
   </header>
 
   <nav class="subbar" aria-label="Spaltenansicht">
+    <button class="subnav-alert" id="subnav-alert" aria-label="Alert-Übersicht" title="Alert-Übersicht">
+      <span id="subnav-alert-icon"></span>
+      <span class="alert-badge-count" id="alert-badge-count" hidden></span>
+    </button>
+    <button class="subnav-alert" id="subnav-control" aria-haspopup="dialog" aria-label="Kontroll-Center"
+      title="Kontrolle: Kandidaten nach Kriterien auswählen (Bulk-Aktionen)">
+      <span id="subnav-control-icon"></span>
+    </button>
+    <button class="subnav-alert" id="subnav-watch" aria-pressed="false" aria-label="Watch-Label filtern"
+      title="Nur aktiv beobachtete Ticker (Watch-Label) anzeigen" hidden>
+      <span id="subnav-watch-icon"></span>
+    </button>
     <div class="segmented" id="view-switch" role="tablist"></div>
     <span id="mode-badge" class="mode-badge" style="margin-left:auto;flex-shrink:0"></span>
   </nav>
@@ -42,11 +63,20 @@
 
   <nav class="botnav" aria-label="Hauptnavigation">
     <button class="botnav__slot botnav__slot--active" id="nav-home">
-      <span id="nav-home-icon"></span><span>Home</span>
+      <span id="nav-home-icon"></span><span>Alerts</span>
     </button>
     <button class="botnav__slot" id="nav-bucket" aria-haspopup="dialog">
       <span id="nav-bucket-icon"></span>
       <span class="botnav__bucket-label" id="nav-bucket-label">Inbox</span>
+    </button>
+    <a class="botnav__slot" id="nav-portfolio" href="https://merkliste-app.netlify.app/">
+      <span id="nav-portfolio-icon"></span><span>Portfolio</span>
+    </a>
+    <button class="botnav__slot" id="nav-markets" aria-haspopup="dialog">
+      <span id="nav-markets-icon"></span><span>Markets</span>
+    </button>
+    <button class="botnav__slot" id="nav-monitor" aria-haspopup="dialog">
+      <span id="nav-monitor-icon"></span><span>Monitor</span>
     </button>
   </nav>
 </div>
@@ -59,6 +89,9 @@
 
 <script src="//cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
-<script type="module" src="app.js?v=20260605d"></script>
+<!-- TradingView Lightweight Charts (vendored, Apache-2.0) — interactive
+     price/volume chart in the detail sheet; the SVG band is the fallback. -->
+<script src="vendor/lightweight-charts-4.2.0.standalone.js"></script>
+<script type="module" src="app.js?v=20260831b"></script>
 </body>
 </html>

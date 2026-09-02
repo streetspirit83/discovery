@@ -2,17 +2,44 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList } from './components/candidate-list.js?v=20260605d';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260602c';
-import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20260831a';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20260831a';
+import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
+import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
-import { loadStorageClient } from './lib/storage-client.js';
+import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
+import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260831b';
+import { triggeredCount } from './lib/alerts.js?v=20260807a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
+import { renderControlModal } from './components/control-modal.js?v=20260831a';
+import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
+import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment } from './lib/tv-enrichment.js?v=20260605d';
-import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT } from './lib/schema.js';
-import { icons } from './lib/icons.js';
-import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260604b';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260831a';
+import { fetchIndexRows } from './lib/tv-indices.js?v=20260807a';
+import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
+import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
+import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
+import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
+import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
+import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
+import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260819m';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260831b';
+import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
+import { buildLinks } from './lib/link-builder.js';
+import { normalizeExchange } from './lib/exchange-map.js';
+import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
+import { icons } from './lib/icons.js?v=20260807a';
+import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
+import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
+import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
+import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260818a';
 
 // ── Inline Lucide SVG for shell icons ─────────────────────────────────────────
 const luc = (d, s = 20) =>
@@ -22,22 +49,39 @@ const L = {
   refresh:  luc('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
   zap:      luc('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
   upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+  scope:    luc('<circle cx="17" cy="3" r="2"/><path d="M2 22 13 11"/><path d="m10.3 10.3 10.7-7 2.7 2.7-7 10.7"/><path d="m5.3 15.3 3.4 3.4"/>'),
   sun:      luc('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
   moon:     luc('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
   download: luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
   settings: luc('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
   home:     luc('<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
+  intraday: luc('<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>'),
+  bell:     luc('<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>'),
   inbox:    luc('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+  portfolio:luc('<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>'),
+  markets:  luc('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>'),
   archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
+  bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
+  activity: luc('<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>', 16),
 };
 
 // ── UI state (persisted) ───────────────────────────────────────────────────────
 const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: '', fSector: '' };
-  try { return { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
-  catch { return { ...def }; }
+  // Dropdown-Filter (fCap/fSector/fScore/fTr/fLsTrend) sind Mehrfachauswahl →
+  // Arrays. fBroker/fAlerts/fDup bleiben Toggles (String).
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fMega: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', currency: 'USD' };
+  let s;
+  try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
+  catch { s = { ...def }; }
+  // Migrate persisted view modes from the old 3-view layout
+  if (!['standard', 'trade', 'score', 'meta', 'price', 'fundamentals'].includes(s.view)) s.view = 'standard';
+  // Migrate the multi-select filters from the old single-value strings to arrays.
+  const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  s.fCap = toArr(s.fCap); s.fSector = toArr(s.fSector); s.fMega = toArr(s.fMega); s.fScore = toArr(s.fScore);
+  s.fTr = toArr(s.fTr); s.fLsTrend = toArr(s.fLsTrend);
+  return s;
 })();
 function saveUiState() {
   try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch {}
@@ -46,13 +90,15 @@ function saveUiState() {
 // ── App globals ────────────────────────────────────────────────────────────────
 let useMock = !isConfigured();
 let currentBlobType = uiState.bucket ?? 'inbox';
-let allBlobs = { inbox: null, archive: null, export: null };
+let allBlobs = { inbox: null, archive: null, export: null, watch: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
+let merklisteMaps = null; // { bySym } of entry_price_manual from merkliste "main"
 
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
+let returnToMonitor = null; // set when a detail sheet is opened from the Monitor dashboard
 let bucketSheetOpen = false;
 let runSheetOpen = false;
 
@@ -63,6 +109,239 @@ function toast(msg, type = 'info', duration = 3000) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), duration);
+}
+
+// ── EUR/USD exchange rate ──────────────────────────────────────────────────────
+// Live rate (cached from the TV forex scanner) takes precedence over the
+// manual value from the settings modal.
+function resolveFxRate() {
+  const live = parseFloat(localStorage.getItem('discovery_fx_eurusd_live') ?? '');
+  if (Number.isFinite(live) && live > 0) return live;
+  const manual = parseFloat((localStorage.getItem('discovery_fx_eurusd') ?? '').replace(',', '.'));
+  return Number.isFinite(manual) && manual > 0 ? manual : null;
+}
+
+async function refreshFxRate() {
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  const rate = await fetchFxRate({ backendUrl, secret });
+  if (rate) {
+    localStorage.setItem('discovery_fx_eurusd_live', String(rate));
+    candidateList?.setFxRate(rate);
+  }
+}
+
+// ── Momentum-Check für ausgewählte Ticker ──────────────────────────────────────
+async function runMomentumCheckForSelection() {
+  if (!candidateList) return;
+  const ids = [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann Momentum-Check starten', 'info', 3500);
+    return;
+  }
+  const updates = candidateList.runMomentumCheck(ids);
+  const verdicts = updates.map((u) => u.updates.momentum_check?.verdict);
+  const g = verdicts.filter((v) => v === 'green').length;
+  const y = verdicts.filter((v) => v === 'yellow').length;
+  const r = verdicts.filter((v) => v === 'red').length;
+  const n = verdicts.filter((v) => v == null).length;
+  toast(`Momentum-Check: 🟢 ${g} · 🟡 ${y} · 🔴 ${r}${n ? ` · ${n}× zu wenig Daten` : ''}`, 'success', 5000);
+
+  if (!useMock) {
+    try {
+      await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+    } catch (err) {
+      toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+    }
+  }
+}
+
+// ── Trade Republic check für ausgewählte Ticker ─────────────────────────────────
+async function runTrCheckForSelection(idsArg) {
+  if (!candidateList) return;
+  const ids = idsArg ?? [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann TR-Check starten', 'info', 3500);
+    return;
+  }
+  if (useMock) { toast('TR-Check nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return; }
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+  // LS matching needs an ISIN. Backfill missing ISINs via the TV scanner first
+  // so a single TR-Check works without a separate "TV Daten" run.
+  const blob = allBlobs[currentBlobType];
+  const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+  const missing = (blob?.candidates ?? []).filter((c) => ids.includes(c.id) && !isISIN(c.isin));
+  if (missing.length) {
+    toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 10000);
+    try {
+      const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+      const tvUpdates = [];
+      for (const [cid, upd] of enr) {
+        const c = missing.find((x) => x.id === cid);
+        if (c) { Object.assign(c, upd); tvUpdates.push({ candidate_id: cid, updates: upd }); }
+      }
+      if (tvUpdates.length) await storageClient.bulkUpdateCandidates(currentBlobType, tvUpdates).catch(() => {});
+    } catch (err) {
+      console.warn('[TR] ISIN backfill failed:', err.message);
+    }
+  }
+
+  toast(`🛒 Prüfe Trade-Republic-Handelbarkeit für ${ids.length} Ticker…`, 'info', 12000);
+  let updates;
+  try {
+    updates = await candidateList.runTrCheck(ids, { backendUrl, secret });
+  } catch (err) {
+    toast(`TR-Check fehlgeschlagen: ${err.message}`, 'error');
+    return;
+  }
+  const yes = updates.filter((u) => u.updates.tr_check?.tradable === true).length;
+  const no  = updates.filter((u) => u.updates.tr_check?.tradable === false).length;
+  const unk = updates.length - yes - no;
+  toast(`TR-Check: ✓ ${yes} handelbar · ✗ ${no} nicht · ${unk ? `? ${unk} unklar` : ''}`.trim(), 'success', 6000);
+
+  try {
+    await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+  }
+}
+
+// ── Lang & Schwarz Echtzeitkurs für ausgewählte Ticker ──────────────────────────
+async function runLsQuoteForSelection(idsArg) {
+  if (!candidateList) return;
+  const ids = idsArg ?? [...candidateList.selected];
+  if (ids.length === 0) {
+    toast('Ticker per Checkbox auswählen, dann LS-Kurs starten', 'info', 3500);
+    return;
+  }
+  if (useMock) { toast('LS-Kurs nicht im Mock-Modus verfügbar (Backend nötig)', 'error'); return; }
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+
+  // LS resolves via the cached ls_id (from a prior TR-Check) or, failing that, the
+  // ISIN. Backfill missing ISINs via TV so the lookup can succeed in one click.
+  const blob = allBlobs[currentBlobType];
+  const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+  const missing = (blob?.candidates ?? []).filter(
+    (c) => ids.includes(c.id) && c.tr_check?.ls_id == null && !isISIN(c.isin),
+  );
+  if (missing.length) {
+    toast(`🔍 Lade ISIN via TV für ${missing.length} Ticker…`, 'info', 10000);
+    try {
+      const enr = await fetchTVEnrichment(missing, { backendUrl, secret });
+      const tvUpdates = [];
+      for (const [cid, upd] of enr) {
+        const c = missing.find((x) => x.id === cid);
+        if (c) { Object.assign(c, upd); tvUpdates.push({ candidate_id: cid, updates: upd }); }
+      }
+      if (tvUpdates.length) await storageClient.bulkUpdateCandidates(currentBlobType, tvUpdates).catch(() => {});
+    } catch (err) { console.warn('[LS] ISIN backfill failed:', err.message); }
+  }
+
+  toast(`📈 Lade LS-Echtzeitkurse für ${ids.length} Ticker…`, 'info', 12000);
+  let updates;
+  try {
+    updates = await candidateList.runLsQuote(ids, { backendUrl, secret });
+  } catch (err) {
+    toast(`LS-Kurs fehlgeschlagen: ${err.message}`, 'error');
+    return;
+  }
+  const ok   = updates.filter((u) => u.updates.ls_quote?.price != null).length;
+  const fail = updates.length - ok;
+  toast(`LS-Kurs: 📈 ${ok} geladen${fail ? ` · ${fail} ohne Kurs` : ''} · Spalte „LS“ in der Preis-Ansicht`, 'success', 6000);
+
+  try {
+    await storageClient.bulkUpdateCandidates(currentBlobType, updates);
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+  }
+}
+
+// ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
+// Replaces the former Intra-Day modal: lists every candidate that has alerts,
+// with a global mute and per-alert enable/disable. Persists enabled-changes.
+function persistAlerts(id, alerts) {
+  if (useMock || !storageClient) return Promise.resolve();
+  return storageClient.updateCandidate(currentBlobType, id, { alerts });
+}
+
+function openAlertModal() {
+  const blob = allBlobs[currentBlobType];
+  const candidates = candidateList ? candidateList.candidates : (blob?.candidates ?? []);
+  renderAlertModal({
+    candidates,
+    toast,
+    onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+    onSetMute: (m) => (useMock || !storageClient ? Promise.resolve() : storageClient.writeConfig({ alerts_muted: m })),
+    // Tap a row → open the alert editor (add / modify alerts).
+    onOpenEditor: (candidate) => {
+      openTriggerEditor(candidate, {
+        onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+        onSaved: () => { candidateList?.renderRows(); updateAlertBadge(); },
+        toast,
+      });
+    },
+  });
+}
+
+// Red sub-nav badge: number of currently-triggered alerts (hidden when 0).
+function updateAlertBadge() {
+  const badge = document.getElementById('alert-badge-count');
+  if (!badge) return;
+  const n = candidateList ? triggeredCount(candidateList.candidates) : 0;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+}
+
+// ── LS snapshot history (Trade view: Breakout/Breakdown/Bottom signals) ────────
+// The nightly snapshot-ls function keeps a 10-day rolling history per
+// watch-bucket ticker. Loaded once per session (single blob read), attached to
+// the candidates as `c.ls_history` (snapshot array) for the Trade-view signals.
+let lsHistoryMap = null;
+
+async function loadLsHistory(force = false) {
+  if (useMock || !storageClient) return;
+  if (force || !lsHistoryMap) {
+    try {
+      const doc = await storageClient.readLsHistory();
+      lsHistoryMap = doc?.history ?? {};
+    } catch (err) {
+      console.warn('[ls-history] load failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!blob?.candidates || !candidateList) return;
+  for (const c of blob.candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
+  candidateList.renderRows();
+}
+
+// ── Merkliste portfolio import (Einstand column) ────────────────────────────────
+// Pull entry_price_manual from the merkliste "main" blob and attach it to the
+// matching candidates as `mk_entry` (matched by symbol). Held in memory only
+// (merkliste stays the source of truth); re-fetched on load and manual refresh.
+async function loadMerklisteEntries(force = false) {
+  if (useMock) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  if (force || !merklisteMaps) {
+    try {
+      merklisteMaps = await fetchMerklisteEntries({ backendUrl, secret });
+    } catch (err) {
+      console.warn('[merkliste] entry import failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!merklisteMaps || !blob?.candidates || !candidateList) return;
+  applyMerklisteEntries(blob.candidates, merklisteMaps);
+  candidateList.renderRows(); // mutate-in-place re-render; keeps selection intact
 }
 
 // ── Mode badge ─────────────────────────────────────────────────────────────────
@@ -93,8 +372,10 @@ function toggleTheme() {
 
 // ── Shell rendering ────────────────────────────────────────────────────────────
 function renderTopbar() {
+  document.getElementById('topbar-search-icon').innerHTML = icons.search;
   document.getElementById('btn-refresh').innerHTML  = L.refresh;
   document.getElementById('btn-run').innerHTML      = L.zap;
+  document.getElementById('btn-screener').innerHTML = L.scope;
   document.getElementById('btn-upload').innerHTML   = L.upload;
   document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
   document.getElementById('btn-export').innerHTML   = L.download;
@@ -104,14 +385,28 @@ function renderTopbar() {
 function renderSubbar() {
   const tabs = [
     { key: 'standard',     label: 'Standard' },
-    { key: 'technicals',   label: 'Technisch' },
+    { key: 'trade',        label: 'Trade' },
+    { key: 'score',        label: 'Score' },
+    { key: 'meta',         label: 'Meta' },
+    { key: 'price',        label: 'Preis' },
     { key: 'fundamentals', label: 'Fundamental' },
   ];
   const vs = document.getElementById('view-switch');
-  vs.innerHTML = tabs.map(({ key, label }) =>
-    `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
-  ).join('');
-  vs.querySelectorAll('.seg-btn').forEach((btn) => {
+  vs.innerHTML =
+    tabs.map(({ key, label }) =>
+      `<button class="seg-btn${uiState.view === key ? ' seg-btn--active' : ''}" data-view="${key}" role="tab" aria-selected="${uiState.view === key}">${label}</button>`
+    ).join('') +
+    `<button class="seg-btn seg-btn--currency" id="currency-toggle" title="Preisanzeige USD/EUR umschalten (nur USD↔EUR wird umgerechnet)">${uiState.currency === 'EUR' ? '€ EUR' : '$ USD'}</button>`;
+  vs.querySelector('#currency-toggle').addEventListener('click', () => {
+    uiState.currency = uiState.currency === 'EUR' ? 'USD' : 'EUR';
+    saveUiState();
+    document.getElementById('currency-toggle').textContent = uiState.currency === 'EUR' ? '€ EUR' : '$ USD';
+    if (!candidateList.hasFxRate() && resolveFxRate() == null) {
+      toast('Kein EUR/USD-Kurs verfügbar – Kurs in Einstellungen eintragen oder TV Daten laden', 'error', 4500);
+    }
+    candidateList.setDisplayCurrency(uiState.currency);
+  });
+  vs.querySelectorAll('.seg-btn[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
       uiState.view = btn.dataset.view;
       saveUiState();
@@ -122,58 +417,143 @@ function renderSubbar() {
       });
     });
   });
+
+  // Sub-nav alert button (static element) — wire once.
+  const alertBtn = document.getElementById('subnav-alert');
+  if (alertBtn && !alertBtn.dataset.wired) {
+    alertBtn.dataset.wired = '1';
+    document.getElementById('subnav-alert-icon').innerHTML = L.bell;
+    alertBtn.addEventListener('pointerup', openAlertModal);
+  }
+
+  // Kontroll-Center: Kandidaten des aktiven Buckets nach Kriterien auswählen
+  // (Score-Slider + Multi-Selects) → Selektion setzen → Bulk-Bar erscheint.
+  const controlBtn = document.getElementById('subnav-control');
+  if (controlBtn && !controlBtn.dataset.wired) {
+    controlBtn.dataset.wired = '1';
+    document.getElementById('subnav-control-icon').innerHTML = icons.sliders;
+    controlBtn.addEventListener('pointerup', () => {
+      renderControlModal({
+        candidates: allBlobs[currentBlobType]?.candidates ?? [],
+        bucket: currentBlobType,
+        onApply: (ids) => candidateList.setSelection(ids),
+      });
+    });
+  }
+
+  // Watch-Filter (nur Watch-Bucket): schaltet die Liste auf Watch-Label-Ticker.
+  const watchBtn = document.getElementById('subnav-watch');
+  if (watchBtn && !watchBtn.dataset.wired) {
+    watchBtn.dataset.wired = '1';
+    document.getElementById('subnav-watch-icon').innerHTML = icons.eye;
+    watchBtn.addEventListener('pointerup', () => {
+      const on = candidateList.filters.watch !== 'yes';
+      candidateList.setWatchOnly(on);
+      watchBtn.classList.toggle('is-active', on);
+    });
+  }
+  updateWatchSubnav();
+  updateAlertBadge();
 }
 
 function renderFilterbar() {
   const fb = document.getElementById('filterbar');
-  const states = [
-    { key: '', label: 'Alle' },
-    { key: 'new', label: 'Neu' },
-    { key: 'reviewed', label: 'Gesehen' },
-    { key: 'promoted', label: 'Promoted' },
-    { key: 'dismissed', label: 'Abgelehnt' },
-  ];
   const sectors = candidateList ? candidateList.getSectors() : [];
 
+  // Toggles bleiben Buttons; die Dropdowns sind jetzt Mehrfachauswahl-Popover.
   fb.innerHTML = `
     <span id="pill-selected-wrap"></span>
-    <div class="pill-group">
-      ${states.map(({ key, label }) =>
-        `<button class="pill${uiState.fState === key ? ' pill--active' : ''}" data-state="${key}">${label}</button>`
-      ).join('')}
-    </div>
-    <select class="filter-select" id="filter-sector">
-      <option value="">Alle Sektoren</option>
-      ${sectors.map((s) => `<option value="${s}"${uiState.fSector === s ? ' selected' : ''}>${s}</option>`).join('')}
-    </select>
-    <select class="filter-select" id="filter-cap">
-      <option value="">Alle Größen</option>
-      <option value="micro"${uiState.fCap === 'micro' ? ' selected' : ''}>Micro</option>
-      <option value="small"${uiState.fCap === 'small' ? ' selected' : ''}>Small</option>
-      <option value="mid"${uiState.fCap === 'mid' ? ' selected' : ''}>Mid</option>
-      <option value="large"${uiState.fCap === 'large' ? ' selected' : ''}>Large</option>
-    </select>`;
+    ${(currentBlobType === 'inbox' || currentBlobType === 'archive')
+      ? `<button class="filter-star filter-dup${uiState.fDup === 'yes' ? ' is-active' : ''}" id="dup-toggle" aria-pressed="${uiState.fDup === 'yes'}" title="Nur Werte, die bereits in einem anderen Bucket liegen (Dubletten) – wählt sie direkt für Bulk-Aktionen aus">⧉</button>`
+      : ''}
+    <button class="filter-star${uiState.fBroker === 'star' ? ' is-active' : ''}" id="portfolio-toggle" aria-pressed="${uiState.fBroker === 'star'}" title="Nur Portfolio-Ticker (★) anzeigen">★</button>
+    <button class="filter-star${uiState.fAlerts === 'active' ? ' is-active' : ''}" id="alerts-toggle" aria-pressed="${uiState.fAlerts === 'active'}" title="Nur Ticker mit aktiven Alerts anzeigen">🔔</button>`;
 
-  fb.querySelectorAll('.pill[data-state]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      uiState.fState = btn.dataset.state;
-      saveUiState();
-      candidateList.setFilter('state', uiState.fState);
-      fb.querySelectorAll('.pill[data-state]').forEach((b) =>
-        b.classList.toggle('pill--active', b.dataset.state === uiState.fState));
-    });
+  // Multi-Select-Buttons in der bisherigen Reihenfolge anhängen.
+  const mkFilter = (cfg) => fb.appendChild(filterMultiSelect(cfg));
+  mkFilter({
+    id: 'filter-score', label: 'Score', title: 'Filter nach Overall-Score (Mehrfachauswahl)',
+    options: [
+      { value: '80', label: 'Score ≥ 80' },
+      { value: '70', label: 'Score 70–79' },
+      { value: '60', label: 'Score 60–69' },
+      { value: '40', label: 'Score 40–59' },
+      { value: '0',  label: 'Score < 40' },
+    ],
+    selected: uiState.fScore,
+    onChange: (v) => { uiState.fScore = v; saveUiState(); candidateList.setFilter('score', v); },
+  });
+  mkFilter({
+    id: 'filter-mega', label: 'Mega', title: 'Filter nach Mega-Cluster (5 Sektor-Gruppen, Mehrfachauswahl)',
+    options: MEGA_CLUSTERS.map((m) => ({ value: m.key, label: m.label })),
+    selected: uiState.fMega,
+    onChange: (v) => { uiState.fMega = v; saveUiState(); candidateList.setFilter('mega', v); },
+  });
+  mkFilter({
+    id: 'filter-sector', label: 'Sectors', title: 'Filter nach Sektor (Mehrfachauswahl)',
+    options: [{ value: '__no_sector__', label: '— Ohne Sektor' }, ...sectors.map((s) => ({ value: s, label: s }))],
+    selected: uiState.fSector,
+    onChange: (v) => { uiState.fSector = v; saveUiState(); candidateList.setFilter('sector', v); },
+  });
+  mkFilter({
+    id: 'filter-cap', label: 'Size', title: 'Filter nach Marktkapitalisierung (Mehrfachauswahl)',
+    options: [
+      { value: 'micro', label: 'Micro' },
+      { value: 'small', label: 'Small' },
+      { value: 'mid',   label: 'Mid' },
+      { value: 'large', label: 'Large' },
+    ],
+    selected: uiState.fCap,
+    onChange: (v) => { uiState.fCap = v; saveUiState(); candidateList.setFilter('capSize', v); },
+  });
+  mkFilter({
+    id: 'filter-tr', label: 'TR', title: 'Filter nach Trade-Republic-Handelbarkeit (Mehrfachauswahl)',
+    options: [
+      { value: 'no',        label: '✗ nicht handelbar' },
+      { value: 'yes',       label: '✓ handelbar' },
+      { value: 'unchecked', label: '? ungeprüft' },
+    ],
+    selected: uiState.fTr,
+    onChange: (v) => { uiState.fTr = v; saveUiState(); candidateList.setFilter('tr', v); },
+  });
+  mkFilter({
+    id: 'filter-lstrend', label: 'LS-Trend', title: 'Filter nach LS-10T-Trend (Regressionsgerade durch die Tages-Schlusskurse; Mehrfachauswahl)',
+    options: [
+      { value: 'pos',     label: '↗ Trend positiv' },
+      { value: 'crossUp', label: '⤴ Kurs kreuzt Trend' },
+    ],
+    selected: uiState.fLsTrend,
+    onChange: (v) => { uiState.fLsTrend = v; saveUiState(); candidateList.setFilter('lsTrend', v); },
   });
 
-  fb.querySelector('#filter-sector').addEventListener('change', (e) => {
-    uiState.fSector = e.target.value;
+  fb.querySelector('#dup-toggle')?.addEventListener('click', () => {
+    const on = uiState.fDup !== 'yes';
+    uiState.fDup = on ? 'yes' : '';
     saveUiState();
-    candidateList.setFilter('sector', uiState.fSector);
+    candidateList.setFilter('dup', uiState.fDup);
+    const btn = fb.querySelector('#dup-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
   });
 
-  fb.querySelector('#filter-cap').addEventListener('change', (e) => {
-    uiState.fCap = e.target.value;
+  fb.querySelector('#portfolio-toggle').addEventListener('click', () => {
+    const on = uiState.fBroker !== 'star';
+    uiState.fBroker = on ? 'star' : '';
     saveUiState();
-    candidateList.setFilter('capSize', uiState.fCap);
+    candidateList.setFilter('broker', uiState.fBroker);
+    const btn = fb.querySelector('#portfolio-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+
+  fb.querySelector('#alerts-toggle').addEventListener('click', () => {
+    const on = uiState.fAlerts !== 'active';
+    uiState.fAlerts = on ? 'active' : '';
+    saveUiState();
+    candidateList.setFilter('alerts', uiState.fAlerts);
+    const btn = fb.querySelector('#alerts-toggle');
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
   });
 
   renderSelectedPill();
@@ -207,11 +587,14 @@ function renderSelectedPill() {
 }
 
 function renderBotnav() {
-  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq };
-  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export' };
-  document.getElementById('nav-home-icon').innerHTML   = L.home;
+  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark };
+  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
+  document.getElementById('nav-home-icon').innerHTML   = L.bell;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
+  document.getElementById('nav-portfolio-icon').innerHTML = L.portfolio;
+  document.getElementById('nav-markets-icon').innerHTML   = L.markets;
+  document.getElementById('nav-monitor-icon').innerHTML   = L.activity;
 }
 
 // ── Sheet management ───────────────────────────────────────────────────────────
@@ -229,11 +612,58 @@ function closeDetailSheet() {
   detailSheetOpen = false;
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
+  // If the sheet was opened from the Monitor dashboard, restore it (X or swipe).
+  if (returnToMonitor) { const back = returnToMonitor; returnToMonitor = null; back(); }
+}
+
+// Mobile swipe navigation for the detail sheet: swipe left → next candidate,
+// swipe right → previous. Gives a small damped drag feedback, then snaps back
+// and steps to the neighbour. Only acts on clearly-horizontal gestures so
+// vertical scrolling still works.
+function initSheetSwipe(el, { onPrev, onNext } = {}) {
+  let startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horizontal = false;
+  const THRESHOLD = 60;
+
+  el.addEventListener('touchstart', (e) => {
+    if (!el.classList.contains('is-open') || e.touches.length !== 1) return;
+    // Don't hijack gestures that start inside the interactive Lightweight chart —
+    // let it pan/zoom (horizontal drag would otherwise trigger prev/next).
+    if (e.target.closest?.('.ls-chart')) { dragging = false; return; }
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    dx = 0; dragging = true; decided = false; horizontal = false;
+    el.style.transition = 'none';
+  }, { passive: true });
+
+  el.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decided = true;
+      horizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!horizontal) return;                  // vertical scroll → leave alone
+    el.style.transform = `translateX(${(dx * 0.35).toFixed(0)}px)`; // damped feedback
+  }, { passive: true });
+
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.transition = '';
+    el.style.transform = '';                  // always snap back; navigation swaps content
+    if (!horizontal) return;
+    if (dx <= -THRESHOLD) onNext?.();
+    else if (dx >= THRESHOLD) onPrev?.();
+  };
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
 }
 
 function renderBucketSheet() {
   const buckets = [
     { key: 'inbox',   label: 'Inbox',  icon: L.inbox },
+    { key: 'watch',   label: 'Watch',  icon: L.bookmark },
     { key: 'archive', label: 'Archiv', icon: L.archive },
     { key: 'export',  label: 'Export', icon: L.checkSq },
   ];
@@ -315,8 +745,8 @@ function closeRunSheet() {
 // ── Data loading ───────────────────────────────────────────────────────────────
 async function loadBlob(blobType) {
   if (useMock) {
-    const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT };
-    return structuredClone(map[blobType]);
+    const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT, watch: MOCK_WATCH };
+    return structuredClone(map[blobType] ?? { schema_version: 'discovery-1.0', blob_type: blobType, updated_at: new Date().toISOString(), candidates: [] });
   }
   try {
     return await storageClient.readBlob(blobType);
@@ -336,11 +766,138 @@ async function ensureBlob(blobType) {
 async function switchBlob(blobType) {
   currentBlobType = blobType;
   uiState.bucket = blobType;
+  // Dubletten-Filter gilt nur in Inbox/Archiv — beim Verlassen zurücksetzen,
+  // sonst filtert er (mit dann leerer dupMap) alle Zeilen weg.
+  if (blobType !== 'inbox' && blobType !== 'archive' && uiState.fDup) {
+    uiState.fDup = '';
+    candidateList.filters.dup = '';
+  }
+  // Watch-Label-Feature gilt nur im Watch-Bucket — Filter beim Verlassen lösen.
+  if (blobType !== 'watch') candidateList.filters.watch = '';
+  candidateDetail.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
+  // Carry merkliste entry prices onto this bucket's candidates before first render.
+  if (merklisteMaps) applyMerklisteEntries(allBlobs[blobType].candidates, merklisteMaps);
+  // Attach the 10-day LS history (Trade-view signals) before first render;
+  // if it isn't loaded yet, fetch it once in the background (re-renders rows).
+  if (lsHistoryMap) {
+    for (const c of allBlobs[blobType].candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
+  } else {
+    loadLsHistory();
+  }
   candidateList.setData(allBlobs[blobType].candidates);
+  candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
   renderBotnav();
   renderFilterbar();
+  updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
+  refreshDupMarkers();                               // fire & forget
+  if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
+}
+
+// Watch-Filter-Button (Subbar) nur im Watch-Bucket zeigen; beim Verlassen den
+// aktiven Filter/Highlight zurücksetzen.
+function updateWatchSubnav() {
+  const btn = document.getElementById('subnav-watch');
+  if (!btn) return;
+  const onWatch = currentBlobType === 'watch';
+  btn.hidden = !onWatch;
+  btn.classList.toggle('is-active', onWatch && candidateList?.filters?.watch === 'yes');
+}
+
+// ── Dup-Marker für Inbox/Archiv ─────────────────────────────────────────────────
+// Werte, die bereits in einem anderen Bucket liegen, bekommen eine eigene
+// Zeilen-Hintergrundfarbe. Gilt nur für die Inbox- und Archiv-Ansicht.
+const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
+async function refreshDupMarkers() {
+  if (currentBlobType !== 'inbox' && currentBlobType !== 'archive') {
+    candidateList.setDupMap(null);
+    return;
+  }
+  const shown  = currentBlobType;
+  const others = ['inbox', 'archive', 'export', 'watch'].filter((b) => b !== shown);
+  const map = new Map();
+  for (const b of others) {
+    const blob = await ensureBlob(b).catch(() => null);
+    for (const c of blob?.candidates ?? []) {
+      const k = dupKey(c);
+      if (!map.has(k)) map.set(k, BUCKET_LABELS[b]);
+    }
+  }
+  // Der Nutzer kann während der Blob-Loads den Bucket gewechselt haben.
+  if (currentBlobType === shown) candidateList.setDupMap(map);
+}
+
+// ── Auto-TR-Check für neue Inbox-Kandidaten ─────────────────────────────────────
+// Neuzugänge (state=new, noch kein tr_check) werden automatisch auf LS-Handel-
+// barkeit geprüft; explizit NICHT handelbare werden gelöscht (das Archiv bleibt
+// dem Wieder-auf-Watch-Setzen vorbehalten). Adapter können Gelöschte beim
+// nächsten Lauf re-importieren — der Check greift dann erneut und löscht wieder.
+// Unklare Ergebnisse bleiben liegen.
+let autoTrRunning = false;
+async function autoTrCheckNewInbox() {
+  if (useMock || autoTrRunning || currentBlobType !== 'inbox' || !storageClient) return;
+  const blob = allBlobs.inbox;
+  const targets = (blob?.candidates ?? []).filter((c) => c.workspace_state === 'new' && c.tr_check == null);
+  if (!targets.length) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  autoTrRunning = true;
+  try {
+    await runTrCheckForSelection(targets.map((c) => c.id));
+    const out = targets.filter((c) => c.tr_check?.tradable === false);
+    let removed = 0;
+    for (const c of out) {
+      try {
+        await storageClient.deleteCandidate('inbox', c.id);
+        blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
+        removed++;
+      } catch (err) {
+        console.warn(`[autoTR] Löschen fehlgeschlagen (${c.symbol}):`, err.message);
+      }
+    }
+    if (removed) {
+      candidateList.setData(blob.candidates);
+      toast(`🧹 Auto-TR-Check: ${removed} neue ohne LS-Handel gelöscht`, 'success', 5000);
+    }
+  } finally {
+    autoTrRunning = false;
+  }
+}
+
+/** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
+function candidateIdFromHash() {
+  const m = /[#&]c=([^&]+)/.exec(location.hash || '');
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/**
+ * Open a candidate's detail sheet by id, switching to whichever bucket holds
+ * it (search order: current bucket first, then the alert-scanned buckets).
+ * Used by the ntfy push deep link. Toasts when the candidate is gone (e.g.
+ * dismissed between push and tap).
+ */
+async function openCandidateById(id) {
+  if (!id) return false;
+  const order = [currentBlobType, 'watch', 'inbox', 'export'].filter((b, i, a) => a.indexOf(b) === i);
+  for (const bucket of order) {
+    const blob = await ensureBlob(bucket).catch(() => null);
+    if (blob?.candidates?.some((c) => c.id === id)) {
+      if (bucket !== currentBlobType) await switchBlob(bucket);
+      const cand = allBlobs[bucket]?.candidates?.find((c) => c.id === id);
+      if (cand) {
+        candidateDetail.show(cand);
+        openDetailSheet();
+        // Clear the hash (no reload, no hashchange) so tapping the same push
+        // again re-triggers the deep link.
+        history.replaceState(null, '', location.pathname + location.search);
+        return true;
+      }
+    }
+  }
+  toast('Kandidat nicht mehr im Workspace', 'info', 3500);
+  return false;
 }
 
 /** Insert a candidate clone into a target blob's in-memory copy (mock mode). */
@@ -352,6 +909,11 @@ async function mockInsert(blobType, candidate) {
   target.updated_at = new Date().toISOString();
 }
 
+/* Yahoo-Kursziele im Anreicherungslauf: sechs gleichzeitig, wie bei den
+   LS-Abrufen — genug Tempo, ohne dass unsere Funktion eine Salve sieht. */
+const YH_BATCH = 6;
+
+
 async function handleAction(action, candidate, extras = {}) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
@@ -361,14 +923,185 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
-  if (action === 'promote') {
-    candidate.workspace_state = 'promoted';
+  if (action === 'isinCopied') {
+    toast(`📋 ${extras.value} kopiert – in TR-Suche einfügen`, 'success', 2500);
+    return;
+  }
+
+  // Detail toolbar: LS live quote for exactly this candidate, then repaint the sheet.
+  if (action === 'lsQuote') {
+    await runLsQuoteForSelection([candidate.id]);
+    if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  // Detail sheet: Firmenprofil auf Knopfdruck laden (ROIC.ai mit Key, sonst
+  // Wikipedia de→en; beide browserseitig). Fehlversuch → Button erlaubt Retry.
+  if (action === 'loadProfile') {
+    if (candidate._profile_loading || candidate.company_profile?.description) return;
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._profile_loading = true; rerender();
+    let profile = null;
+    try {
+      profile = await fetchCompanyProfile(candidate, {
+        backendUrl: localStorage.getItem('discovery_backend_url'),
+        secret:     localStorage.getItem('discovery_secret'),
+      });
+    } catch (err) { console.warn('[profile] fetch fehlgeschlagen:', err.message); }
+    candidate._profile_loading = false;
+    candidate.company_profile = profile ?? { error: true };
+    rerender();
+    return;
+  }
+
+  // Detail sheet: News-Tab (ROIC.ai, 30-min-Cache; force = Aktualisieren-Button).
+  if (action === 'loadNews') {
+    if (candidate._news_loading) return;
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._news_loading = true; rerender();
+    let news;
+    try {
+      news = await fetchCompanyNews(candidate, {
+        backendUrl: localStorage.getItem('discovery_backend_url'),
+        secret:     localStorage.getItem('discovery_secret'),
+      }, { force: extras?.force === true });
+    } catch (err) {
+      console.warn('[news] fetch fehlgeschlagen:', err.message);
+      news = { error: true, message: err.message };
+    }
+    candidate._news_loading = false;
+    candidate.company_news = news;
+    rerender();
+    return;
+  }
+
+  // Fund-Tab: letztes Earnings-Call-Transcript (ROIC), 7-Tage-Cache.
+  if (action === 'loadTranscript') {
+    if (candidate._transcript_loading) return;
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._transcript_loading = true; rerender();
+    try {
+      candidate.company_transcript = await fetchLatestTranscript(candidate, {
+        backendUrl: localStorage.getItem('discovery_backend_url'),
+        secret:     localStorage.getItem('discovery_secret'),
+      });
+    } catch (err) {
+      console.warn('[transcript] fetch fehlgeschlagen:', err.message);
+      candidate.company_transcript = { error: true, message: err.message };
+    }
+    candidate._transcript_loading = false;
+    rerender();
+    return;
+  }
+
+  // Fund.-Tab: FMP-Zweitmeinung (DCF + Rating). Nur US-Titel — der Free-Plan
+  // sperrt alles andere mit 402. Nicht persistiert: 250 Anfragen/Tag sind knapp,
+  // aber der Client cacht 24 h in localStorage, was fürs Blättern reicht.
+  if (action === 'fmpValuation') {
+    if (candidate._fmp_loading) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._fmp_loading = true; rerender();
+    try {
+      candidate.fmp_valuation = await fetchFmpValuation(candidate, { backendUrl, secret });
+    } catch (err) {
+      console.warn('[fmp] fetch fehlgeschlagen:', err.message);
+      candidate.fmp_valuation = { error: 'http', checked_at: new Date().toISOString() };
+    }
+    candidate._fmp_loading = false;
+    rerender();
+    return;
+  }
+
+  /* Prog.-Tab: Analysten-Kursziel von Yahoo — nur als Fallback, wenn TV für den
+     Titel keins hat. Wie beim Sentiment nur im Speicher plus localStorage-Cache
+     (12 h) in `analyst-targets.js`; ein Kursziel im Blob würde nur veralten. */
+  if (action === 'yahooTargets') {
+    if (candidate._yh_loading) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._yh_loading = true; rerender();
+    try {
+      candidate.yh_targets = await fetchYahooTargets(candidate, { backendUrl, secret, force: extras?.force });
+      if (candidate.yh_targets?.error === 'none') toast('Yahoo kennt für diesen Titel kein Kursziel', 'info');
+      else if (candidate.yh_targets?.error) toast(`Yahoo-Kursziel fehlgeschlagen (${candidate.yh_targets.error})`, 'error');
+    } catch (err) {
+      console.warn('[yahoo-targets] fetch fehlgeschlagen:', err.message);
+      candidate.yh_targets = { error: 'http', detail: err.message };
+    }
+    candidate._yh_loading = false;
+    rerender();
+    return;
+  }
+
+  // Trend-Tab: Retail-Stimmung (StockTwits Bull/Bear-Tagesreihe).
+  // Bewusst nur im Speicher, nicht persistiert: die Quote ist tagesaktuell und
+  // in 60 min ohnehin neu zu holen — sie im Blob abzulegen würde nur veralten.
+  if (action === 'stSentiment') {
+    if (candidate._st_loading) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!backendUrl || !secret) { toast('Backend nicht konfiguriert', 'error'); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._st_loading = true; rerender();
+    try {
+      candidate.st_sentiment = await fetchStocktwitsSentiment(candidate, { backendUrl, secret });
+    } catch (err) {
+      console.warn('[stocktwits] fetch fehlgeschlagen:', err.message);
+      candidate.st_sentiment = { error: err.message, checked_at: new Date().toISOString() };
+    }
+    candidate._st_loading = false;
+    rerender();
+    return;
+  }
+
+  // Detail toolbar: Swing-Check (OHLC → support/resistance zones + Bias-Historie).
+  // On-demand, persistiert als swing_analysis. Quelle nach Titel: US →
+  // TwelveData (Key nötig), sonst Yahoo über die scrape-proxy (Backend nötig).
+  if (action === 'tdQuote') {
+    const us = isUsTicker(candidate);
+    if (us && !localStorage.getItem('discovery_twelvedata_key')) { toast(swingErrorText('no_key'), 'error', 4000); return; }
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    if (!us && (!backendUrl || !secret)) { toast(swingErrorText('no_backend'), 'error', 4000); return; }
+    const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    candidate._swing_loading = true; rerender();
+    let result;
+    try {
+      result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate(), backendUrl, secret });
+    } catch (err) {
+      result = { error: us ? 'td_error' : 'yf_error', message: err.message };
+    }
+    candidate._swing_loading = false;
+    if (result?.error) { toast(swingErrorText(result.error), result.error === 'not_us' ? 'info' : 'error', 4000); rerender(); return; }
+    candidate.swing_analysis = result;
+    rerender();
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { swing_analysis: result });
+      } catch (err) {
+        toast(`Swing-Analyse nicht gespeichert: ${err.message}`, 'error');
+      }
+    }
+    toast(`📐 Swing-Zonen aktualisiert (${result.bars} Bars)`, 'success', 2500);
+    return;
+  }
+
+  if (action === 'export') {
+    if (currentBlobType === 'export') {
+      toast('Bereits im Export-Bucket', 'info', 2000);
+      return;
+    }
     if (!useMock) {
       try {
         await storageClient.moveCandidate(candidate.id, currentBlobType, 'export');
         allBlobs.export = null;
       } catch (err) {
-        toast(`Promote fehlgeschlagen: ${err.message}`, 'error');
+        toast(`Export fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
     } else {
@@ -377,18 +1110,58 @@ async function handleAction(action, candidate, extras = {}) {
     blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
     candidateList.setData(blob.candidates);
     candidateDetail.hide();
-    toast(`✓ ${candidate.symbol} → Export (Tab „Export")`, 'success');
+    toast(`↗ ${candidate.symbol} → Export`, 'success');
+    return;
+  }
+
+  if (action === 'setUserPrice') {
+    const { field, value } = extras;
+    if (!['my_entry', 'my_target'].includes(field)) return;
+    const prev = candidate[field];
+    candidate[field] = value;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { [field]: value });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate[field] = prev; // revert
+        candidateList.renderRows();
+        return;
+      }
+    }
+    // No re-render: the input already shows the value, and re-rendering would steal focus.
+    return;
+  }
+
+  if (action === 'promote') {
+    candidate.workspace_state = 'promoted';
+    if (!useMock) {
+      try {
+        await storageClient.moveCandidate(candidate.id, currentBlobType, 'watch');
+        allBlobs.watch = null;
+      } catch (err) {
+        toast(`Promote fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    } else {
+      await mockInsert('watch', candidate);
+    }
+    blob.candidates = blob.candidates.filter((c) => c.id !== candidate.id);
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`✓ ${candidate.symbol} → Watch (Tab „Watch")`, 'success');
   }
 
   if (action === 'delete') {
     if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
     if (!useMock) {
       try {
-        // Inbox delete → move to archive so the adapter won't re-add on next run.
-        // Archive/export delete → true hard delete (adapters never write there).
+        // Löschen = echtes Hard-Delete. Inbox: zusätzlich Tombstone (Re-Add-
+        // Schutz), aber NICHT ins Archiv (Archiv = nur manuell verworfene).
+        // Archive/export: reines Hard-Delete (Adapter schreiben dort nie).
         if (currentBlobType === 'inbox') {
-          await storageClient.moveCandidate(candidate.id, 'inbox', 'archive');
-          allBlobs.archive = null;
+          try { await storageClient.deleteAndTombstone('inbox', [candidate.id]); }
+          catch { await storageClient.deleteCandidate('inbox', candidate.id); }
         } else {
           await storageClient.deleteCandidate(currentBlobType, candidate.id);
         }
@@ -422,6 +1195,53 @@ async function handleAction(action, candidate, extras = {}) {
     toast(`✗ ${candidate.symbol} → Archiv`, 'info');
   }
 
+  if (action === 'toggleStar') {
+    candidate.in_portfolio = !candidate.in_portfolio;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { in_portfolio: candidate.in_portfolio });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.in_portfolio = !candidate.in_portfolio; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    if (candidateDetail?.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  if (action === 'toggleWatch') {
+    candidate.watch_flag = !candidate.watch_flag;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { watch_flag: candidate.watch_flag });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.watch_flag = !candidate.watch_flag; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    if (candidateDetail?.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  if (action === 'toggleBroker') {
+    candidate.broker_armed = !candidate.broker_armed;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { broker_armed: candidate.broker_armed });
+      } catch (err) {
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+        candidate.broker_armed = !candidate.broker_armed; // revert
+        return;
+      }
+    }
+    candidateList.renderRows();
+    return;
+  }
+
   if (action === 'review') {
     candidate.workspace_state = 'reviewed';
     if (!useMock) {
@@ -447,16 +1267,153 @@ async function handleAction(action, candidate, extras = {}) {
   }
 
   if (action === 'saveLinks') {
+    // Der eigene Research-Prompt reitet auf demselben Speichern wie die Links —
+    // beides steht im selben Bearbeiten-Feld, also gehört es in einen Request.
     candidate.links = extras.links;
+    const patch = { links: extras.links };
+    if ('research_prompt' in extras) {
+      candidate.research_prompt = extras.research_prompt;
+      patch.research_prompt = extras.research_prompt;
+    }
     if (!useMock) {
       try {
-        await storageClient.updateCandidate(currentBlobType, candidate.id, { links: extras.links });
+        await storageClient.updateCandidate(currentBlobType, candidate.id, patch);
       } catch (err) {
-        toast(`Links speichern fehlgeschlagen: ${err.message}`, 'error');
+        toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
         return;
       }
     }
-    toast('Links aktualisiert', 'success', 1500);
+    toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
+  }
+
+  /* Detail-Sheet geöffnet: still nachladen, was fehlt oder veraltet ist.
+     Bewusst OHNE Toasts — der Nutzer hat nichts angefordert, er hat nur ein
+     Sheet geöffnet; die Ladezustände stehen in den Tabs selbst. Fehler landen
+     in der Konsole, nicht auf dem Bildschirm.
+     Jede Quelle hat ihre eigene Frist, weil sie unterschiedlich schnell altern:
+     der LS-Kurs ist ein Live-Preis, die Tageskerzen ändern sich einmal je
+     Handelstag, TR-Handelbarkeit praktisch nie, Kursziele alle paar Tage. */
+  if (action === 'detailOpened') {
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    const c = candidate;
+    const plan = autoFetchPlan(c, {
+      hasBackend: !!(backendUrl && secret),
+      isMock: useMock,
+      isUs: isUsTicker(c),
+      hasTdKey: !!localStorage.getItem('discovery_twelvedata_key'),
+      hasYahooSymbol: !!yahooSymbol(c),
+    });
+    if (plan.skip) return;
+    c._auto_at = Date.now();
+
+    const rerender = () => { if (candidateDetail.candidate?.id === c.id) candidateDetail.render(); };
+    const patch = {};
+    const jobs = [];
+
+    if (plan.ls) {
+      jobs.push((async () => {
+        c.ls_quote = { ...(c.ls_quote ?? {}), _fetching: true };
+        const q = await fetchLsQuote(c, { backendUrl, secret });
+        c.ls_quote = q;
+        if (q?.price != null) patch.ls_quote = q;
+      })());
+    }
+
+    if (plan.bars) {
+      jobs.push((async () => {
+        c._swing_loading = true;
+        try {
+          const r = await fetchSwingAnalysis(c, { eurUsd: resolveFxRate(), backendUrl, secret });
+          if (!r?.error) { c.swing_analysis = r; patch.swing_analysis = r; }
+        } finally { c._swing_loading = false; }
+      })());
+    }
+
+    if (plan.tr) {
+      jobs.push((async () => {
+        const t = await checkTradeRepublic(c, { backendUrl, secret });
+        if (t) { c.tr_check = t; patch.tr_check = t; }
+      })());
+    }
+
+    if (plan.yh) {
+      jobs.push((async () => {
+        c._yh_loading = true;
+        try {
+          const r = await fetchYahooTargets(c, { backendUrl, secret });
+          c.yh_targets = r;
+          patch.yh_targets = r;
+        } finally { c._yh_loading = false; }
+      })());
+    }
+
+    if (!jobs.length) return;
+    rerender();   // Ladezustände sichtbar machen, bevor gewartet wird
+    const done = await Promise.allSettled(jobs);
+    done.filter((d) => d.status === 'rejected')
+      .forEach((d) => console.warn('[auto-fetch]', c.symbol, d.reason?.message ?? d.reason));
+    rerender();
+    candidateList.renderRows();
+
+    // Ein Schreibvorgang für alles, was sich geändert hat.
+    if (Object.keys(patch).length) {
+      try { await storageClient.updateCandidate(currentBlobType, c.id, patch); }
+      catch (err) { console.warn('[auto-fetch] speichern fehlgeschlagen:', err.message); }
+    }
+    return;
+  }
+
+  // ✨-Knopf im Detail-Sheet: Modal mit den Recherche-Prompts.
+  if (action === 'openPrompts') {
+    openAiPromptModal(candidate, { currency: extras?.currency });
+    return;
+  }
+
+  if (action === 'openTrigger') {
+    openTriggerEditor(candidate, {
+      onSaveAlerts: persistAlerts,
+      onSaved: () => candidateList.renderRows(),
+      toast,
+    });
+    return;
+  }
+
+  // Nachkauf-Kalkulator (★-Zeilen der Standard-Ansicht). Reiner Rechner —
+  // Einstand/Stückzahl bleiben in der Merkliste, es wird nichts persistiert.
+  if (action === 'openNachkauf') {
+    openNachkaufModal(candidate);
+    return;
+  }
+
+  // Tap on the detail chart → open the Trigger editor with the tapped price
+  // (EUR) pre-filled into the manual-price field.
+  if (action === 'chartAlert') {
+    openTriggerEditor(candidate, {
+      onSaveAlerts: persistAlerts,
+      onSaved: () => candidateList.renderRows(),
+      toast,
+      prefillPriceEur: extras.priceEur,
+    });
+    return;
+  }
+
+  if (action === 'saveMerklisteSymbol') {
+    candidate.merkliste_symbol = extras.value;
+    if (!useMock) {
+      try {
+        await storageClient.updateCandidate(currentBlobType, candidate.id, { merkliste_symbol: extras.value });
+      } catch (err) {
+        toast(`Mapping speichern fehlgeschlagen: ${err.message}`, 'error');
+        return;
+      }
+    }
+    // Re-apply the merkliste portfolio map so Einstand/P/L pick up the new key.
+    if (merklisteMaps) {
+      applyMerklisteEntries(blob.candidates, merklisteMaps);
+      candidateList.renderRows();
+    }
+    toast('Merkliste-Mapping gespeichert', 'success', 1500);
   }
 
   if (action === 'enriched') {
@@ -474,29 +1431,73 @@ async function handleAction(action, candidate, extras = {}) {
   }
 }
 
+/** TD-Tageskerzen für EINEN Kandidaten laden und persistieren (US-only, TD-Free).
+ *  Gibt das Ergebnis zurück – inkl. `{ error }`, damit Aufrufer bei einem
+ *  Rate-Limit abbrechen können, statt weiter Credits zu verbrennen. */
+async function fetchTdBars(candidate) {
+  if (!isUsTicker(candidate)) return { error: 'not_us' };
+  if (!localStorage.getItem('discovery_twelvedata_key')) {
+    toast(swingErrorText('no_key'), 'error', 4000);
+    return { error: 'no_key' };
+  }
+  let result;
+  try {
+    result = await fetchSwingAnalysis(candidate, { eurUsd: resolveFxRate() });
+  } catch (err) {
+    result = { error: 'td_error', message: err.message };
+  }
+  if (result?.error) {
+    toast(`${candidate.symbol}: ${swingErrorText(result.error)}`, 'error', 4000);
+    return result;
+  }
+  candidate.swing_analysis = result;
+  if (!useMock) {
+    try {
+      await storageClient.updateCandidate(currentBlobType, candidate.id, { swing_analysis: result });
+    } catch { /* Anzeige funktioniert auch ohne Persistenz */ }
+  }
+  return result;
+}
+
 async function handleBulkAction(action, ids) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
   const targets = blob.candidates.filter((c) => ids.includes(c.id));
 
+  // Vergleich: reine Ansicht auf bereits geladenen Daten – kein Schreibzugriff.
+  if (action === 'compare') {
+    if (targets.length < 2) { toast('Mindestens zwei Kandidaten auswählen', 'info', 2500); return; }
+    renderCompareModal(targets, {
+      onLoadTv: () => handleBulkAction('tv-data', ids),
+      onFetchTd: (c) => fetchTdBars(c),
+    });
+    return;
+  }
+
   if (action === 'delete') {
     if (!confirm(`${targets.length} Kandidat(en) endgültig aus „${currentBlobType}" löschen?`)) return;
-    for (const c of targets) {
-      if (!useMock) {
+    const ids = targets.map((c) => c.id);
+    if (!useMock) {
+      // Löschen ist ein echtes Hard-Delete. In der Inbox zusätzlich Tombstone,
+      // damit die Adapter den Wert nicht neu anlegen — OHNE ihn ins Archiv zu
+      // schieben (Archiv = nur manuell verworfene Werte). Fallback auf Hard-
+      // Delete ohne Tombstone, falls das Backend die neue Op noch nicht kennt.
+      try {
+        if (currentBlobType === 'inbox') {
+          await storageClient.deleteAndTombstone('inbox', ids);
+        } else {
+          await storageClient.deleteCandidates(currentBlobType, ids);
+        }
+      } catch {
         try {
-          if (currentBlobType === 'inbox') {
-            await storageClient.moveCandidate(c.id, 'inbox', 'archive');
-            allBlobs.archive = null;
-          } else {
-            await storageClient.deleteCandidate(currentBlobType, c.id);
-          }
+          await storageClient.deleteCandidates(currentBlobType, ids);
         } catch (err) {
-          toast(`Löschen fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
-          continue;
+          toast(`Löschen fehlgeschlagen: ${err.message}`, 'error');
         }
       }
-      blob.candidates = blob.candidates.filter((x) => x.id !== c.id);
     }
+    const idSet = new Set(ids);
+    blob.candidates = blob.candidates.filter((x) => !idSet.has(x.id));
     candidateList.setData(blob.candidates);
     candidateDetail.hide();
     toast(`🗑 ${targets.length} Kandidat(en) gelöscht`, 'info');
@@ -509,6 +1510,38 @@ async function handleBulkAction(action, ids) {
 
   if (action === 'promote') {
     for (const c of targets) await handleAction('promote', c);
+  }
+
+  if (action === 'export') {
+    if (currentBlobType === 'export') {
+      toast('Bereits im Export-Bucket', 'info', 2000);
+      return;
+    }
+    const ids = targets.map((c) => c.id);
+    if (!useMock) {
+      try {
+        await storageClient.moveCandidates(ids, currentBlobType, 'export');
+        allBlobs.export = null;
+      } catch {
+        // Fallback: Einzel-Ops (altes Backend ohne Bulk-Op)
+        for (const c of targets) {
+          try {
+            await storageClient.moveCandidate(c.id, currentBlobType, 'export');
+            allBlobs.export = null;
+          } catch (err) {
+            toast(`Export fehlgeschlagen: ${c.symbol} – ${err.message}`, 'error');
+          }
+        }
+      }
+    } else {
+      for (const c of targets) await mockInsert('export', c);
+    }
+    const idSet = new Set(ids);
+    blob.candidates = blob.candidates.filter((x) => !idSet.has(x.id));
+    candidateList.setData(blob.candidates);
+    candidateDetail.hide();
+    toast(`↗ ${targets.length} Ticker → Export`, 'success');
+    return;
   }
 
   if (action === 'enrich') {
@@ -536,6 +1569,36 @@ async function handleBulkAction(action, ids) {
 
     candidateList.renderRows();
     toast('✨ Bulk-Enrichment abgeschlossen', 'success');
+  }
+
+  if (action === 'copy-prompt') {
+    const prompt = buildResearchPrompt(targets);
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      // Clipboard API unavailable (e.g. file:// without permission) → textarea fallback
+      const ta = document.createElement('textarea');
+      ta.value = prompt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (!ok) { toast('Kopieren fehlgeschlagen – Clipboard nicht verfügbar', 'error'); return; }
+    }
+    toast(`📋 Research-Prompt für ${targets.length} Ticker kopiert – in AI-Suche einfügen`, 'success', 4000);
+    return;
+  }
+
+  if (action === 'tr-check') {
+    await runTrCheckForSelection(ids);
+    return;
+  }
+
+  if (action === 'ls-quote') {
+    await runLsQuoteForSelection(ids);
+    return;
   }
 
   if (action === 'tv-data') {
@@ -568,9 +1631,51 @@ async function handleBulkAction(action, ids) {
       bulkUpdates.push({ candidate_id: candidateId, updates });
     }
 
+    /* Analysten-Kursziele von Yahoo gehören zur Anreicherung, nicht in einen
+       Notfallpfad: sie liefern als Einzige die Anzahl der Schätzungen und eine
+       zweite Meinung neben TV. Sie laufen deshalb hier mit — in Wellen von
+       YH_BATCH, und nur für Titel, deren letztes Ergebnis älter als 12 h ist
+       (auch eine Fehlanzeige zählt, sonst fragt jeder Lauf dieselben Titel
+       erneut). Ein Fehler bremst den TV-Lauf nicht aus: die Kursziele sind
+       Beiwerk, die TV-Daten sind der Zweck. */
+    const yhTargets = targets.filter((c) => yahooSymbol(c) && !yahooFresh(c));
+    if (yhTargets.length) {
+      toast(`🔎 Analysten-Kursziele (Yahoo) für ${yhTargets.length} Titel…`, 'info', 8000);
+      let done = 0;
+      for (let i = 0; i < yhTargets.length; i += YH_BATCH) {
+        await Promise.all(yhTargets.slice(i, i + YH_BATCH).map(async (c) => {
+          try {
+            const res = await fetchYahooTargets(c, { backendUrl, secret });
+            c.yh_targets = res;
+            if (res?.mean != null) done++;
+            const u = bulkUpdates.find((b) => b.candidate_id === c.id);
+            if (u) u.updates.yh_targets = res;
+            else bulkUpdates.push({ candidate_id: c.id, updates: { yh_targets: res } });
+          } catch (err) {
+            console.warn('[yahoo-targets]', c.symbol, err.message);
+          }
+        }));
+      }
+      console.log(`[yahoo-targets] ${done}/${yhTargets.length} mit Kursziel`);
+    }
+
+    // Feedback loop: record today's signals + evaluate matured ones, and let
+    // the touched signal_logs ride the same bulk save (no extra request).
+    const tracked = trackSignals(targets);
+    for (const id of tracked.changedIds) {
+      const c = targets.find((x) => x.id === id);
+      if (!c) continue;
+      const u = bulkUpdates.find((b) => b.candidate_id === id);
+      if (u) u.updates.signal_log = c.signal_log;
+      else bulkUpdates.push({ candidate_id: id, updates: { signal_log: c.signal_log } });
+    }
+
     // Re-render immediately — data is already in memory
     candidateList.renderRows();
-    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert`, 'success');
+    const sigNote = tracked.recorded || tracked.evaluated
+      ? ` · ${tracked.recorded} Signale erfasst${tracked.evaluated ? `, ${tracked.evaluated} ausgewertet` : ''}`
+      : '';
+    toast(`📊 ${enrichments.size} Kandidaten mit TV Daten angereichert${sigNote}`, 'success');
 
     // Persist to backend best-effort
     try {
@@ -581,24 +1686,52 @@ async function handleBulkAction(action, ids) {
   }
 }
 
+// Foreign ADRs/stocks that only have German regional listings (e.g. UMCB on
+// Frankfurt/Gettex) are not in the TV scanner. Resolve them to their primary
+// listing via the ISIN (UMCB → NYSE:UMC) so TV data can be fetched, and store
+// the primary. Only foreign ISINs on a German venue are touched.
+const GERMAN_VENUE_CODES = new Set([
+  'XETR', 'FWB', 'XFRA', 'FRA', 'F', 'MUN', 'XMUN', 'STU', 'XSTU', 'SWB',
+  'DUS', 'XDUS', 'BER', 'XBER', 'GETTEX', 'TRADEGATE', 'GAT', 'HAM', 'HAN', 'UNKNOWN',
+]);
+
+async function resolveForeignPrimaries(candidates) {
+  for (const c of candidates) {
+    if (!c.isin) continue;
+    const home = String(c.isin).slice(0, 2).toUpperCase();
+    const code = String(c.exchange ?? '').toUpperCase();
+    const germanOrUnknown = GERMAN_VENUE_CODES.has(code) || normalizeExchange(c.exchange) === 'XETR' || !c.exchange;
+    if (home === 'DE' || !germanOrUnknown) continue; // only foreign-on-German venues
+    try {
+      const p = await resolvePrimaryByIsin(c.isin);
+      if (p && p.exchange && (p.symbol !== c.symbol || p.exchange !== c.exchange)) {
+        c.sources?.push?.({
+          adapter: 'system', source_url: '', discovered_at: new Date().toISOString(),
+          signal_type: 'note', raw_signal: {},
+          info_snippet: `Primärlisting via ISIN aufgelöst: ${c.exchange}:${c.symbol} → ${p.exchange}:${p.symbol}`,
+        });
+        c.symbol = p.symbol;
+        c.exchange = p.exchange;
+        c.yahoo_symbol = p.yahoo_symbol;
+        c.links = buildLinks({ symbol: p.symbol, exchange: p.exchange, yahooSymbol: p.yahoo_symbol });
+      }
+    } catch { /* best-effort – keep original listing */ }
+  }
+  return candidates;
+}
+
 /** Import candidates into inbox (mock = in-memory dedup, real = backend). */
 async function importCandidates(candidates) {
   let added = 0, merged = 0, skipped = 0, errors = 0;
 
+  await resolveForeignPrimaries(candidates);
+
   if (useMock) {
     const inbox = await ensureBlob('inbox');
+    // Inbox is a raw capture: always add, never merge on import.
     for (const cand of candidates) {
-      const existing = inbox.candidates.find(
-        (c) => c.symbol === cand.symbol && c.exchange === cand.exchange,
-      );
-      if (existing) {
-        existing.sources.push(...cand.sources);
-        existing.last_updated_at = new Date().toISOString();
-        merged++;
-      } else {
-        inbox.candidates.push(cand);
-        added++;
-      }
+      inbox.candidates.push(cand);
+      added++;
     }
   } else {
     for (const cand of candidates) {
@@ -649,11 +1782,18 @@ async function init() {
     onAction: handleAction,
     onBulkAction: handleBulkAction,
     onSelectionChange: () => renderSelectedPill(),
+    onAfterRender: () => updateAlertBadge(),
   });
 
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
     onAction: handleAction,
     onClose: closeDetailSheet,
+    // Siblings = the candidates in the current table sort order, for prev/next.
+    getSiblings: () => (candidateList ? candidateList.getSorted(candidateList.getFiltered()) : []),
+  });
+  initSheetSwipe(document.getElementById('detail-sheet'), {
+    onPrev: () => candidateDetail.navigate(-1),
+    onNext: () => candidateDetail.navigate(1),
   });
 
   // Apply saved view mode before first data load
@@ -662,16 +1802,46 @@ async function init() {
   }
 
   // Apply saved filters directly (before setData so first render uses them)
+  // State filter removed — state pills were removed from filterbar
+  uiState.fState = '';
+  uiState.fDup = '';   // Dubletten-Filter ist transient (bucket-abhängig, dupMap lädt async)
   candidateList.filters = {
-    state:   uiState.fState  ?? '',
-    sector:  uiState.fSector ?? '',
-    capSize: uiState.fCap    ?? '',
+    state:   '',
+    sector:  uiState.fSector ?? [],
+    mega:    uiState.fMega ?? [],
+    capSize: uiState.fCap    ?? [],
+    broker:  uiState.fBroker ?? '',
+    score:   uiState.fScore  ?? [],
+    tr:      uiState.fTr     ?? [],
+    alerts:  uiState.fAlerts ?? '',
+    lsTrend: uiState.fLsTrend ?? [],
+    dup:     '',
+    search:  '',
   };
+
+  // Currency display: saved preference + best available EUR/USD rate,
+  // then refresh the live rate from TV in the background.
+  const fx = resolveFxRate();
+  if (fx) candidateList.setFxRate(fx);
+  if (uiState.currency !== 'USD') candidateList.setDisplayCurrency(uiState.currency);
+  refreshFxRate();
 
   // Load initial data (also calls renderBotnav + renderFilterbar)
   await switchBlob(currentBlobType);
 
   updateMockBadge();
+
+  // On load: pull merkliste "Einstand"/shares only. LS quotes are fetched
+  // on demand (LS-Kurs button) — no automatic LS fetch on load.
+  loadMerklisteEntries(true);
+
+  // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
+  // sheet on load, and on later hash changes (second push while app is open).
+  if (candidateIdFromHash()) openCandidateById(candidateIdFromHash());
+  window.addEventListener('hashchange', () => {
+    const id = candidateIdFromHash();
+    if (id) openCandidateById(id);
+  });
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
   document.getElementById('scrim').addEventListener('pointerup', () => {
@@ -690,6 +1860,8 @@ async function init() {
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
     allBlobs[currentBlobType] = null;
     await switchBlob(currentBlobType);
+    await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
+    await loadLsHistory(true);        // re-pull the 10-day LS history (Trade view)
     toast('Aktualisiert', 'info', 1500);
   });
 
@@ -699,15 +1871,87 @@ async function init() {
     renderUploadModal({ onImport: importCandidates });
   });
 
+  document.getElementById('btn-screener').addEventListener('pointerup', () => {
+    if (useMock) {
+      toast('Screener braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
+      return;
+    }
+    renderScreenerModal({
+      storageClient,
+      backendUrl: localStorage.getItem('discovery_backend_url'),
+      secret: localStorage.getItem('discovery_secret'),
+      onImport: importCandidates,
+      toast,
+    });
+  });
+
   document.getElementById('btn-theme').addEventListener('pointerup', toggleTheme);
 
   document.getElementById('btn-export').addEventListener('pointerup', handleExport);
+
+  // ── Topbar-Suche (ersetzt den Discovery-Titel): filtert den aktiven Bucket
+  // über Symbol/Name/ISIN/Sektor/Industrie/Börse/Quellen/Health/Notizen.
+  const searchEl = document.getElementById('global-search');
+  const searchClear = document.getElementById('global-search-clear');
+  const applySearch = () => {
+    searchClear.hidden = !searchEl.value;
+    candidateList.setSearch(searchEl.value);
+  };
+  let searchTimer = null;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(applySearch, 150);
+  });
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { searchEl.value = ''; applySearch(); searchEl.blur(); }
+  });
+  searchClear.addEventListener('pointerup', () => { searchEl.value = ''; applySearch(); searchEl.focus(); });
+
+  // ── Beim Runterscrollen in der Tabelle Topbar+Subbar einklappen (mobil),
+  // beim Hochscrollen wieder zeigen. CSS (#app.is-compact) macht das nur
+  // ≤767px sichtbar; hier nur die Klasse anhand der Scroll-Richtung togglen.
+  //
+  // Das Umschalten ändert die Grid-Zeilen und damit die Höhe von #content.
+  // Am Seitenende sinkt dadurch die maximale Scrollposition, und der Browser
+  // klemmt scrollTop um die Leistenhöhe nach unten. Ungeschützt liest der
+  // Handler das als „hochgescrollt", klappt wieder aus, wodurch erneut geklemmt
+  // wird — die Leisten springen dann im Frame-Takt. Deshalb setzt jedes
+  // Umschalten die Richtungserkennung kurz aus (Referenz läuft mit), bis die
+  // Layout-Transition und das Klemmen durch sind.
+  const contentEl = document.getElementById('content');
+  const appEl = document.getElementById('app');
+  const SETTLE_MS = 350;   // > Grid-Transition (--t-fast = 120 ms) + Klemm-Nachlauf
+  const DEAD_ZONE = 6;     // Mindestbewegung, damit Mikro-Deltas nichts auslösen
+  let lastScrollY = 0, scrollTicking = false, settleUntil = 0;
+  contentEl.addEventListener('scroll', () => {
+    if (scrollTicking) return;
+    scrollTicking = true;
+    requestAnimationFrame(() => {
+      scrollTicking = false;
+      const y = contentEl.scrollTop;
+      const now = performance.now();
+      // Nachlauf nach eigenem Umschalten: nur die Referenz mitziehen, nicht schalten.
+      if (now < settleUntil) { lastScrollY = y; return; }
+      // Zielzustand bestimmen und nur bei echter Änderung schreiben — sonst
+      // setzt jeder Scroll-Frame das class-Attribut neu, ohne dass sich etwas
+      // ändert.
+      const isCompact = appEl.classList.contains('is-compact');
+      let want = isCompact;
+      if (y > lastScrollY + DEAD_ZONE && y > 56) want = true;
+      else if (y < lastScrollY - DEAD_ZONE || y <= 8) want = false;
+      if (want !== isCompact) {
+        appEl.classList.toggle('is-compact', want);
+        settleUntil = now + SETTLE_MS;
+      }
+      lastScrollY = y;
+    });
+  }, { passive: true });
 
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
     renderSettingsModal(async () => {
       useMock = !isConfigured();
       storageClient = isConfigured() ? loadStorageClient() : null;
-      allBlobs = { inbox: null, archive: null, export: null };
+      allBlobs = { inbox: null, archive: null, export: null, watch: null };
       updateMockBadge();
       await switchBlob(currentBlobType);
       toast('Einstellungen gespeichert', 'success');
@@ -717,9 +1961,61 @@ async function init() {
   // ── Botnav ───────────────────────────────────────────────────────────────────
   document.getElementById('nav-home').addEventListener('pointerup', () => {
     document.getElementById('content').scrollTo({ top: 0, behavior: 'smooth' });
+    openAlertModal();
   });
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
+
+  // Markets slot → open the Markets modal (indices + embedded Markets sub-page).
+  document.getElementById('nav-markets').addEventListener('pointerup', () => {
+    renderMarketsModal({
+      onFetchIndicators: async () => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchMarketIndicators({ backendUrl, secret });
+      },
+      // Indices-Tab: Branchen-/Länder-Indizes (Liste in lib/tv-indices.js).
+      onFetchIndexRows: async (entries) => {
+        const backendUrl = localStorage.getItem('discovery_backend_url');
+        const secret     = localStorage.getItem('discovery_secret');
+        if (useMock || !backendUrl || !secret) return null;
+        return fetchIndexRows({ backendUrl, secret, entries });
+      },
+      // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
+      getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
+      // Sektoren-Heatmap: alle Kandidaten aus allen 4 Buckets (inbox + watch +
+      // export + archive), dedupliziert nach Symbol+Börse. Archiv ist meist der
+      // größte Topf (verworfene, aber TV-angereicherte Werte) → breitere Basis.
+      getHeatCandidates: async () => {
+        const blobs = await Promise.all(['inbox', 'watch', 'export', 'archive'].map((b) => ensureBlob(b)));
+        const seen = new Set();
+        const out = [];
+        for (const c of blobs.flatMap((b) => b?.candidates ?? [])) {
+          const k = `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push(c);
+        }
+        return out;
+      },
+    });
+  });
+
+  // Monitor slot → dashboard for the active bucket (score movers, perf, signals).
+  document.getElementById('nav-monitor').addEventListener('pointerup', () => {
+    const candidates = allBlobs[currentBlobType]?.candidates ?? [];
+    renderDashboardModal({
+      candidates,
+      bucket: currentBlobType,
+      onOpenDetail: (candidate, ctrl) => {
+        ctrl?.hide();                        // keep the dashboard mounted, just hidden
+        returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes
+        candidateDetail.show(candidate);
+        openDetailSheet();
+      },
+    });
+  });
 
   // ── First run hint ───────────────────────────────────────────────────────────
   if (!isConfigured()) {
