@@ -120,15 +120,20 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   (Standard view row action). Pure calculator, EUR only — it reads `mk_entry` /
   `mk_shares` (merkliste) + the LS quote and persists nothing.
   Die Toolbar trägt neben den Icon-Links einen **✨-Knopf**, der
-  `ai-prompt-modal.js` öffnet: vier einzeln kopierbare englische Recherche-
+  `ai-prompt-modal.js` öffnet: fünf einzeln kopierbare englische Recherche-
   Prompts (Moat & Wettbewerb · Red Flags inkl. Short-Seller · Insider ·
-  News/Katalysatoren mit 3-Monats-Ausblick), gebaut von `stockPrompts` in
-  `research-prompt.js`. Alle vier teilen Kopf (neutral evidence researcher,
-  Quelle + Datum) und Formatregeln (kurze Bullets, Fettung sparsam,
-  Signal-Marker 🔴🟢🟡⚪, Abschlusszeile „⚠ Watch"). Ein im Bearbeiten-Menü
-  hinterlegter Text (`candidate.research_prompt`) kommt als zusätzliche erste
-  Karte dazu — er ersetzt die vier nicht.
-- `ai-prompt-modal.js` – die vier Recherche-Prompts eines Titels zum Kopieren
+  News/Katalysatoren mit 3-Monats-Ausblick · **Extreme & Katalysatoren**),
+  gebaut von `stockPrompts` in `research-prompt.js`. Alle fünf teilen Kopf
+  (neutral evidence researcher, Quelle + Datum) und Formatregeln (kurze
+  Bullets, Fettung sparsam, Signal-Marker 🔴🟢🟡⚪, Abschlusszeile „⚠ Watch").
+  Ein im Bearbeiten-Menü hinterlegter Text (`candidate.research_prompt`) kommt
+  als zusätzliche erste Karte dazu — er ersetzt die fünf nicht.
+  Der Extreme-Prompt seziert rückblickend die Ausschläge eines Jahres (Auslöser,
+  gehalten oder zurückgegeben, wiederholbar?) und bekommt als Anker die
+  **Termine der grössten Tagessprünge** aus `swing_analysis.ohlc` mit —
+  gefiltert auf ≥ 2,5 × den Median der absoluten Tagesbewegung des Titels,
+  damit keine ereignislosen Tage in der Liste landen.
+- `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.

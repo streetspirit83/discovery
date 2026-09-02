@@ -12,7 +12,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
-import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260819l';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260831b';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
@@ -30,7 +30,7 @@ import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-target
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260819m';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20260819l';
+import { buildResearchPrompt } from './lib/research-prompt.js?v=20260831b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';

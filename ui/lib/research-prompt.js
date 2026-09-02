@@ -114,9 +114,80 @@ function dataBlock(c, cur) {
   ].join(' · ');
 }
 
-/* ── Vier Prompts statt einem ───────────────────────────────────────────────
+/* ── Extrembewegungen: Datum-Anker für die Katalysator-Suche ────────────────
+ * Der Extreme-Prompt fragt „was hat den Sprung ausgelöst" — die Frage ist nur
+ * so gut wie die Daten, an denen sie hängt. Eine Such-KI, die selbst nach
+ * „grösste Tagesbewegungen" suchen muss, rät; bekommt sie konkrete Daten, sucht
+ * sie gezielt nach den Meldungen dieser Tage.
+ *
+ * Quelle sind die persistierten Tageskerzen (`swing_analysis.ohlc`, ~180 Bars
+ * ≈ 8–9 Monate). Bewusst OHNE Währung: Tagesveränderungen sind Prozente, und
+ * die Bars stehen ohnehin in ihrer eigenen Währung (siehe tv-swings.js).
+ * Ohne geladene Kerzen entfällt der Block — der Prompt fragt dann trotzdem
+ * nach den Extremen, nur ohne vorgegebene Termine.
+ */
+function biggestDailyMoves(analysis, n = 6) {
+  const bars = Array.isArray(analysis?.ohlc) ? analysis.ohlc : null;
+  if (!bars || bars.length < 2) return null;
+
+  const moves = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]?.c, cur = bars[i]?.c;
+    if (!(prev > 0) || !(cur > 0)) continue;   // Feiertagslücken tragen null
+    moves.push({ date: bars[i].date, chg: (cur / prev - 1) * 100 });
+  }
+  if (!moves.length) return null;
+
+  /* Schwelle relativ zum Titel, nicht absolut: 4 % sind für einen Mega-Cap ein
+     Ereignis und für einen Small-Cap ein Dienstag. Der Median der absoluten
+     Tagesbewegung ist das Normalmass des Papiers; alles unter dem 2,5-Fachen
+     davon ist kein Ausschlag und hat als Recherche-Termin nichts verloren —
+     sonst schickt der Prompt die KI auf die Suche nach der Meldung eines Tages,
+     an dem nichts passiert ist. */
+  const absSorted = moves.map((m) => Math.abs(m.chg)).sort((a, b) => a - b);
+  const median = absSorted[Math.floor(absSorted.length / 2)] || 0;
+  const floor = Math.max(median * 2.5, 3);
+
+  const top = moves
+    .filter((m) => Math.abs(m.chg) >= floor)
+    .sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg))
+    .slice(0, n)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!top.length) return null;
+
+  return { top, from: bars[0]?.date ?? null, to: bars[bars.length - 1]?.date ?? null, days: bars.length };
+}
+
+/* Was die KI für die Extremfrage nicht selbst besser weiss: wo der Kurs in
+   seiner 52-Wochen-Spanne steht, wie weit er vom Allzeithoch entfernt ist —
+   und die Termine der grössten Tagessprünge aus meinen eigenen Kerzen. */
+function extremesBlock(c, cur) {
+  const tv = c.tv_data ?? {};
+  const px = tv.close_1m ?? tv.close;
+  const hi = tv.price_52_week_high, lo = tv.price_52_week_low;
+  const out = [];
+
+  if (hi != null && lo != null) {
+    const pos = (px != null && hi > lo) ? `, price sits at ${Math.round((px - lo) / (hi - lo) * 100)}% of that range` : '';
+    out.push(`52-week range: ${num(lo)}–${num(hi)} ${cur}${pos}`);
+  }
+  if (tv.high_all != null && px != null) {
+    out.push(`All-time high ${money(tv.high_all, cur)} — now ${pct((px / tv.high_all - 1) * 100)} from it`);
+  }
+  out.push(`Perf W/1M/3M/6M: ${[tv.perf_w, tv.perf_1m, tv.perf_3m, tv.perf_6m].map(pct).join(' / ')}`);
+  if (tv.volatility_m != null) out.push(`Avg daily volatility (1M): ${num(tv.volatility_m)}%`);
+
+  const mv = biggestDailyMoves(c.swing_analysis);
+  if (mv) {
+    out.push(`Largest single-day moves in my daily bars (${mv.from} to ${mv.to}, ${mv.days} sessions): `
+      + mv.top.map((m) => `${m.date} ${pct(m.chg)}`).join(', '));
+  }
+  return out.join('\n');
+}
+
+/* ── Fünf Prompts statt einem ───────────────────────────────────────────────
  * Ein einziger Riesen-Prompt liefert bei Such-KIs regelmässig eine dünne
- * Antwort pro Block — vier gezielte Fragen bringen je Block mehr. Sie teilen
+ * Antwort pro Block — fünf gezielte Fragen bringen je Block mehr. Sie teilen
  * sich Kopf (wer fragt, über welchen Titel) und Formatregeln.
  *
  * Die Signal-Marker im Format-Block sind Emoji: das ist bewusst KEIN Verstoss
@@ -198,6 +269,44 @@ What explains the price move over the last 1 / 3 / 6 months — concrete events,
 
 My screening data (as of ${date}):
 ${dataBlock(c, currency)}
+
+${FORMAT}`,
+  },
+  /* Der Extreme-Prompt ist ausdrücklich NICHT „News noch einmal": der
+     News-Block erklärt die laufende Bewegung und schaut nach vorn, dieser hier
+     seziert rückblickend die Ausschläge eines Jahres — was sie ausgelöst hat,
+     ob sie gehalten haben und was davon wiederholbar ist. Genau die Frage
+     hinter „warum ist Sivers Semiconductors explodiert und dann abgestürzt". */
+  {
+    key: 'extremes',
+    label: 'Extreme & Katalysatoren',
+    hint: 'Was Kurssprünge und Abstürze des letzten Jahres ausgelöst hat',
+    build: (c, { date, currency }) => `${head(c, date)}
+
+**Extreme moves over the last 12 months**
+Reconstruct the largest up moves and the largest drawdowns of the past year — single days as well as multi-week runs. For each one give: the date (or the window), the size of the move, and the concrete trigger.
+
+For every move, work through these in order and say which one it was:
+- Company events: earnings surprise or miss, guidance change, a design win / major contract / order, product or clinical milestone, regulatory decision, M&A, capital raise or dilution, index inclusion or removal, licence and royalty news.
+- Positioning: short squeeze, unusually high short interest, options gamma, retail hype (StockTwits/Reddit/X), a short-seller report, a lock-up expiry.
+- External: sector or peer move, an analyst upgrade/downgrade, macro (rates, FX, tariffs, export controls), a supplier or key customer.
+
+Then, for each move, the part that actually matters:
+- **Did it hold?** How much of the move was retraced 1 week / 1 month later?
+- Was it company-specific or did the peer group move the same day? Name the peers and their move on that day.
+- Was volume confirming it, or was it a thin-liquidity move?
+- Was the underlying claim substantiated later, or did it turn out to be an announcement that never converted into revenue?
+
+**Pattern**
+- Which of these catalysts are repeatable, and which were genuinely one-offs?
+- Is there a recurring pattern — a habitual beat/miss, an equity raise after every spike, a serial "letter of intent" that never becomes an order?
+- Which upcoming events could trigger a move of the same magnitude, and in which direction?
+- Where a spike has NO identifiable cause, say so explicitly instead of inventing one.
+
+Anchor data from my own screening (as of ${date}):
+${extremesBlock(c, currency)}
+
+Treat those dates as leads, not as gospel — my bar window may be shorter than a year and can miss moves outside it. Look for the biggest moves of the full 12 months independently.
 
 ${FORMAT}`,
   },

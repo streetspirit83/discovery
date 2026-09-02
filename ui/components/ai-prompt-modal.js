@@ -2,19 +2,19 @@
  * ai-prompt-modal.js — die Recherche-Prompts eines Titels zum Kopieren.
  *
  * Geöffnet über den ✨-Knopf in der Detail-Toolbar. Statt eines einzigen
- * Riesen-Prompts vier gezielte (Moat & Wettbewerb · Red Flags · Insider ·
- * News & Ausblick): Such-KIs beantworten vier Fragen nacheinander deutlich
- * gründlicher als eine mit sieben Unterpunkten.
+ * Riesen-Prompts fünf gezielte (Moat & Wettbewerb · Red Flags · Insider ·
+ * News & Ausblick · Extreme & Katalysatoren): Such-KIs beantworten fünf Fragen
+ * nacheinander deutlich gründlicher als eine mit sieben Unterpunkten.
  *
  * Ein im Bearbeiten-Menü hinterlegter eigener Prompt (`research_prompt`)
  * erscheint als zusätzliche, erste Karte — er ersetzt nichts, sondern kommt
- * dazu: die vier Bausteine bleiben nutzbar.
+ * dazu: die fünf Bausteine bleiben nutzbar.
  *
  * Reiner Kopier-Dialog: er ruft nichts ab und speichert nichts.
  */
 
 import { icons } from '../lib/icons.js?v=20260807a';
-import { stockPrompts } from '../lib/research-prompt.js?v=20260819l';
+import { stockPrompts } from '../lib/research-prompt.js?v=20260831b';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 
 /* Clipboard-API gibt es nur im sicheren Kontext; der Textarea-Umweg ist der
@@ -85,7 +85,7 @@ export function openAiPromptModal(c, { currency = 'USD' } = {}) {
         <button class="icon-btn" id="aip-close" aria-label="Schließen">${icons.xMark}</button>
       </div>
       <div class="modal-body">
-        <p class="aip-intro">Vier Fragen statt einer: nacheinander in eine Such-KI
+        <p class="aip-intro">Fünf Fragen statt einer: nacheinander in eine Such-KI
           (Perplexity, ChatGPT Search, Claude) einfügen. Jeder Prompt bringt seine
           eigenen Regeln für Belege und Formatierung mit.</p>
         ${all.map((p, i) => card(p, custom ? (i === 0 ? null : i) : i + 1)).join('')}
