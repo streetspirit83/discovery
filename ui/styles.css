@@ -2627,3 +2627,55 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   padding:var(--s-2) var(--s-3); border-left:3px solid var(--border);
   background:var(--surface-2); border-radius:0 var(--r-1) var(--r-1) 0; }
 .tb-hint.is-warn { color:var(--warn); }
+
+/* ════════════════════════════════════════════════════════════════
+   DETAIL-SHEET: DESKTOP-VOLLBILD (ab 1024px)
+   ════════════════════════════════════════════════════════════════
+   Am Desktop ist das Detail-Fenster kein schmales Panel am rechten Rand mehr,
+   sondern ein zentriertes Fenster über fast der ganzen Fläche — zweispaltig:
+   links Kopf/Aktionen/Notizen/Enrichment, rechts die Tabs mit den Inhalten
+   (Charts bekommen so die Breite, die sie brauchen). Beide Spalten scrollen
+   getrennt.
+
+   Der Inhalt liegt dafür in zwei Wrappern (.detail-col). Unter 1024px sind die
+   `display:contents` — der Stapel im seitlichen Sheet bleibt exakt wie bisher;
+   `order` stellt die alte Reihenfolge wieder her, weil Notizen + Enrichment im
+   DOM jetzt in der linken Spalte (also vor den Tabs) stehen. */
+.detail-col { display:contents; }
+.detail-col > * { flex-shrink:0; }            /* gleiche Regel wie .sheet--detail > * */
+.sheet--detail .sheet__header         { order:1; }
+.sheet--detail .detail-nav            { order:2; }
+.sheet--detail .detail-state          { order:3; }
+.sheet--detail .detail-sticky         { order:4; }
+.sheet--detail .detail-tabpanes       { order:5; }
+.sheet--detail .detail-section--notes { order:6; }
+.sheet--detail #enrichment-section    { order:7; }
+
+@media (min-width:1024px) {
+  .sheet--detail {
+    top:2.5vh; right:2.5vw; bottom:2.5vh; left:2.5vw;
+    width:auto; max-width:1680px; margin:0 auto;
+    border:1px solid var(--border); border-radius:var(--r-2);
+    box-shadow:0 24px 64px rgba(0,0,0,.35);
+    display:grid; grid-template-columns:minmax(320px,380px) minmax(0,1fr);
+    overflow:hidden;                           /* die Spalten scrollen, nicht das Fenster */
+    /* Kein translateX mehr — das Fenster blendet zentriert ein. Geschlossen muss
+       es unsichtbar UND klickdurchlässig sein, sonst liegt es über der Tabelle. */
+    transform:translateY(10px) scale(.99); opacity:0;
+    visibility:hidden; pointer-events:none;
+    transition:transform var(--t-sheet) var(--ease), opacity var(--t-sheet) var(--ease),
+               visibility 0s linear var(--t-sheet);
+  }
+  .sheet--detail.is-open {
+    transform:none; opacity:1; visibility:visible; pointer-events:auto;
+    transition:transform var(--t-sheet) var(--ease), opacity var(--t-sheet) var(--ease),
+               visibility 0s;
+  }
+  .detail-col {
+    display:flex; flex-direction:column;
+    min-width:0; min-height:0; overflow-y:auto;  /* min-height:0 — sonst scrollt das Grid-Item nicht */
+  }
+  .detail-col--side { border-right:1px solid var(--border); }
+  /* Mehr Höhe für die Charts, wenn die Fläche da ist. */
+  .ls-chart { height:clamp(280px, 42vh, 520px); }
+}

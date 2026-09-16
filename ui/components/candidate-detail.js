@@ -2597,6 +2597,11 @@ export class CandidateDetail {
     };
 
     this.el.innerHTML = `
+      <!-- Zwei Spalten-Wrapper: am Desktop (ab 1024px) die linke Info-Spalte und
+           die rechte Inhalts-Spalte des Vollbild-Fensters. Darunter sind beide
+           display:contents, der Stapel im seitlichen Sheet bleibt unveraendert
+           (Reihenfolge ueber order in styles.css). -->
+      <div class="detail-col detail-col--side">
       <div class="sheet__header">
         <div class="detail-title">
           <h2>${c.symbol}
@@ -2661,21 +2666,7 @@ export class CandidateDetail {
         <button class="btn btn-sm btn-secondary" id="detail-export">${icons.download} <span class="btn__label">Export</span></button>
       </div>
 
-      <div class="detail-sticky">
-        ${renderToolbar(c)}
-
-        <div class="tab-bar detail-tabs" role="tablist">
-          ${TABS.map(({ key, label }) =>
-            `<button class="tab-btn${this.activeTab === key ? ' active' : ''}" data-tab="${key}"
-              role="tab" aria-selected="${this.activeTab === key}">${label}</button>`).join('')}
-        </div>
-      </div>
-      <div class="detail-tabpanes">
-        ${TABS.map(({ key }) =>
-          `<div class="tab-panel${this.activeTab === key ? ' active' : ''}" data-panel="${key}" role="tabpanel">${tabPanels[key]}</div>`).join('')}
-      </div>
-
-      <div class="detail-section">
+      <div class="detail-section detail-section--notes">
         <h3>Notizen</h3>
         <textarea id="detail-notes" class="notes-editor" placeholder="Notizen…" rows="3">${c.notes ?? ''}</textarea>
         <button class="btn btn-sm btn-secondary" id="detail-save-notes">Speichern</button>
@@ -2692,6 +2683,25 @@ export class CandidateDetail {
         </button>
         <div id="enrich-status" class="enrich-status" style="display:none"></div>
       </div>
+      </div>
+
+      <div class="detail-col detail-col--main">
+      <div class="detail-sticky">
+        ${renderToolbar(c)}
+
+        <div class="tab-bar detail-tabs" role="tablist">
+          ${TABS.map(({ key, label }) =>
+            `<button class="tab-btn${this.activeTab === key ? ' active' : ''}" data-tab="${key}"
+              role="tab" aria-selected="${this.activeTab === key}">${label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="detail-tabpanes">
+        ${TABS.map(({ key }) =>
+          `<div class="tab-panel${this.activeTab === key ? ' active' : ''}" data-panel="${key}" role="tabpanel">${tabPanels[key]}</div>`).join('')}
+      </div>
+
+      </div>
+
     `;
 
     this.el.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
