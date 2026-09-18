@@ -29,7 +29,7 @@ import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
-import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260819m';
+import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260831b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
@@ -1286,18 +1286,23 @@ async function handleAction(action, candidate, extras = {}) {
     toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
   }
 
-  /* Detail-Sheet geöffnet: still nachladen, was fehlt oder veraltet ist.
+  /* Detail-Sheet geöffnet: alle vier Quellen frisch holen — LS-Kurs, Kerzen
+     (TD/Yahoo), TR-Handelbarkeit und die Yahoo-Kursziele. Das gilt überall
+     gleich, am Desktop wie am Handy: wer ein Sheet öffnet, will die aktuellen
+     Zahlen sehen, nicht die vom letzten Blick. Deshalb `force` — die Fristen
+     aus detail-autofetch.js greifen hier nicht mehr, nur noch die harten
+     Bedingungen (kein Backend/Mock, US-Kerzen ohne TwelveData-Key, Kursziele
+     ohne Yahoo-Symbol) und die Sperre gegen eine doppelte laufende Runde.
      Bewusst OHNE Toasts — der Nutzer hat nichts angefordert, er hat nur ein
      Sheet geöffnet; die Ladezustände stehen in den Tabs selbst. Fehler landen
-     in der Konsole, nicht auf dem Bildschirm.
-     Jede Quelle hat ihre eigene Frist, weil sie unterschiedlich schnell altern:
-     der LS-Kurs ist ein Live-Preis, die Tageskerzen ändern sich einmal je
-     Handelstag, TR-Handelbarkeit praktisch nie, Kursziele alle paar Tage. */
+     in der Konsole, nicht auf dem Bildschirm. */
   if (action === 'detailOpened') {
     const backendUrl = localStorage.getItem('discovery_backend_url');
     const secret     = localStorage.getItem('discovery_secret');
     const c = candidate;
     const plan = autoFetchPlan(c, {
+      force: true,
+      busy: !!c._auto_busy,
       hasBackend: !!(backendUrl && secret),
       isMock: useMock,
       isUs: isUsTicker(c),
@@ -1306,6 +1311,7 @@ async function handleAction(action, candidate, extras = {}) {
     });
     if (plan.skip) return;
     c._auto_at = Date.now();
+    c._auto_busy = true;
 
     const rerender = () => { if (candidateDetail.candidate?.id === c.id) candidateDetail.render(); };
     const patch = {};
@@ -1348,9 +1354,10 @@ async function handleAction(action, candidate, extras = {}) {
       })());
     }
 
-    if (!jobs.length) return;
+    if (!jobs.length) { c._auto_busy = false; return; }
     rerender();   // Ladezustände sichtbar machen, bevor gewartet wird
     const done = await Promise.allSettled(jobs);
+    c._auto_busy = false;
     done.filter((d) => d.status === 'rejected')
       .forEach((d) => console.warn('[auto-fetch]', c.symbol, d.reason?.message ?? d.reason));
     rerender();

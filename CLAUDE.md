@@ -182,9 +182,14 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   TradingView-**Chart**-Link `/chart/?symbol=XETR:SAP&interval=1D`; Detail-Sheet
   und Tabelle leiten ihn zur Laufzeit ab, damit auch Kandidaten mit alter
   gespeicherter `/symbols/`-URL im Chart landen),
-  `detail-autofetch.js` (`autoFetchPlan` — entscheidet beim Öffnen eines
-  Detail-Sheets, welche Quelle fällig ist: LS 2 min · Kerzen 20 h · TR 7 Tage ·
-  Yahoo-Kursziele 12 h, plus 2-min-Sperre gegen Doppelläufe beim Blättern), `import-parser.js`,
+  `detail-autofetch.js` (`autoFetchPlan` — entscheidet, welche Quelle abgerufen
+  wird. **Beim Öffnen eines Detail-Sheets läuft der Plan mit `force: true`**:
+  LS · Kerzen (TD/Yahoo) · TR · Yahoo-Kursziele werden immer frisch geholt,
+  unabhängig vom Alter — überall gleich, Desktop wie Handy. Es bleiben nur die
+  harten Bedingungen (kein Backend/Mock, US-Kerzen ohne TwelveData-Key,
+  Kursziele ohne `yahoo_symbol`) und `busy` gegen eine doppelte laufende Runde.
+  Ohne `force` gelten weiter die Fristen LS 2 min · Kerzen 20 h · TR 7 Tage ·
+  Yahoo-Kursziele 12 h plus die 2-min-Sperre), `import-parser.js`,
   `merkliste-import.js`/`merkliste-export.js`, `schema.js`, `icons.js`.
 
 ## Data Sources & External APIs

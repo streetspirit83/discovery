@@ -31,23 +31,43 @@ export function ageMs(iso, now = Date.now()) {
 /**
  * autoFetchPlan(candidate, opts) → { skip, ls, bars, tr, yh }
  *
- * `skip` heisst: gar nichts tun (kein Backend, Mock-Modus, oder derselbe Titel
- * wurde gerade eben schon versorgt). Die vier Flags sagen, welche Quelle fällig
- * ist. `hasTdKey` betrifft nur US-Titel — ohne TwelveData-Key gibt es dort keine
- * Kerzen, und ein Abruf würde nur eine Fehlermeldung erzeugen.
+ * `skip` heisst: gar nichts tun (kein Backend, Mock-Modus, ein noch laufender
+ * Abruf für denselben Titel, oder — ohne `force` — derselbe Titel wurde gerade
+ * eben schon versorgt). Die vier Flags sagen, welche Quelle fällig ist.
+ *
+ * `force` ist der Normalfall beim Öffnen eines Detail-Sheets: dann holt das
+ * Sheet alle vier Quellen frisch, unabhängig vom Alter der gespeicherten Werte.
+ * Wer ein Sheet öffnet, will die aktuellen Zahlen sehen und nicht raten, ob
+ * gerade eine Frist greift. Übrig bleiben nur die harten Bedingungen, unter
+ * denen ein Abruf gar nicht funktionieren kann:
+ * `hasTdKey` (US-Titel ohne TwelveData-Key bekommen keine Kerzen, der Abruf
+ * erzeugte nur eine Fehlermeldung) und `hasYahooSymbol` (ohne Yahoo-Symbol
+ * gibt es keine Kursziel-Abfrage).
+ *
+ * Ohne `force` (Hintergrund-Auffrischung) entscheiden weiter die Fristen — sie
+ * sind unterschiedlich lang, weil die Daten unterschiedlich schnell altern.
  */
 export function autoFetchPlan(c, {
   now = Date.now(), hasBackend = true, isMock = false,
   isUs = false, hasTdKey = false, hasYahooSymbol = false,
+  force = false, busy = false,
 } = {}) {
   const none = { skip: true, ls: false, bars: false, tr: false, yh: false };
   if (!c || isMock || !hasBackend) return none;
-  if (c._auto_at && now - c._auto_at < AUTO_MIN_GAP_MS) return none;
+  // Eine laufende Runde nicht verdoppeln (Doppelklick, schnelles Zurück/Weiter
+  // auf denselben Titel) — das brächte nur dieselben Requests ein zweites Mal.
+  if (busy) return none;
+  if (!force && c._auto_at && now - c._auto_at < AUTO_MIN_GAP_MS) return none;
+
+  const canBars = !isUs || hasTdKey;
+  if (force) {
+    return { skip: false, ls: true, bars: canBars, tr: true, yh: hasYahooSymbol };
+  }
 
   return {
     skip: false,
     ls:   ageMs(c.ls_quote?.checked_at, now) > AUTO_LS_MS,
-    bars: (!isUs || hasTdKey) && ageMs(c.swing_analysis?.checked_at, now) > AUTO_BARS_MS,
+    bars: canBars && ageMs(c.swing_analysis?.checked_at, now) > AUTO_BARS_MS,
     tr:   ageMs(c.tr_check?.checked_at, now) > AUTO_TR_MS,
     yh:   hasYahooSymbol && ageMs(c.yh_targets?.checked_at, now) > AUTO_YH_MS,
   };
