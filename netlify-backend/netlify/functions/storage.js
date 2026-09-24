@@ -12,7 +12,13 @@ const BLOB_NAMES = {
   archive: 'discovery-archive',
   export: 'discovery-export',
   watch: 'discovery-watch',
+  review: 'discovery-review',
 };
+
+/* Der review-Blob führt keine Kandidaten, sondern Tages-Briefings der
+   Cowork-Triage (Ringpuffer über 30 Tage). Er hängt deshalb nur an den ops
+   read und write; append/update/move ergeben für ihn keinen Sinn. */
+const BRIEFING_BLOBS = new Set(['review']);
 
 // Tombstone list: symbol:exchange keys of candidates the user hard-deleted
 // from the inbox. Keeps the scheduled adapters from re-adding them WITHOUT
@@ -48,12 +54,14 @@ function log(level, msg, data = {}) {
 }
 
 function emptyBlob(blobType) {
-  return {
+  const doc = {
     schema_version: 'discovery-1.0',
     blob_type: blobType,
     updated_at: new Date().toISOString(),
-    candidates: [],
   };
+  if (BRIEFING_BLOBS.has(blobType)) doc.briefings = [];
+  else doc.candidates = [];
+  return doc;
 }
 
 function respond(statusCode, body) {
@@ -117,6 +125,13 @@ export default async function handler(req) {
 
   if (!op) {
     return respond(400, { ok: false, error: 'Missing op' });
+  }
+
+  if (BRIEFING_BLOBS.has(blobType) && op !== 'read' && op !== 'write') {
+    return respond(400, {
+      ok: false,
+      error: `blob_type ${blobType} supports read and write only`,
+    });
   }
 
   const store = getStore({ name: 'discovery-data', consistency: 'strong' });
