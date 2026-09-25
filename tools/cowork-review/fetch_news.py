@@ -82,7 +82,11 @@ def fetch(cand: dict, days: int) -> dict:
     url = FEED.format(q=build_query(cand, days))
     res = {"id": cand["id"], "symbol": cand["symbol"], "name": cand.get("name", ""),
            "sector": cand.get("sector"), "sub_sector": cand.get("sub_sector"),
-           "priority": cand.get("priority"), "items": [], "filtered": 0, "error": None}
+           "priority": cand.get("priority"),
+           # Nächster Earnings-Termin aus der TV-Anreicherung (Unix-Sekunden).
+           # push_review.py baut daraus die Termine des Briefings.
+           "earnings_next_date": (cand.get("tv_data") or {}).get("earnings_next_date"),
+           "items": [], "filtered": 0, "error": None}
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=25) as r:

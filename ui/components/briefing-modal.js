@@ -2,7 +2,8 @@
  * Briefing-Modal – die Tages-Briefings der Cowork-Triage.
  *
  * Liest den `review`-Blob (Ringpuffer über 30 Tage) und zeigt je Tag: den
- * Makro-Block mit den drei Clustern als Streifen, die anstehenden Termine und
+ * Makro-Block mit den drei Clustern als Streifen, die Earnings der nächsten
+ * 14 Tage (aus den TV-Daten, nicht recherchiert) und
  * die geflaggten Titel. Geöffnet über das Fernrohr in der Topbar.
  *
  * Rein darstellend — das Modal ruft nichts ab außer dem Blob und schreibt nie.
@@ -85,7 +86,7 @@ function renderEntry(b, opts) {
     ${macro.summary ? `<p class="bf-summary">${esc(macro.summary)}</p>` : ''}
 
     ${drivers ? `<section class="bf-section">
-      <h3 class="bf-h">Termine</h3>
+      <h3 class="bf-h">Earnings (14 Tage)</h3>
       <ul class="bf-drivers">${drivers}</ul>
     </section>` : ''}
 

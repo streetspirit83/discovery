@@ -33,6 +33,14 @@ diese Kennungen, nie URLs. `push_review.py` löst sie auf und verwirft alles, wa
 Digest stand oder zu einem anderen Ticker gehört — der Eintrag fällt dann auf
 `materiality: 0`. Eine erfundene Quelle kann so nicht in den Blob gelangen.
 
+## Termine = Earnings aus den TV-Daten
+
+Die Termine im Briefing werden **nicht recherchiert**. `fetch_news.py` reicht
+`tv_data.earnings_next_date` je Ticker in den Digest durch, `push_review.py` baut daraus
+die Liste (heute bis +14 Tage, chronologisch, `{date: "Mi 30.09.", event: "AVGO · Broadcom"}`)
+und überschreibt damit, was der Lauf unter `macro.drivers` liefert. Der Lauf muss
+dafür nichts tun; ein von ihm gelieferter `drivers`-Block wird ignoriert.
+
 ## Filter
 
 `fetch_news.py` entfernt automatisch erzeugte Schlagzeilen, bevor sie Platz kosten:

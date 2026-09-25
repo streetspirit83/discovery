@@ -137,6 +137,34 @@ def clamp_macro(macro: dict) -> dict:
             "clusters": clusters, "drivers": drivers}
 
 
+EARNINGS_WINDOW_DAYS = 14
+WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+
+
+def earnings_drivers(results: list) -> list:
+    """
+    Termine des Briefings = die nächsten Earnings der Watchlist aus den TV-Daten.
+
+    Nicht recherchiert: der Lauf liefert hier nichts, was nicht schon im
+    watch-Blob steht (`tv_data.earnings_next_date`, Unix-Sekunden, von
+    fetch_news.py durchgereicht). Fenster: heute bis +14 Tage, chronologisch.
+    """
+    today = datetime.now(timezone.utc).date()
+    rows = []
+    for r in results:
+        ts = r.get("earnings_next_date")
+        if not isinstance(ts, (int, float)) or ts <= 0:
+            continue
+        day = datetime.fromtimestamp(ts, timezone.utc).date()
+        if not 0 <= (day - today).days <= EARNINGS_WINDOW_DAYS:
+            continue
+        name = (r.get("name") or "").strip()
+        rows.append((day, r["symbol"], f"{r['symbol']} · {name}" if name else r["symbol"]))
+    rows.sort()
+    return [{"date": f"{WEEKDAYS[d.weekday()]} {d:%d.%m.}", "event": ev}
+            for d, _, ev in rows]
+
+
 def no_news(cluster: str = "other") -> dict:
     return {
         "reviewed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -198,10 +226,13 @@ def main() -> int:
 
     highlights.sort(key=lambda h: -h["materiality"])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    macro = clamp_macro(verdicts.get("macro"))
+    # Termine kommen nicht vom Lauf, sondern aus den TV-Earnings-Daten.
+    macro["drivers"] = earnings_drivers(digest["results"])
     entry = {
         "date": today,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "macro": clamp_macro(verdicts.get("macro")),
+        "macro": macro,
         "highlights": highlights[:10],
         "stats": stats,
     }
