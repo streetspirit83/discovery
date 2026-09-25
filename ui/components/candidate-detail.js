@@ -13,6 +13,7 @@ import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260831a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
+import { SIGNAL_CLASS, CLUSTER_LABELS, EVENT_LABELS, materialityLabel, fullDate, esc as escCow } from '../lib/cowork-review.js?v=20260924a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
@@ -34,6 +35,7 @@ const TABS = [
   { key: 'trade',       label: 'Trade' },
   { key: 'fundamental', label: 'Fund.' },
   { key: 'news',        label: 'News' },
+  { key: 'cowork',      label: 'Cowork' },
   { key: 'meta',        label: 'Meta' },
 ];
 
@@ -672,6 +674,62 @@ function renderNewsTab(c) {
       <span class="pv-muted">Quelle: ROIC.ai${when ? ` · Stand ${when}` : ''}</span>
       <button class="btn btn-sm btn-secondary" id="news-load" data-force="1">Aktualisieren</button>
     </div>`;
+}
+
+/* ── Tab: Cowork-Triage ───────────────────────────────────────────────────
+   Zeigt, was der geplante Tageslauf zu diesem Titel gefunden hat. Rein
+   darstellend: der Tab ruft nichts ab und speichert nichts, die Daten liegen
+   fertig am Kandidaten. Die Quellen stehen als Icon-Only-Links (Styleguide §4). */
+
+function renderCoworkTab(c) {
+  const r = c.cowork_review;
+  if (!r) {
+    return `<p class="pv-muted">Noch kein Cowork-Urteil. Der geplante Lauf sieht die
+      Watchlist täglich um 7:30 Uhr durch und legt sein Ergebnis hier ab.</p>`;
+  }
+
+  const when = fullDate(r.reviewed_at);
+  const foot = `<p class="cow-foot pv-muted">Maschinelle Triage aus öffentlichen Schlagzeilen,
+    geprüft ${when}. Sie ersetzt keine eigene Prüfung und ist keine Anlageempfehlung.</p>`;
+
+  if (r.no_news || !(r.materiality > 0)) {
+    return `<div class="cow-panel">
+      <p class="cow-quiet">${escCow(r.summary || 'Keine relevanten Nachrichten im Zeitfenster gefunden.')}</p>
+      ${foot}
+    </div>`;
+  }
+
+  const cls = SIGNAL_CLASS[r.signal] ?? 'neutral';
+  const chips = (r.event_types ?? [])
+    .filter((e) => e !== 'none')
+    .map((e) => `<span class="cow-chip">${escCow(EVENT_LABELS[e] ?? e)}</span>`)
+    .join('');
+
+  const sources = (r.sources ?? []).map((s) => {
+    const title = `${escCow(s.title ?? 'Quelle')}${s.published ? ` (${escCow(s.published)})` : ''}`;
+    return `<li class="cow-src">
+      <a class="link-chip" href="${escCow(s.url)}" target="_blank" rel="noopener"
+         title="${title}" aria-label="${title}">${icons.newspaper}</a>
+      <span class="cow-src__title">${escCow(s.title ?? s.url)}</span>
+      <span class="cow-src__date">${escCow(s.published ?? '')}</span>
+    </li>`;
+  }).join('');
+
+  return `<div class="cow-panel">
+    <div class="cow-head">
+      <span class="cow-mark cow-mark--${cls} cow-mark--lg" title="${escCow(materialityLabel(r.materiality))}">
+        <span class="cow-mark__dot" aria-hidden="true"></span><span class="cow-mark__num">${r.materiality}</span></span>
+      <div class="cow-head__text">
+        <div class="cow-head__line">${escCow(r.headline || '')}</div>
+        <div class="cow-head__sub">${escCow(materialityLabel(r.materiality))} · ${escCow(CLUSTER_LABELS[r.cluster] ?? r.cluster ?? '')}</div>
+      </div>
+    </div>
+
+    <p class="cow-summary">${escCow(r.summary || '')}</p>
+    ${chips ? `<div class="cow-chips">${chips}</div>` : ''}
+    ${sources ? `<ul class="cow-srcs">${sources}</ul>` : '<p class="pv-muted">Keine Quellen hinterlegt.</p>'}
+    ${foot}
+  </div>`;
 }
 
 /* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
@@ -2593,6 +2651,7 @@ export class CandidateDetail {
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       news:        renderNewsTab(c),
+      cowork:      renderCoworkTab(c),
       meta:        renderMetaTab(c),
     };
 

@@ -23,6 +23,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
+import { SIGNAL_CLASS, materialityLabel, reviewSortValue, shortDate, esc } from '../lib/cowork-review.js?v=20260924a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -404,6 +405,7 @@ function sortValue(c, col) {
     // Pfeilrichtung — sonst fielen alle „seitwärts"-Zeilen in einen Topf.
     case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
+    case 'cow':         return reviewSortValue(c);
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -1150,6 +1152,7 @@ export class CandidateList {
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
       cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
+      cols += this.thNum('cow', 'Cow', 'Cowork-Triage \u00b7 t\u00e4glicher Nachrichten-Durchgang durch die Watchlist \u00b7 Punkt = Richtung (gr\u00fcn positiv, rot negativ, grau neutral), Ziffer = Relevanz 1\u20133 \u00b7 Strich = nichts Neues \u00b7 Details im Tab \u201eCowork" des Kandidaten');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
       cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
       cols += this.thNum('tv_ebitda', 'EBITDA', 'EBITDA \u00b7 Zell-T\u00f6nung nach EBITDA-YoY-Wachstum (voll bei \u00b125%), rot bei negativem EBITDA');
@@ -1359,6 +1362,7 @@ export class CandidateList {
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
           `<td class="num">${renderTrendAge(c)}</td>` +
+          `<td class="num">${renderCowork(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
           `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
           `<td class="num"${ebitdaTint(tv)}>${ebitdaCell(c)}</td>` +
@@ -1645,6 +1649,23 @@ export function liveOverallScore(tv) {
     health:        liveHealthScore(tv)?.total,
     cycle:         tv.cycle_score?.total,
   });
+}
+
+/**
+ * Cow-Zelle: Punkt in Signalfarbe + Materiality-Ziffer. Ein Tag ohne Meldung
+ * ist der Normalfall und bleibt ein stiller Strich — die Spalte soll auffallen,
+ * wenn etwas da ist, nicht wenn nichts da ist.
+ */
+function renderCowork(c) {
+  const r = c.cowork_review;
+  if (!r) return '<span class="muted-dash" title="Noch nicht geprüft – der Cowork-Lauf sieht die Watchlist täglich durch">—</span>';
+  if (r.no_news || !(r.materiality > 0)) {
+    return `<span class="muted-dash" title="Geprüft ${shortDate(r.reviewed_at)} · keine relevanten Nachrichten">—</span>`;
+  }
+  const cls = SIGNAL_CLASS[r.signal] ?? 'neutral';
+  const tip = `${esc(r.headline || materialityLabel(r.materiality))} · ${materialityLabel(r.materiality)} · geprüft ${shortDate(r.reviewed_at)}`;
+  return `<span class="cow-mark cow-mark--${cls}" title="${tip}">
+    <span class="cow-mark__dot" aria-hidden="true"></span><span class="cow-mark__num">${r.materiality}</span></span>`;
 }
 
 function renderTrCheck(c) {
