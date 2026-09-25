@@ -2679,3 +2679,122 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   /* Mehr Höhe für die Charts, wenn die Fläche da ist. */
   .ls-chart { height:clamp(280px, 42vh, 520px); }
 }
+
+/* ═══ Cowork-Triage ═════════════════════════════════════════════════════════
+   Tabellen-Marker, Detail-Tab und Briefing-Modal. Der tägliche Cowork-Lauf
+   legt sein Urteil an `cowork_review` ab, das Briefing im `review`-Blob.     */
+
+/* Marker: Punkt (Richtung) + Ziffer (Relevanz). In der Tabelle klein genug,
+   um neben Bias und S200Ø nicht aufzutrumpfen. */
+.cow-mark {
+  display:inline-flex; align-items:center; gap:var(--s-1);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.cow-mark__dot {
+  width:8px; height:8px; border-radius:var(--r-pill);
+  background:var(--muted); flex:0 0 auto;
+}
+.cow-mark__num { font-size:var(--fs-2); font-weight:var(--fw-bold); color:var(--text); }
+.cow-mark--pos     .cow-mark__dot { background:var(--pos); }
+.cow-mark--neg     .cow-mark__dot { background:var(--neg); }
+.cow-mark--neutral .cow-mark__dot { background:var(--muted); }
+.cow-mark--lg { gap:var(--s-2); }
+.cow-mark--lg .cow-mark__dot { width:12px; height:12px; }
+.cow-mark--lg .cow-mark__num { font-size:var(--fs-4); }
+
+/* ── Detail-Tab ─────────────────────────────────────────────────────────── */
+.cow-panel { display:flex; flex-direction:column; gap:var(--s-3); }
+.cow-head  { display:flex; align-items:flex-start; gap:var(--s-3); }
+.cow-head__text  { min-width:0; }
+/* Zweite Zeile immer eine Stufe kleiner als die darüber (Styleguide §2). */
+.cow-head__line  { font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1.25; }
+.cow-head__sub   { font-size:var(--fs-3); color:var(--muted); }
+.cow-summary     { font-size:var(--fs-2); line-height:1.5; margin:0; }
+.cow-quiet       { font-size:var(--fs-2); color:var(--muted); margin:0; }
+
+.cow-chips { display:flex; flex-wrap:wrap; gap:var(--s-1); }
+.cow-chip {
+  font-size:var(--fs-1); font-weight:var(--fw-med); color:var(--muted);
+  border:1px solid var(--border); background:var(--surface-3);
+  border-radius:var(--r-pill); padding:1px var(--s-2); white-space:nowrap;
+}
+
+.cow-srcs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
+.cow-src  { display:flex; align-items:center; gap:var(--s-2); min-width:0; }
+.cow-src__title {
+  font-size:var(--fs-2); min-width:0; flex:1 1 auto;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.cow-src__date { font-size:var(--fs-1); color:var(--muted); flex:0 0 auto; }
+.cow-foot { font-size:var(--fs-1); margin:0; }
+
+/* ── Briefing-Modal ─────────────────────────────────────────────────────── */
+/* Breiter als die Standard-520px: drei Cluster-Kacheln nebeneinander plus
+   Fließtext brauchen Platz, sonst bleibt von jedem Cluster-Satz ein Wort. */
+.briefing-modal { width:min(820px,96vw); }
+.briefing-modal .modal-body { display:flex; flex-direction:column; gap:var(--s-4); }
+
+.bf-pick {
+  font-family:var(--font-ui); font-size:var(--fs-1);
+  color:var(--text); background:var(--surface-3);
+  border:1px solid var(--border); border-radius:var(--r-1);
+  padding:2px var(--s-2); min-height:32px;
+}
+
+/* Feste Anzahl von drei Kacheln → nie ein Umbruch, auch nicht am Handy
+   (Styleguide §5): gleich breite Spalten, die schrumpfen statt umzubrechen. */
+.bf-tiles { display:flex; flex-wrap:nowrap; gap:var(--s-2); }
+.bf-tile {
+  flex:1 1 0; min-width:0;
+  border:1px solid var(--border); border-radius:var(--r-2);
+  background:var(--surface-2); padding:var(--s-2);
+  display:flex; flex-direction:column; gap:2px; line-height:1.2;
+}
+.bf-tile__label {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  letter-spacing:0.04em; text-transform:uppercase; white-space:nowrap;
+}
+.bf-tile__state { font-size:var(--fs-3); font-weight:var(--fw-bold); white-space:nowrap; }
+.bf-tile__state--pos     { color:var(--pos); }
+.bf-tile__state--neg     { color:var(--neg); }
+.bf-tile__state--neutral { color:var(--muted); }
+/* Die Cluster-Sätze unter der Kachelzeile — dort haben sie die volle Breite. */
+.bf-notes { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
+.bf-note  { display:flex; gap:var(--s-2); align-items:baseline; min-width:0; }
+.bf-note__label {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  letter-spacing:0.04em; text-transform:uppercase; white-space:nowrap; flex:0 0 auto;
+}
+.bf-note__text { font-size:var(--fs-2); line-height:1.45; min-width:0; flex:1 1 auto; }
+.bf-note .link-chip { flex:0 0 auto; align-self:center; }
+
+.bf-summary { font-size:var(--fs-2); line-height:1.55; margin:0; }
+.bf-section { display:flex; flex-direction:column; gap:var(--s-2); }
+.bf-h {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted);
+  letter-spacing:0.04em; text-transform:uppercase; margin:0;
+}
+
+.bf-drivers, .bf-hits { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
+.bf-driver { display:flex; gap:var(--s-3); align-items:baseline; font-size:var(--fs-2); }
+.bf-driver__date {
+  font-family:var(--font-mono); font-size:var(--fs-1); color:var(--muted);
+  flex:0 0 auto; font-variant-numeric:tabular-nums;
+}
+.bf-driver__event { min-width:0; }
+
+.bf-hit {
+  display:flex; gap:var(--s-2); align-items:baseline; min-width:0;
+  border-radius:var(--r-1); padding:var(--s-1); cursor:pointer;
+  transition:background var(--t-fast);
+}
+.bf-hit:hover { background:var(--surface-3); }
+.bf-hit__sym {
+  font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-2);
+  flex:0 0 auto;
+}
+.bf-hit__head {
+  font-size:var(--fs-2); min-width:0; flex:1 1 auto;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.bf-foot { font-size:var(--fs-1); margin:0; }
