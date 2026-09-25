@@ -196,9 +196,13 @@ Der einzige Datenfluss zwischen den Tools: **Discovery → Merkliste** über ein
   "thesis_long": "ausführliche These, Markdown erlaubt",
   "risks": ["Risk 1", "Risk 2"],
   "catalysts": ["Catalyst 1"],
-  "confidence": "high" | "medium" | "low"
+  "confidence": "high" | "medium" | "low",
+  "upside_20pct_probability": 65,
+  "upside_reasoning": "1 Satz Begründung für die geschätzte Wahrscheinlichkeit"
 }
 ```
+
+**`upside_20pct_probability`** (0-100, integer): vom AI-Enrichment geschätzte Wahrscheinlichkeit in Prozent, dass der Kurs innerhalb des nächsten Monats um mindestens +20% steigt, basierend auf Signalen, Momentum und These. `upside_reasoning` liefert die Kurzbegründung dazu.
 
 ---
 
