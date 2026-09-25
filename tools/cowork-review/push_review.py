@@ -82,6 +82,61 @@ def clamp(review: dict, item_map: dict, symbol: str) -> dict:
     }
 
 
+CLUSTER_ORDER = ("biotech", "semis", "tech")
+STATES = {"risk_on", "neutral", "risk_off"}
+
+
+def clean_sources(raw) -> list:
+    out = []
+    for s in raw or []:
+        if isinstance(s, dict) and s.get("url"):
+            out.append({"title": s.get("title", ""), "url": s["url"],
+                        "published": s.get("published", "")})
+    return out[:3]
+
+
+def clamp_macro(macro: dict) -> dict:
+    """
+    Erzwingt die Form des Makro-Blocks, bevor er in den Blob geht.
+
+    Ein Lauf schrieb die Cluster schon einmal unter "cluster" statt "key" und
+    die Termine als flache Zeichenkette. Die Oberfläche liest feste Feldnamen —
+    was hier durchrutscht, ist dort eine leere Kachel. Also hier begradigen,
+    nicht in drei Ansichten Sonderfälle pflegen.
+    """
+    macro = macro if isinstance(macro, dict) else {}
+
+    by_key = {}
+    for c in macro.get("clusters") or []:
+        if not isinstance(c, dict):
+            continue
+        key = c.get("key") or c.get("cluster")
+        if key in CLUSTER_ORDER:
+            by_key[key] = c
+
+    clusters = []
+    for key in CLUSTER_ORDER:
+        c = by_key.get(key, {})
+        state = c.get("state")
+        clusters.append({
+            "key": key,
+            "state": state if state in STATES else "neutral",
+            "note": str(c.get("note") or ""),
+            "sources": clean_sources(c.get("sources")),
+        })
+
+    drivers = []
+    for d in (macro.get("drivers") or [])[:4]:
+        if isinstance(d, str):
+            drivers.append({"date": "", "event": d})
+        elif isinstance(d, dict):
+            drivers.append({"date": str(d.get("date") or ""),
+                            "event": str(d.get("event") or "")})
+
+    return {"summary": str(macro.get("summary") or ""),
+            "clusters": clusters, "drivers": drivers}
+
+
 def no_news(cluster: str = "other") -> dict:
     return {
         "reviewed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -146,7 +201,7 @@ def main() -> int:
     entry = {
         "date": today,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "macro": verdicts.get("macro", {}),
+        "macro": clamp_macro(verdicts.get("macro")),
         "highlights": highlights[:10],
         "stats": stats,
     }

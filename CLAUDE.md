@@ -133,6 +133,12 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   **Termine der grössten Tagessprünge** aus `swing_analysis.ohlc` mit —
   gefiltert auf ≥ 2,5 × den Median der absoluten Tagesbewegung des Titels,
   damit keine ereignislosen Tage in der Liste landen.
+- `briefing-modal.js` – Tages-Briefings der Cowork-Triage aus dem `review`-Blob
+  (Zeitungs-Knopf in der Topbar; Makro-Cluster als drei Kacheln, Termine,
+  auffällige Titel). Braucht ein Backend. Dazu die Spalte **„Cow"** (Standard
+  nach „Dauer") und der Detail-Tab „Cowork", beide aus `cowork_review` am
+  Kandidaten; gemeinsame Helfer in `lib/cowork-review.js`, Schreibseite in
+  `tools/cowork-review/`.
 - `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
