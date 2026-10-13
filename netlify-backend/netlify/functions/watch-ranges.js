@@ -7,8 +7,8 @@
  * with an optional manual override from candidate.range_override
  * ({ sup, res } in native currency, null = auto).
  *
- * No secret required: returns only derived price levels, no notes, alerts
- * or portfolio data. All prices in the ticker's native currency.
+ * No secret required: returns only derived price levels plus ISIN / LS
+ * instrument id (for live quotes), no notes, alerts or portfolio data. All prices in the ticker's native currency.
  */
 
 import { getStore } from '@netlify/blobs';
@@ -27,7 +27,8 @@ const r4 = (v) => (v == null ? null : +(+v).toFixed(4));
 const zone = (z) => (z ? { lo: r4(z.lo), hi: r4(z.hi), mid: r4(z.mid), score: z.score, labels: z.members.map((m) => m.label) } : null);
 
 export default async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
+  // 200 statt 204: bei 204 streicht Netlifys CDN die CORS-Header (siehe CLAUDE.md).
+  if (req.method === 'OPTIONS') return new Response(null, { status: 200, headers: HEADERS });
 
   const store = getStore({ name: 'discovery-data', consistency: 'strong' });
   const [watch, hist] = await Promise.all([
@@ -57,6 +58,8 @@ export default async (req) => {
       id: c.id,
       symbol: c.symbol,
       name: c.name ?? null,
+      isin: c.isin ?? null,
+      ls_id: c.tr_check?.ls_id ?? c.ls_quote?.instrument_id ?? null,
       currency: ccy || null,
       price: r4(price),
       sup,
