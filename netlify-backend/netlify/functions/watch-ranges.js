@@ -60,6 +60,8 @@ export default async (req) => {
       name: c.name ?? null,
       isin: c.isin ?? null,
       ls_id: c.tr_check?.ls_id ?? c.ls_quote?.instrument_id ?? null,
+      star: !!c.in_portfolio,   // ★ Portfolio-Marker in Discovery
+      watch: !!c.watch_flag,    // Watch-Label (Auge) in Discovery
       currency: ccy || null,
       price: r4(price),
       sup,
