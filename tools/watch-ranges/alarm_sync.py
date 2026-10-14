@@ -1,6 +1,6 @@
 """Watch Ranges → Soll-Zustand der Range-Alarme.
 
-Liest die im Artefakt "Watch Ranges" angehakten Titel und berechnet je Titel
+Liest die im Artefakt "Watch Ranges" an- und abgehakten Titel und berechnet je Titel
 die Alarm-Levels in EUR: Support (price_below) und Resistance (price_above),
 mit manuellen Overrides. Ein Level, das der aktuelle LS-Kurs schon
 überschritten hat, bekommt keinen Alarm. Das Ergebnis geht an
@@ -51,7 +51,11 @@ if not ranges:
     sys.exit("ranges/current fehlt oder ist leer — nichts geschrieben")
 live = one("live", "current").get("p") or {}
 overrides = docs("overrides")
-wanted = sorted(k for k, v in docs("alarms").items() if v.get("on") is not False)
+all_alarms = docs("alarms")
+wanted = sorted(k for k, v in all_alarms.items() if v.get("on") is True)
+# Abgehakte Titel werden ausdrücklich als "aus" gemeldet (sup/res = null) —
+# die Function löscht nie implizit.
+off = sorted(k for k, v in all_alarms.items() if v.get("on") is not True)
 
 alarms, armed, missing = [], {}, []
 for cid in wanted:
@@ -69,9 +73,11 @@ for cid in wanted:
     armed[cid] = {"sup": a_sup, "res": a_res, "p": px,
                   "skip_sup": bool(sup and not a_sup), "skip_res": bool(res and not a_res)}
 
+alarms += [{"id": cid, "sup": None, "res": None} for cid in off]
+
 with open(out_desired, "w", encoding="utf-8") as f:
     json.dump({"alarms": alarms}, f)
 with open(out_status, "w", encoding="utf-8") as f:
     json.dump({"at": started_at, "done_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                "armed": armed, "missing": missing}, f, separators=(",", ":"))
-print(f"{len(wanted)} angehakt, {sum(1 for a in alarms if a['sup'] or a['res'])} mit Alarm, fehlend: {missing or 'keine'}")
+print(f"{len(off)} aus, {len(wanted)} angehakt, {sum(1 for a in alarms if a['sup'] or a['res'])} mit Alarm, fehlend: {missing or 'keine'}")

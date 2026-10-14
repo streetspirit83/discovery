@@ -14,9 +14,11 @@
  * lesen Umgebungsvariablen nur beim Deploy ein. Fehlt sie, antwortet die
  * Funktion immer mit 401.
  *
- * Body: { alarms: [{ id, sup, res }] } — der vollständige Soll-Zustand. Titel,
- * die nicht in der Liste stehen, verlieren ihre wr_-Alarme. sup/res = null:
- * für diese Seite keinen Alarm (z. B. Level schon überschritten).
+ * Body: { alarms: [{ id, sup, res }] } — Soll-Zustand je genanntem Titel.
+ * Nur die genannten Titel werden angefasst; Titel, die nicht in der Liste
+ * stehen, bleiben unverändert (kein implizites Löschen, damit ein leerer oder
+ * unvollständiger Abgleich nie Alarme verliert). sup/res = null: für diese
+ * Seite keinen Alarm (Alarm aus, oder Level schon überschritten).
  */
 
 import { getStore } from '@netlify/blobs';
@@ -89,11 +91,12 @@ export default async (req) => {
     known.add(c.id);
     const old = Array.isArray(c.alerts) ? c.alerts : [];
     const prev = (side) => old.find((a) => a?.id === `wr_${side}_${c.id}`);
+    if (!want.has(c.id)) continue;
     const w = want.get(c.id);
     const mine = [];
     if (w?.sup != null) mine.push(makeAlert(c.id, 'sup', w.sup, prev('sup'), now));
     if (w?.res != null) mine.push(makeAlert(c.id, 'res', w.res, prev('res'), now));
-    if (w) armed[c.id] = { sup: w.sup, res: w.res };
+    armed[c.id] = { sup: w.sup, res: w.res };
 
     const key = (list) => JSON.stringify(list.filter(isMine).map((a) => [a.id, a.threshold]).sort());
     if (key(old) !== key(mine)) {
