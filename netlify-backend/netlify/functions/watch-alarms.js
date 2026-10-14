@@ -9,6 +9,11 @@
  *   - Alarme mit id wr_sup_<id> / wr_res_<id> (price_below / price_above, EUR)
  * setzen oder entfernen. Alle anderen Felder und Alarme bleiben unberührt.
  *
+ * Einrichtung: WR_ALARM_TOKEN als geheime Umgebungsvariable (Kontext
+ * production, Scope functions) anlegen und danach neu deployen — Funktionen
+ * lesen Umgebungsvariablen nur beim Deploy ein. Fehlt sie, antwortet die
+ * Funktion immer mit 401.
+ *
  * Body: { alarms: [{ id, sup, res }] } — der vollständige Soll-Zustand. Titel,
  * die nicht in der Liste stehen, verlieren ihre wr_-Alarme. sup/res = null:
  * für diese Seite keinen Alarm (z. B. Level schon überschritten).
