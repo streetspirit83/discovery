@@ -12,6 +12,28 @@ function log(level, msg, data = {}) {
   );
 }
 
+/* Manche Anbieter verlangen den Key als Query-Parameter (FMP + TwelveData +
+   ROIC: `apikey`, Marketaux: `api_token`). Ohne diese Maskierung stünde er im
+   Klartext in den Function-Logs — bei jedem Abruf zweimal. Die Logs sind zwar
+   privat, aber Logs werden geteilt.
+
+   Bewusst nach Namensbestandteil statt nach einer Liste exakter Namen: eine
+   Liste war der erste Versuch und übersah prompt Marketaux' `api_token`. Zu
+   viel zu maskieren kostet in einem Log nichts, zu wenig kostet einen Key. */
+const SECRET_PARAMS = /key|token|secret|pass|auth|credential/i;
+function redactUrl(raw) {
+  try {
+    const u = new URL(raw);
+    for (const k of [...u.searchParams.keys()]) {
+      if (SECRET_PARAMS.test(k)) u.searchParams.set(k, '***');
+    }
+    return u.toString();
+  } catch {
+    // Fallback für Strings, die keine gültige URL sind.
+    return String(raw).replace(/([?&][^=&]*(?:key|token|secret|pass|auth|credential)[^=&]*=)[^&]*/gi, '$1***');
+  }
+}
+
 // Allowed domains (regex). Add more as needed.
 const ALLOWED_DOMAINS = [
   /^https:\/\/openinsider\.com\//,
@@ -25,6 +47,19 @@ const ALLOWED_DOMAINS = [
   /^https:\/\/query1\.finance\.yahoo\.com\//,
   /^https:\/\/query2\.finance\.yahoo\.com\//,
   /^https:\/\/scanner\.tradingview\.com\//,
+  // Indices-Tab: löst Index-Kürzel → Scanner-Ticker auf (lib/tv-indices.js).
+  /^https:\/\/symbol-search\.tradingview\.com\//,
+  /^https:\/\/api\.roic\.ai\//,
+  /^https:\/\/www\.ls-tc\.de\//,
+  /^https:\/\/merkliste-app\.netlify\.app\//,
+  // News-Tab (Markets-Modal): Marketaux + TradingView Data API (RapidAPI)
+  // + Google-Alert-Feeds (Atom). Pfad-Anker bei Google hält die Freigabe eng.
+  /^https:\/\/api\.marketaux\.com\//,
+  /^https:\/\/tradingview-data1\.p\.rapidapi\.com\//,
+  /^https:\/\/www\.google\.com\/alerts\/feeds\//,
+  // Retail-Sentiment im Detail-Sheet (lib/stocktwits-sentiment.js) — öffentlicher
+  // Aggregat-Endpoint, kein Key. Pfad-Anker hält die Freigabe auf die API eng.
+  /^https:\/\/api\.stocktwits\.com\/api\/2\//,
 ];
 
 function isAllowed(url) {
@@ -76,11 +111,11 @@ export default async function handler(req) {
   if (!url) return respond(400, { ok: false, error: 'Missing url' });
 
   if (!isAllowed(url)) {
-    log('warn', 'scrape-proxy: blocked URL', { url });
-    return respond(403, { ok: false, error: `URL not in allowlist: ${url}` });
+    log('warn', 'scrape-proxy: blocked URL', { url: redactUrl(url) });
+    return respond(403, { ok: false, error: `URL not in allowlist: ${redactUrl(url)}` });
   }
 
-  log('info', 'scrape-proxy: fetching', { url, method });
+  log('info', 'scrape-proxy: fetching', { url: redactUrl(url), method });
 
   try {
     const upstream = await fetch(url, {
@@ -97,7 +132,7 @@ export default async function handler(req) {
     const contentType = upstream.headers.get('content-type') ?? 'text/plain';
     const responseBody = await upstream.text();
 
-    log('info', 'scrape-proxy: done', { url, status: upstream.status, size: responseBody.length });
+    log('info', 'scrape-proxy: done', { url: redactUrl(url), status: upstream.status, size: responseBody.length });
 
     return respond(200, {
       ok: true,
@@ -106,7 +141,7 @@ export default async function handler(req) {
       body: responseBody,
     });
   } catch (err) {
-    log('error', 'scrape-proxy: fetch failed', { url, error: err.message });
+    log('error', 'scrape-proxy: fetch failed', { url: redactUrl(url), error: err.message });
     return respond(502, { ok: false, error: `Upstream fetch failed: ${err.message}` });
   }
 }
