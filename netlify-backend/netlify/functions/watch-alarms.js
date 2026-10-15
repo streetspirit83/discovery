@@ -49,6 +49,7 @@ function makeAlert(cid, side, level, prev, now) {
     threshold: level,
     dir: 'watch',
     enabled: true,
+    priority: 4, // ntfy "hoch": eigener Android-Kanal mit Ton und Pop-up
     label: `${sup ? 'Support' : 'Resistance'} ${fmt(level)} €`,
     note: 'Watch Ranges',
     basis: { kind: 'level', source: 'Watch Ranges' },
@@ -98,7 +99,7 @@ export default async (req) => {
     if (w?.res != null) mine.push(makeAlert(c.id, 'res', w.res, prev('res'), now));
     armed[c.id] = { sup: w.sup, res: w.res };
 
-    const key = (list) => JSON.stringify(list.filter(isMine).map((a) => [a.id, a.threshold]).sort());
+    const key = (list) => JSON.stringify(list.filter(isMine).map((a) => [a.id, a.threshold, a.priority ?? null]).sort());
     if (key(old) !== key(mine)) {
       c.alerts = [...old.filter((a) => !isMine(a)), ...mine];
       c.last_updated_at = now;

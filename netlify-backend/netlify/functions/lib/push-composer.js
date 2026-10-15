@@ -259,7 +259,9 @@ export function composePush({ c, shown, q, snapshots = null, portfolio = null, l
   return {
     title,
     message: lines.join('\n'),
-    priority: top.priority,
+    // Ein Alarm darf seine Priorität selbst anheben (z. B. Range-Alarme aus
+    // "Watch Ranges": 4 = Android-Kanal "hoch" mit Ton + Pop-up). Nie absenken.
+    priority: Math.max(top.priority, ...shown.map((a) => (Number.isInteger(a.priority) && a.priority <= 5 ? a.priority : 0))),
     actions: [
       { action: 'view', label: '🔍 Discovery', url: discoveryUrl },
       { action: 'view', label: '📈 TV-Chart', url: tvUrl },
