@@ -66,6 +66,10 @@ const patch = (id, updates) => storage({ op: 'update_candidate', blob_type: BLOB
 function pending(c) {
   if (c.dossier_update) return 'update';
   if (c.dossier_flag && !c.dossier?.doc_id) return 'create';
+  // Hängender Auftrag: Anstoss ging verloren (z. B. Trigger-Fehler), Status
+  // blieb auf queued/running stehen → nachholen statt ewig pulsieren.
+  const st = c.dossier?.status;
+  if (c.dossier_flag && (st === 'queued' || st === 'running')) return c.dossier?.doc_id ? 'update' : 'create';
   return null;
 }
 
