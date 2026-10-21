@@ -11,9 +11,9 @@
  * Treffer → die Bulk-Bar mit allen Aktionen (Löschen/Export/…) erscheint.
  */
 
-import { icons } from '../lib/icons.js?v=20260807a';
-import { filterMultiSelect } from './filter-multiselect.js?v=20260807a';
-import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20260924a';
+import { icons } from '../lib/icons.js?v=20261021a';
+import { filterMultiSelect } from './filter-multiselect.js?v=20261021a';
+import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20261021a';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
 import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 

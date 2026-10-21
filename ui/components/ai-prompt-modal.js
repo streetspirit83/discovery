@@ -13,7 +13,7 @@
  * Reiner Kopier-Dialog: er ruft nichts ab und speichert nichts.
  */
 
-import { icons } from '../lib/icons.js?v=20260807a';
+import { icons } from '../lib/icons.js?v=20261021a';
 import { stockPrompts } from '../lib/research-prompt.js?v=20260831b';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 

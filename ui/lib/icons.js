@@ -63,4 +63,7 @@ export const icons = {
   bear: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd"><circle cx="6" cy="8.2" r="3.2"/><circle cx="18" cy="8.2" r="3.2"/><path d="M12 20.6c-4.4 0-8-3-8-6.6S7.6 7.4 12 7.4s8 3 8 6.6-3.6 6.6-8 6.6zm0-2.1c1.9 0 3.4-1.1 3.4-2.4S13.9 13.7 12 13.7s-3.4 1.1-3.4 2.4S10.1 18.5 12 18.5z"/></svg>`,
   // Nachkauf-Kalkulator (Zeilenaktion bei Portfolio-Tickern)
   calculator:    svg('<rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>'),
+  // Dossier (Google Doc je Watch-Ticker, tools/dossier)
+  fileText:      svg('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>'),
+  externalLink:  svg('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
 };

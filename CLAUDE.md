@@ -281,6 +281,7 @@ product spec.
 ## GitHub Actions
 - Adapters run on schedule (daily at 6 AM UTC)
 - UI deploys to GitHub Pages on push to main
+- `dossier.yml` erzeugt Google-Doc-Dossiers je Watch-Ticker (Spalte „Doc“ in der Meta-Ansicht → `dossier-trigger` → Action → `tools/dossier/run.mjs`, Playwright gegen die eigene App). Setup und Ablauf: `docs/DOSSIER.md`.
 
 ## Netlify Setup
 Deploy `netlify-backend/` directory. Set environment variables:

@@ -2,23 +2,23 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20260924a';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20260807a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20260924a';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20261021a';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261021a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
-import { openNachkaufModal } from './components/nachkauf-modal.js?v=20260807a';
-import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20260831b';
+import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261021a';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
-import { renderMarketsModal } from './components/markets-modal.js?v=20260807a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20260807a';
-import { renderBriefingModal } from './components/briefing-modal.js?v=20260925a';
-import { renderControlModal } from './components/control-modal.js?v=20260924a';
-import { renderCompareModal } from './components/compare-modal.js?v=20260818a';
+import { renderMarketsModal } from './components/markets-modal.js?v=20261021a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261021a';
+import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
+import { renderControlModal } from './components/control-modal.js?v=20261021a';
+import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260831a';
@@ -36,7 +36,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20260807a';
+import { icons } from './lib/icons.js?v=20261021a';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
@@ -1211,6 +1211,53 @@ async function handleAction(action, candidate, extras = {}) {
     }
     candidateList.renderRows();
     if (candidateDetail?.candidate?.id === candidate.id) candidateDetail.render();
+    return;
+  }
+
+  // Dossier (Google Doc je Watch-Ticker): Flag am Kandidaten setzen, dann die
+  // GitHub Action über /api/dossier-trigger anstossen. Geht der Anstoss schief,
+  // bleibt der Auftrag am Kandidaten stehen und der tägliche Sweep holt ihn nach.
+  if (action === 'toggleDossier' || action === 'updateDossier') {
+    const dos = candidate.dossier ?? {};
+    if (dos.status === 'queued' || dos.status === 'running') { toast('Dossier wird gerade erstellt …', 'info', 2500); return; }
+    if (action === 'updateDossier' && !dos.doc_id) return;
+    // Haken raus (angelegt, kein Fehler): nur das Flag entfernen — das Doc bleibt in Drive.
+    const unflag = action === 'toggleDossier' && candidate.dossier_flag && dos.status !== 'error';
+    const mode = action === 'updateDossier' ? 'update' : 'create';
+    const updates = unflag
+      ? { dossier_flag: false }
+      : {
+          dossier_flag: true,
+          ...(mode === 'update' ? { dossier_update: true } : {}),
+          dossier: { ...dos, status: 'queued', error: null, queued_at: new Date().toISOString() },
+        };
+    const before = { dossier_flag: candidate.dossier_flag, dossier_update: candidate.dossier_update, dossier: candidate.dossier };
+    Object.assign(candidate, updates);
+    candidateList.renderRows();
+    if (useMock) return;
+    try {
+      await storageClient.updateCandidate(currentBlobType, candidate.id, updates);
+    } catch (err) {
+      Object.assign(candidate, before);
+      candidateList.renderRows();
+      toast(`Speichern fehlgeschlagen: ${err.message}`, 'error');
+      return;
+    }
+    if (unflag) return;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    try {
+      const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/dossier-trigger`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+        body: JSON.stringify({ candidate_id: candidate.id, mode }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      toast(`Dossier ${candidate.symbol}: ${mode === 'update' ? 'Update' : 'Anlage'} gestartet (≈ 2 min)`, 'success', 3500);
+    } catch (err) {
+      toast(`Dossier-Start fehlgeschlagen (${err.message}) — der tägliche Lauf holt es nach`, 'error', 6000);
+    }
     return;
   }
 

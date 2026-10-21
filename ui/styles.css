@@ -502,6 +502,13 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .act-btn--watch { color:var(--muted); opacity:.5; }
 .act-btn--watch:hover { background:var(--accent-weak); color:var(--accent); opacity:1; }
 .act-btn--watch.is-active { color:var(--accent); opacity:1; }
+.act-btn--dossier { color:var(--muted); opacity:.5; }
+.act-btn--dossier:hover:not(:disabled) { background:var(--accent-weak); color:var(--accent); opacity:1; }
+.act-btn--dossier.is-active { color:var(--accent); opacity:1; }
+.act-btn--dossier.is-error { color:var(--neg); opacity:1; }
+.act-btn--dossier.is-busy svg { animation:dossier-pulse 1.2s ease-in-out infinite; }
+.act-btn--dossier:disabled { opacity:.25; cursor:default; }
+@keyframes dossier-pulse { 50% { opacity:.35; } }
 .btn-icon--delete { color:var(--neg); }
 .btn-icon--delete:hover { background:var(--neg-weak); }
 .btn-icon svg { display:block; width:15px; height:15px; }

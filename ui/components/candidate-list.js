@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20260807a';
+import { icons } from '../lib/icons.js?v=20261021a';
 import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
@@ -1169,6 +1169,7 @@ export class CandidateList {
       cols += `<th class="num">Aktion</th>`;
       if (this.viewMode === 'meta' && this.bucket === 'watch') {
         cols += this.thNum('watch', icons.eye, 'Watch-Label \u00b7 aktiv beobachtete Ticker (nur Watch-Bucket) \u00b7 antippen zum Umschalten');
+        cols += `<th class="num" title="Dossier (Google Doc): 1. Haken legt es einmalig an \u00b7 2. Haken aktualisiert es \u00b7 Link \u00f6ffnet das Doc">Doc</th>`;
       }
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
@@ -1344,6 +1345,18 @@ export class CandidateList {
 
       const trCheckTd = `<td class="num">${renderTrCheck(c)}</td>`;
 
+      // Dossier-Spalte (Meta-Ansicht, Watch-Bucket): Anlegen · Aktualisieren · Link.
+      const dos = c.dossier ?? {};
+      const dosBusy = dos.status === 'queued' || dos.status === 'running';
+      const dosTitle = dosBusy ? 'Dossier wird erstellt \u2026'
+        : dos.status === 'error' ? `Dossier fehlgeschlagen: ${dos.error ?? 'unbekannt'} \u00b7 antippen f\u00fcr neuen Versuch`
+        : c.dossier_flag ? 'Dossier angelegt' : 'Dossier anlegen (Google Doc)';
+      const dossierTd = `<td class="num"><div class="row-actions">
+        <button class="act-btn act-btn--dossier${c.dossier_flag ? ' is-active' : ''}${dosBusy ? ' is-busy' : ''}${dos.status === 'error' ? ' is-error' : ''}" data-action="toggleDossier" title="${dosTitle}" aria-label="${dosTitle}">${icons.fileText}</button>
+        <button class="act-btn act-btn--dossier${c.dossier_update ? ' is-active is-busy' : ''}" data-action="updateDossier" title="${dos.doc_id ? 'Dossier aktualisieren' : 'Erst anlegen, dann aktualisieren'}" aria-label="Dossier aktualisieren"${dos.doc_id ? '' : ' disabled'}>${icons.refreshCw}</button>
+        ${dos.url ? `<a class="link-chip" href="${dos.url}" target="_blank" rel="noopener" title="Dossier \u00f6ffnen" aria-label="Dossier \u00f6ffnen">${icons.externalLink}</a>` : ''}
+      </div></td>`;
+
       let dataCols;
       if (this.viewMode === 'standard') {
         // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
@@ -1371,7 +1384,7 @@ export class CandidateList {
           `<td class="num col-portfolio">${renderPLabs(c)}</td>` +
           starTd + actionTd;
       } else {
-        const watchCol = (this.viewMode === 'meta' && this.bucket === 'watch') ? watchTd : '';
+        const watchCol = (this.viewMode === 'meta' && this.bucket === 'watch') ? watchTd + dossierTd : '';
         dataCols = VIEWS[this.viewMode].map((d) => {
           const heat = HEAT_KEYS.has(d.key) ? heatStyle(sortValue(c, d.key)) : '';
           return `<td class="${d.num ? 'num' : ''}${d.groupStart ? ' col-group-start' : ''}"${heat}>${d.fmt(c)}</td>`;
@@ -1420,6 +1433,8 @@ export class CandidateList {
       tr.querySelector('[data-action="toggleStar"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleStar', c); });
       tr.querySelector('[data-action="toggleBroker"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleBroker', c); });
       tr.querySelector('[data-action="toggleWatch"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleWatch', c); });
+      tr.querySelector('[data-action="toggleDossier"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleDossier', c); });
+      tr.querySelector('[data-action="updateDossier"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); if (!e.currentTarget.disabled) this.onAction?.('updateDossier', c); });
       tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
       tr.querySelector('[data-action="openNachkauf"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openNachkauf', c); });
 
