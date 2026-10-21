@@ -1,6 +1,7 @@
 /**
  * Netlify Function: dossier-trigger
  * POST /api/dossier-trigger  { candidate_id, mode: 'create' | 'update' }
+ *                            { mode: 'sweep' } → alle offenen Aufträge sofort
  *
  * Löst die GitHub Action `dossier.yml` per repository_dispatch aus. Die UI hat
  * vorher schon dossier_flag / dossier_update und dossier.status = 'queued' am
@@ -34,8 +35,9 @@ export default async (req) => {
   try { body = await req.json(); } catch { return respond(400, { ok: false, error: 'Invalid JSON body' }); }
 
   const candidateId = String(body?.candidate_id ?? '').trim();
+  const sweep = body?.mode === 'sweep';
   const mode = body?.mode === 'update' ? 'update' : 'create';
-  if (!candidateId) return respond(400, { ok: false, error: 'Missing candidate_id' });
+  if (!candidateId && !sweep) return respond(400, { ok: false, error: 'Missing candidate_id' });
 
   const token = process.env.GH_DISPATCH_TOKEN;
   if (!token) return respond(500, { ok: false, error: 'GH_DISPATCH_TOKEN fehlt in den Netlify-Umgebungsvariablen' });
@@ -49,12 +51,12 @@ export default async (req) => {
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'discovery-dossier-trigger',
     },
-    body: JSON.stringify({ event_type: 'dossier', client_payload: { candidate_id: candidateId, mode } }),
+    body: JSON.stringify({ event_type: 'dossier', client_payload: { candidate_id: sweep ? '' : candidateId, mode } }),
   });
 
   if (res.status !== 204) {
     const text = await res.text().catch(() => '');
     return respond(502, { ok: false, error: `GitHub dispatch HTTP ${res.status}`, detail: text.slice(0, 300) });
   }
-  return respond(200, { ok: true, candidate_id: candidateId, mode });
+  return respond(200, { ok: true, candidate_id: sweep ? null : candidateId, mode: sweep ? 'sweep' : mode });
 };

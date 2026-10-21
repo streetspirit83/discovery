@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20261021a';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20261021b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261021a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -869,6 +869,47 @@ async function autoTrCheckNewInbox() {
   }
 }
 
+/** Dossier-Auftrag an die Netlify-Function dossier-trigger (→ GitHub Action). */
+async function postDossierTrigger(payload) {
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/dossier-trigger`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) throw new Error(json.error ? `${json.error}${json.detail ? ` – ${json.detail}` : ''}` : `HTTP ${res.status}`);
+  return json;
+}
+
+/* Nach einem Anstoss den Watch-Blob alle 20 s nachlesen (max. 6 min), bis kein
+   Dossier mehr wartet — dann steht der Link am Icon ohne Neuladen. */
+let dossierPoll = null;
+function pollDossiers() {
+  if (dossierPoll) return;
+  const until = Date.now() + 6 * 60e3;
+  dossierPoll = setInterval(async () => {
+    try {
+      const fresh = (await storageClient.readBlob('watch'))?.candidates ?? [];
+      const local = allBlobs.watch?.candidates ?? [];
+      let open = 0, changed = false;
+      for (const f of fresh) {
+        const c = local.find((x) => x.id === f.id);
+        if (!c) continue;
+        if (JSON.stringify(c.dossier) !== JSON.stringify(f.dossier) || c.dossier_update !== f.dossier_update) {
+          c.dossier = f.dossier; c.dossier_update = f.dossier_update; c.dossier_flag = f.dossier_flag; changed = true;
+          if (f.dossier?.status === 'done') toast(`Dossier ${f.symbol} fertig`, 'success', 3000);
+          if (f.dossier?.status === 'error') toast(`Dossier ${f.symbol} fehlgeschlagen: ${f.dossier.error ?? ''}`, 'error', 6000);
+        }
+        if (f.dossier?.status === 'queued' || f.dossier?.status === 'running' || f.dossier_update) open++;
+      }
+      if (changed && currentBlobType === 'watch') candidateList.renderRows();
+      if (!open || Date.now() > until) { clearInterval(dossierPoll); dossierPoll = null; }
+    } catch { /* nächster Tick */ }
+  }, 20e3);
+}
+
 /** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
 function candidateIdFromHash() {
   const m = /[#&]c=([^&]+)/.exec(location.hash || '');
@@ -1217,6 +1258,19 @@ async function handleAction(action, candidate, extras = {}) {
   // Dossier (Google Doc je Watch-Ticker): Flag am Kandidaten setzen, dann die
   // GitHub Action über /api/dossier-trigger anstossen. Geht der Anstoss schief,
   // bleibt der Auftrag am Kandidaten stehen und der tägliche Sweep holt ihn nach.
+  // Alle offenen Dossiers sofort erstellen (Sweep, ohne Kandidaten-ID).
+  if (action === 'runDossiers') {
+    if (useMock) return;
+    try {
+      await postDossierTrigger({ mode: 'sweep' });
+      toast('Dossier-Lauf gestartet — offene Aufträge werden erstellt (≈ 2 min)', 'success', 3500);
+      pollDossiers();
+    } catch (err) {
+      toast(`Dossier-Lauf fehlgeschlagen: ${err.message}`, 'error', 6000);
+    }
+    return;
+  }
+
   if (action === 'toggleDossier' || action === 'updateDossier') {
     const dos = candidate.dossier ?? {};
     if (dos.status === 'queued' || dos.status === 'running') { toast('Dossier wird gerade erstellt …', 'info', 2500); return; }
@@ -1244,16 +1298,9 @@ async function handleAction(action, candidate, extras = {}) {
       return;
     }
     if (unflag) return;
-    const backendUrl = localStorage.getItem('discovery_backend_url');
-    const secret     = localStorage.getItem('discovery_secret');
     try {
-      const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/dossier-trigger`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
-        body: JSON.stringify({ candidate_id: candidate.id, mode }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      await postDossierTrigger({ candidate_id: candidate.id, mode });
+      pollDossiers();
       toast(`Dossier ${candidate.symbol}: ${mode === 'update' ? 'Update' : 'Anlage'} gestartet (≈ 2 min)`, 'success', 3500);
     } catch (err) {
       toast(`Dossier-Start fehlgeschlagen (${err.message}) — der tägliche Lauf holt es nach`, 'error', 6000);

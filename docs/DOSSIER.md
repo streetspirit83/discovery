@@ -13,8 +13,11 @@ ausschliesslich die eigene App — kein Claude, keine Tokens, kein Rechner an.
      nimmt den Haken raus; das Doc in Drive bleibt.
    - Pfeil-Icon = „Dossier aktualisieren“ (`dossier_update`, Einmal-Auftrag,
      erst aktiv, wenn ein Doc existiert).
-   - Link-Icon öffnet das fertige Doc. Pulsieren = läuft, rot = Fehler
-     (Tooltip zeigt den Grund, antippen startet neu).
+   - Ist das Doc fertig, wird das Dokument-Icon selbst zum Link aufs Doc.
+     Pulsieren = läuft, rot = Fehler (Tooltip zeigt den Grund, antippen startet neu).
+   - Spaltenkopf „Doc ⟳“ antippen = alle offenen Aufträge sofort erstellen.
+   - Nach jedem Anstoss liest die App den Status alle 20 s nach (max. 6 min),
+     der Link erscheint ohne Neuladen.
 2. **Netlify** `dossier-trigger` → `repository_dispatch` (event `dossier`).
 3. **GitHub Action** `dossier.yml` → `tools/dossier/run.mjs`: öffnet die App
    headless (Playwright) über den Deep-Link `#c=<id>`, schaltet den Chart auf 1J,
@@ -101,7 +104,6 @@ greifen erst mit dem nächsten Deploy).
 
 ## Bekannte Grenzen
 
-- Status-Wechsel sieht die UI erst nach Reload/Bucket-Wechsel (kein Polling).
 - Screenshots zeigen den Zustand der App beim Lauf; US-Kerzen brauchen den
   TwelveData-Key, ROIC.ai im Free-Plan max. 5 Anfragen/min — beim Sweep über
   viele Ticker greift dann der Wikipedia-Fallback.

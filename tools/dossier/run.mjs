@@ -209,7 +209,7 @@ async function buildDocx(c, cap) {
 
   if (p?.description) {
     for (const para of p.description.split(/\n{2,}/)) children.push(new Paragraph({ text: para.trim() }));
-    const facts = Object.entries(p).filter(([k, v]) => !['description', 'source', 'website', 'url', 'error'].includes(k) && v != null && typeof v !== 'object');
+    const facts = Object.entries(p).filter(([k, v]) => !['description', 'source', 'website', 'url', 'error', 'fetched_at', 'cached_at'].includes(k) && v != null && typeof v !== 'object');
     if (facts.length) children.push(new Paragraph({ children: [new TextRun({ text: facts.map(([k, v]) => `${k}: ${v}`).join(' · '), size: 18 })] }));
     if (website) children.push(new Paragraph({ children: [new ExternalHyperlink({ link: website, children: [new TextRun({ text: website, style: 'Hyperlink' })] })] }));
     children.push(new Paragraph({ children: [new TextRun({ text: `Quelle: ${p.source ?? 'ROIC.ai'}`, italics: true, size: 18 })] }));

@@ -507,6 +507,8 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .act-btn--dossier.is-active { color:var(--accent); opacity:1; }
 .act-btn--dossier.is-error { color:var(--neg); opacity:1; }
 .act-btn--dossier.is-busy svg { animation:dossier-pulse 1.2s ease-in-out infinite; }
+a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+.dossier-run svg { width:12px; height:12px; vertical-align:-1px; opacity:.6; }
 .act-btn--dossier:disabled { opacity:.25; cursor:default; }
 @keyframes dossier-pulse { 50% { opacity:.35; } }
 .btn-icon--delete { color:var(--neg); }

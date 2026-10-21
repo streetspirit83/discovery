@@ -1169,7 +1169,7 @@ export class CandidateList {
       cols += `<th class="num">Aktion</th>`;
       if (this.viewMode === 'meta' && this.bucket === 'watch') {
         cols += this.thNum('watch', icons.eye, 'Watch-Label \u00b7 aktiv beobachtete Ticker (nur Watch-Bucket) \u00b7 antippen zum Umschalten');
-        cols += `<th class="num" title="Dossier (Google Doc): 1. Haken legt es einmalig an \u00b7 2. Haken aktualisiert es \u00b7 Link \u00f6ffnet das Doc">Doc</th>`;
+        cols += `<th class="num"><button class="sort-btn dossier-run" data-action="runDossiers" title="Dossier (Google Doc) \u00b7 Icon pro Zeile: anlegen bzw. fertiges Doc \u00f6ffnen \u00b7 hier tippen: alle offenen Dossiers jetzt erstellen">Doc ${icons.refreshCw}</button></th>`;
       }
       cols += this.thNum('star', '\u2605', 'Im Portfolio (Benchmark-Marker)');
       cols += this.thNum('broker', '\u2713', 'Im Broker handelbar & Alert scharf');
@@ -1177,6 +1177,7 @@ export class CandidateList {
     }
 
     this.thead.innerHTML = `<tr>${cols}</tr>`;
+    this.thead.querySelector('[data-action="runDossiers"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('runDossiers', null); });
     this.thead.querySelectorAll('.sort-btn[data-sort]').forEach((btn) => {
       btn.addEventListener('click', (e) => { e.stopPropagation(); this.setSort(btn.dataset.sort); });
     });
@@ -1351,10 +1352,13 @@ export class CandidateList {
       const dosTitle = dosBusy ? 'Dossier wird erstellt \u2026'
         : dos.status === 'error' ? `Dossier fehlgeschlagen: ${dos.error ?? 'unbekannt'} \u00b7 antippen f\u00fcr neuen Versuch`
         : c.dossier_flag ? 'Dossier angelegt' : 'Dossier anlegen (Google Doc)';
+      // Fertig + Link: das Dokument-Icon IST der Link aufs Doc. Sonst Haken zum Anlegen.
+      const dossierMain = (dos.status === 'done' && dos.url)
+        ? `<a class="act-btn act-btn--dossier is-active" href="${dos.url}" target="_blank" rel="noopener" title="Dossier \u00f6ffnen" aria-label="Dossier \u00f6ffnen">${icons.fileText}</a>`
+        : `<button class="act-btn act-btn--dossier${c.dossier_flag ? ' is-active' : ''}${dosBusy ? ' is-busy' : ''}${dos.status === 'error' ? ' is-error' : ''}" data-action="toggleDossier" title="${dosTitle}" aria-label="${dosTitle}">${icons.fileText}</button>`;
       const dossierTd = `<td class="num"><div class="row-actions">
-        <button class="act-btn act-btn--dossier${c.dossier_flag ? ' is-active' : ''}${dosBusy ? ' is-busy' : ''}${dos.status === 'error' ? ' is-error' : ''}" data-action="toggleDossier" title="${dosTitle}" aria-label="${dosTitle}">${icons.fileText}</button>
+        ${dossierMain}
         <button class="act-btn act-btn--dossier${c.dossier_update ? ' is-active is-busy' : ''}" data-action="updateDossier" title="${dos.doc_id ? 'Dossier aktualisieren' : 'Erst anlegen, dann aktualisieren'}" aria-label="Dossier aktualisieren"${dos.doc_id ? '' : ' disabled'}>${icons.refreshCw}</button>
-        ${dos.url ? `<a class="link-chip" href="${dos.url}" target="_blank" rel="noopener" title="Dossier \u00f6ffnen" aria-label="Dossier \u00f6ffnen">${icons.externalLink}</a>` : ''}
       </div></td>`;
 
       let dataCols;
