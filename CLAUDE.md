@@ -282,6 +282,7 @@ product spec.
 - Adapters run on schedule (daily at 6 AM UTC)
 - UI deploys to GitHub Pages on push to main
 - `dossier.yml` erzeugt Google-Doc-Dossiers je Watch-Ticker (Spalte „Doc“ in der Meta-Ansicht → `dossier-trigger` → Action → `tools/dossier/run.mjs`, Playwright gegen die eigene App). Setup und Ablauf: `docs/DOSSIER.md`.
+- `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
 ## Netlify Setup
 Deploy `netlify-backend/` directory. Set environment variables:
