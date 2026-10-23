@@ -1,0 +1,11 @@
+{
+  "name": "discovery-dossier",
+  "private": true,
+  "type": "module",
+  "description": "Google-Doc-Dossiers je Watchlist-Ticker (GitHub Action dossier.yml)",
+  "dependencies": {
+    "docx": "^9.0.0",
+    "googleapis": "^144.0.0",
+    "playwright": "^1.48.0"
+  }
+}
