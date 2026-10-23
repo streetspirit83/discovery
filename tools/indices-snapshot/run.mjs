@@ -62,7 +62,14 @@ function addSheet(wb, group, rows, at) {
   ws.getRow(1).font = { bold: true };
 
   const byCode = new Map(rows.map((r) => [r.code, r]));
-  for (const e of group.entries) {
+  // Absteigend nach PerfW; Indizes ohne Wert stehen immer am Ende.
+  const entries = [...group.entries].sort((a, b) => {
+    const x = byCode.get(a.code)?.perf_w, y = byCode.get(b.code)?.perf_w;
+    const xe = x == null || Number.isNaN(x), ye = y == null || Number.isNaN(y);
+    if (xe || ye) return xe && ye ? 0 : xe ? 1 : -1;
+    return y - x;
+  });
+  for (const e of entries) {
     const r = byCode.get(e.code) ?? e;
     ws.addRow({
       code: e.code,

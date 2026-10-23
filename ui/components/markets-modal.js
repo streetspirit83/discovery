@@ -11,7 +11,7 @@
 import { icons } from '../lib/icons.js?v=20261021a';
 import { renderNewsPanel } from './news-panel.js?v=20261021a';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260807a';
-import { renderIndicesPanel } from './indices-panel.js?v=20261021a';
+import { renderIndicesPanel } from './indices-panel.js?v=20261023a';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 
