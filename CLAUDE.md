@@ -141,6 +141,19 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `tools/cowork-review/`.
 - `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
+- `ranges-modal.js` (+ `ranges-modal.css`) – **Watch Ranges** (Topbar, Pfeil-Knopf):
+  1:1-Kopie des Claude-Artefakts „Watch Ranges" als Vollbild-Modal. Läuft im
+  **Shadow DOM**, damit Markup und CSS des Artefakts unverändert bleiben können
+  (die App-Klassen `.btn`/`.row`/`.chip` würden sonst hineinwirken) — Änderungen
+  am Look daher in `ranges-modal.css`, nicht in `styles.css`. Daten aus dem
+  Watch-Blob, Ranges wie `/api/watch-ranges` (computePriceClusters um den
+  TV-Schluss, Fallback 52W), angezeigt in EUR (nur USD↔EUR umrechenbar).
+  Schreibt `range_override` (native Währung, dasselbe Feld wie die Function),
+  `range_alarm` und die Alerts `wr_sup_<id>`/`wr_res_<id>` (Format wie
+  `watch-alarms.js`) direkt. Momentum-/Tiefenanalyse des Artefakts sind an
+  dessen Datenbank gebunden und fehlen hier bewusst. Detail-Knopf schaltet bei
+  Bedarf auf den Watch-Bucket und kehrt nach dem Sheet ins Modal zurück
+  (`returnToMonitor`).
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 

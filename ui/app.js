@@ -17,6 +17,7 @@ import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261021a';
 import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
+import { openRangesModal } from './components/ranges-modal.js?v=20261025a';
 import { renderControlModal } from './components/control-modal.js?v=20261021a';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
@@ -52,6 +53,7 @@ const L = {
   upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
   scope:    luc('<circle cx="17" cy="3" r="2"/><path d="M2 22 13 11"/><path d="m10.3 10.3 10.7-7 2.7 2.7-7 10.7"/><path d="m5.3 15.3 3.4 3.4"/>'),
   briefing: luc('<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>'),
+  ranges:   luc('<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>'),
   sun:      luc('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
   moon:     luc('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
   download: luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
@@ -379,6 +381,7 @@ function renderTopbar() {
   document.getElementById('btn-run').innerHTML      = L.zap;
   document.getElementById('btn-screener').innerHTML = L.scope;
   document.getElementById('btn-briefing').innerHTML = L.briefing;
+  document.getElementById('btn-ranges').innerHTML   = L.ranges;
   document.getElementById('btn-upload').innerHTML   = L.upload;
   document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
   document.getElementById('btn-export').innerHTML   = L.download;
@@ -1992,6 +1995,48 @@ async function init() {
           return;
         }
         candidateDetail.show(c);
+        openDetailSheet();
+      },
+    });
+  });
+
+  // Watch Ranges: 1:1-Kopie des Claude-Artefakts als Modal, gespeist aus dem
+  // Watch-Blob (Ranges wie /api/watch-ranges). Schreibt range_override, das
+  // Alarm-Flag range_alarm und die wr_-Alerts direkt in den Watch-Blob.
+  document.getElementById('btn-ranges').addEventListener('pointerup', () => {
+    const canWrite = !useMock && !!storageClient;
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    const afterWrite = () => { if (currentBlobType === 'watch') { candidateList.renderRows(); updateAlertBadge(); } };
+    openRangesModal({
+      getCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
+      getFx: resolveFxRate,
+      persist: canWrite
+        ? async (id, patch) => { await storageClient.updateCandidate('watch', id, patch); afterWrite(); }
+        : async () => afterWrite(),
+      // LS-Kurse in Wellen von 6 (wie die übrigen Bulk-Abrufe), je Titel persistiert.
+      refreshLs: canWrite && backendUrl && secret
+        ? async (cands, onEach) => {
+            for (let i = 0; i < cands.length; i += 6) {
+              await Promise.allSettled(cands.slice(i, i + 6).map(async (c) => {
+                try {
+                  const q = await fetchLsQuote(c, { backendUrl, secret });
+                  if (q?.price != null) {
+                    c.ls_quote = q;
+                    await storageClient.updateCandidate('watch', c.id, { ls_quote: q }).catch(() => {});
+                  }
+                } finally { onEach(c); }
+              }));
+            }
+            afterWrite();
+          }
+        : null,
+      onOpenCandidate: async (c, ctrl) => {
+        if (currentBlobType !== 'watch') await switchBlob('watch');
+        const cand = (allBlobs.watch?.candidates ?? []).find((x) => x.id === c.id) ?? c;
+        ctrl.hide();
+        returnToMonitor = () => ctrl.show();   // beim Schliessen des Sheets zurück ins Modal
+        candidateDetail.show(cand);
         openDetailSheet();
       },
     });
