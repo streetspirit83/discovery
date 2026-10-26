@@ -9,7 +9,7 @@ import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260831a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
-import { fetchLsQuote } from '../lib/ls-intraday.js?v=20260819e';
+import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { sparkCellHTML, atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20260819h';

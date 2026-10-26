@@ -12,7 +12,14 @@
  * angezeigt:
  *   - Levels/Zonen/Cluster: native Währung × EUR-Faktor (nur USD↔EUR umrechenbar)
  *   - Kurs: LS-Kurs (EUR, wie im Artefakt), sonst TV-Schluss umgerechnet
- *   - Kursverlauf: swing_analysis.ohlc (Schlusskurse) + heutiger LS-Kurs
+ *   - Kursverlauf: swing_analysis.ohlc (Schlusskurse) + heutiger LS-Kurs.
+ *     Die Kerzen lädt das Modal selbst nach, mit demselben Abruf wie das
+ *     Detail-Sheet (opts.loadCandles): beim Aufklappen einer Zeile sofort, wenn
+ *     sie fehlen oder älter als 20 h sind; beim Öffnen im Hintergrund für alle
+ *     Titel ohne Kerzen (Yahoo in Wellen von 6, US/TwelveData gedrosselt).
+ *   - Weder EUR noch USD (SEK, GBX …): EUR-Basis aus eur-basis.js — Verlauf
+ *     aus LS-Schlusskursen, sonst deutschem Yahoo-Listing, sonst Kerzen ×
+ *     Wechselkurs; Levels über den implizierten Faktor `eur_basis.f` in EUR.
  *   - Overrides: candidate.range_override { sup, res } in NATIVER Währung —
  *     dasselbe Feld, das watch-ranges.js liest
  *   - Alarme: candidate.range_alarm (angehakt) + Alerts wr_sup_<id>/wr_res_<id>
@@ -26,6 +33,7 @@
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
+import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261026a';
 
 const CSS_URL = new URL('./ranges-modal.css?v=20261025a', import.meta.url).href;
 
@@ -69,12 +77,13 @@ function eurFactor(ccy, fx) {
 function buildItem(c, fx) {
   const tv = c.tv_data ?? {};
   const ccy = String(c.currency ?? '').toUpperCase() || null;
-  const fE0 = eurFactor(ccy, fx);
+  const eb = c.eur_basis && num(c.eur_basis.f) ? c.eur_basis : null;
+  const fE0 = eb && needsEurBasis(c) ? +eb.f : eurFactor(ccy, fx);
   const conv = fE0 != null;
   const fE = conv ? fE0 : 1;                    // nicht umrechenbar → native Anzeige, ohne LS
   const pN = num(tv.close_1m ?? tv.close);
   // Wie watch-ranges.js: LS-Historie (EUR) → native über lsToNative.
-  const lsToNative = ccy === 'EUR' ? 1 : ccy === 'USD' ? fx : null;
+  const lsToNative = conv ? 1 / fE : null;
   const pc = pN ? computePriceClusters(tv, { lsHistory: c.ls_history ?? null, refPrice: pN, lsToNative }) : null;
   const lo52 = num(tv.price_52_week_low), hi52 = num(tv.price_52_week_high);
   const ns = pc?.nearestSup, nr = pc?.nearestRes;
@@ -95,12 +104,20 @@ function buildItem(c, fx) {
     oc: ccy,
     conv,
     fE,
+    eb: eb && needsEurBasis(c) ? { src: eb.src, sym: eb.sym } : null,
     c,
   };
 }
 
 // Schlusskurse aus swing_analysis.ohlc, in EUR; heute = LS-Kurs (wie im Artefakt).
 function buildHist(c, it, fx, livePx) {
+  const today = new Date().toISOString().slice(0, 10);
+  const eb = c.eur_basis;
+  if (it.eb && Array.isArray(eb?.t) && eb.t.length >= 2) {
+    const t = eb.t.slice(), cl = eb.c.slice();
+    if (livePx > 0) { if (t[t.length - 1] === today) cl[cl.length - 1] = livePx; else if (t[t.length - 1] < today) { t.push(today); cl.push(livePx); } }
+    return { t, c: cl };
+  }
   const a = c.swing_analysis;
   const bars = Array.isArray(a?.ohlc) ? a.ohlc.filter((b) => b && num(b.c) && b.date) : [];
   if (bars.length < 2) return null;
@@ -109,7 +126,6 @@ function buildHist(c, it, fx, livePx) {
   if (f == null) return null;
   const t = bars.map((b) => String(b.date).slice(0, 10));
   const cl = bars.map((b) => r4(+b.c * f));
-  const today = new Date().toISOString().slice(0, 10);
   if (livePx > 0 && t[t.length - 1] < today) { t.push(today); cl.push(livePx); }
   return { t, c: cl };
 }
@@ -143,8 +159,11 @@ function wrAlert(cid, side, level, prev, now) {
  * @param {(id:string, patch:object) => Promise<void>} [opts.persist]  schreibt in den Watch-Blob; fehlt → nur lokal (Mock)
  * @param {(cands:object[], onEach:(c:object)=>void) => Promise<void>} [opts.refreshLs]  LS-Kurse holen; fehlt → Knopf aus
  * @param {(c:object, ctrl:{hide:Function, show:Function}) => void} [opts.onOpenCandidate]  Detail-Sheet öffnen
+ * @param {object} [opts.loader]  Nachladen wie im Detail-Sheet; fehlt → kein Nachladen (Mock)
+ *   loader.canCandles(c) → bool · loader.isUs(c) → bool (TwelveData, gedrosselt)
+ *   loader.candles(c) / loader.eurBasis(c) → Promise<{ ok, error?, msg? }> (schreiben selbst in den Blob)
  */
-export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOpenCandidate } = {}) {
+export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOpenCandidate, loader = null } = {}) {
   if (document.getElementById('ranges-modal-host')) return null;
 
   const host = document.createElement('div');
@@ -161,7 +180,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
       <button class="chip fl" id="flstar" aria-pressed="false" aria-label="Nur Portfolio (Stern)" title="Nur Titel mit Stern (Portfolio) in Discovery">${I_STAR}<b id="nstar"></b></button>
       <button class="chip fl" id="flwatch" aria-pressed="false" aria-label="Nur Watch-Label" title="Nur Titel mit Watch-Label in Discovery">${I_EYE}<b id="nwatch"></b></button>
       <button class="chip" id="grpbtn" aria-pressed="false" title="Nach Sektor gruppieren" aria-label="Nach Sektor gruppieren">${I_LAYERS}</button>
-      <div class="info" id="info" title="Tippen für den vollen Status"><span id="meta">lädt …</span><span id="alst" role="status"></span><span class="st" id="lsst" role="status"></span></div>
+      <div class="info" id="info" title="Tippen für den vollen Status"><span id="meta">lädt …</span><span id="alst" role="status"></span><span class="st" id="lsst" role="status"></span><span id="ldst" role="status"></span></div>
       <button class="btn pri ico" id="lsbtn" type="button" aria-label="LS-Kurse aktualisieren" title="LS-Kurse aktualisieren">${I_REFRESH}</button>
       <button class="btn ico x" id="close" type="button" aria-label="Schließen" title="Schließen">${I_X}</button>
     </div>
@@ -183,7 +202,8 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
   const $ = (id) => root.getElementById(id);
   const listEl = $('list'), scroller = $('scroller');
 
-  const S = { items: [], ov: {}, live: null, liveAt: null, hist: {}, meta: {}, sort: 'res', group: false, closed: {}, q: '', open: null, tf: '6M', sel: null, chart: null, alarms: {}, armed: {}, aState: {}, flags: {}, fStar: false, fWatch: false, ls: { run: false, done: 0, total: 0, at: null, err: '' }, synced: {} };
+  const S = { items: [], ov: {}, live: null, liveAt: null, hist: {}, meta: {}, sort: 'res', group: false, closed: {}, q: '', open: null, tf: '6M', sel: null, chart: null, alarms: {}, armed: {}, aState: {}, flags: {}, fStar: false, fWatch: false, ls: { run: false, done: 0, total: 0, at: null, err: '' }, synced: {},
+    ld: { busy: {}, err: {}, run: false, done: 0, total: 0, tdStop: false } };
   try { S.sort = localStorage.getItem('wr_sort') || S.sort; S.tf = localStorage.getItem('wr_tf') || S.tf; S.group = localStorage.getItem('wr_group') === '1'; S.fStar = localStorage.getItem('wr_fstar') === '1'; S.fWatch = localStorage.getItem('wr_fwatch') === '1'; S.closed = JSON.parse(localStorage.getItem('wr_closed') || '{}') || {}; } catch (e) {}
 
   /* Kandidaten → Zustand (wie die Artefakt-Snapshots) */
@@ -401,10 +421,12 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const sel = S.sel && S.sel.id === it.id ? S.sel.p : null;
     const m = S.meta[it.id] || {}, sec = sectorOf(it);
     const cu = it.conv ? '€' : esc(it.oc || '');
-    const ccyNote = it.oc && it.oc !== 'EUR' ? (it.conv ? ' · Levels aus ' + esc(it.oc) + ' umgerechnet' : ' · Levels in ' + esc(it.oc) + ' (nicht in EUR umrechenbar)') : '';
+    const basis = it.eb ? ' (Basis ' + esc(it.eb.src === 'yahoo' ? 'Yahoo ' + it.eb.sym : EUR_BASIS_LABEL[it.eb.src] || it.eb.src) + ')' : '';
+    const ccyNote = it.oc && it.oc !== 'EUR' ? (it.conv ? ' · Levels aus ' + esc(it.oc) + ' umgerechnet' + basis : ' · Levels in ' + esc(it.oc) + ' (nicht in EUR umrechenbar)') : '';
+    const noChart = S.ld.busy[it.id] ? 'Kursverlauf wird geladen …' : S.ld.err[it.id] ? 'Kein Kursverlauf: ' + esc(S.ld.err[it.id]) : loader && !loader.canCandles(it.c) ? 'Kein Kursverlauf: TwelveData-Key in den Einstellungen hinterlegen (nur für US-Titel nötig).' : 'Noch kein Kursverlauf.';
     return '<div class="ed" data-ed="' + id + '">' +
       '<div class="edh"><span class="nm">' + esc(it.n || it.s) + (m.sub ? ' · ' + esc(m.sub) : sec ? ' · ' + esc(sec) : '') + ccyNote + '</span><div class="tf">' + tf + '</div></div>' +
-      (S.hist[it.id] ? '<div class="chart" id="chart"></div>' : '<div class="nochart">Noch kein Kursverlauf. Im Detail-Sheet werden die Kerzen geladen.</div>') +
+      (S.hist[it.id] ? '<div class="chart" id="chart"></div>' : '<div class="nochart">' + noChart + '</div>') +
       '<div class="sel" id="sel">' + (sel != null ? 'Gewählt <b>' + fmt(sel) + ' ' + cu + '</b><button class="sbtn s" data-pick="sup">Als Support</button><button class="sbtn r" data-pick="res">Als Resistance</button>' : '<span class="hint">Tippe in den Chart, um einen Preis als Level zu wählen. Ziehen verschiebt, Zwei-Finger zoomt.</span>') + '</div>' +
       '<div class="grid2"><label>Support (' + cu + ')<input class="s" id="sup-' + id + '" inputmode="decimal" value="' + (v.supM ? fmt(v.bSup) : '') + '" placeholder="' + fmt(v.brk ? v.sup : it.as) + '"><span class="auto">auto ' + fmt(it.as) + (it.sl ? ' · ' + esc(it.sl) : '') + '</span></label>' +
       '<label>Resistance (' + cu + ')<input class="r" id="res-' + id + '" inputmode="decimal" value="' + (v.resM ? fmt(v.bRes) : '') + '" placeholder="' + fmt(v.brk ? v.res : it.ar) + '"><span class="auto">auto ' + fmt(it.ar) + (it.rl ? ' · ' + esc(it.rl) : '') + '</span></label></div>' +
@@ -495,9 +517,11 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     }).join('');
   }
 
-  function render() {
+  function render(keepInputs) {
     if (!S.items.length) return;
     const y = scroller.scrollTop;
+    // Hintergrund-Updates dürfen getippte Levels im offenen Editor nicht verwerfen.
+    const kept = keepInputs && S.open ? ['sup', 'res'].map((k) => { const el = $(k + '-' + S.open); return el ? [k, el.value, root.activeElement === el] : null; }).filter(Boolean) : [];
     const outs = S.items.filter((it) => view(it).st).length; $('outn').textContent = outs ? String(outs) : '';
     const rows = filtered();
     listEl.innerHTML = rows.length ? (S.group ? groupedHtml(rows) : rows.map(rowHtml).join('')) : '<p class="empty">' + ((S.fStar || S.fWatch) && !S.q.trim() ? 'Kein Titel trägt in Discovery diese Markierung.' : S.sort === 'out' ? 'Gerade bricht kein Titel aus seiner Range aus.' : 'Kein Ticker passt zur Suche.') + '</p>';
@@ -505,8 +529,90 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     let meta = S.items.length + ' Titel';
     if (S.live && S.live.at) meta += ' · LS ' + hhmm(S.live.at);
     $('meta').textContent = meta; alarmStatus(); checkAlarmLevels();
+    ldStatus();
+    kept.forEach(([k, v, f]) => { const el = $(k + '-' + S.open); if (el) { el.value = v; if (f) el.focus(); } });
     const it = S.open && S.items.find((x) => x.id === S.open); if (it && $('chart')) mountChart(it); else if (S.chart) { S.chart.remove(); S.chart = null; }
     scroller.scrollTop = y;
+  }
+
+  /* ── Kerzen / EUR-Basis nachladen (wie das Detail-Sheet) ─────────────────── */
+  const BARS_MS = 20 * 60 * 60 * 1000, TD_GAP_MS = 8000;
+  const hasBars = (c) => Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
+  const barsStale = (c) => { const a = Date.parse(c.swing_analysis?.checked_at ?? ''); return !hasBars(c) || !(Number.isFinite(a) && Date.now() - a < BARS_MS); };
+  const basisDue = (c) => needsEurBasis(c) && !eurBasisFresh(c);
+  function ldStatus() {
+    const el = $('ldst'); if (!el) return;
+    el.textContent = S.ld.run ? 'Kerzen ' + S.ld.done + '/' + S.ld.total : '';
+  }
+  // Gesammelte Updates: offene Editor-Zeile → ganze Liste (mit Eingaben), sonst nur die Zeile.
+  const dirty = new Set(); let flushT = null;
+  function refreshItem(id) {
+    dirty.add(id);
+    if (flushT) return;
+    flushT = setTimeout(() => {
+      flushT = null;
+      const ids = [...dirty]; dirty.clear();
+      if (host.hidden) return;
+      ingest(S.items.map((it) => it.c));
+      if (!S.open || ids.includes(S.open)) { render(true); return; }
+      ids.forEach((id) => {
+        const el = listEl.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
+        const it = S.items.find((x) => x.id === id);
+        if (el && it) el.outerHTML = rowHtml(it);
+      });
+      const outs = S.items.filter((it) => view(it).st).length; $('outn').textContent = outs ? String(outs) : '';
+      ldStatus();
+    }, 150);
+  }
+  async function loadOne(c, { bars, basis }) {
+    const id = c.id;
+    if (S.ld.busy[id]) return S.ld.busy[id];
+    const p = (async () => {
+      if (bars && loader.canCandles(c)) {
+        const r = await loader.candles(c);
+        if (r?.ok) delete S.ld.err[id];
+        else { S.ld.err[id] = r?.msg || 'Abruf fehlgeschlagen'; if (r?.error === 'td_limit') S.ld.tdStop = true; }
+      }
+      if (basis && needsEurBasis(c)) {
+        const r = await loader.eurBasis(c);
+        if (!r?.ok && !S.ld.err[id]) S.ld.err[id] = r?.msg || 'Keine EUR-Kurse gefunden';
+      }
+    })();
+    S.ld.busy[id] = p; refreshItem(id);
+    try { await p; } catch (e) { S.ld.err[id] = e?.message || 'Abruf fehlgeschlagen'; }
+    finally { delete S.ld.busy[id]; refreshItem(id); }
+  }
+  // Beim Aufklappen: wie das Detail-Sheet sofort holen, was fehlt oder veraltet ist.
+  function loadOnOpen(id) {
+    if (!loader) return;
+    const it = S.items.find((x) => x.id === id); if (!it) return;
+    const c = it.c, bars = barsStale(c) && loader.canCandles(c), basis = basisDue(c) || (needsEurBasis(c) && bars);
+    if (bars || basis) loadOne(c, { bars, basis });
+  }
+  // Beim Öffnen: Titel ohne Kerzen (Nicht-US auch veraltete) und fällige EUR-Basis.
+  // Yahoo in Wellen von 6; TwelveData (US) nacheinander mit 8 s Abstand (Free: 8/min).
+  async function autoLoad() {
+    if (!loader || S.ld.run) return;
+    const yq = [], tq = [];
+    S.items.forEach(({ c }) => {
+      const us = loader.isUs(c), can = loader.canCandles(c);
+      const bars = can && (us ? !hasBars(c) : barsStale(c));
+      const basis = basisDue(c) || (needsEurBasis(c) && bars);
+      if (bars || basis) (us && bars ? tq : yq).push({ c, bars, basis });
+    });
+    if (!yq.length && !tq.length) return;
+    Object.assign(S.ld, { run: true, done: 0, total: yq.length + tq.length, tdStop: false }); ldStatus();
+    const one = async (j) => { await loadOne(j.c, j); S.ld.done++; ldStatus(); };
+    const yahoo = (async () => { for (let i = 0; i < yq.length; i += 6) await Promise.allSettled(yq.slice(i, i + 6).map(one)); })();
+    const td = (async () => {
+      for (let i = 0; i < tq.length; i++) {
+        if (S.ld.tdStop || !host.isConnected) { S.ld.done += tq.length - i; break; }
+        await one(tq[i]);
+        if (i < tq.length - 1) await new Promise((r) => setTimeout(r, TD_GAP_MS));
+      }
+    })();
+    await Promise.allSettled([yahoo, td]);
+    S.ld.run = false; ldStatus();
   }
 
   function parseNum(s) { s = String(s || '').trim(); s = s.indexOf(',') >= 0 ? s.replace(/\./g, '').replace(',', '.') : s; if (!s) return null; const n = Number(s); return isFinite(n) && n > 0 ? n : NaN; }
@@ -564,7 +670,12 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
   }
   const ctrl = {
     hide: () => { host.hidden = true; document.body.style.overflow = prevOverflow; },
-    show: () => { host.hidden = false; document.body.style.overflow = 'hidden'; ingest(S.items.map((it) => it.c)); render(); },
+    show: () => {
+      host.hidden = false; document.body.style.overflow = 'hidden'; ingest(S.items.map((it) => it.c)); render();
+      // Läuft der Abruf des Detail-Sheets noch, die Zeile nach dessen Ende auffrischen.
+      const c = S.detailC; S.detailC = null;
+      if (c && c._auto_busy) { const t = setInterval(() => { if (!c._auto_busy || !host.isConnected) { clearInterval(t); refreshItem(c.id); } }, 1000); }
+    },
     close,
   };
   function onKey(e) { if (e.key === 'Escape' && !host.hidden) close(); }
@@ -585,7 +696,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const b = $(c[0]); b.setAttribute('aria-pressed', String(S[c[1]]));
     b.addEventListener('click', () => { S[c[1]] = !S[c[1]]; b.setAttribute('aria-pressed', String(S[c[1]])); try { localStorage.setItem(c[2], S[c[1]] ? '1' : '0'); } catch (e) {} render(); });
   });
-  function toggleRow(id) { S.open = S.open === id ? null : id; S.sel = null; render(); }
+  function toggleRow(id) { S.open = S.open === id ? null : id; S.sel = null; render(); if (S.open) loadOnOpen(S.open); }
   listEl.addEventListener('keydown', (e) => {
     const row = e.target.classList && e.target.classList.contains('row') ? e.target : null;
     if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleRow(row.dataset.id); }
@@ -598,7 +709,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const dt = e.target.closest('[data-detail]');
     if (dt) {
       const it = S.items.find((x) => x.id === dt.dataset.detail);
-      if (it && onOpenCandidate) onOpenCandidate(it.c, ctrl);
+      if (it && onOpenCandidate) { S.detailC = it.c; onOpenCandidate(it.c, ctrl); }
       return;
     }
     if (e.target.closest('a') || e.target.closest('.alm')) return;
@@ -631,6 +742,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     catch (e) { listEl.innerHTML = '<p class="empty">Die Daten konnten nicht geladen werden. Öffne das Fenster neu.</p>'; $('meta').textContent = ''; return; }
     if (!cands.length) { listEl.innerHTML = '<p class="empty">Im Watch-Bucket liegen noch keine Titel.</p>'; $('meta').textContent = ''; return; }
     ingest(cands); render();
+    autoLoad();
   })();
 
   return ctrl;

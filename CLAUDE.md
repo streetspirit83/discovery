@@ -154,6 +154,19 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   dessen Datenbank gebunden und fehlen hier bewusst. Detail-Knopf schaltet bei
   Bedarf auf den Watch-Bucket und kehrt nach dem Sheet ins Modal zurück
   (`returnToMonitor`).
+  **Kerzen lädt das Modal selbst nach** (derselbe `fetchSwingAnalysis` wie das
+  Detail-Sheet, persistiert als `swing_analysis`): beim Aufklappen einer Zeile
+  sofort, wenn sie fehlen oder > 20 h alt sind; beim Öffnen im Hintergrund für
+  Titel ohne Kerzen (Nicht-US auch veraltete) — Yahoo in Wellen von 6,
+  US/TwelveData nacheinander mit 8 s Abstand (Free: 8/min), Abbruch bei
+  `td_limit`. **Weder EUR noch USD** (Sivers SEK, Funding Circle GBX):
+  `lib/eur-basis.js` holt eine EUR-Basis — LS `series=history` (Tages-
+  schlüsse EUR, ~2 Jahre) → deutsches Yahoo-Listing per Namenssuche (per ISIN
+  findet Yahoo nur SIVE.ST; Listing muss ±20 % zum Wechselkurs passen) →
+  Heimat-Kerzen × Yahoo `SEKEUR=X`. Persistiert als `eur_basis` {src, sym, t, c,
+  f, at}; `f` = EUR je Notierungs-Einheit (impliziert, Median über gemeinsame
+  Tage — gleicht GBX/Pence automatisch aus). Range-Levels × `f`, Chart/5T aus
+  `eur_basis.c`, Kurs aus LS.
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 

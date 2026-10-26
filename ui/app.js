@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20261021b';
+import { CandidateList, dupKey } from './components/candidate-list.js?v=20261026a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261021a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -17,8 +17,9 @@ import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261021a';
 import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
-import { openRangesModal } from './components/ranges-modal.js?v=20261025a';
-import { renderControlModal } from './components/control-modal.js?v=20261021a';
+import { openRangesModal } from './components/ranges-modal.js?v=20261026a';
+import { fetchEurBasis } from './lib/eur-basis.js?v=20261026a';
+import { renderControlModal } from './components/control-modal.js?v=20261026a';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -29,7 +30,7 @@ import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
-import { fetchLsQuote } from './lib/ls-intraday.js?v=20260819e';
+import { fetchLsQuote } from './lib/ls-intraday.js?v=20261026a';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt } from './lib/research-prompt.js?v=20260831b';
@@ -2031,6 +2032,27 @@ async function init() {
             afterWrite();
           }
         : null,
+      // Kerzen und EUR-Basis nachladen — derselbe Abruf wie im Detail-Sheet,
+      // Ergebnis landet wie dort am Kandidaten im Watch-Blob.
+      loader: canWrite && backendUrl && secret ? {
+        isUs: (c) => isUsTicker(c),
+        canCandles: (c) => !isUsTicker(c) || !!localStorage.getItem('discovery_twelvedata_key'),
+        candles: async (c) => {
+          const r = await fetchSwingAnalysis(c, { eurUsd: resolveFxRate(), backendUrl, secret });
+          if (r?.error) return { ok: false, error: r.error, msg: swingErrorText(r.error) || r.message || r.error };
+          c.swing_analysis = r;
+          await storageClient.updateCandidate('watch', c.id, { swing_analysis: r }).catch((e) => console.warn('[ranges] Kerzen speichern:', e.message));
+          afterWrite();
+          return { ok: true };
+        },
+        eurBasis: async (c) => {
+          const r = await fetchEurBasis(c, { backendUrl, secret });
+          if (r?.error) return { ok: false, error: r.error, msg: 'Keine EUR-Kurse (LS, Yahoo, Wechselkurs) gefunden' };
+          c.eur_basis = r;
+          await storageClient.updateCandidate('watch', c.id, { eur_basis: r }).catch((e) => console.warn('[ranges] EUR-Basis speichern:', e.message));
+          return { ok: true };
+        },
+      } : null,
       onOpenCandidate: async (c, ctrl) => {
         if (currentBlobType !== 'watch') await switchBlob('watch');
         const cand = (allBlobs.watch?.candidates ?? []).find((x) => x.id === c.id) ?? c;

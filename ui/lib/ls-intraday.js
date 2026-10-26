@@ -51,7 +51,7 @@ async function proxyGet(url, { backendUrl, secret }) {
    ihre `instrument_id` längst mitliefert. Letztere wurde vorher nie gelesen —
    ohne TR-Check zahlte damit jeder Abruf für jeden Titel dauerhaft zwei
    Proxy-Runden statt einer. */
-async function resolveInstrumentId(candidate, auth) {
+export async function resolveInstrumentId(candidate, auth) {
   const cached = candidate.tr_check?.ls_id ?? candidate.ls_quote?.instrument_id;
   if (cached != null && cached !== '') return cached;
 
