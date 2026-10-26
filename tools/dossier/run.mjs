@@ -24,6 +24,8 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun,
   Table, TableRow, TableCell, WidthType, ExternalHyperlink,
 } from 'docx';
+import { markdownToParagraphs } from './md-docx.mjs';
+import { PROMPT_TEMPLATES } from '../../ui/lib/research-prompt.js';
 
 const env = (k, fallback) => {
   const v = process.env[k] ?? fallback;
@@ -221,6 +223,8 @@ async function buildDocx(c, cap) {
     children.push(new Paragraph({ text: `Kein Profil verfügbar${cap.profile?.error ? ` (${cap.profile.error})` : ''}.` }));
   }
 
+  children.push(...researchSection(c));
+
   children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, text: 'Screenshots' }));
   for (const s of cap.shots) {
     // Breite auf ~6,3 Zoll (A4 mit Rand) skalieren, Seitenverhältnis halten.
@@ -231,6 +235,31 @@ async function buildDocx(c, cap) {
   }
 
   return Packer.toBuffer(new Document({ sections: [{ children }] }));
+}
+
+/* Abschnitt „AI Research": Ergebnisse der Claude-Recherche aus candidate.research
+   (geschrieben von netlify/functions/research.js, ein Eintrag je Prompt — ein
+   neuer Lauf ersetzt den alten). Reihenfolge wie die Prompt-Vorlagen; Schlüssel,
+   die es dort nicht gibt, hängen hinten an. Der Text lebt im Blob, nicht im Doc —
+   deshalb übersteht er jedes Dossier-Update. */
+function researchSection(c) {
+  const r = c.research ?? {};
+  const order = PROMPT_TEMPLATES.map((t) => t.key);
+  const keys = Object.keys(r).filter((k) => r[k]?.md)
+    .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+  if (!keys.length) return [];
+  const out = [
+    new Paragraph({ heading: HeadingLevel.HEADING_1, text: 'AI Research' }),
+    new Paragraph({ children: [new TextRun({ text: 'Web-Recherche durch Claude, ausgelöst im Artefakt „Research“. Belege und Daten stehen je Punkt in Klammern — vor Entscheidungen selbst prüfen.', italics: true, size: 18 })] }),
+  ];
+  for (const k of keys) {
+    const e = r[k];
+    const label = e.label || PROMPT_TEMPLATES.find((t) => t.key === k)?.label || k;
+    out.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: label }));
+    out.push(new Paragraph({ children: [new TextRun({ text: `Stand ${fmtEarnings(Date.parse(e.at))}`, italics: true, size: 18 })] }));
+    out.push(...markdownToParagraphs(e.md));
+  }
+  return out;
 }
 
 function pngSize(buf) {

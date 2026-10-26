@@ -141,6 +141,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `tools/cowork-review/`.
 - `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
+  Die Prompts sind seit Okt. 2026 **Vorlagen mit Platzhaltern** (`PROMPT_TEMPLATES`,
+  `promptVars`, `fillPrompt` in `research-prompt.js`) — dieselben Texte nutzen das
+  Research-Artefakt (dort editierbar) und die Netlify-Funktion `research`.
+  `PROMPT_TEMPLATES` enthält zusätzlich „Momentum", das ✨-Modal zeigt nur die fünf.
 - `ranges-modal.js` (+ `ranges-modal.css`) – **Watch Ranges** (Topbar, Pfeil-Knopf):
   1:1-Kopie des Claude-Artefakts „Watch Ranges" als Vollbild-Modal. Läuft im
   **Shadow DOM**, damit Markup und CSS des Artefakts unverändert bleiben können
@@ -308,6 +312,7 @@ product spec.
 - Adapters run on schedule (daily at 6 AM UTC)
 - UI deploys to GitHub Pages on push to main
 - `dossier.yml` erzeugt Google-Doc-Dossiers je Watch-Ticker (Spalte „Doc“ in der Meta-Ansicht → `dossier-trigger` → Action → `tools/dossier/run.mjs`, Playwright gegen die eigene App). Setup und Ablauf: `docs/DOSSIER.md`.
+- **AI Research im Dossier:** Artefakt „Dossier Research" (https://claude.ai/artifact/HtGSH28Lkng8zC9t3swEXn) listet die Docs im Dossier-Ordner (Google-Drive-Konnektor), Prompts liegen editierbar in dessen Datenbank (`prompts`, Standard in `defaults`). Auswahl → geplante Aufgabe „Discovery Research" → Netlify `research` (eigener Schlüssel `RESEARCH_TOKEN`): GET liefert die Platzhalter-Werte (`promptVars` aus `ui/lib/research-prompt.js`, fairer Kurs aus `tv-reverse-dcf.js` — die Funktion importiert beide direkt aus `ui/lib`), POST schreibt `candidate.research[key] = {label, md, at}` (neuer Lauf ersetzt den alten) und stösst ein Dossier-Update an. `run.mjs` setzt daraus den Abschnitt „AI Research" (`tools/dossier/md-docx.mjs`). Der Text lebt im Blob, deshalb übersteht er jedes Dossier-Update. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
 ## Netlify Setup

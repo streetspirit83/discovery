@@ -29,6 +29,30 @@ ausschliesslich die eigene App — kein Claude, keine Tokens, kein Rechner an.
 
 Dauer pro Ticker ≈ 1–2 min Action-Laufzeit (Freikontingent).
 
+## AI Research im Dossier
+
+Abschnitt „AI Research“ zwischen Firmenprofil und Screenshots: je Prompt ein
+Unterabschnitt mit Stand-Datum. Ein neuer Lauf desselben Prompts ersetzt den
+alten.
+
+1. **Artefakt „Dossier Research“** (https://claude.ai/artifact/HtGSH28Lkng8zC9t3swEXn):
+   listet die Docs im Dossier-Ordner über den Google-Drive-Konnektor. Zeile
+   aufklappen, Prompts wählen, „An Claude“. Reiter „Prompts“: Vorlagen
+   bearbeiten, eigene anlegen, Standard wiederherstellen. Platzhalter wie
+   `{{subject}}`, `{{data}}`, `{{extremes}}` füllt die Netlify-Funktion.
+2. Das Artefakt schreibt `req/<docId>` in seine Datenbank und startet die
+   geplante Aufgabe **„Discovery Research“** (Claude Code Remote `fire_trigger`).
+3. Die Aufgabe liest Anfrage und Vorlagen, holt die Werte über
+   `GET /api/research?doc=<docId>`, recherchiert je Prompt im Web, schickt die
+   Ergebnisse per `POST /api/research` (rebuild) und meldet `status/<docId>` ans
+   Artefakt zurück.
+4. `research` speichert `candidate.research[key]` im watch-Blob und stösst
+   `dossier.yml` an; `run.mjs` baut das Doc samt Abschnitt neu.
+
+Schlüssel: Netlify-Variable `RESEARCH_TOKEN` (Kontext production, Scope
+functions), Header `x-research-token`. Darf nur `research` am watch-Blob
+schreiben und ein Dossier-Update anstossen.
+
 ## Einmalige Einrichtung
 
 ### A. Google: OAuth-Client + Refresh-Token (~15 min)

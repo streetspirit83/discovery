@@ -14,7 +14,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20261021a';
-import { stockPrompts } from '../lib/research-prompt.js?v=20260831b';
+import { stockPrompts } from '../lib/research-prompt.js?v=20261026b';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 
 /* Clipboard-API gibt es nur im sicheren Kontext; der Textarea-Umweg ist der

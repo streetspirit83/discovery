@@ -196,42 +196,45 @@ function extremesBlock(c, cur) {
  * das einzige Mittel, das in jedem Chatfenster gleich aussieht.
  */
 
-function head(c, date) {
-  const name = c.name ? `${c.name} ` : '';
-  const isin = c.isin ? `, ISIN ${c.isin}` : '';
-  return `You are a neutral evidence researcher. Subject: ${name}(${c.symbol} @ ${c.exchange}${isin}). Use current web sources (today: ${date}). Gather and weigh evidence — do not argue for or against the stock.
-
-Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.`;
-}
-
-const FORMAT = `Output format:
-- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
-- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
-- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
-- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
-- End with one line "⚠ Watch:" naming the single most important open point.`;
-
-/** Die vier Bausteine. `build` bekommt den Kandidaten und den Kontext. */
-export const STOCK_PROMPTS = [
+/* ── Vorlagen statt Funktionen ──────────────────────────────────────────────
+ * Die Prompts sind Text mit Platzhaltern ({{subject}}, {{data}} …), damit sie
+ * sich ausserhalb dieses Moduls bearbeiten lassen: das Artefakt „Research"
+ * zeigt sie editierbar an, die Netlify-Funktion `research` füllt die
+ * Platzhalter für die Claude-Recherche aus denselben Kandidatendaten. Das
+ * ✨-Modal in Discovery füllt dieselben Vorlagen — der Text existiert nur hier.
+ *
+ * Platzhalter (siehe promptVars): subject, symbol, date, sector, data,
+ * extremes, fair_note, currency. Unbekannte {{…}} bleiben stehen.
+ */
+export const PROMPT_TEMPLATES = [
   {
     key: 'moat',
     label: 'Moat & Wettbewerb',
     hint: 'Geschäftsmodell, Burggraben, Sub-Sektor, Konkurrenz',
-    build: (c, { date }) => `${head(c, date)}
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
 
 **Business & moat**
 What exactly does the company earn money with (revenue split by segment and region)? Where does the moat come from — network effects, switching costs, scale, patents, brand, regulation? Give evidence rather than assertions. How durable is it — what would have to happen for the moat to be gone in three years?
 
 **Sector, sub-sector & competition**
-Which sector and, more importantly, which sub-sector / niche does it actually compete in? My data classifies it as ${sectorLine(c)}. Name the 3–5 most relevant competitors, listed and private, with rough size or market share. How does ${c.symbol} compare on growth? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, economy, interest rates, geopolitical stress)?
+Which sector and, more importantly, which sub-sector / niche does it actually compete in? My data classifies it as {{sector}}. Name the 3–5 most relevant competitors, listed and private, with rough size or market share. How does {{symbol}} compare on growth? Who is gaining share right now, and why? Where is that sub-sector in its cycle (demand, economy, interest rates, geopolitical stress)?
 
-${FORMAT}`,
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
   },
   {
     key: 'redflags',
     label: 'Red Flags',
     hint: 'Bilanzqualität, Betrugsrisiko, Short-Seller, Positionierung',
-    build: (c, { date }) => `${head(c, date)}
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
 
 **Red flags**
 Accounting: gaps between cash flow and earnings (accruals), receivables and inventory versus revenue, capitalised costs, recurring "one-off" items, aggressive revenue recognition. Governance: auditor or CFO changes, late filings, restatements, related-party transactions, SEC/BaFin proceedings, class actions. Dilution: share count over time, ATM programmes, convertibles, stock-based comp as a share of revenue. Balance sheet: debt maturities, covenants, cash runway.
@@ -239,27 +242,41 @@ Accounting: gaps between cash flow and earnings (accruals), receivables and inve
 **Short sellers**
 Are there short-seller reports (Hindenburg, Muddy Waters, Kerrisdale, Culper, Scorpion, Fuzzy Panda, Grizzly, Blue Orca …)? If so: the core allegations, the date, the company's response, and what has since been substantiated or refuted. Current short interest (% of float), days-to-cover and the trend — with the as-of date. Summarise the short thesis in two sentences, and the counter-arguments in two more.
 
-${FORMAT}`,
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
   },
   {
     key: 'insiders',
     label: 'Insider & Großaktionäre',
     hint: 'Käufe/Verkäufe, Beteiligungen, Rückkäufe',
-    build: (c, { date }) => `${head(c, date)}
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
 
 **Insiders & major holders**
 Insider buys and sells over the last 6–12 months: who, how much, at what price, and whether these were genuine open-market purchases or scheduled 10b5-1 sales. Cluster buying by several insiders at once? Management ownership in absolute terms and as a share of their pay. Changes among the largest institutional holders, new activist positions, buybacks in progress (announced vs. actually executed).
 
-${FORMAT}`,
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
   },
   {
     key: 'news',
     label: 'News, Katalysatoren & Ausblick',
     hint: 'Bewegung erklären, Termine, 3-Monats-Ausblick mit Spanne',
-    build: (c, { date, currency, fair, impliedGrowth }) => `${head(c, date)}
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
 
 **Recent news & catalysts**
-What explains the price move over the last 1 / 3 / 6 months — concrete events, not "market conditions"? What is coming up: earnings, guidance, approvals, contract decisions, lock-up expiries, index changes, capital measures? How does the price sit relative to the analyst consensus and to its 52-week range?${fair != null ? `\n\nMy own reverse-DCF puts fair value at ${num(fair)} ${currency}${impliedGrowth != null ? `, i.e. the market is pricing in ~${num(impliedGrowth * 100, 1)}% p.a. free-cash-flow growth` : ''}. Which assumptions is that price most sensitive to?` : ''}
+What explains the price move over the last 1 / 3 / 6 months — concrete events, not "market conditions"? What is coming up: earnings, guidance, approvals, contract decisions, lock-up expiries, index changes, capital measures? How does the price sit relative to the analyst consensus and to its 52-week range?{{fair_note}}
 
 **Outlook — next 3 months**
 - One price range for the next three months, with the reasoning in a single line and the two or three factors it hinges on.
@@ -267,21 +284,23 @@ What explains the price move over the last 1 / 3 / 6 months — concrete events,
 - Opportunities: 3–5 bullets, same standard.
 - Where the evidence is thin or contradictory, say so instead of resolving it.
 
-My screening data (as of ${date}):
-${dataBlock(c, currency)}
+My screening data (as of {{date}}):
+{{data}}
 
-${FORMAT}`,
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
   },
-  /* Der Extreme-Prompt ist ausdrücklich NICHT „News noch einmal": der
-     News-Block erklärt die laufende Bewegung und schaut nach vorn, dieser hier
-     seziert rückblickend die Ausschläge eines Jahres — was sie ausgelöst hat,
-     ob sie gehalten haben und was davon wiederholbar ist. Genau die Frage
-     hinter „warum ist Sivers Semiconductors explodiert und dann abgestürzt". */
   {
     key: 'extremes',
     label: 'Extreme & Katalysatoren',
     hint: 'Was Kurssprünge und Abstürze des letzten Jahres ausgelöst hat',
-    build: (c, { date, currency }) => `${head(c, date)}
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
 
 **Extreme moves over the last 12 months**
 Reconstruct the largest up moves and the largest drawdowns of the past year — single days as well as multi-week runs. For each one give: the date (or the window), the size of the move, and the concrete trigger.
@@ -303,14 +322,73 @@ Then, for each move, the part that actually matters:
 - Which upcoming events could trigger a move of the same magnitude, and in which direction?
 - Where a spike has NO identifiable cause, say so explicitly instead of inventing one.
 
-Anchor data from my own screening (as of ${date}):
-${extremesBlock(c, currency)}
+Anchor data from my own screening (as of {{date}}):
+{{extremes}}
 
 Treat those dates as leads, not as gospel — my bar window may be shorter than a year and can miss moves outside it. Look for the biggest moves of the full 12 months independently.
 
-${FORMAT}`,
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
+  },
+  {
+    key: 'momentum',
+    label: 'Momentum',
+    hint: 'Kurs-Momentum und ob News/Zahlen es bestätigen',
+    tpl: `You are a neutral evidence researcher. Subject: {{subject}}. Use current web sources (today: {{date}}). Gather and weigh evidence — do not argue for or against the stock.
+
+Cite a source and a date for every claim. Where you find nothing, write "no evidence found" instead of something that merely sounds plausible. Label company-provided material (IR deck, press release) as such, and keep facts, estimates and opinions apart.
+
+**Momentum check**
+Is the momentum of {{symbol}} intact right now? Judge two things, roughly half each:
+- Price momentum: 1 / 3 / 6 / 12-month performance, position versus the 50- and 200-day moving averages, distance from the 52-week high.
+- Confirmation: do news and fundamentals of the last 4 weeks back the move — earnings and guidance, estimate revisions, analyst actions, contract news, sector and peer flows? Only count news from the last 4 weeks.
+
+Start with one line "Verdict: strong | intact | fading | none — score N/100". Then: drivers (max 4 bullets), risks (max 3 bullets), and upcoming catalysts with dates. No buy or sell recommendation and no price target of your own; third-party targets only as reported facts.
+
+My screening data (as of {{date}}):
+{{extremes}}
+
+Output format:
+- Short bullets only. No prose paragraphs, no preamble, no restating of the question.
+- Put the **few genuinely important findings in bold** — sparingly, so bold still means something.
+- Start every bullet with a signal marker: 🔴 material risk / red flag · 🟢 verified strength · 🟡 contested or thin evidence · ⚪ context only.
+- Put source and date in brackets at the end of the bullet, e.g. [10-K, 2026-02-14].
+- End with one line "⚠ Watch:" naming the single most important open point.`,
   },
 ];
+
+/** Werte für die Platzhalter. `fair`/`impliedGrowth` aus dem Reverse-DCF des Aufrufers. */
+export function promptVars(c, { date = new Date().toISOString().slice(0, 10), currency = 'USD', fair = null, impliedGrowth = null } = {}) {
+  const name = c.name ? `${c.name} ` : '';
+  const isin = c.isin ? `, ISIN ${c.isin}` : '';
+  return {
+    subject: `${name}(${c.symbol} @ ${c.exchange}${isin})`,
+    symbol: c.symbol,
+    date,
+    currency,
+    sector: sectorLine(c),
+    data: dataBlock(c, currency),
+    extremes: extremesBlock(c, currency),
+    fair_note: fair != null
+      ? `\n\nMy own reverse-DCF puts fair value at ${num(fair)} ${currency}${impliedGrowth != null ? `, i.e. the market is pricing in ~${num(impliedGrowth * 100, 1)}% p.a. free-cash-flow growth` : ''}. Which assumptions is that price most sensitive to?`
+      : '',
+  };
+}
+
+/** Platzhalter ersetzen; unbekannte bleiben sichtbar stehen statt still zu verschwinden. */
+export function fillPrompt(tpl, vars) {
+  return String(tpl ?? '').replace(/\{\{(\w+)\}\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k] ?? '') : m));
+}
+
+/** Die fünf Recherche-Bausteine des ✨-Modals (Momentum gehört zum Artefakt). */
+export const STOCK_PROMPTS = PROMPT_TEMPLATES.filter((t) => t.key !== 'momentum').map(({ key, label, hint, tpl }) => ({
+  key, label, hint,
+  build: (c, ctx) => fillPrompt(tpl, promptVars(c, ctx)),
+}));
 
 /**
  * stockPrompts(candidate, opts) → [{ key, label, hint, text }]
