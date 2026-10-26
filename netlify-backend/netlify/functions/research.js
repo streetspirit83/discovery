@@ -8,10 +8,15 @@
  * GET  /api/research                 → Watch-Titel mit Dossier-Doc
  *        { items: [{ id, symbol, name, doc_id, url, research: { key: at } }] }
  * GET  /api/research?doc=<driveId>   (oder ?id=<candidateId>)
+ *        Optional &symbol=<SYM>: Ist das Doc an keinem Titel verknüpft (z. B. ein
+ *        Dossier-Doc aus der Zeit vor der Verknüpfung), gilt der eindeutige
+ *        Watch-Titel mit diesem Symbol, der selbst noch kein Doc hat. Der POST
+ *        verknüpft das Doc dann dauerhaft (dossier.doc_id), sodass das Update
+ *        genau dieses Doc neu baut statt ein zweites anzulegen.
  *        → { candidate: {…}, vars: {…} }   Werte für die Prompt-Platzhalter,
  *          gerechnet mit denselben Funktionen wie das ✨-Modal in Discovery
  *          (ui/lib/research-prompt.js, Reverse-DCF aus ui/lib/tv-reverse-dcf.js).
- * POST /api/research  { doc | id, results: [{ key, label, md }], rebuild }
+ * POST /api/research  { doc | id, symbol?, results: [{ key, label, md }], rebuild }
  *        Schreibt candidate.research[key] = { label, md, at } — ein neuer Lauf
  *        ersetzt den alten desselben Prompts. Mit rebuild: true wird danach das
  *        Dossier zum Update vorgemerkt und die Action dossier.yml angestossen;
@@ -36,10 +41,18 @@ const MAX_RESULTS = 10;
 
 const respond = (status, body) => new Response(JSON.stringify(body), { status, headers: HEADERS });
 
-function findCandidate(cands, { id, doc }) {
+const DOC_RE = /^[A-Za-z0-9_-]{10,100}$/;
+
+function findCandidate(cands, { id, doc, symbol }) {
   if (id) return cands.find((c) => c.id === id) ?? null;
-  if (doc) return cands.find((c) => c.dossier?.doc_id === doc) ?? null;
-  return null;
+  if (!doc) return null;
+  const linked = cands.find((c) => c.dossier?.doc_id === doc);
+  if (linked) return linked;
+  // Fallback: Doc noch an keinem Titel → eindeutiger Watch-Titel mit dem Symbol und ohne eigenes Doc.
+  const sym = String(symbol ?? '').trim().toUpperCase();
+  if (!sym || !DOC_RE.test(doc)) return null;
+  const hits = cands.filter((c) => String(c.symbol ?? '').toUpperCase() === sym && !c.dossier?.doc_id);
+  return hits.length === 1 ? hits[0] : null;
 }
 
 function researchSummary(c) {
@@ -87,20 +100,21 @@ export default async (req) => {
 
   if (req.method === 'GET') {
     const u = new URL(req.url);
-    const id = u.searchParams.get('id'), docId = u.searchParams.get('doc');
+    const id = u.searchParams.get('id'), docId = u.searchParams.get('doc'), symbol = u.searchParams.get('symbol');
     if (!id && !docId) {
       const items = doc.candidates
         .filter((c) => c.dossier?.doc_id)
         .map((c) => ({ id: c.id, symbol: c.symbol, name: c.name ?? null, doc_id: c.dossier.doc_id, url: c.dossier.url ?? null, research: researchSummary(c) }));
       return respond(200, { ok: true, count: items.length, items });
     }
-    const c = findCandidate(doc.candidates, { id, doc: docId });
+    const c = findCandidate(doc.candidates, { id, doc: docId, symbol });
     if (!c) return respond(404, { ok: false, error: 'Titel nicht im Watch-Bucket' });
     return respond(200, {
       ok: true,
       candidate: {
         id: c.id, symbol: c.symbol, name: c.name ?? null, exchange: c.exchange ?? null, isin: c.isin ?? null,
-        currency: c.currency ?? null, doc_id: c.dossier?.doc_id ?? null, url: c.dossier?.url ?? null,
+        currency: c.currency ?? null, doc_id: c.dossier?.doc_id ?? docId ?? null, url: c.dossier?.url ?? null,
+        linked: !!c.dossier?.doc_id,
       },
       vars: varsFor(c),
       research: researchSummary(c),
@@ -111,7 +125,7 @@ export default async (req) => {
 
   let body;
   try { body = await req.json(); } catch { return respond(400, { ok: false, error: 'Invalid JSON' }); }
-  const c = findCandidate(doc.candidates, { id: body?.id, doc: body?.doc });
+  const c = findCandidate(doc.candidates, { id: body?.id, doc: body?.doc, symbol: body?.symbol });
   if (!c) return respond(404, { ok: false, error: 'Titel nicht im Watch-Bucket' });
 
   const results = Array.isArray(body?.results) ? body.results : [];
@@ -127,12 +141,15 @@ export default async (req) => {
     written.push(key);
   }
 
+  // Über den Symbol-Fallback gefunden → Doc jetzt fest verknüpfen.
+  const relink = !c.dossier?.doc_id && !body?.id && DOC_RE.test(String(body?.doc ?? ''));
+  if (relink) c.dossier = { ...(c.dossier ?? {}), doc_id: body.doc, url: `https://docs.google.com/document/d/${body.doc}/edit?usp=drivesdk` };
   const rebuild = body?.rebuild === true && !!c.dossier?.doc_id;
   if (!written.length && !rebuild) return respond(400, { ok: false, error: 'keine gültigen Ergebnisse' });
 
   if (written.length) c.research = research;
+  if (rebuild || relink) c.dossier_flag = true;
   if (rebuild) {
-    c.dossier_flag = true;
     c.dossier_update = true;
     c.dossier = { ...(c.dossier ?? {}), status: 'queued', error: null, queued_at: now };
   }
@@ -142,5 +159,5 @@ export default async (req) => {
 
   // Geht der Anstoss verloren, holt der tägliche Sweep der Action das Update nach.
   const dispatchError = rebuild ? await dispatchDossier(c.id) : null;
-  return respond(200, { ok: true, id: c.id, written, rebuild, dispatched: rebuild && !dispatchError, dispatch_error: dispatchError });
+  return respond(200, { ok: true, id: c.id, written, rebuild, relinked: relink, dispatched: rebuild && !dispatchError, dispatch_error: dispatchError });
 };

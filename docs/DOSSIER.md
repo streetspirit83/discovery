@@ -43,11 +43,17 @@ alten.
 2. Das Artefakt schreibt `req/<docId>` in seine Datenbank und startet die
    geplante Aufgabe **„Discovery Research“** (Claude Code Remote `fire_trigger`).
 3. Die Aufgabe liest Anfrage und Vorlagen, holt die Werte über
-   `GET /api/research?doc=<docId>`, recherchiert je Prompt im Web, schickt die
+   `GET /api/research?doc=<docId>&symbol=<SYM>`, recherchiert je Prompt im Web, schickt die
    Ergebnisse per `POST /api/research` (rebuild) und meldet `status/<docId>` ans
    Artefakt zurück.
 4. `research` speichert `candidate.research[key]` im watch-Blob und stösst
    `dossier.yml` an; `run.mjs` baut das Doc samt Abschnitt neu.
+
+Unverknüpfte Docs: Liegt im Ordner ein Doc, das an keinem Titel als
+`dossier.doc_id` hängt (z. B. aus der Zeit vor der Verknüpfung), findet
+`research` den Titel über `symbol` — nur wenn genau ein Watch-Titel dieses
+Symbol trägt und selbst noch kein Doc hat. Der POST verknüpft das Doc dann fest,
+das Update baut genau dieses Doc neu.
 
 Schlüssel: Netlify-Variable `RESEARCH_TOKEN` (Kontext production, Scope
 functions), Header `x-research-token`. Darf nur `research` am watch-Blob
