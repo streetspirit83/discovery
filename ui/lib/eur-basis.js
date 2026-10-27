@@ -86,19 +86,6 @@ async function lsSeries(c, auth) {
   return { ...toSeries(pts.filter(Array.isArray).map(([ms, p]) => [day(ms), p])), sym: `LS ${id}` };
 }
 
-/**
- * fetchLsDays(candidate, { backendUrl, secret }) → { t, c, at } — die letzten 10
- * LS-Tagesschlusskurse (EUR), nur für die 5-Tage-Richtung im Ranges-Modal.
- * Eine Proxy-Runde (Instrument-ID wird wiederverwendet), keine Fremdquelle.
- */
-export async function fetchLsDays(c, { backendUrl, secret } = {}) {
-  const at = new Date().toISOString();
-  if (!backendUrl || !secret) return { error: 'no_backend', at };
-  const s = await lsSeries(c, { backendUrl, secret });
-  if (!s) return { error: 'none', at };
-  return { t: s.t.slice(-10), c: s.c.slice(-10).map((v) => +v.toFixed(4)), at };
-}
-
 async function yahooChart(sym, auth) {
   const j = await proxyGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1d`, auth, YF_HEADERS);
   const r = j?.chart?.result?.[0];

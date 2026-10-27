@@ -17,8 +17,8 @@ import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261021a';
 import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
-import { openRangesModal } from './components/ranges-modal.js?v=20261027b';
-import { fetchEurBasis, fetchLsDays } from './lib/eur-basis.js?v=20261027a';
+import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
+import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
 import { renderControlModal } from './components/control-modal.js?v=20261026a';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
@@ -2025,11 +2025,7 @@ async function init() {
                   if (q?.price != null) {
                     c.ls_quote = q;
                     await storageClient.updateCandidate('watch', c.id, { ls_quote: q }).catch(() => {});
-                    const d = await fetchLsDays(c, { backendUrl, secret });
-                    if (!d?.error) {
-                      c.ls_days = d;
-                      await storageClient.updateCandidate('watch', c.id, { ls_days: d }).catch(() => {});
-                    }
+                  }
                   }
                 } finally { onEach(c); }
               }));
