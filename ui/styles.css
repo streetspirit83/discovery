@@ -114,8 +114,7 @@ svg { display:block; }
      Botnav) über den Bildschirm hinausschiebt. Das schnitt auf dem Handy das
      Monitor-Icon ab; jetzt füllt die Botnav genau die Breite → alle 5 Slots. */
   grid-template-columns:minmax(0,1fr);
-  /* auto = Sektor-Leiste (nur Watch + Archiv), sonst 0 hoch. */
-  grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) auto 1fr var(--h-botnav);
+  grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) 1fr var(--h-botnav);
   height:100dvh;
 }
 
@@ -183,18 +182,6 @@ svg { display:block; }
   transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 .seg-btn--active { background:var(--accent); border-color:var(--accent); color:#fff; }
-
-/* ─ Sektor-Leiste (Watch + Archiv) ─
-   Belegt immer eine eigene Rasterzeile (#app), ausgeblendet mit Höhe 0 statt
-   display:none — sonst rutschen Tabelle und Botnav eine Zeile nach oben. */
-.segbar {
-  display:flex; align-items:center;
-  padding:var(--s-1) var(--s-4); background:var(--surface-2);
-  border-bottom:1px solid var(--border); overflow-x:auto; overflow-y:hidden;
-}
-.segbar[hidden] { display:flex; height:0; padding:0; border:0; overflow:hidden; }
-.segbar .seg-n { font-size:var(--fs-1); opacity:.75; font-variant-numeric:tabular-nums; }
-.segbar--off .seg-btn { opacity:.45; cursor:default; }
 
 /* ─ Filterbar ─ */
 .filterbar {
@@ -1426,7 +1413,7 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
 
   #app { transition:grid-template-rows var(--t-fast) var(--ease); }
   #app.is-compact {
-    grid-template-rows:0 0 var(--h-filterbar) auto 1fr var(--h-botnav);
+    grid-template-rows:0 0 var(--h-filterbar) 1fr var(--h-botnav);
   }
   #app.is-compact .topbar,
   #app.is-compact .subbar { overflow:hidden; border-bottom:none; pointer-events:none; }
@@ -2232,6 +2219,11 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .subnav-alert:hover { background:var(--surface-3); color:var(--text); }
 .subnav-alert[hidden] { display:none; }
 #subnav-watch.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+/* Sektor-Buttons (nur Watch + Archiv): Einfachauswahl, aktiver Button wie das Auge. */
+.sector-btns { display:inline-flex; flex-shrink:0; padding-left:.4rem; border-left:1px solid var(--border); }
+.sector-btns[hidden] { display:none; }
+.sector-btns .subnav-alert.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.sector-btns--off .subnav-alert { opacity:.4; cursor:default; }
 .alert-badge-count { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px;
   border-radius:999px; background:var(--neg); color:#fff; font-size:10px; font-weight:700;
   line-height:16px; text-align:center; box-shadow:0 0 0 2px var(--surface-2); }

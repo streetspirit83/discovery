@@ -38,7 +38,7 @@ import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20261021a';
+import { icons } from './lib/icons.js?v=20261027g';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
@@ -492,13 +492,15 @@ function renderFilterbar() {
     selected: uiState.fScore,
     onChange: (v) => { uiState.fScore = v; saveUiState(); candidateList.setFilter('score', v); },
   });
-  mkFilter({
+  // Watch + Archiv: dort ist die Sektor-Leiste (Einfachauswahl) der einzige Sektor-Filter.
+  const segView = currentBlobType === 'all';
+  if (!segView) mkFilter({
     id: 'filter-mega', label: 'Mega', title: 'Filter nach Mega-Cluster (5 Sektor-Gruppen, Mehrfachauswahl)',
     options: MEGA_CLUSTERS.map((m) => ({ value: m.key, label: m.label })),
     selected: uiState.fMega,
     onChange: (v) => { uiState.fMega = v; saveUiState(); candidateList.setFilter('mega', v); },
   });
-  mkFilter({
+  if (!segView) mkFilter({
     id: 'filter-sector', label: 'Sectors', title: 'Filter nach Sektor (Mehrfachauswahl)',
     options: [{ value: '__no_sector__', label: '— Ohne Sektor' }, ...sectors.map((s) => ({ value: s, label: s }))],
     selected: uiState.fSector,
@@ -866,6 +868,9 @@ async function switchBlob(blobType) {
   }
   // Watch-Label-Feature gilt nur im Watch-Bucket (und in Watch + Archiv) — Filter beim Verlassen lösen.
   if (blobType !== 'watch' && blobType !== 'all') candidateList.filters.watch = '';
+  // Mega/Sectors (Mehrfachauswahl) ruhen in Watch + Archiv, die Sektor-Leiste ersetzt sie.
+  candidateList.filters.mega   = blobType === 'all' ? [] : (uiState.fMega ?? []);
+  candidateList.filters.sector = blobType === 'all' ? [] : (uiState.fSector ?? []);
   candidateDetail.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
@@ -883,7 +888,7 @@ async function switchBlob(blobType) {
   renderBotnav();
   renderFilterbar();
   updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
-  renderSegbar();                                    // Sektor-Leiste nur in Watch + Archiv
+  renderSegbar();                                    // Sektor-Buttons nur in Watch + Archiv
   refreshDupMarkers();                               // fire & forget
   if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
 }
@@ -898,29 +903,31 @@ function updateWatchSubnav() {
   btn.classList.toggle('is-active', onWatch && candidateList?.filters?.watch === 'yes');
 }
 
-// ── Sektor-Leiste (nur Watch + Archiv) ──────────────────────────────────────────
-// Ein Tipp schaltet zwischen den fünf Mega-Clustern (wie die Sektor-Heatmap im
-// Markets-Modal) plus „ETFs & ohne Sektor". Stern oder Auge aktiv → die Leiste
-// tritt zurück und die Liste zeigt alle markierten Titel ohne Sektor-Trennung.
+// ── Sektor-Buttons (nur Watch + Archiv) ─────────────────────────────────────────
+// Fünf Icon-Buttons in der Subleiste, je Mega-Cluster einer (wie die Sektor-
+// Heatmap im Markets-Modal). Einfachauswahl: Tipp wählt den Sektor, nochmal
+// tippen = wieder alle. Stern oder Auge aktiv → Buttons treten zurück, die Liste
+// zeigt alle markierten Titel ohne Sektor-Trennung.
+const SECTOR_ICONS = { tech: 'cpu', health: 'heartPulse', consumer: 'shoppingCart', industry: 'factory', finance: 'landmark' };
 function renderSegbar() {
-  const bar = document.getElementById('segbar');
-  if (!bar) return;
+  const box = document.getElementById('sector-btns');
+  if (!box) return;
   const on = currentBlobType === 'all';
-  bar.hidden = !on;
+  box.hidden = !on;
   candidateList.setSegment(on ? (uiState.fSeg ?? '') : '');
   if (!on) return;
   const cands = allBlobs.all?.candidates ?? [];
-  const count = (k) => cands.filter((c) => segmentOf(c) === k).length;
-  const segs = [{ key: '', label: 'Alle', n: cands.length },
-    ...MEGA_CLUSTERS.map((m) => ({ key: m.key, label: m.label, n: count(m.key) })),
-    { key: 'none', label: 'ETFs & ohne Sektor', n: count('none') }].filter((x) => x.key === '' || x.n);
   const overridden = uiState.fBroker === 'star' || candidateList.filters.watch === 'yes';
-  const cur = overridden ? '' : (uiState.fSeg ?? '');
-  bar.classList.toggle('segbar--off', overridden);
-  bar.innerHTML = `<div class="segmented" role="tablist" aria-label="Sektor-Gruppe">${segs.map((x) =>
-    `<button class="seg-btn${x.key === cur ? ' seg-btn--active' : ''}" data-seg="${x.key}" role="tab" aria-selected="${x.key === cur}"${overridden ? ' disabled title="Stern/Auge aktiv: alle markierten Titel ohne Sektor-Trennung"' : ''}>${x.label} <span class="seg-n">${x.n}</span></button>`).join('')}</div>`;
-  bar.querySelectorAll('.seg-btn[data-seg]').forEach((b) => b.addEventListener('click', () => {
-    uiState.fSeg = b.dataset.seg;
+  const cur = uiState.fSeg ?? '';
+  box.classList.toggle('sector-btns--off', overridden);
+  box.innerHTML = MEGA_CLUSTERS.map((m) => {
+    const n = cands.filter((c) => segmentOf(c) === m.key).length;
+    const act = !overridden && m.key === cur;
+    const tip = overridden ? `${m.label} (${n}) · Stern/Auge aktiv: alle markierten Titel` : act ? `${m.label} (${n}) · nochmal tippen: alle Sektoren` : `Nur ${m.label} (${n})`;
+    return `<button class="subnav-alert${act ? ' is-active' : ''}" data-seg="${m.key}" aria-pressed="${act}" title="${tip}" aria-label="${tip}"${overridden ? ' disabled' : ''}>${icons[SECTOR_ICONS[m.key]]}</button>`;
+  }).join('');
+  box.querySelectorAll('[data-seg]').forEach((b) => b.addEventListener('click', () => {
+    uiState.fSeg = uiState.fSeg === b.dataset.seg ? '' : b.dataset.seg;
     saveUiState();
     renderSegbar();
   }));

@@ -86,11 +86,14 @@ jedes Objekt als **nicht-aufzählbares `_bucket`** (landet nie im Blob) und zeig
 sie als W/A-Label in der Symbol-Zelle. Schreibzugriffe mit `blob_type 'all'`
 leitet `routeAll()` in `app.js` (Proxy um den Storage-Client) an den echten
 Bucket des Titels weiter; nach Verschieben/Löschen baut `rebuildAllView()` die
-Sicht aus frisch gelesenen Blobs neu. Darüber die **Sektor-Leiste** (`#segbar`,
-eigene Rasterzeile in `#app`, ausgeblendet mit Höhe 0): die fünf Mega-Cluster
-plus „ETFs & ohne Sektor" (`segmentOf` in `candidate-list.js`). Stern- oder
-Auge-Filter aktiv → die Leiste wird ausgegraut, die Liste zeigt alle markierten
-Titel ohne Sektor-Trennung.
+Sicht aus frisch gelesenen Blobs neu. In der Subleiste stehen dann **fünf
+Sektor-Buttons** (`#sector-btns`, je Mega-Cluster ein Lucide-Icon: cpu ·
+heartPulse · shoppingCart · factory · landmark): Einfachauswahl, nochmal tippen =
+wieder alle (`uiState.fSeg`, `segmentOf` in `candidate-list.js`). ETFs/Titel ohne
+Sektor erscheinen nur unter „alle". Die Mehrfachauswahl-Dropdowns „Mega" und
+„Sectors" sind in dieser Sicht ausgeblendet und ruhen. Stern- oder Auge-Filter
+aktiv → die Buttons treten zurück, die Liste zeigt alle markierten Titel ohne
+Sektor-Trennung.
 
 ## Workspace States
 `new` → `reviewed` → `promoted` | `dismissed`
