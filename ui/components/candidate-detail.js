@@ -2693,7 +2693,7 @@ export class CandidateDetail {
         <div class="detail-header-right">
           <div class="detail-score-stack">
             ${(() => { const ov = liveOverallScore(c.tv_data); return scoreRingSVG(ov?.total ?? null, ov?.labelCode ?? null); })()}
-            ${this.bucket === 'watch'
+            ${this.bucket === 'watch' || (this.bucket === 'all' && c._bucket === 'watch')
               ? `<button class="detail-watch${c.watch_flag ? ' is-active' : ''}" id="detail-watch"
                   aria-pressed="${c.watch_flag ? 'true' : 'false'}"
                   title="${c.watch_flag ? 'Watch-Label entfernen' : 'Als aktiv beobachtet markieren'}">

@@ -114,7 +114,8 @@ svg { display:block; }
      Botnav) über den Bildschirm hinausschiebt. Das schnitt auf dem Handy das
      Monitor-Icon ab; jetzt füllt die Botnav genau die Breite → alle 5 Slots. */
   grid-template-columns:minmax(0,1fr);
-  grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) 1fr var(--h-botnav);
+  /* auto = Sektor-Leiste (nur Watch + Archiv), sonst 0 hoch. */
+  grid-template-rows:var(--h-topbar) var(--h-subbar) var(--h-filterbar) auto 1fr var(--h-botnav);
   height:100dvh;
 }
 
@@ -182,6 +183,18 @@ svg { display:block; }
   transition:background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 .seg-btn--active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+/* ─ Sektor-Leiste (Watch + Archiv) ─
+   Belegt immer eine eigene Rasterzeile (#app), ausgeblendet mit Höhe 0 statt
+   display:none — sonst rutschen Tabelle und Botnav eine Zeile nach oben. */
+.segbar {
+  display:flex; align-items:center;
+  padding:var(--s-1) var(--s-4); background:var(--surface-2);
+  border-bottom:1px solid var(--border); overflow-x:auto; overflow-y:hidden;
+}
+.segbar[hidden] { display:flex; height:0; padding:0; border:0; overflow:hidden; }
+.segbar .seg-n { font-size:var(--fs-1); opacity:.75; font-variant-numeric:tabular-nums; }
+.segbar--off .seg-btn { opacity:.45; cursor:default; }
 
 /* ─ Filterbar ─ */
 .filterbar {
@@ -378,6 +391,13 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .sym-cell__sub .type-tag--stock::before { content:'·'; margin-right:3px; }
 .type-tag--etf   { color:var(--etf); background:var(--etf-weak); font-weight:var(--fw-bold); }
 .type-tag--guess { opacity:.7; }
+/* Herkunft in Watch + Archiv: W gedämpft, A als Fläche — das Archiv ist der Ausnahmefall. */
+.bkt-tag {
+  font-size:var(--fs-1); line-height:1.3; font-weight:var(--fw-bold);
+  padding:0 4px; border-radius:var(--r-1); white-space:nowrap;
+}
+.bkt-tag--watch   { color:var(--accent); background:var(--accent-weak); }
+.bkt-tag--archive { color:var(--muted); background:var(--surface-3); }
 /* Im Detail-Header steht das Label neben dem Börsen-Tag und braucht dessen Luft. */
 .detail-title .type-tag { margin-left:var(--s-1); vertical-align:middle; }
 .symbol-cell strong { font-weight:var(--fw-bold); font-size:var(--fs-4); }
@@ -1406,7 +1426,7 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
 
   #app { transition:grid-template-rows var(--t-fast) var(--ease); }
   #app.is-compact {
-    grid-template-rows:0 0 var(--h-filterbar) 1fr var(--h-botnav);
+    grid-template-rows:0 0 var(--h-filterbar) auto 1fr var(--h-botnav);
   }
   #app.is-compact .topbar,
   #app.is-compact .subbar { overflow:hidden; border-bottom:none; pointer-events:none; }

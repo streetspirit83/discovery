@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey } from './components/candidate-list.js?v=20261026a';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027e';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261021a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261027e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -15,11 +15,11 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261026b';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261021a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
 import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261026a';
+import { renderControlModal } from './components/control-modal.js?v=20261027e';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -67,6 +67,7 @@ const L = {
   markets:  luc('<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>'),
   archive:  luc('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
   checkSq:  luc('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>'),
+  layers:   luc('<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>'),
   bookmark: luc('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
   activity: luc('<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>', 16),
 };
@@ -76,7 +77,7 @@ const UI_KEY = 'discovery.ui.v1';
 const uiState = (() => {
   // Dropdown-Filter (fCap/fSector/fScore/fTr/fLsTrend) sind Mehrfachauswahl →
   // Arrays. fBroker/fAlerts/fDup bleiben Toggles (String).
-  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fMega: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', currency: 'USD' };
+  const def = { view: 'standard', bucket: 'inbox', theme: 'light', fState: '', fCap: [], fSector: [], fMega: [], fBroker: '', fScore: [], fTr: [], fAlerts: '', fLsTrend: [], fDup: '', fSeg: '', currency: 'USD' };
   let s;
   try { s = { ...def, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }; }
   catch { s = { ...def }; }
@@ -95,7 +96,7 @@ function saveUiState() {
 // ── App globals ────────────────────────────────────────────────────────────────
 let useMock = !isConfigured();
 let currentBlobType = uiState.bucket ?? 'inbox';
-let allBlobs = { inbox: null, archive: null, export: null, watch: null };
+let allBlobs = { inbox: null, archive: null, export: null, watch: null, all: null };
 let candidateList = null;
 let candidateDetail = null;
 let storageClient = null;
@@ -457,6 +458,7 @@ function renderSubbar() {
       const on = candidateList.filters.watch !== 'yes';
       candidateList.setWatchOnly(on);
       watchBtn.classList.toggle('is-active', on);
+      renderSegbar();
     });
   }
   updateWatchSubnav();
@@ -548,6 +550,7 @@ function renderFilterbar() {
     uiState.fBroker = on ? 'star' : '';
     saveUiState();
     candidateList.setFilter('broker', uiState.fBroker);
+    renderSegbar();
     const btn = fb.querySelector('#portfolio-toggle');
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', String(on));
@@ -594,8 +597,8 @@ function renderSelectedPill() {
 }
 
 function renderBotnav() {
-  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark };
-  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch' };
+  const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark, all: L.layers };
+  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch', all: 'Watch+Archiv' };
   document.getElementById('nav-home-icon').innerHTML   = L.bell;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
@@ -673,6 +676,7 @@ function renderBucketSheet() {
     { key: 'watch',   label: 'Watch',  icon: L.bookmark },
     { key: 'archive', label: 'Archiv', icon: L.archive },
     { key: 'export',  label: 'Export', icon: L.checkSq },
+    { key: 'all',     label: 'Watch + Archiv', icon: L.layers },
   ];
   const bs = document.getElementById('bucket-sheet');
   bs.innerHTML = `
@@ -763,7 +767,88 @@ async function loadBlob(blobType) {
   }
 }
 
+// ── Watch + Archiv (Bucket „all") ──────────────────────────────────────────────
+// Kein eigener Blob: eine gemeinsame Sicht auf die geladenen Watch- und Archiv-
+// Kandidaten (dieselben Objekte, Änderungen wirken in beiden Buckets). Dubletten
+// nach Symbol+Börse zeigt sie einmal, Watch gewinnt. Die Herkunft trägt jedes
+// Objekt als nicht-aufzählbares `_bucket` — es landet so nie im Blob.
+async function buildAllBlob() {
+  const [watch, archive] = await Promise.all([ensureBlob('watch'), ensureBlob('archive')]);
+  const seen = new Set(), candidates = [];
+  for (const [bucket, blob] of [['watch', watch], ['archive', archive]]) {
+    for (const c of blob?.candidates ?? []) {
+      const k = dupKey(c);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      Object.defineProperty(c, '_bucket', { value: bucket, writable: true, configurable: true, enumerable: false });
+      candidates.push(c);
+    }
+  }
+  return { schema_version: 'discovery-1.0', blob_type: 'all', updated_at: new Date().toISOString(), candidates };
+}
+
+const bucketOfId = (id) => (allBlobs.all?.candidates ?? []).find((c) => c.id === id)?._bucket ?? 'watch';
+
+// Nach Verschieben/Löschen in „Watch + Archiv" beide Blobs frisch lesen und die Sicht neu bauen.
+function rebuildAllView() {
+  allBlobs.watch = null; allBlobs.archive = null; allBlobs.all = null;
+  if (currentBlobType === 'all') switchBlob('all');
+}
+
+/* Schreibzugriffe auf den Pseudo-Bucket „all" gehen an den echten Bucket des
+ * jeweiligen Titels — so bleiben alle Aktionen (Notiz, Alarm, Stern, Promote,
+ * Dismiss, Bulk …) unverändert `storageClient.x(currentBlobType, …)`. */
+function routeAll(sc) {
+  if (!sc) return sc;
+  const group = (ids) => {
+    const m = new Map();
+    for (const id of ids) { const b = bucketOfId(id); if (!m.has(b)) m.set(b, []); m.get(b).push(id); }
+    return m;
+  };
+  const after = () => setTimeout(rebuildAllView, 0);
+  const route = {
+    updateCandidate: (b, id, u) => sc.updateCandidate(b === 'all' ? bucketOfId(id) : b, id, u),
+    bulkUpdateCandidates: async (b, ups) => {
+      if (b !== 'all') return sc.bulkUpdateCandidates(b, ups);
+      for (const [bk, ids] of group(ups.map((u) => u.candidate_id))) {
+        await sc.bulkUpdateCandidates(bk, ups.filter((u) => ids.includes(u.candidate_id)));
+      }
+    },
+    moveCandidate: async (id, from, to) => {
+      if (from !== 'all') return sc.moveCandidate(id, from, to);
+      const fb = bucketOfId(id);
+      if (fb !== to) await sc.moveCandidate(id, fb, to);
+      after();
+    },
+    moveCandidates: async (ids, from, to) => {
+      if (from !== 'all') return sc.moveCandidates(ids, from, to);
+      for (const [fb, part] of group(ids)) if (fb !== to) await sc.moveCandidates(part, fb, to);
+      after();
+    },
+    deleteCandidate: async (b, id) => {
+      if (b !== 'all') return sc.deleteCandidate(b, id);
+      await sc.deleteCandidate(bucketOfId(id), id); after();
+    },
+    deleteCandidates: async (b, ids) => {
+      if (b !== 'all') return sc.deleteCandidates(b, ids);
+      for (const [bk, part] of group(ids)) await sc.deleteCandidates(bk, part);
+      after();
+    },
+  };
+  return new Proxy(sc, {
+    get(t, k) {
+      if (k in route) return route[k];
+      const v = t[k];
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+}
+
 async function ensureBlob(blobType) {
+  if (blobType === 'all') {
+    allBlobs.all = await buildAllBlob();
+    return allBlobs.all;
+  }
   if (!allBlobs[blobType]) {
     allBlobs[blobType] = await loadBlob(blobType);
   }
@@ -779,8 +864,8 @@ async function switchBlob(blobType) {
     uiState.fDup = '';
     candidateList.filters.dup = '';
   }
-  // Watch-Label-Feature gilt nur im Watch-Bucket — Filter beim Verlassen lösen.
-  if (blobType !== 'watch') candidateList.filters.watch = '';
+  // Watch-Label-Feature gilt nur im Watch-Bucket (und in Watch + Archiv) — Filter beim Verlassen lösen.
+  if (blobType !== 'watch' && blobType !== 'all') candidateList.filters.watch = '';
   candidateDetail.bucket = blobType;
   saveUiState();
   await ensureBlob(blobType);
@@ -798,6 +883,7 @@ async function switchBlob(blobType) {
   renderBotnav();
   renderFilterbar();
   updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
+  renderSegbar();                                    // Sektor-Leiste nur in Watch + Archiv
   refreshDupMarkers();                               // fire & forget
   if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
 }
@@ -807,9 +893,37 @@ async function switchBlob(blobType) {
 function updateWatchSubnav() {
   const btn = document.getElementById('subnav-watch');
   if (!btn) return;
-  const onWatch = currentBlobType === 'watch';
+  const onWatch = currentBlobType === 'watch' || currentBlobType === 'all';
   btn.hidden = !onWatch;
   btn.classList.toggle('is-active', onWatch && candidateList?.filters?.watch === 'yes');
+}
+
+// ── Sektor-Leiste (nur Watch + Archiv) ──────────────────────────────────────────
+// Ein Tipp schaltet zwischen den fünf Mega-Clustern (wie die Sektor-Heatmap im
+// Markets-Modal) plus „ETFs & ohne Sektor". Stern oder Auge aktiv → die Leiste
+// tritt zurück und die Liste zeigt alle markierten Titel ohne Sektor-Trennung.
+function renderSegbar() {
+  const bar = document.getElementById('segbar');
+  if (!bar) return;
+  const on = currentBlobType === 'all';
+  bar.hidden = !on;
+  candidateList.setSegment(on ? (uiState.fSeg ?? '') : '');
+  if (!on) return;
+  const cands = allBlobs.all?.candidates ?? [];
+  const count = (k) => cands.filter((c) => segmentOf(c) === k).length;
+  const segs = [{ key: '', label: 'Alle', n: cands.length },
+    ...MEGA_CLUSTERS.map((m) => ({ key: m.key, label: m.label, n: count(m.key) })),
+    { key: 'none', label: 'ETFs & ohne Sektor', n: count('none') }].filter((x) => x.key === '' || x.n);
+  const overridden = uiState.fBroker === 'star' || candidateList.filters.watch === 'yes';
+  const cur = overridden ? '' : (uiState.fSeg ?? '');
+  bar.classList.toggle('segbar--off', overridden);
+  bar.innerHTML = `<div class="segmented" role="tablist" aria-label="Sektor-Gruppe">${segs.map((x) =>
+    `<button class="seg-btn${x.key === cur ? ' seg-btn--active' : ''}" data-seg="${x.key}" role="tab" aria-selected="${x.key === cur}"${overridden ? ' disabled title="Stern/Auge aktiv: alle markierten Titel ohne Sektor-Trennung"' : ''}>${x.label} <span class="seg-n">${x.n}</span></button>`).join('')}</div>`;
+  bar.querySelectorAll('.seg-btn[data-seg]').forEach((b) => b.addEventListener('click', () => {
+    uiState.fSeg = b.dataset.seg;
+    saveUiState();
+    renderSegbar();
+  }));
 }
 
 // ── Dup-Marker für Inbox/Archiv ─────────────────────────────────────────────────
@@ -908,7 +1022,7 @@ function pollDossiers() {
         }
         if (f.dossier?.status === 'queued' || f.dossier?.status === 'running' || f.dossier_update) open++;
       }
-      if (changed && currentBlobType === 'watch') candidateList.renderRows();
+      if (changed && (currentBlobType === 'watch' || currentBlobType === 'all')) candidateList.renderRows();
       if (!open || Date.now() > until) { clearInterval(dossierPoll); dossierPoll = null; }
     } catch { /* nächster Tick */ }
   }, 20e3);
@@ -1201,7 +1315,7 @@ async function handleAction(action, candidate, extras = {}) {
   }
 
   if (action === 'delete') {
-    if (!confirm(`${candidate.symbol} endgültig aus „${currentBlobType}" löschen?`)) return;
+    if (!confirm(`${candidate.symbol} endgültig aus „${candidate._bucket ?? currentBlobType}" löschen?`)) return;
     if (!useMock) {
       try {
         // Löschen = echtes Hard-Delete. Inbox: zusätzlich Tombstone (Re-Add-
@@ -1869,7 +1983,7 @@ async function handleExport() {
 async function init() {
   // Init storage client
   if (!useMock) {
-    storageClient = loadStorageClient();
+    storageClient = routeAll(loadStorageClient());
     if (!storageClient) useMock = true;
   }
 
@@ -1967,6 +2081,7 @@ async function init() {
   // ── Topbar buttons ───────────────────────────────────────────────────────────
   document.getElementById('btn-refresh').addEventListener('pointerup', async () => {
     allBlobs[currentBlobType] = null;
+    if (currentBlobType === 'all') { allBlobs.watch = null; allBlobs.archive = null; }
     await switchBlob(currentBlobType);
     await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
     await loadLsHistory(true);        // re-pull the 10-day LS history (Trade view)
@@ -2008,7 +2123,7 @@ async function init() {
     const canWrite = !useMock && !!storageClient;
     const backendUrl = localStorage.getItem('discovery_backend_url');
     const secret     = localStorage.getItem('discovery_secret');
-    const afterWrite = () => { if (currentBlobType === 'watch') { candidateList.renderRows(); updateAlertBadge(); } };
+    const afterWrite = () => { if (currentBlobType === 'watch' || currentBlobType === 'all') { candidateList.renderRows(); updateAlertBadge(); } };
     openRangesModal({
       getCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
       getFx: resolveFxRate,
@@ -2054,7 +2169,7 @@ async function init() {
         },
       } : null,
       onOpenCandidate: async (c, ctrl) => {
-        if (currentBlobType !== 'watch') await switchBlob('watch');
+        if (currentBlobType !== 'watch' && currentBlobType !== 'all') await switchBlob('watch');
         const cand = (allBlobs.watch?.candidates ?? []).find((x) => x.id === c.id) ?? c;
         ctrl.hide();
         returnToMonitor = () => ctrl.show();   // beim Schliessen des Sheets zurück ins Modal
@@ -2143,8 +2258,8 @@ async function init() {
   document.getElementById('btn-settings').addEventListener('pointerup', () => {
     renderSettingsModal(async () => {
       useMock = !isConfigured();
-      storageClient = isConfigured() ? loadStorageClient() : null;
-      allBlobs = { inbox: null, archive: null, export: null, watch: null };
+      storageClient = isConfigured() ? routeAll(loadStorageClient()) : null;
+      allBlobs = { inbox: null, archive: null, export: null, watch: null, all: null };
       updateMockBadge();
       await switchBlob(currentBlobType);
       toast('Einstellungen gespeichert', 'success');

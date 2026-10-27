@@ -44,6 +44,17 @@ function nativeCurrency(c) {
  * Ist der Typ nur aus dem Namen geraten (noch keine TV-Anreicherung), sagt das
  * der Tooltip — die Zelle selbst tut nicht so, als wäre sie sicher.
  */
+/* Sektor-Gruppe einer Zeile für die Sektor-Leiste in Watch + Archiv:
+ * Mega-Cluster-Key oder 'none' (ETFs und Titel ohne Sektor). */
+export const segmentOf = (c) => megaClusterOf(c.sector) ?? 'none';
+
+/* Herkunft in der Sicht Watch + Archiv: W/A neben dem Typ-Label. */
+const BUCKET_TAG = { watch: ['W', 'Liegt in der Watchlist'], archive: ['A', 'Liegt im Archiv'] };
+function bucketTag(c) {
+  const t = BUCKET_TAG[c._bucket];
+  return t ? `<span class="bkt-tag bkt-tag--${c._bucket}" title="${t[1]}">${t[0]}</span>` : '';
+}
+
 function typeTag(c) {
   const t   = instrumentType(c);
   const src = instrumentTypeSource(c);
@@ -837,7 +848,7 @@ export class CandidateList {
     this.candidates        = [];
     // Mehrfachauswahl-Filter (sector/capSize/score/tr/lsTrend) sind Arrays;
     // Toggles (broker/alerts/dup) und state bleiben String.
-    this.filters           = { state: '', sector: [], mega: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '', watch: '' };
+    this.filters           = { state: '', sector: [], mega: [], capSize: [], broker: '', score: [], tr: [], alerts: '', lsTrend: [], dup: '', search: '', watch: '', seg: '' };
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
@@ -1029,6 +1040,13 @@ export class CandidateList {
     this.renderRows();
   }
 
+  /** Sektor-Leiste (Watch + Archiv): '' = alle, sonst Mega-Cluster-Key oder 'none'. */
+  setSegment(key) {
+    if (this.filters.seg === key) return;
+    this.filters.seg = key;
+    this.renderRows();
+  }
+
   /** Watch-Filter-Toggle (Subbar, nur Watch-Bucket): zeigt nur Watch-Label-Kandidaten.
    *  Ohne Auto-Select — es ist eine Sicht, keine Bulk-Vorauswahl. */
   setWatchOnly(on) {
@@ -1057,7 +1075,9 @@ export class CandidateList {
   }
 
   getFiltered() {
-    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search, mega, watch } = this.filters;
+    const { state, sector, capSize, broker, score, tr, alerts, lsTrend: fTrend, dup, search, mega, watch, seg } = this.filters;
+    // Stern oder Auge aktiv → alle markierten Titel, ohne Sektor-Trennung.
+    const fSeg = seg && broker !== 'star' && watch !== 'yes' ? seg : '';
     // Dropdown-Filter sind Mehrfachauswahl (Arrays): OR innerhalb eines
     // Filters, AND über die Filter hinweg. Strings (Alt-Zustand) werden als
     // Ein-Element-Auswahl behandelt.
@@ -1080,6 +1100,7 @@ export class CandidateList {
       if (state   && c.workspace_state !== state)               return false;
       if (fSector.length && !fSector.some((v) => (v === '__no_sector__' ? !c.sector : c.sector === v))) return false;
       if (fMega.length && !fMega.includes(megaClusterOf(c.sector))) return false;
+      if (fSeg && segmentOf(c) !== fSeg)                        return false;
       if (fCap.length && !fCap.includes(capSizeFromMC(c.tv_data?.market_cap))) return false;
       if (broker === 'broker' && !c.broker_armed)               return false;
       if (broker === 'star'   && !c.in_portfolio)               return false;
@@ -1167,7 +1188,7 @@ export class CandidateList {
           <button class="sort-btn" data-sort="${d.key}">${d.label} ${this.sortGlyph(d.key)}</button></th>`
       ).join('');
       cols += `<th class="num">Aktion</th>`;
-      if (this.viewMode === 'meta' && this.bucket === 'watch') {
+      if (this.viewMode === 'meta' && (this.bucket === 'watch' || this.bucket === 'all')) {
         cols += this.thNum('watch', icons.eye, 'Watch-Label \u00b7 aktiv beobachtete Ticker (nur Watch-Bucket) \u00b7 antippen zum Umschalten');
         cols += `<th class="num"><button class="sort-btn dossier-run" data-action="runDossiers" title="Dossier (Google Doc) \u00b7 Icon pro Zeile: anlegen bzw. fertiges Doc \u00f6ffnen \u00b7 hier tippen: alle offenen Dossiers jetzt erstellen">Doc ${icons.refreshCw}</button></th>`;
       }
@@ -1320,6 +1341,7 @@ export class CandidateList {
         <div class="sym-cell__sub">
           <span class="exch-tag exch-tag--sub">${c.exchange}</span>
           ${typeTag(c)}
+          ${bucketTag(c)}
         </div>
       </div>`;
 
@@ -1388,7 +1410,10 @@ export class CandidateList {
           `<td class="num col-portfolio">${renderPLabs(c)}</td>` +
           starTd + actionTd;
       } else {
-        const watchCol = (this.viewMode === 'meta' && this.bucket === 'watch') ? watchTd + dossierTd : '';
+        // Watch + Archiv: Archiv-Zeilen haben kein Watch-Label/Dossier → leere Zellen halten die Spalten.
+        const watchCol = this.viewMode !== 'meta' ? ''
+          : this.bucket === 'watch' || (this.bucket === 'all' && c._bucket === 'watch') ? watchTd + dossierTd
+          : this.bucket === 'all' ? '<td class="num"></td><td class="num"></td>' : '';
         dataCols = VIEWS[this.viewMode].map((d) => {
           const heat = HEAT_KEYS.has(d.key) ? heatStyle(sortValue(c, d.key)) : '';
           return `<td class="${d.num ? 'num' : ''}${d.groupStart ? ' col-group-start' : ''}"${heat}>${d.fmt(c)}</td>`;

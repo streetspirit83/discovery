@@ -79,6 +79,19 @@ tag like `20260627j`; keep it consistent across a single change set.
 - **export**: Promoted candidates ready for action
 - **watch**: Promoted/exported candidates kept for ongoing benchmarking
 
+**Watch + Archiv (Bucket `all`, nur UI):** kein eigener Blob, sondern eine
+gemeinsame Sicht auf die geladenen Watch- und Archiv-Kandidaten (dieselben
+Objekte; Dubletten nach Symbol+Börse einmal, Watch gewinnt). Die Herkunft trägt
+jedes Objekt als **nicht-aufzählbares `_bucket`** (landet nie im Blob) und zeigt
+sie als W/A-Label in der Symbol-Zelle. Schreibzugriffe mit `blob_type 'all'`
+leitet `routeAll()` in `app.js` (Proxy um den Storage-Client) an den echten
+Bucket des Titels weiter; nach Verschieben/Löschen baut `rebuildAllView()` die
+Sicht aus frisch gelesenen Blobs neu. Darüber die **Sektor-Leiste** (`#segbar`,
+eigene Rasterzeile in `#app`, ausgeblendet mit Höhe 0): die fünf Mega-Cluster
+plus „ETFs & ohne Sektor" (`segmentOf` in `candidate-list.js`). Stern- oder
+Auge-Filter aktiv → die Leiste wird ausgegraut, die Liste zeigt alle markierten
+Titel ohne Sektor-Trennung.
+
 ## Workspace States
 `new` → `reviewed` → `promoted` | `dismissed`
 
