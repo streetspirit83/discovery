@@ -33,7 +33,7 @@
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
-import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261026a';
+import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261027a';
 
 const CSS_URL = new URL('./ranges-modal.css?v=20261025a', import.meta.url).href;
 
@@ -349,7 +349,15 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
 
   /* Richtung der letzten 5 Handelstage (Schlusskurse, heute = LS): ±1 % gilt als seitwärts. */
   function trend(it) {
-    const h = S.hist[it.id]; if (!h || !h.c || h.c.length < 6) return null;
+    // Bevorzugt LS-Tagesschlusskurse (ls_days, EUR) + heutiger LS-Kurs; sonst der Kursverlauf des Charts.
+    const d = it.c.ls_days, lp = S.live[it.id]?.p, today = new Date().toISOString().slice(0, 10);
+    let h = S.hist[it.id];
+    if (Array.isArray(d?.c) && d.c.length >= 6) {
+      const t = d.t.slice(), c = d.c.slice();
+      if (lp > 0) { if (t[t.length - 1] === today) c[c.length - 1] = lp; else if (t[t.length - 1] < today) { t.push(today); c.push(lp); } }
+      h = { t, c };
+    }
+    if (!h || !h.c || h.c.length < 6) return null;
     const c = h.c, now = c[c.length - 1], then = c[c.length - 6]; if (!(then > 0)) return null;
     const ch = (now - then) / then * 100; return { dir: ch >= 1 ? 'up' : ch <= -1 ? 'dn' : '', ch };
   }
@@ -423,7 +431,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const cu = it.conv ? '€' : esc(it.oc || '');
     const basis = it.eb ? ' (Basis ' + esc(it.eb.src === 'yahoo' ? 'Yahoo ' + it.eb.sym : EUR_BASIS_LABEL[it.eb.src] || it.eb.src) + ')' : '';
     const ccyNote = it.oc && it.oc !== 'EUR' ? (it.conv ? ' · Levels aus ' + esc(it.oc) + ' umgerechnet' + basis : ' · Levels in ' + esc(it.oc) + ' (nicht in EUR umrechenbar)') : '';
-    const noChart = S.ld.busy[it.id] ? 'Kursverlauf wird geladen …' : S.ld.err[it.id] ? 'Kein Kursverlauf: ' + esc(S.ld.err[it.id]) : loader && !loader.canCandles(it.c) ? 'Kein Kursverlauf: TwelveData-Key in den Einstellungen hinterlegen (nur für US-Titel nötig).' : 'Noch kein Kursverlauf.';
+    const noChart = S.ld.busy[it.id] ? 'Kursverlauf wird geladen …' : S.ld.err[it.id] ? 'Kein Kursverlauf: ' + esc(S.ld.err[it.id]) : loader && loader.isUs(it.c) && !hasBars(it.c) ? 'Kein Kursverlauf: US-Kerzen holt das Detail-Sheet (Öffnen genügt).' : 'Noch kein Kursverlauf.';
     return '<div class="ed" data-ed="' + id + '">' +
       '<div class="edh"><span class="nm">' + esc(it.n || it.s) + (m.sub ? ' · ' + esc(m.sub) : sec ? ' · ' + esc(sec) : '') + ccyNote + '</span><div class="tf">' + tf + '</div></div>' +
       (S.hist[it.id] ? '<div class="chart" id="chart"></div>' : '<div class="nochart">' + noChart + '</div>') +
@@ -539,6 +547,8 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
   const BARS_MS = 20 * 60 * 60 * 1000, TD_GAP_MS = 8000;
   const hasBars = (c) => Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
   const barsStale = (c) => { const a = Date.parse(c.swing_analysis?.checked_at ?? ''); return !hasBars(c) || !(Number.isFinite(a) && Date.now() - a < BARS_MS); };
+  // Das Modal ruft nie TwelveData: US-Kerzen kommen nur über das Detail-Sheet.
+  const canBars = (c) => !!loader && !loader.isUs(c) && loader.canCandles(c);
   const basisDue = (c) => needsEurBasis(c) && !eurBasisFresh(c);
   function ldStatus() {
     const el = $('ldst'); if (!el) return;
@@ -568,7 +578,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const id = c.id;
     if (S.ld.busy[id]) return S.ld.busy[id];
     const p = (async () => {
-      if (bars && loader.canCandles(c)) {
+      if (bars && canBars(c)) {
         const r = await loader.candles(c);
         if (r?.ok) delete S.ld.err[id];
         else { S.ld.err[id] = r?.msg || 'Abruf fehlgeschlagen'; if (r?.error === 'td_limit') S.ld.tdStop = true; }
@@ -586,35 +596,23 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
   function loadOnOpen(id) {
     if (!loader) return;
     const it = S.items.find((x) => x.id === id); if (!it) return;
-    const c = it.c, bars = barsStale(c) && loader.canCandles(c), basis = basisDue(c) || (needsEurBasis(c) && bars);
+    const c = it.c, bars = barsStale(c) && canBars(c), basis = basisDue(c) || (needsEurBasis(c) && bars);
     if (bars || basis) loadOne(c, { bars, basis });
   }
-  // Beim Öffnen: Titel ohne oder mit veralteten Kerzen (> 20 h) und fällige EUR-Basis.
-  // Yahoo in Wellen von 6; TwelveData (US) nacheinander mit 8 s Abstand (Free: 8/min).
+  // Beim Öffnen: LS-Kurse (+ LS-Tagesschlüsse für Trend 5T) aller Titel holen — keine Kerzen, kein TwelveData.
   async function autoLoad() {
-    if (!loader || S.ld.run) return;
-    const yq = [], tq = [];
-    S.items.forEach(({ c }) => {
-      const us = loader.isUs(c), can = loader.canCandles(c);
-      const bars = can && barsStale(c);
-      const basis = basisDue(c) || (needsEurBasis(c) && bars);
-      if (bars || basis) (us && bars ? tq : yq).push({ c, bars, basis });
-    });
-    // US: erst die Titel ganz ohne Kerzen, dann die veralteten (TD-Limit kappt sonst den Rest).
-    tq.sort((a, b) => hasBars(a.c) - hasBars(b.c));
-    if (!yq.length && !tq.length) return;
-    Object.assign(S.ld, { run: true, done: 0, total: yq.length + tq.length, tdStop: false }); ldStatus();
-    const one = async (j) => { await loadOne(j.c, j); S.ld.done++; ldStatus(); };
-    const yahoo = (async () => { for (let i = 0; i < yq.length; i += 6) await Promise.allSettled(yq.slice(i, i + 6).map(one)); })();
-    const td = (async () => {
-      for (let i = 0; i < tq.length; i++) {
-        if (S.ld.tdStop || !host.isConnected) { S.ld.done += tq.length - i; break; }
-        await one(tq[i]);
-        if (i < tq.length - 1) await new Promise((r) => setTimeout(r, TD_GAP_MS));
-      }
-    })();
-    await Promise.allSettled([yahoo, td]);
-    S.ld.run = false; ldStatus();
+    if (!refreshLs || S.ls.run) return;
+    const cands = S.items.map((it) => it.c);
+    S.ls = { run: true, done: 0, total: cands.length, at: null, err: '' }; syncBtn();
+    try {
+      await refreshLs(cands, () => { S.ls.done++; syncBtn(); });
+      S.ls.at = new Date().toISOString();
+    } catch (e) {
+      S.ls.err = 'Abruf fehlgeschlagen: ' + (e?.message || 'unbekannter Fehler');
+    }
+    S.ls.run = false;
+    if (!host.isConnected) return;
+    ingest(cands); render(); syncBtn();
   }
 
   function parseNum(s) { s = String(s || '').trim(); s = s.indexOf(',') >= 0 ? s.replace(/\./g, '').replace(',', '.') : s; if (!s) return null; const n = Number(s); return isFinite(n) && n > 0 ? n : NaN; }
