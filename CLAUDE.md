@@ -112,9 +112,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   nach dem Potenzial, nicht nach dem angezeigten Preis. In der Standard-Ansicht
   zeigt „10T" (nach PerfW) den LS-Verlauf der letzten zehn Tage als Sparkline —
   aus den Nacht-Snapshots plus Live-Kurs, sortiert nach dem Zuwachs über das
-  Fenster (`ls10Series` in `spark.js`). Jede Zeile trägt in der zweiten Zeile der
-  Symbol-Zelle ein **ETF/Aktie-Label** (`instrument-type.js`); ETF-Zeilen
-  bekommen zusätzlich die Flächentönung `.row-etf`. Die Spalte **„S200Ø"**
+  Fenster (`ls10Series` in `spark.js`). ETF-Zeilen tragen in der zweiten Zeile der
+  Symbol-Zelle ein **ETF-Label** (`instrument-type.js`) und die Flächentönung
+  `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
+  endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
   Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`).
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,

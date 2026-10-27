@@ -57,6 +57,9 @@ function bucketTag(c) {
 
 function typeTag(c) {
   const t   = instrumentType(c);
+  // „Aktie" ist der Normalfall und kostet in der schmalen Symbol-Spalte Platz —
+  // in der Tabelle trägt nur der ETF ein Label (plus Zeilentönung .row-etf).
+  if (t === 'stock') return '';
   const src = instrumentTypeSource(c);
   const tip = src === 'tv'
     ? `Instrumententyp laut TradingView: ${TYPE_LABEL[t]}`

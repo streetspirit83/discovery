@@ -364,6 +364,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
   color:var(--muted); letter-spacing:.02em; }
 /* Zweite Zeile der Symbol-Zelle: Börse + Instrumententyp nebeneinander. */
 .sym-cell__sub { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
+/* Die Symbol-Spalte endet nach Symbol + TV-Icon: die zweite Zeile darf nie
+   breiter werden und in die Nachbarspalte laufen — sie wird abgeschnitten. */
+td.col-anchor .sym-cell { max-width:100%; overflow:hidden; }
+td.col-anchor .sym-cell__sub { max-width:100%; overflow:hidden; }
 
 /* ETF/Aktie-Label. „Aktie" bleibt gedämpft wie die Börse daneben, „ETF" trägt
    Farbe — der Korb ist der Ausnahmefall, den man beim Scannen sehen will.
