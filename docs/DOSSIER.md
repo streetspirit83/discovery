@@ -58,7 +58,10 @@ hat er noch kein Dossier, setzt sie zugleich den Dossier-Haken und stösst das
 Anlegen an.
 
 Die geplante Aufgabe **„Discovery Research (App-Warteschlange)“** läuft alle
-2 Stunden (7–23 Uhr Berlin):
+2 Stunden (6:47–22:47 Uhr Berlin) — **in der Cloud-Umgebung „netlify-blobs“**.
+Die „Standard-Cloud-Umgebung“ sperrt `screener-discovery.netlify.app` (403 beim
+CONNECT); dort angelegt, bricht jeder Lauf nach Sekunden ab und die Aufträge
+bleiben liegen:
 1. meldet die Prompt-Liste des Artefakts an `POST /api/research { catalog }` —
    daraus baut die App ihre Checkbox-Liste (`GET ?catalog=1`, Fallback: die
    eingebauten Vorlagen);
