@@ -49,6 +49,28 @@ alten.
 4. `research` speichert `candidate.research[key]` im watch-Blob und stösst
    `dossier.yml` an; `run.mjs` baut das Doc samt Abschnitt neu.
 
+### Auslösen aus der App (Warteschlange)
+
+Im ✨-Modal eines Watch-Titels (Detail-Sheet, Toolbar) steht oben „AI Research
+ins Dossier“: Prompts per Checkbox wählen (nichts vorausgewählt), „In
+Warteschlange“. Die App schreibt `research_request = { keys, at }` an den Titel;
+hat er noch kein Dossier, setzt sie zugleich den Dossier-Haken und stösst das
+Anlegen an.
+
+Die geplante Aufgabe **„Discovery Research (App-Warteschlange)“** läuft alle
+2 Stunden (7–23 Uhr Berlin):
+1. meldet die Prompt-Liste des Artefakts an `POST /api/research { catalog }` —
+   daraus baut die App ihre Checkbox-Liste (`GET ?catalog=1`, Fallback: die
+   eingebauten Vorlagen);
+2. holt offene Aufträge (`GET ?queue=1`), höchstens 3 je Lauf;
+3. recherchiert je Prompt und schickt `POST { id, rebuild, results, failed }`.
+   Geschriebene und gescheiterte Schlüssel werden aus `research_request`
+   ausgetragen, Fehler stehen in `research_error` (zeigt das Modal an). Ohne Doc,
+   aber mit Dossier-Haken stösst `rebuild` das Anlegen an.
+
+Die Artefakt-Variante (Knopf „An Claude“) bleibt unverändert; das Artefakt ist
+weiter der Ort, an dem Prompts bearbeitet werden.
+
 Unverknüpfte Docs: Liegt im Ordner ein Doc, das an keinem Titel als
 `dossier.doc_id` hängt (z. B. aus der Zeit vor der Verknüpfung), findet
 `research` den Titel über `symbol` — nur wenn genau ein Watch-Titel dieses

@@ -2129,6 +2129,19 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .aip-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); }
 .aip-modal .modal-header h2 svg { flex:0 0 auto; }
 .aip-intro { font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-3); }
+.aip-sub, .aiq h3 { font-size:var(--fs-2); font-weight:var(--fw-bold); margin:0 0 var(--s-2); display:flex; align-items:center; gap:var(--s-2); }
+/* AI Research ins Dossier: Auswahl per Checkbox (nichts vorausgewählt) → Warteschlange. */
+.aiq { border:1px solid var(--ai); background:var(--ai-weak); border-radius:var(--r-2); padding:var(--s-3); margin-bottom:var(--s-4); }
+.aiq-status { font-size:var(--fs-1); color:var(--muted); margin:0 0 var(--s-2); }
+.aiq-status--err { color:var(--neg); }
+.aiq-list { display:flex; flex-direction:column; gap:2px; margin-bottom:var(--s-2); }
+.aiq-row { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-1) 0; cursor:pointer; }
+.aiq-row input { width:18px; height:18px; flex:0 0 auto; accent-color:var(--ai); }
+.aiq-row__lbl { flex:1; min-width:0; font-size:var(--fs-2); }
+.aiq-row small { color:var(--muted); font-size:var(--fs-1); white-space:nowrap; }
+.aiq-row.is-pending { opacity:.6; cursor:default; }
+.aiq-foot { display:flex; align-items:center; gap:var(--s-3); }
+.aiq-hint { flex:1; color:var(--muted); font-size:var(--fs-1); }
 .aip-card {
   border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2);
   padding:var(--s-3); margin-bottom:var(--s-3);

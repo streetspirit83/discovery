@@ -12,7 +12,7 @@ import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
-import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261026b';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261027h';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
@@ -33,7 +33,7 @@ import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-target
 import { fetchLsQuote } from './lib/ls-intraday.js?v=20261026a';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
-import { buildResearchPrompt } from './lib/research-prompt.js?v=20261026b';
+import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
@@ -1008,6 +1008,40 @@ async function postDossierTrigger(payload) {
   return json;
 }
 
+/* ── AI Research aus der App (Warteschlange) ────────────────────────────────────
+ * Prompt-Liste = die Prompts des Artefakts „Dossier Research", die die geplante
+ * Aufgabe bei jedem Lauf an /api/research meldet; ohne Meldung die eingebauten
+ * Vorlagen (gleiche Schlüssel). Der Auftrag ist ein Feld am Watch-Titel. */
+async function loadResearchCatalog() {
+  const fallback = PROMPT_TEMPLATES.map(({ key, label }) => ({ key, label }));
+  try {
+    const backendUrl = localStorage.getItem('discovery_backend_url');
+    const secret     = localStorage.getItem('discovery_secret');
+    const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/research?catalog=1`, { headers: { 'x-discovery-secret': secret } });
+    const json = await res.json();
+    return json?.ok && json.prompts?.length ? json.prompts : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function enqueueResearch(candidate, keys) {
+  const keep = new Set([...(candidate.research_request?.keys ?? []), ...keys]);
+  const now = new Date().toISOString();
+  const updates = { research_request: { keys: [...keep], at: candidate.research_request?.at ?? now } };
+  // Noch kein Dossier → mit anlegen; die Ergebnisse landen dann gleich darin.
+  const needDoc = !candidate.dossier?.doc_id && !candidate.dossier_flag;
+  if (needDoc) Object.assign(updates, { dossier_flag: true, dossier: { ...(candidate.dossier ?? {}), status: 'queued', error: null, queued_at: now } });
+  await storageClient.updateCandidate('watch', candidate.id, updates);
+  Object.assign(candidate, updates);
+  candidateList.renderRows();
+  toast(`AI Research ${candidate.symbol}: ${keys.length} Prompt${keys.length === 1 ? '' : 's'} in der Warteschlange (Lauf alle 2 h)`, 'success', 4000);
+  if (needDoc) {
+    try { await postDossierTrigger({ candidate_id: candidate.id, mode: 'create' }); pollDossiers(); }
+    catch (err) { toast(`Dossier-Start fehlgeschlagen (${err.message}) — der tägliche Lauf holt es nach`, 'error', 6000); }
+  }
+}
+
 /* Nach einem Anstoss den Watch-Blob alle 20 s nachlesen (max. 6 min), bis kein
    Dossier mehr wartet — dann steht der Link am Icon ohne Neuladen. */
 let dossierPoll = null;
@@ -1594,8 +1628,15 @@ async function handleAction(action, candidate, extras = {}) {
   }
 
   // ✨-Knopf im Detail-Sheet: Modal mit den Recherche-Prompts.
+  // Dazu oben der Bereich „AI Research ins Dossier" (nur Watch-Titel mit Backend).
   if (action === 'openPrompts') {
-    openAiPromptModal(candidate, { currency: extras?.currency });
+    const onWatch = currentBlobType === 'watch' || (currentBlobType === 'all' && candidate._bucket === 'watch');
+    const canQueue = !useMock && onWatch;
+    openAiPromptModal(candidate, {
+      currency: extras?.currency,
+      hint: useMock ? '' : onWatch ? '' : 'AI Research ins Dossier gibt es nur für Watchlist-Titel.',
+      queue: canQueue ? { catalog: loadResearchCatalog, enqueue: (keys) => enqueueResearch(candidate, keys) } : null,
+    });
     return;
   }
 
