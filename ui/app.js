@@ -2026,7 +2026,6 @@ async function init() {
                     c.ls_quote = q;
                     await storageClient.updateCandidate('watch', c.id, { ls_quote: q }).catch(() => {});
                   }
-                  }
                 } finally { onEach(c); }
               }));
             }
