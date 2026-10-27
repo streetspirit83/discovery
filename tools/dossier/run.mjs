@@ -6,6 +6,8 @@
  *   node tools/dossier/run.mjs [candidate_id] [create|update]
  *   ohne candidate_id → Sweep: alle Watch-Kandidaten mit offenem Auftrag
  *     (dossier_flag ohne Doc, oder dossier_update gesetzt).
+ *   mit candidate_id → dieser Titel zuerst, danach alle übrigen offenen
+ *     Aufträge (GitHub verwirft ältere wartende Läufe derselben Gruppe).
  *
  * Datenquellen — nur die eigene App:
  *   • Watch-Blob (storage read):   ISIN, Sector, Sub Sector, MCap, Earnings
@@ -304,11 +306,15 @@ async function upload(d, c, buf) {
 async function main() {
   const [argId, argMode] = process.argv.slice(2);
   const all = await readWatch();
-  const jobs = argId
+  const open = all.map((c) => ({ c, mode: pending(c) })).filter((j) => j.mode);
+  const own = argId
     ? all.filter((c) => c.id === argId).map((c) => ({ c, mode: argMode === 'update' ? 'update' : (pending(c) ?? 'create') }))
-    : all.map((c) => ({ c, mode: pending(c) })).filter((j) => j.mode);
-
-  if (argId && !jobs.length) throw new Error(`Kandidat ${argId} nicht im Watch-Blob`);
+    : [];
+  if (argId && !own.length) throw new Error(`Kandidat ${argId} nicht im Watch-Blob`);
+  // Mit ID zusätzlich alle übrigen offenen Aufträge: GitHub hält je concurrency-
+  // Gruppe nur EINEN wartenden Lauf und verwirft ältere Wartende — kommen mehrere
+  // Anstösse kurz nacheinander, bliebe sonst nur der letzte Titel übrig.
+  const jobs = argId ? [...own, ...open.filter((j) => j.c.id !== argId)] : open;
   if (!jobs.length) { console.log('Keine offenen Dossier-Aufträge.'); return; }
   console.log(`Dossiers: ${jobs.map((j) => `${j.c.symbol}(${j.mode})`).join(', ')}`);
 
