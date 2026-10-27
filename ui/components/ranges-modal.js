@@ -589,17 +589,19 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const c = it.c, bars = barsStale(c) && loader.canCandles(c), basis = basisDue(c) || (needsEurBasis(c) && bars);
     if (bars || basis) loadOne(c, { bars, basis });
   }
-  // Beim Öffnen: Titel ohne Kerzen (Nicht-US auch veraltete) und fällige EUR-Basis.
+  // Beim Öffnen: Titel ohne oder mit veralteten Kerzen (> 20 h) und fällige EUR-Basis.
   // Yahoo in Wellen von 6; TwelveData (US) nacheinander mit 8 s Abstand (Free: 8/min).
   async function autoLoad() {
     if (!loader || S.ld.run) return;
     const yq = [], tq = [];
     S.items.forEach(({ c }) => {
       const us = loader.isUs(c), can = loader.canCandles(c);
-      const bars = can && (us ? !hasBars(c) : barsStale(c));
+      const bars = can && barsStale(c);
       const basis = basisDue(c) || (needsEurBasis(c) && bars);
       if (bars || basis) (us && bars ? tq : yq).push({ c, bars, basis });
     });
+    // US: erst die Titel ganz ohne Kerzen, dann die veralteten (TD-Limit kappt sonst den Rest).
+    tq.sort((a, b) => hasBars(a.c) - hasBars(b.c));
     if (!yq.length && !tq.length) return;
     Object.assign(S.ld, { run: true, done: 0, total: yq.length + tq.length, tdStop: false }); ldStatus();
     const one = async (j) => { await loadOne(j.c, j); S.ld.done++; ldStatus(); };
