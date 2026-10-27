@@ -313,6 +313,17 @@ product spec.
 - UI deploys to GitHub Pages on push to main
 - `dossier.yml` erzeugt Google-Doc-Dossiers je Watch-Ticker (Spalte „Doc“ in der Meta-Ansicht → `dossier-trigger` → Action → `tools/dossier/run.mjs`, Playwright gegen die eigene App). Setup und Ablauf: `docs/DOSSIER.md`.
 - **AI Research im Dossier:** Artefakt „Dossier Research" (https://claude.ai/artifact/HtGSH28Lkng8zC9t3swEXn) listet die Docs im Dossier-Ordner (Google-Drive-Konnektor), Prompts liegen editierbar in dessen Datenbank (`prompts`, Standard in `defaults`). Auswahl → geplante Aufgabe „Discovery Research" → Netlify `research` (eigener Schlüssel `RESEARCH_TOKEN`): GET liefert die Platzhalter-Werte (`promptVars` aus `ui/lib/research-prompt.js`, fairer Kurs aus `tv-reverse-dcf.js` — die Funktion importiert beide direkt aus `ui/lib`), POST schreibt `candidate.research[key] = {label, md, at}` (neuer Lauf ersetzt den alten) und stösst ein Dossier-Update an. `run.mjs` setzt daraus den Abschnitt „AI Research" (`tools/dossier/md-docx.mjs`). Der Text lebt im Blob, deshalb übersteht er jedes Dossier-Update. Details: `docs/DOSSIER.md`.
+- `monitor-report.yml` (werktags 22:13 UTC) schreibt den **Monitor-Bericht** über
+  Watchlist + Archiv (nur diese beiden, dedupliziert, Watch gewinnt) als Google Doc,
+  **je Mega-Cluster ein Block** (die fünf Gruppen aus `sector-clusters.js`) mit den
+  Kennzahlen des Monitors (`dashboard-metrics.js`, `trend-radar.js`) plus Range-Brüche
+  und Alarme — `tools/monitor-report/run.mjs`. Zwei Docs: „Discovery Monitor" (in
+  place überschrieben, Link bleibt) und „Monitor JJJJ-MM-TT" im Unterordner
+  „Monitor Archiv". TV-Daten holt die Action für alle Titel frisch (das Archiv frischt
+  sonst niemand auf), die Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand
+  (Score-Tagesreihe je Titel) liegt im Blob **`monitor`** (storage-Funktion, nur
+  read/write) — ohne ihn gäbe es für Archiv-Titel keine Deltas. Ordner per Variable
+  `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`).
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
 ## Netlify Setup

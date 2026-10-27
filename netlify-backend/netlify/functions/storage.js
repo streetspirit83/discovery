@@ -13,12 +13,18 @@ const BLOB_NAMES = {
   export: 'discovery-export',
   watch: 'discovery-watch',
   review: 'discovery-review',
+  monitor: 'discovery-monitor',
 };
 
 /* Der review-Blob führt keine Kandidaten, sondern Tages-Briefings der
    Cowork-Triage (Ringpuffer über 30 Tage). Er hängt deshalb nur an den ops
    read und write; append/update/move ergeben für ihn keinen Sinn. */
 const BRIEFING_BLOBS = new Set(['review']);
+
+/* Der monitor-Blob hält den Vortagszustand des täglichen Monitor-Berichts
+   (tools/monitor-report): je Titel die Score-Tagesreihe, damit die Deltas auch
+   für Archiv-Titel funktionieren, die die App nie auffrischt. Nur read/write. */
+const STATE_BLOBS = new Set(['monitor']);
 
 // Tombstone list: symbol:exchange keys of candidates the user hard-deleted
 // from the inbox. Keeps the scheduled adapters from re-adding them WITHOUT
@@ -60,6 +66,7 @@ function emptyBlob(blobType) {
     updated_at: new Date().toISOString(),
   };
   if (BRIEFING_BLOBS.has(blobType)) doc.briefings = [];
+  else if (STATE_BLOBS.has(blobType)) doc.snapshots = {};
   else doc.candidates = [];
   return doc;
 }
@@ -127,7 +134,7 @@ export default async function handler(req) {
     return respond(400, { ok: false, error: 'Missing op' });
   }
 
-  if (BRIEFING_BLOBS.has(blobType) && op !== 'read' && op !== 'write') {
+  if ((BRIEFING_BLOBS.has(blobType) || STATE_BLOBS.has(blobType)) && op !== 'read' && op !== 'write') {
     return respond(400, {
       ok: false,
       error: `blob_type ${blobType} supports read and write only`,
