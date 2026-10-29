@@ -1,4 +1,4 @@
-name: Monitor-Bericht – Google Doc (Watchlist + Archiv je Sektor-Gruppe)
+name: Monitor-Bericht – Google Doc + JSON (Watchlist + Archiv, nur Aktien)
 
 on:
   # Werktags nach US-Schluss und nach dem LS-Snapshot (21:30 UTC)

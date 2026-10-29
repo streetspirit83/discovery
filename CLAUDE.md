@@ -331,16 +331,20 @@ product spec.
 - `dossier.yml` erzeugt Google-Doc-Dossiers je Watch-Ticker (Spalte „Doc“ in der Meta-Ansicht → `dossier-trigger` → Action → `tools/dossier/run.mjs`, Playwright gegen die eigene App). Setup und Ablauf: `docs/DOSSIER.md`.
 - **AI Research im Dossier:** Artefakt „Dossier Research" (https://claude.ai/artifact/HtGSH28Lkng8zC9t3swEXn) listet die Docs im Dossier-Ordner (Google-Drive-Konnektor), Prompts liegen editierbar in dessen Datenbank (`prompts`, Standard in `defaults`). Auswahl → geplante Aufgabe „Discovery Research" → Netlify `research` (eigener Schlüssel `RESEARCH_TOKEN`): GET liefert die Platzhalter-Werte (`promptVars` aus `ui/lib/research-prompt.js`, fairer Kurs aus `tv-reverse-dcf.js` — die Funktion importiert beide direkt aus `ui/lib`), POST schreibt `candidate.research[key] = {label, md, at}` (neuer Lauf ersetzt den alten) und stösst ein Dossier-Update an. `run.mjs` setzt daraus den Abschnitt „AI Research" (`tools/dossier/md-docx.mjs`). Der Text lebt im Blob, deshalb übersteht er jedes Dossier-Update. Details: `docs/DOSSIER.md`.
 - `monitor-report.yml` (werktags 22:13 UTC) schreibt den **Monitor-Bericht** über
-  Watchlist + Archiv (nur diese beiden, dedupliziert, Watch gewinnt) als Google Doc,
-  **je Mega-Cluster ein Block** (die fünf Gruppen aus `sector-clusters.js`) mit den
-  Kennzahlen des Monitors (`dashboard-metrics.js`, `trend-radar.js`) plus Range-Brüche
-  und Alarme — `tools/monitor-report/run.mjs`. Zwei Docs: „Discovery Monitor" (in
-  place überschrieben, Link bleibt) und „Monitor JJJJ-MM-TT" im Unterordner
-  „Monitor Archiv". TV-Daten holt die Action für alle Titel frisch (das Archiv frischt
-  sonst niemand auf), die Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand
-  (Score-Tagesreihe je Titel) liegt im Blob **`monitor`** (storage-Funktion, nur
-  read/write) — ohne ihn gäbe es für Archiv-Titel keine Deltas. Ordner per Variable
-  `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`).
+  Watchlist + Archiv (nur diese beiden, dedupliziert, Watch gewinnt, **ETFs raus**) —
+  `tools/monitor-report/run.mjs` (I/O) + `report.mjs` (reine Logik). Seit Okt. 2026
+  **ohne Sektor-Gliederung**: der Sektor steht nur als Feld am Titel. Erst entsteht
+  ein Bericht-Objekt (`buildReport`, Schema `discovery-monitor-2.0`: `field_guide`,
+  `breadth`, `headlines` = automatische Textbausteine, `earnings_next_7d`,
+  `movers_1d`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
+  lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
+  `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
+  und „Discovery Monitor.json" (kompakt, für die KI-Auswertung), beide in place
+  überschrieben; „Discovery Monitor – Prompt.md" (aus `tools/monitor-report/PROMPT.md`,
+  KI-neutraler Auswertungsprompt für Claude/Gemini); im Unterordner „Monitor Archiv"
+  je Tag Doc + JSON. TV-Daten holt die Action für alle Titel frisch, die
+  Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand (Score-Tagesreihe je
+  Titel) liegt im Blob **`monitor`** — ohne ihn gäbe es für Archiv-Titel keine Deltas.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
