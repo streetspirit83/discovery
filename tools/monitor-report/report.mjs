@@ -75,7 +75,8 @@ export const FIELD_GUIDE = {
 
 /* Indexzeilen aus fetchIndexRows (ui/lib/tv-indices.js) → schlanke Einträge. */
 const idx = (r) => ({
-  code: r.code, name: r.label ?? r.name, value: r2(r.value), chg_1d: r2(r.change),
+  code: r.code, name: r.label ?? r.name,
+  value: r.value != null && Math.abs(r.value) < 10 ? Math.round(r.value * 1e4) / 1e4 : r2(r.value), chg_1d: r2(r.change),
   chg_abs: r.chg_abs != null ? r2(r.chg_abs) : undefined,
   perf_1w: r2(r.perf_w), perf_1m: r2(r.perf_1m),
 });
