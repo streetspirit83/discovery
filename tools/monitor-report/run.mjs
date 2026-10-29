@@ -33,7 +33,45 @@ import { readFile } from 'node:fs/promises';
 import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
-import { buildReport, renderHtml, slimReport } from './report.mjs';
+import { INDEX_GROUPS, fetchIndexRows } from '../../ui/lib/tv-indices.js';
+import { buildReport, buildIndices, renderHtml, slimReport } from './report.mjs';
+
+/* Leitindizes, Zins, Rohstoffe, Währung – Einträge im Format von INDEX_GROUPS,
+   damit fetchIndexRows die Ticker-Auflösung übernimmt (mehrere Kandidaten je
+   Index, der erste mit Daten gewinnt). */
+const BENCHMARKS = [
+  { code: 'SPX',    label: 'S&P 500',        tickers: ['SP:SPX'] },
+  { code: 'IXIC',   label: 'Nasdaq Comp.',   tickers: ['NASDAQ:IXIC'] },
+  { code: 'NDX',    label: 'Nasdaq 100',     tickers: ['NASDAQ:NDX'] },
+  { code: 'DJI',    label: 'Dow Jones',      tickers: ['DJ:DJI', 'TVC:DJI'] },
+  { code: 'RUT',    label: 'Russell 2000',   tickers: ['TVC:RUT', 'RUSSELL:RUT'] },
+  { code: 'SOX',    label: 'Halbleiter (SOX)', tickers: ['TVC:SOX', 'NASDAQ:SOX'] },
+  { code: 'DAX',    label: 'DAX',            tickers: ['XETR:DAX'] },
+  { code: 'SX5E',   label: 'Euro Stoxx 50',  tickers: ['TVC:SX5E', 'STOXX:SX5E'] },
+  { code: 'N225',   label: 'Nikkei 225',     tickers: ['TVC:NI225'] },
+  { code: 'HSI',    label: 'Hang Seng',      tickers: ['HSI:HSI', 'TVC:HSI'] },
+  { code: 'VIX',    label: 'VIX',            tickers: ['TVC:VIX', 'CBOE:VIX'] },
+  { code: 'US10Y',  label: 'US-Rendite 10J', tickers: ['TVC:US10Y'], yield: true },
+  { code: 'BRENT',  label: 'Brent',          tickers: ['TVC:UKOIL'] },
+  { code: 'GOLD',   label: 'Gold',           tickers: ['TVC:GOLD'] },
+  { code: 'EURUSD', label: 'EUR/USD',        tickers: ['FX_IDC:EURUSD', 'FX:EURUSD'] },
+  { code: 'BTC',    label: 'Bitcoin',        tickers: ['BITSTAMP:BTCUSD', 'COINBASE:BTCUSD'] },
+];
+
+async function fetchIndices(auth) {
+  try {
+    const branchen = INDEX_GROUPS.find((g) => g.key === 'branchen')?.entries ?? [];
+    const rows = await fetchIndexRows({ ...auth, entries: [...BENCHMARKS, ...branchen] });
+    const bench = rows.slice(0, BENCHMARKS.length).map((r) => (r.yield && r.value != null && r.change != null
+      ? { ...r, chg_abs: r.value - r.value / (1 + r.change / 100) } : r));
+    const missing = rows.filter((r) => !r.ok).map((r) => r.code);
+    console.log(`Indizes: ${rows.filter((r) => r.ok).length}/${rows.length}${missing.length ? ` · ohne Daten: ${missing.join(', ')}` : ''}`);
+    return buildIndices(bench, rows.slice(BENCHMARKS.length));
+  } catch (e) {
+    console.warn(`Indizes nicht abrufbar (${e.message}) – Bericht ohne Indizes.`);
+    return null;
+  }
+}
 
 const DRY_RUN = process.env.DRY_RUN === '1';
 const NAME = process.env.MONITOR_NAME || 'Discovery Monitor';
@@ -181,14 +219,15 @@ async function main() {
     return { ...c, ...u, _bucket: c._bucket, ls_history: c.ls_history, tv_data: u.tv_data };
   }).filter((c) => !isEtf(c));                       // TV kennt den Typ genauer als die Namensheuristik
 
-  await publish(fresh, stale.filter((c) => fresh.includes(c)), async (snapshots, urls) => {
+  const indices = await fetchIndices(auth);
+  await publish(fresh, stale.filter((c) => fresh.includes(c)), indices, async (snapshots, urls) => {
     await storage(auth, { op: 'write', blob_type: 'monitor', blob: { schema_version: 'discovery-monitor-1.0', report_day: urls.day, doc_url: urls.doc, json_url: urls.json, snapshots } });
   });
 }
 
 /* Bericht bauen und ausliefern. `saveState` schreibt den Vortagszustand erst nach erfolgreichem Upload. */
-async function publish(fresh, stale, saveState) {
-  const report = buildReport(fresh, stale);
+async function publish(fresh, stale, indices, saveState) {
+  const report = buildReport(fresh, stale, new Date(), indices);
   const full = JSON.stringify({ ...report, variant: 'full' });
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;

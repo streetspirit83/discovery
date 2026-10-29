@@ -16,7 +16,9 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261027h';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
-import { renderBriefingModal } from './components/briefing-modal.js?v=20261021a';
+// Cowork-Briefing (review-Blob): seit Okt. 2026 nicht mehr über die Topbar
+// erreichbar – der Zeitungs-Knopf öffnet das Marktbriefing. Modul bleibt liegen.
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261029a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
 import { renderControlModal } from './components/control-modal.js?v=20261027i';
@@ -1069,6 +1071,69 @@ function pollDossiers() {
   }, 20e3);
 }
 
+/* ── Marktbriefing ─────────────────────────────────────────────────────────── */
+
+/** Schlanke Kandidatenliste über alle Buckets für die Symbol-Auflösung (Watch zuerst). */
+async function briefingCandidates() {
+  const out = [];
+  for (const bucket of ['watch', 'archive', 'export', 'inbox']) {
+    const blob = await ensureBlob(bucket).catch(() => null);
+    for (const c of blob?.candidates ?? []) out.push({ id: c.id, symbol: c.symbol, exchange: normalizeExchange(c.exchange) || c.exchange, bucket });
+  }
+  return out;
+}
+
+/**
+ * Detail-Sheet zu einem Treffer der Symbol-Auflösung öffnen. Watch- und
+ * Archiv-Titel erscheinen in „Watch + Archiv“, wenn der aktuelle Bucket sie
+ * nicht enthält; `ctrl` (optional) ist das aufrufende Modal, das beim
+ * Schliessen des Sheets zurückkehrt.
+ */
+async function openBriefingHit(hit, ctrl = null) {
+  if (!hit) return false;
+  let target = hit.bucket;
+  if (hit.bucket === 'watch' || hit.bucket === 'archive') {
+    target = currentBlobType === hit.bucket || currentBlobType === 'all' ? currentBlobType : 'all';
+  }
+  if (target !== currentBlobType) await switchBlob(target);
+  const cand = (allBlobs[currentBlobType]?.candidates ?? []).find((c) => c.id === hit.id);
+  if (!cand) { toast('Titel nicht mehr im Workspace', 'info', 3500); return false; }
+  if (ctrl) { ctrl.hide(); returnToMonitor = () => ctrl.show(); }
+  candidateDetail.show(cand);
+  openDetailSheet();
+  return true;
+}
+
+function openMarketBriefing() {
+  if (useMock || !storageClient) {
+    toast('Marktbriefing braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
+    return;
+  }
+  renderMarketBriefingModal({
+    loadBriefings: async () => (await storageClient.readBlob('market'))?.briefings ?? [],
+    loadCandidates: briefingCandidates,
+    onOpenCandidate: (hit, ctrl) => openBriefingHit(hit, ctrl),
+  });
+}
+
+/**
+ * Deep links aus dem Claude-Artefakt „Marktbriefing“:
+ *   #briefing          → Marktbriefing-Modal
+ *   #s=SYMBOL[:BÖRSE]  → Detail-Sheet des Titels (Watch zuerst)
+ */
+async function handleBriefingHash() {
+  const h = location.hash || '';
+  const m = /[#&]s=([^&]+)/.exec(h);
+  if (!/^#briefing\b/.test(h) && !m) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!m) { openMarketBriefing(); return true; }
+  const [sym, ex] = decodeURIComponent(m[1]).toUpperCase().split(':');
+  const list = (await briefingCandidates()).filter((c) => String(c.symbol ?? '').toUpperCase() === sym);
+  const hit = (ex && list.find((c) => String(c.exchange ?? '').toUpperCase() === ex)) || list[0];
+  if (!hit) { toast(`${sym} liegt nicht im Workspace`, 'info', 3500); return false; }
+  return openBriefingHit(hit);
+}
+
 /** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
 function candidateIdFromHash() {
   const m = /[#&]c=([^&]+)/.exec(location.hash || '');
@@ -2108,9 +2173,11 @@ async function init() {
   // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
   // sheet on load, and on later hash changes (second push while app is open).
   if (candidateIdFromHash()) openCandidateById(candidateIdFromHash());
+  else handleBriefingHash();
   window.addEventListener('hashchange', () => {
     const id = candidateIdFromHash();
     if (id) openCandidateById(id);
+    else handleBriefingHash();
   });
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────
@@ -2142,27 +2209,8 @@ async function init() {
     renderUploadModal({ onImport: importCandidates });
   });
 
-  // Briefing: liest den review-Blob direkt über den Storage-Client. Ohne Backend
-  // gibt es nichts zu zeigen — der Blob wird ausschließlich vom Cowork-Lauf
-  // gefüllt, es existiert bewusst keine Mock-Fassung.
-  document.getElementById('btn-briefing').addEventListener('pointerup', () => {
-    if (useMock || !storageClient) {
-      toast('Briefing braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
-      return;
-    }
-    renderBriefingModal({
-      loadBlob: (blobType) => storageClient.readBlob(blobType),
-      onOpenCandidate: (id) => {
-        const c = (allBlobs[currentBlobType]?.candidates ?? []).find((x) => x.id === id);
-        if (!c) {
-          toast('Titel liegt nicht im aktuellen Bucket – auf „Watch" wechseln.', 'error', 4000);
-          return;
-        }
-        candidateDetail.show(c);
-        openDetailSheet();
-      },
-    });
-  });
+  // Briefing: Marktbriefing aus dem market-Blob (Claude-Tagesauswertung).
+  document.getElementById('btn-briefing').addEventListener('pointerup', () => openMarketBriefing());
 
   // Watch Ranges: 1:1-Kopie des Claude-Artefakts als Modal, gespeist aus dem
   // Watch-Blob (Ranges wie /api/watch-ranges). Schreibt range_override, das

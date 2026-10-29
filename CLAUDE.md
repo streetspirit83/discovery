@@ -335,7 +335,8 @@ product spec.
   `tools/monitor-report/run.mjs` (I/O) + `report.mjs` (reine Logik). Seit Okt. 2026
   **ohne Sektor-Gliederung**: der Sektor steht nur als Feld am Titel. Erst entsteht
   ein Bericht-Objekt (`buildReport`, Schema `discovery-monitor-2.0`: `field_guide`,
-  `breadth`, `headlines` = automatische Textbausteine, `earnings_next_7d`,
+  `breadth`, `indices` (Leitindizes/Zins/Rohstoffe/FX aus `BENCHMARKS` in `run.mjs` plus
+  die Branchen aus `INDEX_GROUPS`, beides über `fetchIndexRows`), `headlines` = automatische Textbausteine, `earnings_next_7d`,
   `movers_1d`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
   lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
   `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
@@ -347,15 +348,28 @@ product spec.
   je Tag Doc + vollständiges JSON. TV-Daten holt die Action für alle Titel frisch, die
   Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand (Score-Tagesreihe je
   Titel) liegt im Blob **`monitor`** — ohne ihn gäbe es für Archiv-Titel keine Deltas.
-- **Tagesauswertung „Marktbriefing“:** Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
-  (db-Collection `briefings`, Dokument-ID = `trading_day`). Auf „Go“ im Chat: „Discovery
-  Monitor.json“ aus Drive lesen, Nachrichten des Handelstags recherchieren (Märkte,
-  Movers, Ausreisser, Earnings), dann ein Dokument schreiben mit `day, title, lead,
-  breadth{advancers,decliners,median_chg_1d,median_perf_1w,above_sma200_pct,big_moves},
-  drivers[{text}], top/flop[{symbol,name,sector,chg_1d,perf_1w,reason}],
-  earnings[{date,weekday,symbol,name,perf_1w,focus}], technik[{symbol,name,signal,dir,text}],
-  fazit, sources[{title,url,date}]`. Für andere KIs liegt der Prompt als
-  „Discovery Monitor – Prompt.md“ im selben Drive-Ordner.
+- **Tagesauswertung „Marktbriefing“:** Claude-Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
+  (db-Collection `briefings`, Dokument-ID = Handelstag) **und** in der App über den
+  Zeitungs-Knopf der Topbar (`components/market-briefing-modal.js`, liest den Blob
+  **`market`** — read/write wie `review`, 30 Briefings, neueste zuerst). Das Artefakt
+  lässt sich nicht einbetten (claude.ai sendet `frame-ancestors 'self'`), deshalb rendert
+  die App dieselben Daten selbst. Symbole im Modal öffnen das Detail-Sheet (Watch/Archiv
+  → „Watch + Archiv“, sonst der eigene Bucket), beim Schliessen kehrt das Modal zurück
+  (`returnToMonitor`). Deep Links: `#briefing` öffnet das Modal, `#s=SYMBOL[:BÖRSE]` das
+  Detail-Sheet (`handleBriefingHash` in `app.js`; das Artefakt verlinkt Symbole so).
+  Das Cowork-Briefing (`briefing-modal.js`, review-Blob) hat damit keinen Einstieg mehr.
+  **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
+  Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,
+  indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,
+  median_chg_1d,median_perf_1w,above_sma200_pct,big_moves}, drivers[{text}],
+  top/flop[{symbol,exchange,name,sector,chg_1d,perf_1w,reason}],
+  earnings[{date,weekday,symbol,exchange,name,focus}],
+  technik[{symbol,exchange,name,signal,dir,text}], fazit, sources[{title,url,date}]` —
+  je Eintrag genau EIN Symbol), dann (1) ins Artefakt schreiben (ArtifactData `set`) und
+  (2) `gh workflow run market-briefing.yml -f payload="$(cat briefing.json)"` →
+  `tools/market-briefing/push.mjs` schreibt in den market-Blob (Upsert je Tag;
+  `-f delete_day=JJJJ-MM-TT` löscht). Für andere KIs liegt der Prompt als
+  „Discovery Monitor – Prompt.md“ im Drive-Ordner.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 

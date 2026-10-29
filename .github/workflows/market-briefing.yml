@@ -1,0 +1,37 @@
+name: Marktbriefing speichern (market-Blob)
+
+# Wird von Claude nach der Tagesauswertung („Go“) gestartet:
+#   gh workflow run market-briefing.yml -f payload="$(cat briefing.json)"
+# Das Briefing erscheint danach im Briefing-Modal der App.
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'Briefing als JSON (ein Tag, Feld day = JJJJ-MM-TT)'
+        required: false
+        type: string
+      delete_day:
+        description: 'Statt zu speichern: Briefing dieses Tages löschen (JJJJ-MM-TT)'
+        required: false
+        type: string
+
+concurrency:
+  group: market-briefing
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Briefing in den market-Blob schreiben
+        run: node tools/market-briefing/push.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          PAYLOAD: ${{ inputs.payload }}
+          DELETE_DAY: ${{ inputs.delete_day }}

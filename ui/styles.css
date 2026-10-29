@@ -2836,3 +2836,81 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .bf-foot { font-size:var(--fs-1); margin:0; }
+
+/* ── Marktbriefing-Modal (market-briefing-modal.js) ─────────────────────────
+   Baut auf den bf-*-Bausteinen des Cowork-Briefings auf (Kacheln, Notes,
+   Abschnittsköpfe); mb-* ergänzt nur, was dort fehlt. */
+.mb-head { display:flex; flex-direction:column; gap:var(--s-2); }
+.mb-dateline {
+  font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--accent);
+  letter-spacing:0.04em; text-transform:uppercase;
+}
+.mb-title { font-size:var(--fs-6); font-weight:var(--fw-bold); line-height:1.25; margin:0; text-wrap:balance; }
+.mb-muted { color:var(--muted); }
+.mb-tag { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-reg); }
+.mb-num { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; }
+.mb-num--sm { font-size:var(--fs-1); font-weight:var(--fw-reg); }
+.mb-num.pos, .mb-idx__day.pos, .mb-idx__wk.pos { color:var(--pos); }
+.mb-num.neg, .mb-idx__day.neg, .mb-idx__wk.neg { color:var(--neg); }
+
+/* Indexkacheln: vier je Zeile, schrumpfen statt umzubrechen (Styleguide §5). */
+.mb-idx { padding:var(--s-1); overflow:hidden; }
+.mb-idx .bf-tile__label { overflow:hidden; text-overflow:ellipsis; letter-spacing:0; text-transform:none; font-weight:var(--fw-med); }
+.mb-idx .bf-tile__label, .mb-idx__day, .mb-idx__wk { padding-inline:2px; }
+.mb-idx--empty { visibility:hidden; }
+.mb-idx__day { font-size:var(--fs-3); font-weight:var(--fw-bold); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mb-idx__wk  { font-size:var(--fs-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mb-secs { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
+.mb-sub { font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-1); }
+.mb-sec { display:flex; justify-content:space-between; gap:var(--s-2); font-size:var(--fs-1); }
+.mb-sec__name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.mb-adv { display:flex; height:6px; border-radius:var(--r-pill); overflow:hidden; background:var(--surface-3); }
+.mb-adv i { display:block; }
+.mb-adv i.pos { background:var(--pos); }
+.mb-adv i.neg { background:var(--neg); }
+.mb-advlab { display:flex; justify-content:space-between; font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+
+.mb-drivers { margin:0; padding-left:1.1em; display:flex; flex-direction:column; gap:var(--s-2); font-size:var(--fs-2); line-height:1.5; }
+
+/* Top/Flop-Balken: Nulllinie in der Mitte, Minus links, Plus rechts. */
+.mb-chart { display:flex; flex-direction:column; gap:var(--s-1); }
+.mb-bar { display:grid; grid-template-columns:minmax(0,9rem) 1fr auto; gap:var(--s-2); align-items:center; font-size:var(--fs-1); }
+.mb-bar__name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+.mb-bar__track { display:grid; grid-template-columns:1fr 1fr; height:12px; border-left:0; }
+.mb-bar__half { display:flex; height:100%; }
+.mb-bar__half:first-child { justify-content:flex-end; border-right:1px solid var(--border); }
+.mb-bar__half i { display:block; height:100%; border-radius:2px; }
+.mb-bar__half i.pos { background:var(--pos); }
+.mb-bar__half i.neg { background:var(--neg); }
+.mb-bar .mb-num { font-size:var(--fs-1); min-width:4.5em; text-align:right; }
+
+.mb-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
+.mb-row { display:flex; flex-direction:column; gap:2px; padding-bottom:var(--s-2); border-bottom:1px solid var(--border); }
+.mb-row:last-child { border-bottom:0; padding-bottom:0; }
+.mb-row__head { display:flex; align-items:baseline; gap:var(--s-2); min-width:0; }
+.mb-row__name { flex:1 1 auto; min-width:0; font-size:var(--fs-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mb-row__why { font-size:var(--fs-1); color:var(--muted); line-height:1.45; }
+.mb-date { font-family:var(--font-mono); font-size:var(--fs-1); color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+/* Symbol-Knopf → Detail-Sheet. */
+.mb-sym {
+  font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-2);
+  color:var(--accent); background:var(--accent-weak); border:0; border-radius:var(--r-1);
+  padding:0 var(--s-1); min-height:24px; cursor:pointer; flex:0 0 auto;
+  transition:background var(--t-fast);
+}
+.mb-sym:hover { background:var(--surface-3); }
+.mb-sym:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.mb-sym--plain { color:var(--text); background:none; cursor:default; padding:0; }
+.mb-chip {
+  font-size:var(--fs-1); font-weight:var(--fw-med); white-space:nowrap; flex:0 0 auto;
+  padding:0 var(--s-1); border-radius:var(--r-1); background:var(--surface-3); color:var(--muted);
+}
+.mb-chip.pos { background:var(--pos-weak); color:var(--pos); }
+.mb-chip.neg { background:var(--neg-weak); color:var(--neg); }
+.mb-fazit {
+  font-size:var(--fs-3); line-height:1.6;
+  background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--accent);
+  border-radius:var(--r-2); padding:var(--s-3) var(--s-4);
+}

@@ -14,12 +14,16 @@ const BLOB_NAMES = {
   watch: 'discovery-watch',
   review: 'discovery-review',
   monitor: 'discovery-monitor',
+  market: 'discovery-market',
 };
 
 /* Der review-Blob führt keine Kandidaten, sondern Tages-Briefings der
    Cowork-Triage (Ringpuffer über 30 Tage). Er hängt deshalb nur an den ops
-   read und write; append/update/move ergeben für ihn keinen Sinn. */
-const BRIEFING_BLOBS = new Set(['review']);
+   read und write; append/update/move ergeben für ihn keinen Sinn.
+   Ebenso der market-Blob: die Marktbriefings der Tagesauswertung (Claude auf
+   „Go“, geschrieben über die Action market-briefing.yml, angezeigt im
+   Briefing-Modal der App). */
+const BRIEFING_BLOBS = new Set(['review', 'market']);
 
 /* Der monitor-Blob hält den Vortagszustand des täglichen Monitor-Berichts
    (tools/monitor-report): je Titel die Score-Tagesreihe, damit die Deltas auch

@@ -41,9 +41,9 @@ const isoDay = (d) => d.toLocaleDateString('sv-SE', { timeZone: TZ });
 const weekday = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', timeZone: TZ });
 
 /* Kurzreferenz auf einen Titel – in jeder Signal-Liste gleich aufgebaut. */
-const ref = (c) => ({ symbol: c.symbol, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket });
+const ref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket });
 /* Schlanke Referenz für die Signal-Listen – Sektor und Bucket stehen in `stocks`. */
-const sref = (c) => ({ symbol: c.symbol, name: nameOf(c), bucket: c._bucket });
+const sref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), bucket: c._bucket });
 
 function rangeState(c) {
   const tv = c.tv_data ?? {};
@@ -68,11 +68,26 @@ export const FIELD_GUIDE = {
   'movers_1d': 'Grösste Tagesgewinner (top) und -verlierer (flop) nach Kursveränderung zum Vortagesschluss in %.',
   'movers_1w': 'Dasselbe auf Wochensicht (Performance 1 Woche in %).',
   'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
+  'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
   'headlines': 'Automatisch erzeugte, rein datenbasierte Kernsätze – ohne Nachrichtenbezug.',
   'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum).',
 };
 
-export function buildReport(cands, stale, now = new Date()) {
+/* Indexzeilen aus fetchIndexRows (ui/lib/tv-indices.js) → schlanke Einträge. */
+const idx = (r) => ({
+  code: r.code, name: r.label ?? r.name, value: r2(r.value), chg_1d: r2(r.change),
+  chg_abs: r.chg_abs != null ? r2(r.chg_abs) : undefined,
+  perf_1w: r2(r.perf_w), perf_1m: r2(r.perf_1m),
+});
+
+export function buildIndices(benchRows = [], sectorRows = []) {
+  return {
+    benchmarks: benchRows.filter((r) => r.ok).map(idx),
+    sectors: sectorRows.filter((r) => r.ok && r.change != null).map(idx).sort((a, b) => b.chg_1d - a.chg_1d),
+  };
+}
+
+export function buildReport(cands, stale, now = new Date(), indices = null) {
   const tvd = cands.filter((c) => c.tv_data);
   const tv = (c, k) => c.tv_data?.[k] ?? null;
 
@@ -187,6 +202,7 @@ export function buildReport(cands, stale, now = new Date()) {
     field_guide: FIELD_GUIDE,
     universe: { n: cands.length, watch: nW, archive: cands.length - nW, stale: stale.map((c) => c.symbol) },
     breadth,
+    indices: indices ?? { benchmarks: [], sectors: [] },
     headlines: [],
     earnings_next_7d,
     movers_1d,
@@ -217,6 +233,12 @@ const names = (arr, n = 3) => {
 export function headlines(rep) {
   const out = [];
   const b = rep.breadth, n = b.advancers + b.decliners + b.unchanged;
+
+  const bm = new Map((rep.indices?.benchmarks ?? []).map((x) => [x.code, x]));
+  const lead = ['SPX', 'IXIC', 'DAX', 'SOX'].map((k) => bm.get(k)).filter((x) => x?.chg_1d != null);
+  if (lead.length) out.push(`Die Leitindizes: ${lead.map((x) => `${x.name} ${fmtPct(x.chg_1d)}`).join(', ')}.`);
+  const sec = rep.indices?.sectors ?? [];
+  if (sec.length >= 4) out.push(`Stärkste Branchen waren ${sec.slice(0, 2).map((x) => `${x.name} (${fmtPct(x.chg_1d)})`).join(' und ')}, am schwächsten ${sec.slice(-2).reverse().map((x) => `${x.name} (${fmtPct(x.chg_1d)})`).join(' und ')}.`);
 
   if (n) {
     const q = Math.round(b.advancers / n * 100);
@@ -297,6 +319,20 @@ const SIGNAL_ROWS = [
   ['alerts', 'Ausgelöste Alarme', 'Eigene Kursalarme, die heute gegriffen haben.', (x) => `${short(x)} ${esc(x.alert)}`],
 ];
 
+function idxHtml(ix) {
+  const bm = ix?.benchmarks ?? [], sec = ix?.sectors ?? [];
+  if (!bm.length && !sec.length) return '';
+  const val = (x) => (x.value == null ? '–' : esc(fmtNum(x.value, x.value >= 1000 ? 0 : 2)));
+  const day = (x) => (x.chg_abs != null ? tone(x.chg_abs, `${x.chg_abs >= 0 ? '+' : '−'}${fmtNum(Math.abs(x.chg_abs * 100), 0)} Bp`) : tPct(x.chg_1d));
+  const bmRows = bm.map((x) => [`<b>${esc(x.name)}</b>`, val(x), day(x), tPct(x.perf_1w), tPct(x.perf_1m)]);
+  const secRows = [...sec.slice(0, 5), ...(sec.length > 10 ? sec.slice(-5) : sec.slice(5))]
+    .map((x) => [`<b>${esc(x.name)}</b>`, tPct(x.chg_1d), tPct(x.perf_1w), tPct(x.perf_1m)]);
+  return `<h2>Indizes</h2>
+${table(['Index', 'Stand', 'Heute', '1 Woche', '1 Monat'], bmRows)}
+${secRows.length ? `<h3>Branchen (stärkste und schwächste)</h3>
+${table(['Branche', 'Heute', '1 Woche', '1 Monat'], secRows)}` : ''}`;
+}
+
 export function renderHtml(rep, { jsonName = 'Discovery Monitor.json' } = {}) {
   const day = new Date(rep.generated_at);
   const date = day.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: TZ });
@@ -326,6 +362,8 @@ export function renderHtml(rep, { jsonName = 'Discovery Monitor.json' } = {}) {
 
 <h2>Auf einen Blick</h2>
 <ul>${rep.headlines.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+
+${idxHtml(rep.indices)}
 
 <h2>Tagesgewinner</h2>
 ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.top))}
