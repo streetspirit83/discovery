@@ -347,3 +347,32 @@ ${sig.length ? `<table border="1" cellpadding="5" style="border-collapse:collaps
 <p style="color:${MUTED};font-size:9pt">${u.stale.length ? `Ohne frische Kurse (Vortageswerte verwendet): ${esc(u.stale.join(', '))}. ` : ''}Alle Werte sind Schlusskurse laut TradingView; die Kernsätze oben sind automatisch aus den Daten erzeugt und enthalten keine Nachrichten. Die vollständige, maschinenlesbare Fassung liegt als „${esc(jsonName)}" im selben Ordner.</p>
 </body></html>`;
 }
+
+/* ── Kompakte Fassung für die tägliche KI-Auswertung ──────────────────────────
+ * Bei mehreren hundert Titeln wäre das volle JSON ~400 KB (≈ 120k Tokens). Die
+ * Tagesfassung kürzt jede Signal-Liste auf SLIM_LIST Einträge (die volle Länge
+ * steht in `signal_counts`) und behält in `stocks` nur Titel, die irgendwo im
+ * Bericht vorkommen. Die volle Fassung bleibt als eigene Datei erhalten. */
+const SLIM_LIST = 12;
+
+export function slimReport(rep) {
+  const signals = {}, signal_counts = {};
+  for (const [k, arr] of Object.entries(rep.signals)) {
+    signal_counts[k] = arr.length;
+    signals[k] = arr.slice(0, SLIM_LIST);
+  }
+  const used = new Set();
+  const mark = (arr) => arr.forEach((x) => used.add(x.symbol));
+  mark(rep.movers_1d.top); mark(rep.movers_1d.flop);
+  mark(rep.movers_1w.top); mark(rep.movers_1w.flop);
+  mark(rep.earnings_next_7d);
+  Object.values(signals).forEach(mark);
+  return {
+    ...rep,
+    variant: 'compact',
+    variant_note: `Kompakte Tagesfassung: Signal-Listen auf ${SLIM_LIST} Einträge gekürzt (volle Länge in signal_counts), stocks nur mit Titeln, die im Bericht vorkommen. Alle Titel stehen in der vollständigen Fassung.`,
+    signals,
+    signal_counts,
+    stocks: rep.stocks.filter((s) => used.has(s.symbol)),
+  };
+}

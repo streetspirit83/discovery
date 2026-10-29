@@ -17,9 +17,10 @@
  *      damit Deltas, MACD-Wechsel und SMA-Kreuzungen funktionieren.
  *   4. Nach Drive (Ordner MONITOR_FOLDER_ID):
  *        „Discovery Monitor"        Google Doc, in place überschrieben (Link bleibt)
- *        „Discovery Monitor.json"   JSON, in place überschrieben (Link bleibt)
+ *        „Discovery Monitor.json"   kompakte Tagesfassung für die KI-Auswertung
+ *        „Discovery Monitor – vollständig.json"  alle Titel (beide in place überschrieben)
  *        „Discovery Monitor – Prompt.md"  Auswertungsprompt (aus PROMPT.md)
- *        Monitor Archiv/„Monitor JJJJ-MM-TT" + „Monitor JJJJ-MM-TT.json"
+ *        Monitor Archiv/„Monitor JJJJ-MM-TT" + „Monitor JJJJ-MM-TT.json" (vollständig)
  *
  * Env: DISCOVERY_BACKEND_URL, DISCOVERY_SECRET,
  *      GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN,
@@ -32,7 +33,7 @@ import { readFile } from 'node:fs/promises';
 import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
-import { buildReport, renderHtml } from './report.mjs';
+import { buildReport, renderHtml, slimReport } from './report.mjs';
 
 const DRY_RUN = process.env.DRY_RUN === '1';
 const NAME = process.env.MONITOR_NAME || 'Discovery Monitor';
@@ -188,8 +189,10 @@ async function main() {
 /* Bericht bauen und ausliefern. `saveState` schreibt den Vortagszustand erst nach erfolgreichem Upload. */
 async function publish(fresh, stale, saveState) {
   const report = buildReport(fresh, stale);
-  const json = JSON.stringify(report);           // kompakt – spart Tokens bei der KI-Auswertung
+  const full = JSON.stringify({ ...report, variant: 'full' });
+  const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
+  const fullName = `${NAME} – vollständig.json`;
   const html = renderHtml(report, { jsonName });
   const day = report.trading_day;
 
@@ -197,6 +200,7 @@ async function publish(fresh, stale, saveState) {
     const { writeFile } = await import('node:fs/promises');
     await writeFile('monitor-report.html', html);
     await writeFile('monitor-report.json', json);
+    await writeFile('monitor-report.full.json', full);
     console.log(`DRY_RUN: monitor-report.html + .json geschrieben (${report.stocks.length} Aktien), kein Upload, kein Blob.`);
     return report;
   }
@@ -206,7 +210,9 @@ async function publish(fresh, stale, saveState) {
   const doc = await upsertDoc(d, folder, NAME, html);
   console.log(`✓ ${NAME}: ${doc.webViewLink}`);
   const js = await upsertFile(d, folder, jsonName, JSON_MIME, json);
-  console.log(`✓ ${jsonName}: ${js.webViewLink}`);
+  console.log(`✓ ${jsonName} (${Math.round(json.length / 1024)} KB): ${js.webViewLink}`);
+  const fj = await upsertFile(d, folder, fullName, JSON_MIME, full);
+  console.log(`✓ ${fullName} (${Math.round(full.length / 1024)} KB): ${fj.webViewLink}`);
   const prompt = await readFile(new URL('./PROMPT.md', import.meta.url), 'utf8').catch(() => null);
   if (prompt) {
     const p = await upsertFile(d, folder, `${NAME} – Prompt.md`, MD_MIME, prompt);
@@ -214,7 +220,7 @@ async function publish(fresh, stale, saveState) {
   }
   const archive = await ensureFolder(d, folder, ARCHIVE_FOLDER);
   await upsertDoc(d, archive, `Monitor ${day}`, html);
-  await upsertFile(d, archive, `Monitor ${day}.json`, JSON_MIME, json);
+  await upsertFile(d, archive, `Monitor ${day}.json`, JSON_MIME, full);
   console.log(`✓ Archiv: Monitor ${day} (Doc + JSON)`);
 
   // Nur aktuelle Titel → Blob bleibt klein.

@@ -339,10 +339,12 @@ product spec.
   `movers_1d`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
   lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
   `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
-  und „Discovery Monitor.json" (kompakt, für die KI-Auswertung), beide in place
-  überschrieben; „Discovery Monitor – Prompt.md" (aus `tools/monitor-report/PROMPT.md`,
+  und „Discovery Monitor.json" (kompakte Tagesfassung für die KI-Auswertung via
+  `slimReport`: Signal-Listen auf 12 gekürzt, `stocks` nur mit erwähnten Titeln —
+  das volle JSON wären bei ~470 Titeln ~380 KB) plus „Discovery Monitor –
+  vollständig.json", alle in place überschrieben; „Discovery Monitor – Prompt.md" (aus `tools/monitor-report/PROMPT.md`,
   KI-neutraler Auswertungsprompt für Claude/Gemini); im Unterordner „Monitor Archiv"
-  je Tag Doc + JSON. TV-Daten holt die Action für alle Titel frisch, die
+  je Tag Doc + vollständiges JSON. TV-Daten holt die Action für alle Titel frisch, die
   Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand (Score-Tagesreihe je
   Titel) liegt im Blob **`monitor`** — ohne ihn gäbe es für Archiv-Titel keine Deltas.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.

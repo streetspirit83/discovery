@@ -6,3 +6,4 @@ node_modules/
 # Monitor-Bericht DRY_RUN
 tools/monitor-report/monitor-report.html
 tools/monitor-report/monitor-report.json
+tools/monitor-report/monitor-report.full.json
