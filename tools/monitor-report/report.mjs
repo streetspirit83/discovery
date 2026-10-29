@@ -305,7 +305,8 @@ export function renderHtml(rep, { jsonName = 'Discovery Monitor.json' } = {}) {
 
   const moverRows = (arr) => arr.slice(0, DOC_TOP).map((x) => [title(x), esc(x.sector ?? '–'), tPct(x.chg_1d), tPct(x.perf_1w)]);
   const weekRows = (arr) => arr.slice(0, DOC_TOP).map((x) => [title(x), esc(x.sector ?? '–'), tPct(x.perf_1w), tPct(x.perf_1m)]);
-  const earnRows = rep.earnings_next_7d.map((x) => [
+  const EARN_MAX = 30;
+  const earnRows = rep.earnings_next_7d.slice(0, EARN_MAX).map((x) => [
     `${esc(x.weekday)} ${esc(x.date.slice(8, 10))}.${esc(x.date.slice(5, 7))}. · ${title(x)}`,
     esc(x.sector ?? '–'), tPct(x.perf_1w), tPct(x.perf_1m), x.rsi == null ? '–' : esc(Math.round(x.rsi)),
   ]);
@@ -334,6 +335,7 @@ ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.flop))}
 
 <h2>Quartalszahlen in den nächsten 7 Tagen</h2>
 ${table(['Termin · Titel', 'Sektor', '1 Woche', '1 Monat', 'RSI'], earnRows)}
+${rep.earnings_next_7d.length > EARN_MAX ? `<p style="color:${MUTED}">… und ${rep.earnings_next_7d.length - EARN_MAX} weitere Termine (vollständig im JSON).</p>` : ''}
 
 <h2>Wochenbilanz</h2>
 <h3>Stärkste Werte</h3>
@@ -353,7 +355,7 @@ ${sig.length ? `<table border="1" cellpadding="5" style="border-collapse:collaps
  * Tagesfassung kürzt jede Signal-Liste auf SLIM_LIST Einträge (die volle Länge
  * steht in `signal_counts`) und behält in `stocks` nur Titel, die irgendwo im
  * Bericht vorkommen. Die volle Fassung bleibt als eigene Datei erhalten. */
-const SLIM_LIST = 12;
+const SLIM_LIST = 8;
 
 export function slimReport(rep) {
   const signals = {}, signal_counts = {};
@@ -361,16 +363,14 @@ export function slimReport(rep) {
     signal_counts[k] = arr.length;
     signals[k] = arr.slice(0, SLIM_LIST);
   }
-  const used = new Set();
-  const mark = (arr) => arr.forEach((x) => used.add(x.symbol));
-  mark(rep.movers_1d.top); mark(rep.movers_1d.flop);
-  mark(rep.movers_1w.top); mark(rep.movers_1w.flop);
-  mark(rep.earnings_next_7d);
-  Object.values(signals).forEach(mark);
+  // Kennzahlen nur für die Titel, über die geschrieben wird: Tages-Movers und Ausreisser.
+  const used = new Set([...rep.movers_1d.top, ...rep.movers_1d.flop].map((x) => x.symbol));
+  for (const s of rep.stocks) if (s.chg_1d != null && Math.abs(s.chg_1d) >= rep.breadth.big_move_threshold_pct) used.add(s.symbol);
   return {
     ...rep,
     variant: 'compact',
-    variant_note: `Kompakte Tagesfassung: Signal-Listen auf ${SLIM_LIST} Einträge gekürzt (volle Länge in signal_counts), stocks nur mit Titeln, die im Bericht vorkommen. Alle Titel stehen in der vollständigen Fassung.`,
+    variant_note: `Kompakte Tagesfassung: Signal-Listen auf ${SLIM_LIST} Einträge gekürzt (volle Länge in signal_counts), earnings_next_7d ohne Kennzahlen, stocks nur für Tages-Movers und Ausreisser. Alles Weitere in der vollständigen Fassung.`,
+    earnings_next_7d: rep.earnings_next_7d.map(({ date, weekday, symbol, name, bucket }) => ({ date, weekday, symbol, name, bucket })),
     signals,
     signal_counts,
     stocks: rep.stocks.filter((s) => used.has(s.symbol)),

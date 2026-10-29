@@ -340,7 +340,7 @@ product spec.
   lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
   `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
   und „Discovery Monitor.json" (kompakte Tagesfassung für die KI-Auswertung via
-  `slimReport`: Signal-Listen auf 12 gekürzt, `stocks` nur mit erwähnten Titeln —
+  `slimReport`: Signal-Listen auf 8 gekürzt, Earnings ohne Kennzahlen, `stocks` nur für Tages-Movers und Ausreisser —
   das volle JSON wären bei ~470 Titeln ~380 KB) plus „Discovery Monitor –
   vollständig.json", alle in place überschrieben; „Discovery Monitor – Prompt.md" (aus `tools/monitor-report/PROMPT.md`,
   KI-neutraler Auswertungsprompt für Claude/Gemini); im Unterordner „Monitor Archiv"
