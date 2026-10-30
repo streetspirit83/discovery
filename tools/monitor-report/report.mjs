@@ -38,6 +38,18 @@ const median = (a) => {
 };
 const nameOf = (c) => (c.name && c.name !== c.symbol ? c.name : c.symbol);
 const isoDay = (d) => d.toLocaleDateString('sv-SE', { timeZone: TZ });
+
+/* Handelstag der Schlusskurse – nach US-Ostküstenzeit, nicht nach Berliner Datum:
+   GitHub startet den Lauf oft Stunden verspätet (nach Mitternacht in Berlin).
+   Vor 9:30 Uhr New York gelten noch die Kurse des letzten Werktags. */
+export function tradingDay(now = new Date()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(now).map((x) => [x.type, x.value]));
+  const d = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
+  if (+p.hour * 60 + +p.minute < 9 * 60 + 30) d.setUTCDate(d.getUTCDate() - 1);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 const weekday = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', timeZone: TZ });
 
 /* Kurzreferenz auf einen Titel – in jeder Signal-Liste gleich aufgebaut. */
@@ -61,7 +73,7 @@ function rangeState(c) {
 /* ── Bericht als Objekt ───────────────────────────────────────────────────── */
 
 export const FIELD_GUIDE = {
-  'trading_day': 'Handelstag (Europe/Berlin), auf den sich die Schlusskurse beziehen.',
+  'trading_day': 'Handelstag der Schlusskurse (US-Börsentag nach New Yorker Zeit; europäische Werte vom selben Tag).',
   'universe': 'Beobachtete Einzelaktien aus Watchlist (watch) und Archiv (archive), ohne ETFs. stale = Titel ohne frische Kurse (Vortageswerte).',
   'breadth': 'Marktbreite der beobachteten Titel: Anzahl steigender/fallender Werte, Mediane der Kursveränderung, Anteil über SMA50/SMA200, Ø Qualitäts-Score 0–100.',
   'earnings_next_7d': 'Angekündigte Quartalszahlen in den nächsten 7 Tagen (Datum laut TradingView; Uhrzeit vor/nach Börse ist nicht bekannt).',
@@ -197,7 +209,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
   const report = {
     schema: SCHEMA,
     generated_at: now.toISOString(),
-    trading_day: isoDay(now),
+    trading_day: tradingDay(now),
     timezone: TZ,
     source: 'Discovery Workspace – Watchlist + Archiv, Schlusskurse und Indikatoren von TradingView',
     field_guide: FIELD_GUIDE,
