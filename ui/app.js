@@ -18,7 +18,7 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
 // Cowork-Briefing (review-Blob): seit Okt. 2026 nicht mehr über die Topbar
 // erreichbar – der Zeitungs-Knopf öffnet das Marktbriefing. Modul bleibt liegen.
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261029a';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261030a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
 import { renderControlModal } from './components/control-modal.js?v=20261027i';

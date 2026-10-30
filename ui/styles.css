@@ -2850,20 +2850,21 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .mb-tag { font-size:var(--fs-1); color:var(--muted); font-weight:var(--fw-reg); }
 .mb-num { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; }
 .mb-num--sm { font-size:var(--fs-1); font-weight:var(--fw-reg); }
-.mb-num.pos, .mb-idx__day.pos, .mb-idx__wk.pos { color:var(--pos); }
-.mb-num.neg, .mb-idx__day.neg, .mb-idx__wk.neg { color:var(--neg); }
+.mb-num.pos, .mb-idx__day.pos { color:var(--pos); }
+.mb-num.neg, .mb-idx__day.neg { color:var(--neg); }
 
 /* Indexkacheln: vier je Zeile, schrumpfen statt umzubrechen (Styleguide §5). */
 .mb-idx { padding:var(--s-1); overflow:hidden; }
 .mb-idx .bf-tile__label { overflow:hidden; text-overflow:ellipsis; letter-spacing:0; text-transform:none; font-weight:var(--fw-med); }
-.mb-idx .bf-tile__label, .mb-idx__day, .mb-idx__wk { padding-inline:2px; }
-.mb-idx--empty { visibility:hidden; }
+.mb-idx .bf-tile__label, .mb-idx__day, .mb-idx__abs { padding-inline:2px; }
 .mb-idx__day { font-size:var(--fs-3); font-weight:var(--fw-bold); white-space:nowrap; font-variant-numeric:tabular-nums; }
-.mb-idx__wk  { font-size:var(--fs-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
-.mb-secs { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); }
+.mb-idx__abs { font-size:var(--fs-2); color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; }
+.mb-secs { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s-3); }
+.mb-secs .mb-list { gap:2px; }
 .mb-sub { font-size:var(--fs-1); color:var(--muted); margin-bottom:var(--s-1); }
 .mb-sec { display:flex; justify-content:space-between; gap:var(--s-2); font-size:var(--fs-1); }
-.mb-sec__name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mb-sec__name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mb-sec .mb-num { flex:0 0 auto; font-size:var(--fs-1); }
 
 .mb-adv { display:flex; height:6px; border-radius:var(--r-pill); overflow:hidden; background:var(--surface-3); }
 .mb-adv i { display:block; }

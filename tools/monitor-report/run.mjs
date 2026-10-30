@@ -50,6 +50,7 @@ const BENCHMARKS = [
   { code: 'SX5E',   label: 'Euro Stoxx 50',  tickers: ['TVC:SX5E', 'STOXX:SX5E'] },
   { code: 'N225',   label: 'Nikkei 225',     tickers: ['TVC:NI225'] },
   { code: 'HSI',    label: 'Hang Seng',      tickers: ['HSI:HSI', 'TVC:HSI'] },
+  { code: 'KOSPI',  label: 'KOSPI',          tickers: ['KRX:KOSPI', 'TVC:KOSPI', 'INDEX:KOSPI'] },
   { code: 'VIX',    label: 'VIX',            tickers: ['TVC:VIX', 'CBOE:VIX'] },
   { code: 'US10Y',  label: 'US-Rendite 10J', tickers: ['TVC:US10Y'], yield: true },
   { code: 'BRENT',  label: 'Brent',          tickers: ['TVC:UKOIL', 'ICEEUR:BRN1!', 'NYMEX:BZ1!', 'FX:UKOIL'] },

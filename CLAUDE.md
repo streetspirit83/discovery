@@ -358,6 +358,13 @@ product spec.
   (`returnToMonitor`). Deep Links: `#briefing` öffnet das Modal, `#s=SYMBOL[:BÖRSE]` das
   Detail-Sheet (`handleBriefingHash` in `app.js`; das Artefakt verlinkt Symbole so).
   Das Cowork-Briefing (`briefing-modal.js`, review-Blob) hat damit keinen Einstieg mehr.
+  Indexkacheln (Modal und Artefakt): zwei feste Viererreihen S&P 500 · Nasdaq · HXR · SOX /
+  DAX · KOSPI · VIX · Brent, je Label / Tagesveränderung / absoluter Stand; HXR kommt aus
+  `indices.sectors`, der Rest aus `indices.benchmarks`. Darunter je drei stärkste und
+  schwächste Branchen.
+  **Automatisch:** geplante Aufgabe „Marktbriefing werktags“ (Mo–Fr 7:07 Uhr Berlin) führt
+  den Go-Ablauf in einer frischen Sitzung aus; sie überspringt einen Handelstag, für den
+  schon ein Briefing im Artefakt steht.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
   Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,
   indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,

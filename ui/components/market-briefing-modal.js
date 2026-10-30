@@ -24,44 +24,38 @@ const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 const longDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 const shortDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 
-/* Indexkacheln: feste Vierergruppen → je Gruppe EINE Zeile (Styleguide §5). */
+/* Indexkacheln: zwei feste Vierergruppen → je Gruppe EINE Zeile (Styleguide §5).
+   HXR (Cybersecurity) kommt aus den Branchenindizes, der Rest aus den Benchmarks. */
 const INDEX_ROWS = [
-  ['SPX', 'IXIC', 'SOX', 'RUT'],
-  ['DAX', 'SX5E', 'N225', 'HSI'],
-  ['VIX', 'US10Y', 'BRENT', 'GOLD'],
-  ['DJI', 'NDX', 'EURUSD', 'BTC'],
+  ['SPX', 'IXIC', 'HXR', 'SOX'],
+  ['DAX', 'KOSPI', 'VIX', 'BRENT'],
 ];
-const SHORT = { SPX: 'S&P 500', IXIC: 'Nasdaq', SOX: 'SOX', RUT: 'R2000', DAX: 'DAX', SX5E: 'Stoxx 50', N225: 'Nikkei', HSI: 'HSI', VIX: 'VIX', US10Y: 'US 10J', BRENT: 'Brent', GOLD: 'Gold', DJI: 'Dow', NDX: 'NDX', EURUSD: 'EUR/USD', BTC: 'Bitcoin' };
+const SHORT = { SPX: 'S&P 500', IXIC: 'Nasdaq', HXR: 'HXR', SOX: 'SOX', DAX: 'DAX', KOSPI: 'KOSPI', VIX: 'VIX', BRENT: 'Brent' };
 /* Kachel-Prozent ohne Leerzeichen – vier Spalten am Handy sind schmal. */
 const pctT = (v) => pct(v).replace(' %', '%');
+const absVal = (v) => (v == null ? '–' : nf(Math.abs(v) >= 1000 ? 0 : 2).format(v));
 
-function indexTile(x) {
-  if (!x) return '<div class="bf-tile mb-idx mb-idx--empty"></div>';
-  const isYield = x.chg_abs != null;
-  const day = isYield
-    ? `${x.chg_abs >= 0 ? '+' : '−'}${nf(0).format(Math.abs(x.chg_abs * 100))} Bp`
-    : pctT(x.chg_1d);
-  const dayTone = tone(isYield ? x.chg_abs : x.chg_1d);
-  return `<div class="bf-tile mb-idx" title="${esc(x.name)}${x.value != null ? ` · ${nf(x.value >= 1000 ? 0 : 2).format(x.value)}` : ''}">
+function indexTile(x, code) {
+  if (!x) return `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(SHORT[code] ?? code)}</div><div class="mb-idx__day">–</div><div class="mb-idx__abs">–</div></div>`;
+  return `<div class="bf-tile mb-idx" title="${esc(x.name)}">
     <div class="bf-tile__label">${esc(SHORT[x.code] ?? x.name)}</div>
-    <div class="mb-idx__day ${dayTone}">${esc(day)}</div>
-    <div class="mb-idx__wk ${tone(x.perf_1w)}">${esc(pctT(x.perf_1w))}</div>
+    <div class="mb-idx__day ${tone(x.chg_1d)}">${esc(pctT(x.chg_1d))}</div>
+    <div class="mb-idx__abs">${esc(absVal(x.value))}</div>
   </div>`;
 }
 
 function indicesBlock(ix) {
-  const bm = new Map((ix?.benchmarks ?? []).map((x) => [x.code, x]));
-  if (!bm.size && !(ix?.sectors ?? []).length) return '';
+  const all = new Map([...(ix?.sectors ?? []), ...(ix?.benchmarks ?? [])].map((x) => [x.code, x]));
+  if (!all.size) return '';
   const rows = INDEX_ROWS
-    .filter((codes) => codes.some((c) => bm.has(c)))
-    .map((codes) => `<div class="bf-tiles">${codes.map((c) => indexTile(bm.get(c))).join('')}</div>`).join('');
+    .map((codes) => `<div class="bf-tiles">${codes.map((c) => indexTile(all.get(c), c)).join('')}</div>`).join('');
   const sec = ix?.sectors ?? [];
   const secItem = (x) => `<li class="mb-sec"><span class="mb-sec__name">${esc(x.name)}</span><span class="mb-num ${tone(x.chg_1d)}">${esc(pct(x.chg_1d))}</span></li>`;
   const secBlock = sec.length >= 6 ? `<div class="mb-secs">
-      <div><div class="mb-sub">Stärkste Branchen</div><ul class="mb-list">${sec.slice(0, 4).map(secItem).join('')}</ul></div>
-      <div><div class="mb-sub">Schwächste Branchen</div><ul class="mb-list">${sec.slice(-4).reverse().map(secItem).join('')}</ul></div>
+      <div><div class="mb-sub">Stärkste Branchen</div><ul class="mb-list">${sec.slice(0, 3).map(secItem).join('')}</ul></div>
+      <div><div class="mb-sub">Schwächste Branchen</div><ul class="mb-list">${sec.slice(-3).reverse().map(secItem).join('')}</ul></div>
     </div>` : '';
-  return `<section class="bf-section"><h3 class="bf-h">Indizes <span class="mb-tag">· heute / 1 Woche</span></h3>${rows}${secBlock}</section>`;
+  return `<section class="bf-section"><h3 class="bf-h">Indizes <span class="mb-tag">· heute</span></h3>${rows}${secBlock}</section>`;
 }
 
 function breadthBlock(br) {
