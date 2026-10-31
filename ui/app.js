@@ -18,7 +18,7 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
 // Cowork-Briefing (review-Blob): seit Okt. 2026 nicht mehr über die Topbar
 // erreichbar – der Zeitungs-Knopf öffnet das Marktbriefing. Modul bleibt liegen.
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261030a';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261031a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
 import { renderControlModal } from './components/control-modal.js?v=20261027i';
@@ -1104,7 +1104,7 @@ async function openBriefingHit(hit, ctrl = null) {
   return true;
 }
 
-function openMarketBriefing() {
+function openMarketBriefing(kind = null) {
   if (useMock || !storageClient) {
     toast('Marktbriefing braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
     return;
@@ -1113,20 +1113,22 @@ function openMarketBriefing() {
     loadBriefings: async () => (await storageClient.readBlob('market'))?.briefings ?? [],
     loadCandidates: briefingCandidates,
     onOpenCandidate: (hit, ctrl) => openBriefingHit(hit, ctrl),
+    kind,
   });
 }
 
 /**
  * Deep links aus dem Claude-Artefakt „Marktbriefing“:
- *   #briefing          → Marktbriefing-Modal
+ *   #briefing[=preview|watch] → Marktbriefing-Modal (optional mit Reiter)
  *   #s=SYMBOL[:BÖRSE]  → Detail-Sheet des Titels (Watch zuerst)
  */
 async function handleBriefingHash() {
   const h = location.hash || '';
   const m = /[#&]s=([^&]+)/.exec(h);
-  if (!/^#briefing\b/.test(h) && !m) return false;
+  const bm = /^#briefing(?:=(\w+))?/.exec(h);
+  if (!bm && !m) return false;
   history.replaceState(null, '', location.pathname + location.search);
-  if (!m) { openMarketBriefing(); return true; }
+  if (!m) { openMarketBriefing(bm[1] ?? null); return true; }
   const [sym, ex] = decodeURIComponent(m[1]).toUpperCase().split(':');
   const list = (await briefingCandidates()).filter((c) => String(c.symbol ?? '').toUpperCase() === sym);
   const hit = (ex && list.find((c) => String(c.exchange ?? '').toUpperCase() === ex)) || list[0];

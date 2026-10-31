@@ -2912,6 +2912,12 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .mb-chip.neg { background:var(--neg-weak); color:var(--neg); }
 .mb-fazit {
   font-size:var(--fs-3); line-height:1.6;
-  background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--accent);
+  background:var(--surface-2); border:1px solid var(--border); border-top:3px solid var(--accent);
   border-radius:var(--r-2); padding:var(--s-3) var(--s-4);
 }
+
+/* Reiter Tag / Woche / Watchlist unter dem Modal-Kopf */
+.briefing-modal .mb-tabs { margin:0; padding:0 20px; flex:0 0 auto; }
+.mb-cal { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; font-size:var(--fs-2); line-height:1.45; }
+.mb-row__lead { font-size:var(--fs-2); font-weight:var(--fw-med); line-height:1.4; }
+.mb-row__head .link-chip { flex:0 0 auto; }

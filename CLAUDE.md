@@ -362,9 +362,19 @@ product spec.
   DAX · KOSPI · VIX · Brent, je Label / Tagesveränderung / absoluter Stand; HXR kommt aus
   `indices.sectors`, der Rest aus `indices.benchmarks`. Darunter je drei stärkste und
   schwächste Branchen.
-  **Automatisch:** geplante Aufgabe „Marktbriefing werktags“ (Mo–Fr 7:07 Uhr Berlin) führt
-  den Go-Ablauf in einer frischen Sitzung aus; sie überspringt einen Handelstag, für den
-  schon ein Briefing im Artefakt steht.
+  **Drei Arten** (Feld `kind`, Reiter Tag / Woche / Watchlist in Modal und Artefakt):
+  `daily` (Tagesbriefing, Standard), `preview` (Wochenvorschau, Felder zusätzlich
+  `week_label, themes[{text}], calendar[{date,weekday,items[{time?,text}]}]`, earnings mit
+  `watch:true` für Watchlist-Titel) und `watch` (Watchlist-Rückblick:
+  `week_label, stats{n,up,down,median_1w,median_1m,above_sma200_pct}`, `top/flop` mit
+  `perf_1w/perf_1m/reason`, `news[{symbol,exchange,name,perf_1w,headline,text,url}]`,
+  `technik`, `earnings`). Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
+  Artefakt doc_id = Tag (daily), `preview-<Tag>` bzw. `watch-<Tag>`. Deep Link
+  `#briefing=preview|watch` öffnet den Reiter.
+  **Automatisch (geplante Aufgaben):** „Marktbriefing werktags“ Di–Sa 7:07 Uhr (Vortag,
+  also Freitag am Samstag), „Wochenvorschau Montag“ Mo 7:08 Uhr, „Watchlist-Wochenrückblick“
+  So 9:34 Uhr (liest „Discovery Monitor – vollständig.json“, filtert `bucket == "watch"`).
+  Jede überspringt einen Eintrag, der im Artefakt schon steht.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
   Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,
   indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,

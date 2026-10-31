@@ -14,6 +14,10 @@ on:
         description: 'Statt zu speichern: Briefing dieses Tages löschen (JJJJ-MM-TT)'
         required: false
         type: string
+      delete_kind:
+        description: 'Art des zu löschenden Briefings (daily, preview, watch)'
+        required: false
+        type: string
 
 concurrency:
   group: market-briefing
@@ -35,3 +39,4 @@ jobs:
           DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
           PAYLOAD: ${{ inputs.payload }}
           DELETE_DAY: ${{ inputs.delete_day }}
+          DELETE_KIND: ${{ inputs.delete_kind }}
