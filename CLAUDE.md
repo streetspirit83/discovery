@@ -368,7 +368,12 @@ product spec.
   `watch:true` für Watchlist-Titel) und `watch` (Watchlist-Rückblick:
   `week_label, stats{n,up,down,median_1w,median_1m,above_sma200_pct}`, `top/flop` mit
   `perf_1w/perf_1m/reason`, `news[{symbol,exchange,name,perf_1w,headline,text,url}]`,
-  `technik`, `earnings`). Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
+  `technik`, `earnings`, dazu der KI-Wochenausblick `outlook{text, candidates[{symbol,exchange,
+  name,setup,chance(hoch|mittel|gering),potential_pct,target,stop,risk_pct,catalyst,reason}],
+  risks[{symbol,exchange,name,text}]}`). Grundlage dafür ist `watch_setups` in „Discovery
+  Monitor – vollständig.json“ (je Watch-Titel nächster Widerstand/Unterstützung aus
+  `computePriceClusters` mit Abstand in %, 52W-Hoch-Abstand, `computeUpsidePotential`,
+  Analystenziel-Abstand, Trend-Radar, Score/Bias, aktive Signale). Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
   Artefakt doc_id = Tag (daily), `preview-<Tag>` bzw. `watch-<Tag>`. Deep Link
   `#briefing=preview|watch` öffnet den Reiter.
   **Automatisch (geplante Aufgaben):** „Marktbriefing werktags“ Di–Sa 7:07 Uhr (Vortag,

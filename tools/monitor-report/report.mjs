@@ -16,7 +16,8 @@ import { isAlertTriggered, alertSummary } from '../../ui/lib/alerts.js';
 import {
   pulse, scoreMovers, momMovers, perfLeaders, macdFlips, rsiExtremes, smaCrosses, trends, liveOverallScore,
 } from '../../ui/lib/dashboard-metrics.js';
-import { trendRadar } from '../../ui/lib/trend-radar.js';
+import { trendRadar, trendScore } from '../../ui/lib/trend-radar.js';
+import { computeUpsidePotential } from '../../ui/lib/tv-upside.js';
 
 export const SCHEMA = 'discovery-monitor-2.0';
 const BRK = 0.005;          // Bruch erst 0,5 % jenseits des Levels (wie Watch Ranges)
@@ -82,6 +83,7 @@ export const FIELD_GUIDE = {
   'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
   'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
   'headlines': 'Automatisch erzeugte, rein datenbasierte Kernsätze – ohne Nachrichtenbezug.',
+  'watch_setups': 'Nur vollständige Fassung: Ausgangslage je Watchlist-Titel für den Wochenausblick. res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in %, res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch, upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
   'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum).',
 };
 
@@ -205,6 +207,37 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     };
   }).sort((a, b) => (b.chg_1d ?? -Infinity) - (a.chg_1d ?? -Infinity));
 
+  /* Ausgangslage je Watchlist-Titel – Grundlage für den KI-Wochenausblick
+     (Breakout-Chance, Potenzial). Nur Daten, keine Bewertung. */
+  const sigOf = new Map();
+  for (const [k, arr] of Object.entries(signals)) for (const x of arr) {
+    if (!sigOf.has(x.symbol)) sigOf.set(x.symbol, []);
+    sigOf.get(x.symbol).push(x.cross ? `${k}:${x.cross}` : k);
+  }
+  const watch_setups = cands.filter((c) => c._bucket === 'watch' && c.tv_data).map((c) => {
+    const t = c.tv_data, p = t.close;
+    const pc = p > 0 ? computePriceClusters(t, { lsHistory: c.ls_history ?? null, refPrice: t.close_1m ?? p }) : null;
+    const res = pc?.nearestRes, sup = pc?.nearestSup;
+    const up = computeUpsidePotential(t);
+    const ts = trendScore(c);
+    const dist = (lvl) => (lvl > 0 && p > 0 ? r1((lvl / p - 1) * 100) : null);
+    return {
+      symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, currency: c.currency ?? null,
+      close: r2(p), chg_1d: r2(t.change_1d), perf_1w: r2(t.perf_w), perf_1m: r2(t.perf_1m), perf_3m: r2(t.perf_3m),
+      rsi: r1(t.rsi), score: liveOverallScore(t)?.total ?? null, d_score: dScore.get(c) ?? null, bias: biasOf.get(c) ?? null,
+      trend: ts?.score ?? null, trend_fresh: ts?.fresh ?? false,
+      above_sma50: p != null && t.sma50 != null ? p > t.sma50 : null,
+      above_sma200: p != null && t.sma200 != null ? p > t.sma200 : null,
+      res: r2(res?.mid), res_dist_pct: dist(res?.mid), res_strength: res?.score != null ? r1(res.score) : null,
+      sup: r2(sup?.mid), sup_dist_pct: dist(sup?.mid),
+      high_52w_dist_pct: dist(t.price_52_week_high),
+      upside_pct: r1(up?.upside), downside_pct: r1(up?.downside),
+      pt_upside_pct: dist(t.pt_average),
+      earnings_next: Number(t.earnings_next_date) > 0 ? isoDay(new Date(Number(t.earnings_next_date) * 1000)) : null,
+      signals: sigOf.get(c.symbol) ?? [],
+    };
+  }).sort((a, b) => (b.trend ?? -1) - (a.trend ?? -1));
+
   const nW = cands.filter((c) => c._bucket === 'watch').length;
   const report = {
     schema: SCHEMA,
@@ -222,6 +255,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     movers_1w,
     signals,
     stocks,
+    watch_setups,
   };
   report.headlines = headlines(report);
   return report;
@@ -425,5 +459,6 @@ export function slimReport(rep) {
     signals,
     signal_counts,
     stocks: rep.stocks.filter((s) => used.has(s.symbol)),
+    watch_setups: undefined,          // nur in der vollständigen Fassung
   };
 }

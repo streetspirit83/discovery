@@ -262,15 +262,51 @@ function newsBlock(rows, find) {
   </section>`;
 }
 
+/* KI-Wochenausblick für Watch-Titel: Breakout-Kandidaten mit Chance, Potenzial,
+   Risiko und Katalysator; darunter Titel mit erhöhtem Rückschlagrisiko. */
+const CHANCE = { hoch: 'pos', mittel: '', gering: 'neg' };
+function outlookBlock(o, find) {
+  if (!o || (!o.text && !o.candidates?.length)) return '';
+  const num = (v, d = 2) => (v == null ? null : nf(Math.abs(v) >= 1000 ? 0 : d).format(v));
+  const cand = (o.candidates ?? []).map((c) => {
+    const meta = [
+      c.target != null ? `Ziel ${num(c.target)}` : null,
+      c.stop != null ? `Stopp ${num(c.stop)}${c.risk_pct != null ? ` (${pct(-Math.abs(c.risk_pct))})` : ''}` : null,
+      c.catalyst || null,
+    ].filter(Boolean).join(' · ');
+    return `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(c, find)}
+        <span class="mb-row__name">${esc(c.name)}</span>
+        ${c.potential_pct != null ? `<span class="mb-num pos">${esc(pct(c.potential_pct))}</span>` : ''}
+      </div>
+      <div class="mb-row__chips">
+        ${c.setup ? `<span class="mb-chip">${esc(c.setup)}</span>` : ''}
+        ${c.chance ? `<span class="mb-chip ${CHANCE[c.chance] ?? ''}">Chance ${esc(c.chance)}</span>` : ''}
+      </div>
+      ${meta ? `<div class="mb-row__why">${esc(meta)}</div>` : ''}
+      ${c.reason ? `<div class="mb-row__text">${esc(c.reason)}</div>` : ''}
+    </li>`;
+  }).join('');
+  const risks = (o.risks ?? []).map((r) => `<li class="mb-row"><div class="mb-row__head">${symHtml(r, find)}<span class="mb-row__name">${esc(r.name)}</span></div><div class="mb-row__why">${esc(r.text)}</div></li>`).join('');
+  return `<section class="bf-section"><h3 class="bf-h">Ausblick auf die Woche <span class="mb-tag">· KI-Einschätzung</span></h3>
+    ${o.text ? `<p class="bf-summary">${esc(o.text)}</p>` : ''}
+    ${cand ? `<div class="mb-sub">Breakout- und Wachstumskandidaten</div><ul class="mb-list">${cand}</ul>` : ''}
+    ${risks ? `<div class="mb-sub">Erhöhtes Rückschlagrisiko</div><ul class="mb-list">${risks}</ul>` : ''}
+    <p class="bf-foot pv-muted">Chance und Potenzial sind eine Einschätzung aus Kursdaten, Widerständen und Nachrichtenlage, keine Prognose und keine Empfehlung.</p>
+  </section>`;
+}
+
 function renderWatch(b, find) {
   return `
     <header class="mb-head">
-      <div class="mb-dateline">Watchlist · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <div class="mb-dateline">Watchlist · Rückblick und Ausblick · ${esc(b.week_label ?? longDay(b.day))}</div>
       <h3 class="mb-title">${esc(b.title)}</h3>
       <p class="bf-summary">${esc(b.lead)}</p>
       ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
     </header>
     ${watchStats(b.stats)}
+    ${outlookBlock(b.outlook, find)}
     ${perfChart('Stärkste und schwächste Titel der Woche', [...(b.top ?? []), ...(b.flop ?? []).slice().reverse()])}
     ${moverBlock('Gewinner der Woche', b.top, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
     ${moverBlock('Verlierer der Woche', b.flop, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
@@ -284,7 +320,7 @@ function renderWatch(b, find) {
 const KINDS = [
   { key: 'daily',   label: 'Tag',       render: (b, f) => renderEntry(b, f),   empty: 'Noch kein Tagesbriefing gespeichert. Es entsteht dienstags bis samstags morgens für den Vortag.' },
   { key: 'preview', label: 'Woche',     render: (b, f) => renderPreview(b, f), empty: 'Noch keine Wochenvorschau gespeichert. Sie entsteht montags morgens.' },
-  { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags.' },
+  { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags, mit Ausblick auf die neue Woche.' },
 ];
 const kindOf = (b) => (KINDS.some((k) => k.key === b?.kind) ? b.kind : 'daily');
 
