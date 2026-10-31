@@ -54,9 +54,11 @@ export function tradingDay(now = new Date()) {
 const weekday = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', timeZone: TZ });
 
 /* Kurzreferenz auf einen Titel – in jeder Signal-Liste gleich aufgebaut. */
-const ref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket });
+/* eye: mit dem Augen-Knopf als aktiv beobachtet markiert – nur gesetzt, wenn wahr (spart Platz). */
+const eyeOf = (c) => (c._bucket === 'watch' && c.watch_flag ? { eye: true } : {});
+const ref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket, ...eyeOf(c) });
 /* Schlanke Referenz für die Signal-Listen – Sektor und Bucket stehen in `stocks`. */
-const sref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), bucket: c._bucket });
+const sref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), bucket: c._bucket, ...eyeOf(c) });
 
 function rangeState(c) {
   const tv = c.tv_data ?? {};
@@ -76,6 +78,7 @@ function rangeState(c) {
 export const FIELD_GUIDE = {
   'trading_day': 'Handelstag der Schlusskurse (US-Börsentag nach New Yorker Zeit; europäische Werte vom selben Tag).',
   'universe': 'Beobachtete Einzelaktien aus Watchlist (watch) und Archiv (archive), ohne ETFs. stale = Titel ohne frische Kurse (Vortageswerte).',
+  'eye': 'In allen Titel-Einträgen: eye == true heisst, der Titel ist in der App mit dem Augen-Knopf als aktiv beobachtet markiert („Watch“ im engeren Sinn). bucket "watch" allein heisst nur: liegt im Watch-Bucket.',
   'breadth': 'Marktbreite der beobachteten Titel: Anzahl steigender/fallender Werte, Mediane der Kursveränderung, Anteil über SMA50/SMA200, Ø Qualitäts-Score 0–100.',
   'earnings_next_7d': 'Angekündigte Quartalszahlen in den nächsten 7 Tagen (Datum laut TradingView; Uhrzeit vor/nach Börse ist nicht bekannt).',
   'movers_1d': 'Grösste Tagesgewinner (top) und -verlierer (flop) nach Kursveränderung zum Vortagesschluss in %.',
@@ -83,8 +86,8 @@ export const FIELD_GUIDE = {
   'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
   'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
   'headlines': 'Automatisch erzeugte, rein datenbasierte Kernsätze – ohne Nachrichtenbezug.',
-  'watch_setups': 'Nur vollständige Fassung: Ausgangslage je Watchlist-Titel für den Wochenausblick. res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in % (positiv = Marke liegt über dem Kurs, negativ = darunter), res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch in % (0 = am Hoch, +10 = Hoch liegt 10 % über dem Kurs), upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
-  'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum).',
+  'watch_setups': 'Nur vollständige Fassung: Ausgangslage je aktiv beobachtetem Watchlist-Titel (Augen-Markierung, in stocks eye == true) für den Wochenausblick. res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in % (positiv = Marke liegt über dem Kurs, negativ = darunter), res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch in % (0 = am Hoch, +10 = Hoch liegt 10 % über dem Kurs), upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
+  'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum), eye = in der App mit dem Augen-Knopf als aktiv beobachtet markiert.',
 };
 
 /* Indexzeilen aus fetchIndexRows (ui/lib/tv-indices.js) → schlanke Einträge. */
@@ -214,7 +217,8 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     if (!sigOf.has(x.symbol)) sigOf.set(x.symbol, []);
     sigOf.get(x.symbol).push(x.cross ? `${k}:${x.cross}` : k);
   }
-  const watch_setups = cands.filter((c) => c._bucket === 'watch' && c.tv_data).map((c) => {
+  // Nur die mit dem Augen-Knopf markierten Watch-Titel (watch_flag) – die aktiv beobachteten.
+  const watch_setups = cands.filter((c) => c._bucket === 'watch' && c.watch_flag && c.tv_data).map((c) => {
     const t = c.tv_data, p = t.close;
     const pc = p > 0 ? computePriceClusters(t, { lsHistory: c.ls_history ?? null, refPrice: t.close_1m ?? p }) : null;
     const res = pc?.nearestRes, sup = pc?.nearestSup;
@@ -246,7 +250,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     timezone: TZ,
     source: 'Discovery Workspace – Watchlist + Archiv, Schlusskurse und Indikatoren von TradingView',
     field_guide: FIELD_GUIDE,
-    universe: { n: cands.length, watch: nW, archive: cands.length - nW, stale: stale.map((c) => c.symbol) },
+    universe: { n: cands.length, watch: nW, eye: cands.filter((c) => c._bucket === 'watch' && c.watch_flag).length, archive: cands.length - nW, stale: stale.map((c) => c.symbol) },
     breadth,
     indices: indices ?? { benchmarks: [], sectors: [] },
     headlines: [],
@@ -455,7 +459,7 @@ export function slimReport(rep) {
     ...rep,
     variant: 'compact',
     variant_note: `Kompakte Tagesfassung: Signal-Listen auf ${SLIM_LIST} Einträge gekürzt (volle Länge in signal_counts), earnings_next_7d ohne Kennzahlen, stocks nur für Tages-Movers und Ausreisser. Alles Weitere in der vollständigen Fassung.`,
-    earnings_next_7d: rep.earnings_next_7d.map(({ date, weekday, symbol, name, bucket }) => ({ date, weekday, symbol, name, bucket })),
+    earnings_next_7d: rep.earnings_next_7d.map(({ date, weekday, symbol, exchange, name, bucket, eye }) => ({ date, weekday, symbol, exchange, name, bucket, ...(eye ? { eye } : {}) })),
     signals,
     signal_counts,
     stocks: rep.stocks.filter((s) => used.has(s.symbol)),

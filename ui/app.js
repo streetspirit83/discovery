@@ -384,7 +384,6 @@ function renderTopbar() {
   document.getElementById('btn-refresh').innerHTML  = L.refresh;
   document.getElementById('btn-run').innerHTML      = L.zap;
   document.getElementById('btn-screener').innerHTML = L.scope;
-  document.getElementById('btn-briefing').innerHTML = L.briefing;
   document.getElementById('btn-ranges').innerHTML   = L.ranges;
   document.getElementById('btn-upload').innerHTML   = L.upload;
   document.getElementById('btn-theme').innerHTML    = uiState.theme === 'dark' ? L.sun : L.moon;
@@ -602,13 +601,14 @@ function renderSelectedPill() {
 
 function renderBotnav() {
   const bucketIcons  = { inbox: L.inbox, archive: L.archive, export: L.checkSq, watch: L.bookmark, all: L.layers };
-  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch', all: 'Watch+Archiv' };
+  const bucketLabels = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watch', all: 'All' };
   document.getElementById('nav-home-icon').innerHTML   = L.bell;
   document.getElementById('nav-bucket-icon').innerHTML = bucketIcons[currentBlobType] ?? L.inbox;
   document.getElementById('nav-bucket-label').textContent = bucketLabels[currentBlobType] ?? 'Inbox';
   document.getElementById('nav-portfolio-icon').innerHTML = L.portfolio;
   document.getElementById('nav-markets-icon').innerHTML   = L.markets;
   document.getElementById('nav-monitor-icon').innerHTML   = L.activity;
+  document.getElementById('nav-briefing-icon').innerHTML  = L.briefing;
 }
 
 // ── Sheet management ───────────────────────────────────────────────────────────
@@ -2212,7 +2212,7 @@ async function init() {
   });
 
   // Briefing: Marktbriefing aus dem market-Blob (Claude-Tagesauswertung).
-  document.getElementById('btn-briefing').addEventListener('pointerup', () => openMarketBriefing());
+  document.getElementById('nav-briefing').addEventListener('pointerup', () => openMarketBriefing());
 
   // Watch Ranges: 1:1-Kopie des Claude-Artefakts als Modal, gespeist aus dem
   // Watch-Blob (Ranges wie /api/watch-ranges). Schreibt range_override, das

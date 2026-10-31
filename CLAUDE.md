@@ -350,7 +350,8 @@ product spec.
   Titel) liegt im Blob **`monitor`** — ohne ihn gäbe es für Archiv-Titel keine Deltas.
 - **Tagesauswertung „Marktbriefing“:** Claude-Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
   (db-Collection `briefings`, Dokument-ID = Handelstag) **und** in der App über den
-  Zeitungs-Knopf der Topbar (`components/market-briefing-modal.js`, liest den Blob
+  Slot „Briefing“ ganz rechts in der unteren Menüleiste (`#nav-briefing`; der Bucket „Watch + Archiv“
+  heisst dort kurz „All“) (`components/market-briefing-modal.js`, liest den Blob
   **`market`** — read/write wie `review`, 30 Briefings, neueste zuerst). Das Artefakt
   lässt sich nicht einbetten (claude.ai sendet `frame-ancestors 'self'`), deshalb rendert
   die App dieselben Daten selbst. Symbole im Modal öffnen das Detail-Sheet (Watch/Archiv
@@ -373,7 +374,9 @@ product spec.
   risks[{symbol,exchange,name,text}]}`). Grundlage dafür ist `watch_setups` in „Discovery
   Monitor – vollständig.json“ (je Watch-Titel nächster Widerstand/Unterstützung aus
   `computePriceClusters` mit Abstand in %, 52W-Hoch-Abstand, `computeUpsidePotential`,
-  Analystenziel-Abstand, Trend-Radar, Score/Bias, aktive Signale). Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
+  Analystenziel-Abstand, Trend-Radar, Score/Bias, aktive Signale). **„Watch“ im Briefing heisst
+  nur die mit dem Augen-Knopf markierten Titel** (`watch_flag` am Kandidaten; im Monitor-JSON
+  `eye: true` an jedem Titel-Eintrag, `universe.eye` = Anzahl). `watch_setups` enthält nur diese. Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
   Artefakt doc_id = Tag (daily), `preview-<Tag>` bzw. `watch-<Tag>`. Deep Link
   `#briefing=preview|watch` öffnet den Reiter.
   **Automatisch (geplante Aufgaben):** „Marktbriefing werktags“ Di–Sa 7:07 Uhr (Vortag,

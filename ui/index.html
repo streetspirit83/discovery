@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261031b">
+  <link rel="stylesheet" href="styles.css?v=20261031c">
 </head>
 <body>
 <div id="app">
@@ -24,7 +24,6 @@
       <button class="icon-btn" id="btn-refresh" aria-label="Aktualisieren"></button>
       <button class="icon-btn" id="btn-run" aria-label="Adapter ausführen" aria-haspopup="dialog"></button>
       <button class="icon-btn" id="btn-screener" aria-label="Screener Studio" aria-haspopup="dialog"></button>
-      <button class="icon-btn" id="btn-briefing" aria-label="Marktbriefing" title="Marktbriefing" aria-haspopup="dialog"></button>
       <button class="icon-btn" id="btn-ranges" aria-label="Watch Ranges" title="Watch Ranges" aria-haspopup="dialog"></button>
       <button class="icon-btn" id="btn-upload" aria-label="Import"></button>
       <button class="icon-btn" id="btn-theme" aria-label="Theme umschalten"></button>
@@ -83,6 +82,9 @@
     <button class="botnav__slot" id="nav-monitor" aria-haspopup="dialog">
       <span id="nav-monitor-icon"></span><span>Monitor</span>
     </button>
+    <button class="botnav__slot" id="nav-briefing" aria-haspopup="dialog" aria-label="Marktbriefing">
+      <span id="nav-briefing-icon"></span><span>Briefing</span>
+    </button>
   </nav>
 </div>
 
@@ -93,10 +95,12 @@
 <div class="bucket-sheet" id="run-sheet" role="dialog" aria-modal="true" aria-label="Adapter ausführen"></div>
 
 <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-<script>eruda.init();</script>
+<script>eruda.init();
+  // Debug-Knopf aus der unteren Menüleiste heraushalten – dort liegt rechts „Briefing“.
+  try { eruda.position({ x: window.innerWidth - 56, y: Math.round(window.innerHeight * 0.45) }); } catch (e) {}</script>
 <!-- TradingView Lightweight Charts (vendored, Apache-2.0) — interactive
      price/volume chart in the detail sheet; the SVG band is the fallback. -->
 <script src="vendor/lightweight-charts-4.2.0.standalone.js"></script>
-<script type="module" src="app.js?v=20261031b"></script>
+<script type="module" src="app.js?v=20261031c"></script>
 </body>
 </html>
