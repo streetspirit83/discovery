@@ -1,0 +1,56 @@
+name: Dossier – Google Doc je Watchlist-Ticker
+
+on:
+  # Checkbox in der Watchlist → Netlify-Function dossier-trigger → repository_dispatch
+  repository_dispatch:
+    types: [dossier]
+  # Manuell (Actions-Tab): leer = Sweep über alle offenen Aufträge
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: 'Kandidaten-ID (leer = alle offenen Aufträge)'
+        required: false
+      mode:
+        description: 'create oder update'
+        required: false
+        default: 'create'
+  # Sicherheitsnetz: holt Aufträge nach, deren Dispatch verloren ging
+  schedule:
+    - cron: '41 5 * * *'
+
+concurrency:
+  group: dossier
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/dossier
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Dossier erzeugen
+        run: node run.mjs "$CANDIDATE_ID" "$MODE"
+        env:
+          CANDIDATE_ID: ${{ github.event.client_payload.candidate_id || github.event.inputs.candidate_id || '' }}
+          MODE: ${{ github.event.client_payload.mode || github.event.inputs.mode || 'create' }}
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          DISCOVERY_UI_URL: ${{ vars.DISCOVERY_UI_URL || 'https://streetspirit83.github.io/discovery/' }}
+          ROIC_API_KEY: ${{ secrets.ROIC_API_KEY }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          DOSSIER_FOLDER_ID: ${{ vars.DOSSIER_FOLDER_ID || '1V9z1QYbwgWhAxZ0tf3vErKSdm5nfaffj' }}

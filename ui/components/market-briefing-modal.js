@@ -1,0 +1,394 @@
+/**
+ * Marktbriefing-Modal – die finanzjournalistische Tagesauswertung.
+ *
+ * Liest den `market`-Blob (bis zu 30 Briefings, neueste zuerst; geschrieben von
+ * Claude auf „Go“ über die Action market-briefing.yml) und zeigt je Tag:
+ * Schlagzeile und Lead, Indizes, Marktbreite, Treiber, Top/Flop mit Auslöser,
+ * Earnings, Technik, Fazit und Quellen. Dieselben Inhalte wie das Claude-
+ * Artefakt „Marktbriefing“ – das Artefakt selbst lässt sich nicht einbetten
+ * (claude.ai sendet `frame-ancestors 'self'`).
+ *
+ * Symbole, die in Watch/Archiv/Inbox/Export liegen, sind antippbar und öffnen
+ * das Detail-Sheet; beim Schliessen des Sheets kehrt das Modal zurück
+ * (`ctrl.hide/show`, wie das Monitor-Dashboard).
+ *
+ * Rein darstellend – das Modal schreibt nie.
+ */
+
+import { icons } from '../lib/icons.js?v=20261021a';
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+const nf = (d) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (v, d = 1) => (v == null || Number.isNaN(+v) ? '–' : `${+v > 0 ? '+' : +v < 0 ? '−' : ''}${nf(d).format(Math.abs(+v))} %`);
+const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+const longDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const shortDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+/* Indexkacheln: zwei feste Vierergruppen → je Gruppe EINE Zeile (Styleguide §5).
+   HXR (Cybersecurity) kommt aus den Branchenindizes, der Rest aus den Benchmarks. */
+const INDEX_ROWS = [
+  ['SPX', 'IXIC', 'HXR', 'SOX'],
+  ['DAX', 'KOSPI', 'VIX', 'BRENT'],
+];
+const SHORT = { SPX: 'S&P 500', IXIC: 'Nasdaq', HXR: 'HXR', SOX: 'SOX', DAX: 'DAX', KOSPI: 'KOSPI', VIX: 'VIX', BRENT: 'Brent' };
+/* Kachel-Prozent ohne Leerzeichen – vier Spalten am Handy sind schmal. */
+const pctT = (v) => pct(v).replace(' %', '%');
+const absVal = (v) => (v == null ? '–' : nf(Math.abs(v) >= 1000 ? 0 : 2).format(v));
+
+function indexTile(x, code) {
+  if (!x) return `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(SHORT[code] ?? code)}</div><div class="mb-idx__day">–</div><div class="mb-idx__abs">–</div></div>`;
+  return `<div class="bf-tile mb-idx" title="${esc(x.name)}">
+    <div class="bf-tile__label">${esc(SHORT[x.code] ?? x.name)}</div>
+    <div class="mb-idx__day ${tone(x.chg_1d)}">${esc(pctT(x.chg_1d))}</div>
+    <div class="mb-idx__abs">${esc(absVal(x.value))}</div>
+  </div>`;
+}
+
+function indicesBlock(ix) {
+  const all = new Map([...(ix?.sectors ?? []), ...(ix?.benchmarks ?? [])].map((x) => [x.code, x]));
+  if (!all.size) return '';
+  const rows = INDEX_ROWS
+    .map((codes) => `<div class="bf-tiles">${codes.map((c) => indexTile(all.get(c), c)).join('')}</div>`).join('');
+  const sec = ix?.sectors ?? [];
+  const secItem = (x) => `<li class="mb-sec"><span class="mb-sec__name">${esc(x.name)}</span><span class="mb-num ${tone(x.chg_1d)}">${esc(pct(x.chg_1d))}</span></li>`;
+  const secBlock = sec.length >= 6 ? `<div class="mb-secs">
+      <div><div class="mb-sub">Stärkste Branchen</div><ul class="mb-list">${sec.slice(0, 3).map(secItem).join('')}</ul></div>
+      <div><div class="mb-sub">Schwächste Branchen</div><ul class="mb-list">${sec.slice(-3).reverse().map(secItem).join('')}</ul></div>
+    </div>` : '';
+  return `<section class="bf-section"><h3 class="bf-h">Indizes <span class="mb-tag">· heute</span></h3>${rows}${secBlock}</section>`;
+}
+
+function breadthBlock(br) {
+  if (!br) return '';
+  const n = (br.advancers ?? 0) + (br.decliners ?? 0);
+  const ap = n ? Math.round(br.advancers / n * 100) : 0;
+  const tile = (label, val, cls = '') => `<div class="bf-tile"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  return `<section class="bf-section"><h3 class="bf-h">Marktbreite der beobachteten Aktien</h3>
+    <div class="bf-tiles">
+      ${tile('Median', pct(br.median_chg_1d), tone(br.median_chg_1d))}
+      ${tile('1 Woche', pct(br.median_perf_1w), tone(br.median_perf_1w))}
+      ${tile('> SMA200', br.above_sma200_pct != null ? `${br.above_sma200_pct} %` : '–')}
+      ${tile('> ±5 %', br.big_moves ?? '–')}
+    </div>
+    ${n ? `<div class="mb-adv" aria-hidden="true"><i class="pos" style="width:${ap}%"></i><i class="neg" style="width:${100 - ap}%"></i></div>
+    <div class="mb-advlab"><span>${br.advancers} im Plus</span><span>${br.decliners} im Minus</span></div>` : ''}
+  </section>`;
+}
+
+/* Symbol als Knopf, wenn der Titel im Workspace liegt – sonst reiner Text. */
+function symHtml(x, find) {
+  const hit = find(x.symbol, x.exchange);
+  return hit
+    ? `<button type="button" class="mb-sym" data-id="${esc(hit.id)}" title="Detail öffnen">${esc(x.symbol)}</button>`
+    : `<span class="mb-sym mb-sym--plain">${esc(x.symbol)}</span>`;
+}
+
+function chartBlock(top, flop) {
+  const rows = [...(top ?? []).slice(0, 6), ...(flop ?? []).slice(0, 6).reverse()].filter((r) => r.chg_1d != null);
+  if (!rows.length) return '';
+  const max = Math.max(...rows.map((r) => Math.abs(r.chg_1d)), 1);
+  return `<section class="bf-section"><h3 class="bf-h">Top &amp; Flop des Tages</h3>
+    <div class="mb-chart">${rows.map((r) => {
+      const w = Math.max(1, Math.abs(r.chg_1d) / max * 100);
+      return `<div class="mb-bar">
+        <span class="mb-bar__name">${esc(r.name)}</span>
+        <span class="mb-bar__track">
+          <span class="mb-bar__half">${r.chg_1d < 0 ? `<i class="neg" style="width:${w}%"></i>` : ''}</span>
+          <span class="mb-bar__half">${r.chg_1d >= 0 ? `<i class="pos" style="width:${w}%"></i>` : ''}</span>
+        </span>
+        <span class="mb-num ${tone(r.chg_1d)}">${esc(pct(r.chg_1d))}</span>
+      </div>`;
+    }).join('')}</div>
+  </section>`;
+}
+
+/* main/sub: welche Kennzahl gross und welche klein daneben steht – im
+   Tagesbriefing heute/1W, im Watchlist-Rückblick 1W/1M. */
+function moverBlock(title, rows, find, { main = 'chg_1d', sub = 'perf_1w', subTag = '1W' } = {}) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}${r.sector ? ` <span class="mb-muted">· ${esc(r.sector)}</span>` : ''}</span>
+        <span class="mb-num ${tone(r[main])}">${esc(pct(r[main]))}</span>
+        <span class="mb-num mb-num--sm ${tone(r[sub])}">${esc(pct(r[sub]))} <span class="mb-tag">${subTag}</span></span>
+      </div>
+      <div class="mb-row__why">${esc(r.reason || 'kein eindeutiger Nachrichtenauslöser')}</div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function earningsBlock(rows, find, title = 'Anstehende Quartalszahlen') {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <ul class="mb-list">${rows.map((e) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-date">${esc(e.weekday ?? '')} ${esc(e.date ? `${e.date.slice(8, 10)}.${e.date.slice(5, 7)}.` : '')}</span>
+        ${symHtml(e, find)}
+        <span class="mb-row__name">${esc(e.name)}${e.watch ? ' <span class="mb-chip">Watch</span>' : ''}</span>
+      </div>
+      ${e.focus ? `<div class="mb-row__why">${esc(e.focus)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function technikBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Technik in Kürze</h3>
+    <ul class="mb-list">${rows.map((t) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-chip ${t.dir === 'up' ? 'pos' : t.dir === 'down' ? 'neg' : ''}">${esc(t.signal)}</span>
+        ${t.symbol ? symHtml(t, find) : ''}
+        <span class="mb-row__name">${esc(t.name)}</span>
+      </div>
+      ${t.text ? `<div class="mb-row__why">${esc(t.text)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function sourcesBlock(sources) {
+  const src = (sources ?? []).map((s) => `<li class="bf-note">
+      <span class="bf-note__text">${esc(s.title)}${s.date ? ` <span class="mb-muted">· ${esc(s.date)}</span>` : ''}</span>
+      ${s.url ? `<a class="link-chip" href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(s.title)}">${icons.externalLink}</a>` : ''}
+    </li>`).join('');
+  return `${src ? `<section class="bf-section"><h3 class="bf-h">Quellen</h3><ul class="bf-notes">${src}</ul></section>` : ''}
+    <p class="bf-foot pv-muted">Einordnung von Claude, keine Anlageberatung.</p>`;
+}
+
+function renderEntry(b, find) {
+  if (!b) return '<p class="pv-muted">Für diesen Tag liegt kein Briefing vor.</p>';
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">${esc(longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${indicesBlock(b.indices)}
+    ${breadthBlock(b.breadth)}
+    ${b.drivers?.length ? `<section class="bf-section"><h3 class="bf-h">Was die Märkte bewegt hat</h3>
+      <ul class="mb-drivers">${b.drivers.map((d) => `<li>${esc(d.text ?? d)}</li>`).join('')}</ul></section>` : ''}
+    ${chartBlock(b.top, b.flop)}
+    ${moverBlock('Top Movers', b.top, find)}
+    ${moverBlock('Flops', b.flop, find)}
+    ${earningsBlock(b.earnings, find)}
+    ${technikBlock(b.technik, find)}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Fazit des Redakteurs</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+
+/* ── Wochenvorschau (kind "preview", montags) ─────────────────────────────── */
+
+function calendarBlock(days) {
+  if (!days?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Termine der Woche</h3>
+    <ul class="mb-list">${days.map((d) => `<li class="mb-row">
+      <div class="mb-row__head"><span class="mb-date">${esc(d.weekday ?? '')} ${esc(d.date ? `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}.` : '')}</span></div>
+      <ul class="mb-cal">${(d.items ?? []).map((it) => `<li>${it.time ? `<span class="mb-date">${esc(it.time)}</span> ` : ''}${esc(it.text ?? it)}</li>`).join('')}</ul>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function renderPreview(b, find) {
+  const themes = (b.themes ?? []).map((t) => `<li>${esc(t.text ?? t)}</li>`).join('');
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Wochenvorschau · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${indicesBlock(b.indices)}
+    ${themes ? `<section class="bf-section"><h3 class="bf-h">Themen der Woche</h3><ul class="mb-drivers">${themes}</ul></section>` : ''}
+    ${calendarBlock(b.calendar)}
+    ${earningsBlock(b.earnings, find, 'Quartalszahlen der Woche')}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Worauf es ankommt</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+/* ── Watchlist-Rückblick (kind "watch", wöchentlich) ─────────────────────── */
+
+function watchStats(st) {
+  if (!st) return '';
+  const tile = (label, val, cls = '') => `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  const n = (st.up ?? 0) + (st.down ?? 0);
+  const ap = n ? Math.round(st.up / n * 100) : 0;
+  return `<section class="bf-section"><h3 class="bf-h">Watchlist in Zahlen</h3>
+    <div class="bf-tiles">
+      ${tile('Titel', st.n ?? '–')}
+      ${tile('Median 1W', pct(st.median_1w), tone(st.median_1w))}
+      ${tile('Median 1M', pct(st.median_1m), tone(st.median_1m))}
+      ${tile('Über SMA200', st.above_sma200_pct != null ? `${st.above_sma200_pct} %` : '–')}
+    </div>
+    ${n ? `<div class="mb-adv" aria-hidden="true"><i class="pos" style="width:${ap}%"></i><i class="neg" style="width:${100 - ap}%"></i></div>
+    <div class="mb-advlab"><span>${st.up} mit Wochenplus</span><span>${st.down} mit Wochenminus</span></div>` : ''}
+  </section>`;
+}
+
+function perfChart(title, rows, key = 'perf_1w') {
+  const r = (rows ?? []).filter((x) => x[key] != null);
+  if (!r.length) return '';
+  const max = Math.max(...r.map((x) => Math.abs(x[key])), 1);
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <div class="mb-chart">${r.map((x) => {
+      const w = Math.max(1, Math.abs(x[key]) / max * 100);
+      return `<div class="mb-bar">
+        <span class="mb-bar__name">${esc(x.name)}</span>
+        <span class="mb-bar__track">
+          <span class="mb-bar__half">${x[key] < 0 ? `<i class="neg" style="width:${w}%"></i>` : ''}</span>
+          <span class="mb-bar__half">${x[key] >= 0 ? `<i class="pos" style="width:${w}%"></i>` : ''}</span>
+        </span>
+        <span class="mb-num ${tone(x[key])}">${esc(pct(x[key]))}</span>
+      </div>`;
+    }).join('')}</div>
+  </section>`;
+}
+
+function newsBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Meldungen der Woche</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}</span>
+        ${r.perf_1w != null ? `<span class="mb-num ${tone(r.perf_1w)}">${esc(pct(r.perf_1w))} <span class="mb-tag">1W</span></span>` : ''}
+        ${r.url ? `<a class="link-chip" href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.headline ?? 'Quelle')}" aria-label="${esc(r.headline ?? 'Quelle')}">${icons.externalLink}</a>` : ''}
+      </div>
+      ${r.headline ? `<div class="mb-row__lead">${esc(r.headline)}</div>` : ''}
+      ${r.text ? `<div class="mb-row__why">${esc(r.text)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function renderWatch(b, find) {
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Watchlist · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${watchStats(b.stats)}
+    ${perfChart('Stärkste und schwächste Titel der Woche', [...(b.top ?? []), ...(b.flop ?? []).slice().reverse()])}
+    ${moverBlock('Gewinner der Woche', b.top, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
+    ${moverBlock('Verlierer der Woche', b.flop, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
+    ${newsBlock(b.news, find)}
+    ${technikBlock(b.technik, find)}
+    ${earningsBlock(b.earnings, find, 'Zahlen in der kommenden Woche')}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+const KINDS = [
+  { key: 'daily',   label: 'Tag',       render: (b, f) => renderEntry(b, f),   empty: 'Noch kein Tagesbriefing gespeichert. Es entsteht dienstags bis samstags morgens für den Vortag.' },
+  { key: 'preview', label: 'Woche',     render: (b, f) => renderPreview(b, f), empty: 'Noch keine Wochenvorschau gespeichert. Sie entsteht montags morgens.' },
+  { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags.' },
+];
+const kindOf = (b) => (KINDS.some((k) => k.key === b?.kind) ? b.kind : 'daily');
+
+/**
+ * @param {object}   opts
+ * @param {function} opts.loadBriefings    – async () => Briefing[] (neueste zuerst)
+ * @param {function} opts.loadCandidates   – async () => [{id, symbol, exchange, bucket}]
+ * @param {function} opts.onOpenCandidate  – (hit, ctrl) => void
+ * @returns {object} ctrl {hide, show, close}
+ */
+export function renderMarketBriefingModal(opts = {}) {
+  const existing = document.getElementById('mb-modal-overlay');
+  if (existing) { existing.style.display = ''; return null; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'mb-modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal briefing-modal" role="dialog" aria-modal="true" aria-label="Marktbriefing">
+      <div class="modal-header">
+        <h2>${icons.newspaper} Marktbriefing</h2>
+        <div class="modal-header-actions">
+          <select class="bf-pick" id="mb-pick" aria-label="Handelstag wählen"></select>
+          <button class="icon-btn" id="mb-close" aria-label="Schließen">${icons.xMark}</button>
+        </div>
+      </div>
+      <div class="tab-bar mb-tabs" role="tablist">
+        ${KINDS.map((k, i) => `<button class="tab-btn${i ? '' : ' active'}" data-kind="${k.key}" role="tab" aria-selected="${!i}">${esc(k.label)}</button>`).join('')}
+      </div>
+      <div class="modal-body" id="mb-body">
+        <p class="pv-muted"><span class="ls-loading"></span> Lade Briefing …</p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const hidden = () => overlay.style.display === 'none';
+  const ctrl = {
+    hide: () => { overlay.style.display = 'none'; },
+    show: () => { overlay.style.display = ''; },
+    close: () => { document.removeEventListener('keydown', onKey); overlay.remove(); },
+  };
+  const onKey = (e) => { if (e.key === 'Escape' && !hidden()) ctrl.close(); };
+  overlay.querySelector('#mb-close').addEventListener('pointerup', ctrl.close);
+  overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) ctrl.close(); });
+  document.addEventListener('keydown', onKey);
+
+  const body = overlay.querySelector('#mb-body');
+  const pick = overlay.querySelector('#mb-pick');
+  let index = { bySym: new Map(), byId: new Map() };
+
+  /* Symbol (+ Börse) → Kandidat. Ohne passende Börse gewinnt der erste Treffer
+     in der Reihenfolge, in der loadCandidates liefert (Watch zuerst). */
+  const find = (symbol, exchange) => {
+    const list = index.bySym.get(String(symbol ?? '').toUpperCase());
+    if (!list?.length) return null;
+    if (exchange) return list.find((c) => String(c.exchange ?? '').toUpperCase() === String(exchange).toUpperCase()) ?? list[0];
+    return list[0];
+  };
+
+  // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
+  body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mb-sym[data-id]');
+    if (!btn) return;
+    const hit = index.byId.get(btn.dataset.id);
+    if (hit) opts.onOpenCandidate?.(hit, ctrl);
+  });
+
+  (async () => {
+    let briefings = [];
+    try {
+      const [list, cands] = await Promise.all([
+        opts.loadBriefings?.() ?? [],
+        opts.loadCandidates?.().catch(() => []) ?? [],
+      ]);
+      briefings = Array.isArray(list) ? list.filter((b) => b?.day).sort((a, b) => (a.day < b.day ? 1 : -1)) : [];
+      for (const c of cands ?? []) {
+        const k = String(c.symbol ?? '').toUpperCase();
+        if (!index.bySym.has(k)) index.bySym.set(k, []);
+        index.bySym.get(k).push(c);
+        index.byId.set(c.id, c);
+      }
+    } catch (err) {
+      body.innerHTML = `<p class="pv-muted">Briefing konnte nicht geladen werden: ${esc(err.message)}</p>`;
+      return;
+    }
+    const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
+    let current = [];
+    const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); body.scrollTop = 0; };
+    const showKind = (key) => {
+      tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
+      current = briefings.filter((b) => kindOf(b) === key);
+      if (!current.length) {
+        pick.hidden = true;
+        body.innerHTML = `<p class="pv-muted">${esc(KINDS.find((k) => k.key === key).empty)}</p>`;
+        return;
+      }
+      pick.hidden = false;
+      pick.innerHTML = current.map((b, i) => `<option value="${i}">${esc(shortDay(b.day))}</option>`).join('');
+      mount(0);
+    };
+    pick.addEventListener('change', () => mount(Number(pick.value)));
+    tabs.forEach((t) => t.addEventListener('click', () => showKind(t.dataset.kind)));
+    showKind(opts.kind && KINDS.some((k) => k.key === opts.kind) ? opts.kind : 'daily');
+  })();
+
+  return ctrl;
+}

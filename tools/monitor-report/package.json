@@ -1,0 +1,9 @@
+{
+  "name": "discovery-monitor-report",
+  "private": true,
+  "type": "module",
+  "description": "Täglicher Monitor-Bericht (Watchlist + Archiv, nur Aktien) als JSON + lesbares Google Doc (GitHub Action monitor-report.yml)",
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}

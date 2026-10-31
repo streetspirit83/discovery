@@ -1,0 +1,10 @@
+{
+  "name": "discovery-indices-snapshot",
+  "private": true,
+  "type": "module",
+  "description": "Täglicher Snapshot der Indices-Tabs (Branchen/Länder) als Google Sheet (GitHub Action indices-snapshot.yml)",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "googleapis": "^144.0.0"
+  }
+}

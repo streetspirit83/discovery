@@ -85,14 +85,16 @@ Endpoint: `GET https://api.stocktwits.com/api/2/trending/symbols.json`
 
 > ✅ Public endpoint, no API key, no cookie/crumb flow. Cloud IPs not blocked as of 2025.
 
-StockTwits refreshes their trending list every 15 minutes. The adapter runs twice daily to capture distinct pre-market (08:00 UTC) and after-hours (20:00 UTC) sentiment snapshots without excessive polling.
+StockTwits refreshes their trending list every 15 minutes. The adapter runs 3× daily (08:23 / 13:23 / 20:23 UTC) to capture distinct pre-market, US-open and after-hours sentiment snapshots without excessive polling.
 
 ### Method
 
-1. **Fetch** `trending/symbols.json` — returns top-30 symbols with `id`, `symbol`, `title`, `watchlist_count`.
+1. **Fetch** `trending/symbols.json` — returns top-30 symbols. The response carries far more than the name suggests: `rank`, `trending_score`, `exchange`, `symbol_mic`, `isin`, `cusip`, `sector`/`industry`, a `trends.summary` blurb, and a full `fundamentals` block.
 2. **Filter** for standard equity tickers only — regex `/^[A-Z]{1,5}$/` removes crypto (`.X` suffix), indices, and malformed entries.
-3. **Resolve exchange** via `resolveUSExchange()` (FMP → Twelve Data → static fallback → NASDAQ).
-4. **Return** all remaining symbols as candidates; rank and watchlist count stored in `raw_signal` for downstream weighting.
+3. **Read exchange + ISIN from the payload** (`exchange`, else the MIC in `symbol_mic`). `resolveUSExchange()` (FMP → Twelve Data → static fallback → NASDAQ) is only a fallback for entries that carry neither — so a normal run makes **one** HTTP request instead of up to 31.
+4. **Return** all remaining symbols as candidates. `trends.summary` — StockTwits' own explanation of *why* the symbol is trending — becomes the `info_snippet`; rank, watchlist count, trending score and CUSIP go to `raw_signal`.
+
+> ⚠️ The **message stream** (`streams/symbol/{SYM}.json`) is not a usable sentiment source: `entities.sentiment` is `null` on virtually every message, because users rarely tag their posts. For per-symbol bull/bear numbers use `symbols/{SYM}/sentiment.json` instead — that is what the UI's `lib/stocktwits-sentiment.js` reads.
 
 ### Key Thresholds & Filters
 
@@ -100,8 +102,8 @@ StockTwits refreshes their trending list every 15 minutes. The adapter runs twic
 |---------------------|-------------------|---------------------------------------------|
 | Symbols fetched     | Top 30 (API max)  | Full trending list; dedup prevents bloat    |
 | Equity filter       | `/^[A-Z]{1,5}$/`  | Excludes crypto `BTC.X`, indices `SPY500`   |
-| Schedule            | 2× daily          | Pre-market + after-hours sentiment capture  |
-| Rate limit margin   | 50 ms between     | API allows ~60 req/min; one req per run     |
+| Schedule            | 3× daily          | Pre-market, US-open + after-hours capture   |
+| Rate limit margin   | 50 ms between     | Only on the fallback exchange lookup        |
 
 ### Signal Quality
 
@@ -113,8 +115,8 @@ US equity-focused. Measures **retail sentiment momentum** — not a price breako
 |-------------------------|----------|------------------------------------|
 | `DISCOVERY_BACKEND_URL` | ✅        | Netlify backend URL                |
 | `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
-| `FMP_API_KEY`           | Optional | Exchange resolution (primary)      |
-| `TWELVEDATA_API_KEY`    | Optional | Exchange resolution (fallback)     |
+| `FMP_API_KEY`           | Optional | Exchange resolution — fallback only |
+| `TWELVEDATA_API_KEY`    | Optional | Exchange resolution — fallback only |
 
 ---
 

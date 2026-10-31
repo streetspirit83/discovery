@@ -1,0 +1,39 @@
+name: Indices-Snapshot – Google Sheet (Branchen + Länder)
+
+on:
+  # Täglich nach US-Börsenschluss (21:47 UTC)
+  schedule:
+    - cron: '47 21 * * *'
+  # Manuell: Actions-Tab → Run workflow
+  workflow_dispatch:
+
+concurrency:
+  group: indices-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/indices-snapshot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      - name: Snapshot ins Google Sheet schreiben
+        run: node run.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          # Drive-Ordner „Wertpapiere"
+          INDICES_FOLDER_ID: ${{ vars.INDICES_FOLDER_ID || '0B_5gQxQZ0ZHQfkk4dk5mYUg0aDdXT3Y0dWZJZ0VPSFRmQVJfeWxyaERxRXNaYlNja1AxQTg' }}
