@@ -47,7 +47,7 @@ function validate(b) {
   if (!KINDS.includes(kindOf(b))) errs.push(`kind muss ${KINDS.join('|')} sein`);
   if (!b.title) errs.push('title fehlt');
   if (!b.lead) errs.push('lead fehlt');
-  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news']) {
+  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news', 'ranking']) {
     if (b[k] != null && !Array.isArray(b[k]) && !(k === 'indices' && typeof b[k] === 'object')) errs.push(`${k} hat das falsche Format`);
   }
   return errs;

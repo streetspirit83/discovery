@@ -376,12 +376,28 @@ product spec.
   `computePriceClusters` mit Abstand in %, 52W-Hoch-Abstand, `computeUpsidePotential`,
   Analystenziel-Abstand, Trend-Radar, Score/Bias, aktive Signale). **„Watch“ im Briefing heisst
   nur die mit dem Augen-Knopf markierten Titel** (`watch_flag` am Kandidaten; im Monitor-JSON
-  `eye: true` an jedem Titel-Eintrag, `universe.eye` = Anzahl). `watch_setups` enthält nur diese. Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
+  `eye: true` an jedem Titel-Eintrag, `universe.eye` = Anzahl). `watch_setups` enthält nur diese.
+  **Ranking + Lernschleife (seit Nov. 2026):** `ranking[{rank,symbol,exchange,name,score,base,adj,
+  chance,setup,potential_pct,target,stop,risk_pct,crv,catalyst,note,factors}]` rankt ALLE
+  Augen-Titel für die kommende Woche: Basis-Score aus `tools/market-briefing/watch_rank.py rank`
+  (Faktoren trend/bias/quality/breakout/crv/sma/delta, Gewichte aus der Artefakt-Datenbank
+  `watch_method/current`), dazu KI-Korrektur `adj` ±15 mit Begründung; Chance hoch ≥ 70,
+  mittel ≥ 50. `review{available, prev_day, summary, hit_rate_pct, spearman, top_third_avg,
+  bottom_third_avg, items[{rank,symbol,…,perf_1w,verdict,why}], lessons[{text}],
+  weight_changes[{factor,old,new,reason}]}` prüft das Ranking der Vorwoche (`watch_rank.py
+  review`: Rangkorrelation, Drittel-Vergleich, Faktor-Korrelation → Gewichtsvorschlag, je Woche
+  höchstens ±0,02 je Faktor); `method{version,weights,penalties,rules[{text}]}` ist der Stand
+  nach dem Check. Die Methode lebt in `watch_method/current` (+ `watch_method/v<N>` als Historie)
+  — so korrigiert sich die Einschätzung Woche für Woche, ohne den Aufgaben-Prompt anzufassen.
+  Modal und Artefakt setzen über jedes Briefing ein nummeriertes Inhaltsverzeichnis mit
+  Sprungknöpfen (`addToc`; Knöpfe statt `#`-Links, weil der Hash in der App Deep Links trägt).
+  Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
   Artefakt doc_id = Tag (daily), `preview-<Tag>` bzw. `watch-<Tag>`. Deep Link
   `#briefing=preview|watch` öffnet den Reiter.
   **Automatisch (geplante Aufgaben):** „Marktbriefing werktags“ Di–Sa 7:07 Uhr (Vortag,
-  also Freitag am Samstag), „Wochenvorschau Montag“ Mo 7:08 Uhr, „Watchlist-Wochenrückblick“
-  So 9:34 Uhr (liest „Discovery Monitor – vollständig.json“, filtert `bucket == "watch"`).
+  also Freitag am Samstag), „Wochenvorschau Montag“ Mo 7:08 Uhr, „Watchlist-Wochenrückblick
+  und -ausblick“ So 9:34 Uhr (liest „Discovery Monitor – vollständig.json“, filtert `eye == true`,
+  Prognose-Check → Methode anpassen → Ranking).
   Jede überspringt einen Eintrag, der im Artefakt schon steht.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
   Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,

@@ -2923,3 +2923,38 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .mb-row__head .link-chip { flex:0 0 auto; }
 .mb-row__chips { display:flex; flex-wrap:wrap; gap:var(--s-1); }
 .mb-row__text { font-size:var(--fs-2); line-height:1.45; }
+
+/* Marktbriefing: Inhaltsverzeichnis, nummerierte Abschnitte, Ranking, Methode */
+.mb-toc { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2); padding:var(--s-2) var(--s-3); scroll-margin-top:var(--s-2); }
+.mb-toc ol { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(11rem, 1fr)); gap:2px var(--s-3); }
+.mb-toc__a {
+  display:flex; align-items:center; gap:var(--s-2); width:100%; min-height:32px;
+  background:none; border:0; padding:0; color:var(--text); font:inherit; font-size:var(--fs-2);
+  text-align:left; cursor:pointer;
+}
+.mb-toc__a:hover span:last-child { color:var(--accent); text-decoration:underline; }
+.mb-secno {
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+  min-width:1.6em; height:1.6em; border-radius:var(--r-pill);
+  background:var(--accent-weak); color:var(--accent);
+  font-family:var(--font-mono); font-size:var(--fs-1); font-weight:var(--fw-bold); letter-spacing:0;
+}
+.mb-part { padding-top:var(--s-4); border-top:1px solid var(--border); scroll-margin-top:var(--s-2); }
+.mb-part > .bf-h { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); color:var(--text); }
+.mb-up {
+  margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border:0; border-radius:var(--r-1); background:none; color:var(--muted); cursor:pointer;
+}
+.mb-up:hover { background:var(--surface-3); color:var(--text); }
+.mb-up svg { width:16px; height:16px; }
+.mb-rank__no { font-family:var(--font-mono); font-weight:var(--fw-bold); font-size:var(--fs-2); color:var(--muted); min-width:1.6em; text-align:right; flex:0 0 auto; }
+.mb-rank__score { position:relative; flex:0 0 4.5rem; height:18px; border-radius:var(--r-1); background:var(--surface-3); overflow:hidden; align-self:center; }
+.mb-rank__score i { position:absolute; inset:0 auto 0 0; background:var(--accent-weak); border-right:2px solid var(--accent); }
+.mb-rank__score b { position:relative; display:block; text-align:center; font-family:var(--font-mono); font-size:var(--fs-1); line-height:18px; }
+.mb-rank .mb-row__chips, .mb-rank .mb-row__why, .mb-rank .mb-row__text { padding-left:calc(1.6em + var(--s-2)); }
+.mb-wbar { height:10px; border-radius:2px; background:var(--surface-3); overflow:hidden; }
+.mb-wbar i { display:block; height:100%; background:var(--accent); }
+.mb-part > .bf-h .mb-tag { white-space:nowrap; }
+.mb-part > .bf-h { display:block; line-height:1.6; }
+.mb-part > .bf-h .mb-secno { margin-right:var(--s-2); vertical-align:1px; }
+.mb-part > .bf-h .mb-up { float:right; margin:-4px 0 0 var(--s-2); }

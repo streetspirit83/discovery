@@ -297,6 +297,91 @@ function outlookBlock(o, find) {
   </section>`;
 }
 
+/* Ranking aller Augen-Titel für die kommende Woche (Score 0–100). */
+const num2 = (v, d = 2) => (v == null ? null : nf(Math.abs(v) >= 1000 ? 0 : d).format(v));
+function rankingBlock(rows, find) {
+  if (!rows?.length) return '';
+  const items = rows.map((r) => {
+    const sc = Math.round(r.score ?? r.base ?? 0);
+    const chips = [
+      r.chance ? `<span class="mb-chip ${CHANCE[r.chance] ?? ''}">Chance ${esc(r.chance)}</span>` : '',
+      r.setup ? `<span class="mb-chip">${esc(r.setup)}</span>` : '',
+      r.potential_pct != null ? `<span class="mb-chip pos">Pot. ${esc(pct(r.potential_pct))}</span>` : '',
+      r.risk_pct != null ? `<span class="mb-chip neg">Risiko ${esc(pct(-Math.abs(r.risk_pct)))}</span>` : '',
+      r.crv != null ? `<span class="mb-chip">CRV ${esc(num2(r.crv, 1))}</span>` : '',
+    ].join('');
+    const meta = [r.target != null ? `Ziel ${num2(r.target)}` : null, r.stop != null ? `Stopp ${num2(r.stop)}` : null, r.catalyst || null].filter(Boolean).join(' · ');
+    return `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-rank__no">${esc(r.rank)}</span>
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}</span>
+        <span class="mb-rank__score" title="Score ${sc} von 100${r.adj ? ` (Basis ${Math.round(r.base)}, KI ${r.adj > 0 ? '+' : '−'}${Math.abs(r.adj)})` : ''}"><i style="width:${Math.max(2, Math.min(100, sc))}%"></i><b>${sc}</b></span>
+      </div>
+      <div class="mb-row__chips">${chips}</div>
+      ${meta ? `<div class="mb-row__why">${esc(meta)}</div>` : ''}
+      ${r.note ? `<div class="mb-row__text">${esc(r.note)}</div>` : ''}
+    </li>`;
+  }).join('');
+  return `<section class="bf-section" data-toc="Ranking"><h3 class="bf-h">Ranking der Woche <span class="mb-tag">· ${rows.length} Titel</span></h3>
+    <p class="bf-foot pv-muted">Score 0–100: regelbasierter Basis-Score aus den Kursdaten (Gewichte unter „Methode“) plus begründete KI-Korrektur aus Nachrichten und Terminen. Chance hoch ab 70, mittel ab 50.</p>
+    <ol class="mb-list mb-rank">${items}</ol>
+  </section>`;
+}
+
+/* Prognose-Check: Ranking der Vorwoche gegen die tatsächliche Wochenbewegung. */
+const VERDICT = { Treffer: 'pos', Fehlschlag: 'neg', teilweise: '' };
+function reviewBlock(rv, find) {
+  if (!rv) return '';
+  const head = `<section class="bf-section" data-toc="Prognose-Check"><h3 class="bf-h">Prognose-Check <span class="mb-tag">· Vorwoche</span></h3>`;
+  if (!rv.available) return `${head}<p class="bf-summary">${esc(rv.text || 'Noch kein Ranking der Vorwoche vorhanden.')}</p>${lessons(rv)}</section>`;
+  const tile = (label, val, cls = '') => `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  const items = (rv.items ?? []).filter((x) => x.verdict).map((x) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-rank__no">${esc(x.rank)}</span>
+        ${symHtml(x, find)}
+        <span class="mb-row__name">${esc(x.name)}</span>
+        <span class="mb-chip ${VERDICT[x.verdict] ?? ''}">${esc(x.verdict)}</span>
+        <span class="mb-num ${tone(x.perf_1w)}">${esc(pct(x.perf_1w))}</span>
+      </div>
+      ${x.why ? `<div class="mb-row__why">${esc(x.why)}</div>` : ''}
+    </li>`).join('');
+  return `${head}
+    <div class="bf-tiles">
+      ${tile('Treffer', rv.hit_rate_pct != null ? `${rv.hit_rate_pct} %` : '–')}
+      ${tile('Rangkorr.', rv.spearman != null ? nf(2).format(rv.spearman) : '–', tone(rv.spearman))}
+      ${tile('Top-Drittel', pct(rv.top_third_avg), tone(rv.top_third_avg))}
+      ${tile('Flop-Drittel', pct(rv.bottom_third_avg), tone(rv.bottom_third_avg))}
+    </div>
+    ${rv.summary ? `<p class="bf-summary">${esc(rv.summary)}</p>` : ''}
+    ${items ? `<div class="mb-sub">Einzelbewertung (oberes und unteres Drittel des Rankings vom ${esc(rv.prev_day ? shortDay(rv.prev_day) : '–')})</div><ul class="mb-list">${items}</ul>` : ''}
+    ${lessons(rv)}
+  </section>`;
+}
+function lessons(rv) {
+  const l = (rv.lessons ?? []).map((x) => `<li>${esc(x.text ?? x)}</li>`).join('');
+  const w = (rv.weight_changes ?? []).map((c) => `<li><b>${esc(FACTOR[c.factor] ?? c.factor)}</b> ${esc(nf(2).format(c.old))} → ${esc(nf(2).format(c.new))}${c.reason ? ` <span class="mb-muted">· ${esc(c.reason)}</span>` : ''}</li>`).join('');
+  return `${l ? `<div class="mb-sub">Lehren für die neue Woche</div><ul class="mb-drivers">${l}</ul>` : ''}
+    ${w ? `<div class="mb-sub">Angepasste Gewichte</div><ul class="mb-drivers">${w}</ul>` : ''}`;
+}
+
+/* Methode: aktuelle Gewichte und Regeln – lernt Woche für Woche (watch_method). */
+const FACTOR = { trend: 'Trend-Radar', bias: 'Bias', quality: 'Qualitäts-Score', breakout: 'Ausbruchsnähe', crv: 'Chance/Risiko', sma: 'SMA-Lage', delta: 'Score-Dynamik' };
+function methodBlock(m) {
+  if (!m?.weights) return '';
+  const max = Math.max(...Object.values(m.weights), 0.01);
+  const bars = Object.entries(m.weights).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="mb-bar mb-bar--w">
+      <span class="mb-bar__name">${esc(FACTOR[k] ?? k)}</span>
+      <span class="mb-wbar"><i style="width:${v / max * 100}%"></i></span>
+      <span class="mb-num">${esc(Math.round(v * 100))} %</span>
+    </div>`).join('');
+  const rules = (m.rules ?? []).map((r) => `<li>${esc(r.text ?? r)}</li>`).join('');
+  return `<section class="bf-section" data-toc="Methode"><h3 class="bf-h">Methode <span class="mb-tag">· Version ${esc(m.version ?? 1)}</span></h3>
+    <div class="mb-chart">${bars}</div>
+    ${rules ? `<div class="mb-sub">Regeln aus den bisherigen Prognose-Checks</div><ul class="mb-drivers">${rules}</ul>` : ''}
+  </section>`;
+}
+
 function renderWatch(b, find) {
   return `
     <header class="mb-head">
@@ -306,7 +391,9 @@ function renderWatch(b, find) {
       ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
     </header>
     ${watchStats(b.stats)}
+    ${rankingBlock(b.ranking, find)}
     ${outlookBlock(b.outlook, find)}
+    ${reviewBlock(b.review, find)}
     ${perfChart('Stärkste und schwächste Titel der Woche', [...(b.top ?? []), ...(b.flop ?? []).slice().reverse()])}
     ${moverBlock('Gewinner der Woche', b.top, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
     ${moverBlock('Verlierer der Woche', b.flop, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
@@ -314,7 +401,28 @@ function renderWatch(b, find) {
     ${technikBlock(b.technik, find)}
     ${earningsBlock(b.earnings, find, 'Zahlen in der kommenden Woche')}
     ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${methodBlock(b.method)}
     ${sourcesBlock(b.sources)}`;
+}
+
+/* Inhaltsverzeichnis: nummeriert jeden Abschnitt, setzt eine Sprungliste unter
+   den Kopf und an jede Überschrift einen Knopf zurück. Knöpfe statt #-Links,
+   weil der Hash in der App Deep Links trägt (#briefing, #s=…). */
+function addToc(root) {
+  const secs = [...root.children].filter((s) => s.matches('section.bf-section') && s.querySelector(':scope > h3.bf-h'));
+  if (secs.length < 3) return;
+  const items = secs.map((s, i) => {
+    const h = s.querySelector(':scope > h3.bf-h');
+    const label = s.dataset.toc || [...h.childNodes].filter((n) => !(n.nodeType === 1 && n.classList.contains('mb-tag'))).map((n) => n.textContent).join('').trim();
+    s.id = `mb-s${i + 1}`;
+    s.classList.add('mb-part');
+    h.insertAdjacentHTML('afterbegin', `<span class="mb-secno">${i + 1}</span>`);
+    h.insertAdjacentHTML('beforeend', `<button type="button" class="mb-up" data-goto="mb-toc" title="Zum Inhalt" aria-label="Zum Inhalt">${icons.arrowUp}</button>`);
+    return `<li><button type="button" class="mb-toc__a" data-goto="mb-s${i + 1}"><span class="mb-secno">${i + 1}</span><span>${esc(label)}</span></button></li>`;
+  });
+  const nav = `<nav class="mb-toc" id="mb-toc" aria-label="Inhalt"><div class="mb-sub">Inhalt</div><ol>${items.join('')}</ol></nav>`;
+  const head = root.querySelector(':scope > .mb-head');
+  if (head) head.insertAdjacentHTML('afterend', nav); else root.insertAdjacentHTML('afterbegin', nav);
 }
 
 const KINDS = [
@@ -382,6 +490,8 @@ export function renderMarketBriefingModal(opts = {}) {
 
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   body.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-goto]');
+    if (go) { body.querySelector(`#${go.dataset.goto}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const btn = e.target.closest('.mb-sym[data-id]');
     if (!btn) return;
     const hit = index.byId.get(btn.dataset.id);
@@ -408,7 +518,7 @@ export function renderMarketBriefingModal(opts = {}) {
     }
     const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
     let current = [];
-    const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); body.scrollTop = 0; };
+    const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
     const showKind = (key) => {
       tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
       current = briefings.filter((b) => kindOf(b) === key);
