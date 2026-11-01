@@ -148,6 +148,7 @@ async function capture(ctx, c) {
 
   // Profil als Daten: dieselbe Funktion, die der Button nutzt (Cache greift).
   const profile = await page.evaluate(async (cand) => {
+    if (cand?.company_profile?.description) return cand.company_profile;   // im Blob gespeichert
     try {
       const m = await import(new URL('lib/company-profile.js', location.href).href);
       return await m.fetchCompanyProfile(cand, {

@@ -231,6 +231,14 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   ist das persistierte Ergebnis), `sma-trend.js` (Ø-Wachstum und Richtung einer
   SMA-Reihe; **braucht `swing_analysis.sma`** — der Scanner-Wert `sma200` ist nur
   ein Momentwert und trägt keine Richtung).
+- Firmenprofil: `company-profile.js` (ROIC.ai → Wikipedia, auf Knopfdruck im Perf.-Tab).
+  Ein Treffer wird **gekürzt am Kandidaten im Blob** gespeichert (`company_profile`,
+  `compactProfile`: Text ≤ 3000 Zeichen am Satzende, fünf Fakten, Quelle, `fetched_at` —
+  ≤ ~3,5 KB je Titel), Fehlversuche nie. Danach zeigt jedes Gerät das Profil sofort;
+  „neu laden“ im Profil-Fuss holt frisch (`force`) und behält bei Fehlschlag das alte.
+  Profile, die vorher nur im localStorage-Cache lagen, übernimmt `detailOpened`
+  einmalig ohne Netz in den Blob (`cachedCompanyProfile`). Das Dossier nutzt das
+  gespeicherte Profil zuerst.
 - Misc: `research-prompt.js`, `link-builder.js` (**`tvChartUrl`** baut den
   TradingView-**Chart**-Link `/chart/?symbol=XETR:SAP&interval=1D`; Detail-Sheet
   und Tabelle leiten ihn zur Laufzeit ab, damit auch Kandidaten mit alter

@@ -12,6 +12,10 @@
  *      läuft direkt aus dem Browser; deckt Nebenwerte aber nicht immer ab.
  *
  * Treffer werden 30 Tage, Fehlversuche 3 Tage in localStorage gecacht.
+ * Dauerhaft liegt ein Treffer als `company_profile` am Kandidaten im Blob
+ * (app.js, `compactProfile`): einmal geladen, auf jedem Gerät sofort da.
+ * Gespeichert wird nur die gekürzte Fassung (Text ≤ PROFILE_MAX Zeichen,
+ * fünf Fakten), Fehlversuche nie — so wächst der Blob je Titel um ≤ ~3,5 KB.
  */
 
 import { normalizeExchange } from './exchange-map.js';
@@ -234,15 +238,52 @@ function cacheSet(key, profile) {
   try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), profile })); } catch { /* quota */ }
 }
 
+/* ── Persistenz am Kandidaten (Blob) ──────────────────────────────────────── */
+
+export const PROFILE_MAX = 3000;   // Zeichen Beschreibung, die im Blob landen
+
+/* Gekürzte, blobtaugliche Fassung eines Profils; null, wenn kein Text da ist.
+   Schneidet am letzten Satzende vor PROFILE_MAX, damit kein halber Satz bleibt. */
+export function compactProfile(p) {
+  const text = String(p?.description ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  let description = text;
+  if (text.length > PROFILE_MAX) {
+    const cut = text.slice(0, PROFILE_MAX);
+    const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+    description = (end > PROFILE_MAX * 0.6 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '')) + ' …';
+  }
+  const f = p.facts ?? {};
+  const facts = Object.fromEntries(['ceo', 'employees', 'ipo_date', 'industry', 'country']
+    .filter((k) => f[k] != null && f[k] !== '').map((k) => [k, typeof f[k] === 'string' ? f[k].slice(0, 120) : f[k]]));
+  return {
+    description,
+    source: p.source ?? null,
+    ...(p.url ? { url: p.url } : {}),
+    ...(p.website ? { website: p.website } : {}),
+    ...(Object.keys(facts).length ? { facts } : {}),
+    fetched_at: p.fetched_at ?? new Date().toISOString(),
+  };
+}
+
+/* Treffer aus dem localStorage-Cache (ohne Netz) — überführt Profile, die vor
+   der Blob-Speicherung geladen wurden, beim Öffnen des Sheets in den Blob. */
+export function cachedCompanyProfile(candidate) {
+  if (!candidate?.symbol) return null;
+  const hit = cacheGet(`${CACHE_PREFIX}${normalizeExchange(candidate.exchange)}:${candidate.symbol}`);
+  return hit?.description ? hit : null;
+}
+
 /**
  * @param {object} candidate
  * @param {{backendUrl?:string, secret?:string}} [auth] nur für den ROIC-Proxy-Fallback
+ * @param {{force?:boolean}} [opts] force = Cache umgehen (Knopf „neu laden“)
  * @returns {Promise<{description, source, ...}|null>} null = keine Quelle lieferte.
  */
-export async function fetchCompanyProfile(candidate, auth) {
+export async function fetchCompanyProfile(candidate, auth, { force = false } = {}) {
   if (!candidate?.symbol) return null;
   const key = `${CACHE_PREFIX}${normalizeExchange(candidate.exchange)}:${candidate.symbol}`;
-  const cached = cacheGet(key);
+  const cached = force ? undefined : cacheGet(key);
   if (cached !== undefined) return cached;
 
   let profile = null;

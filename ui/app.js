@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027i';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261027e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261101b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -28,7 +28,7 @@ import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260831a';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
-import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript } from './lib/company-profile.js?v=20260807a';
+import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
@@ -1184,6 +1184,14 @@ async function mockInsert(blobType, candidate) {
 const YH_BATCH = 6;
 
 
+/* Firmenprofil am Kandidaten speichern (ein Feld, ein Schreibvorgang). Im
+   Mock-Modus nur im Speicher. */
+async function saveProfile(candidate, profile) {
+  if (useMock) return;
+  try { await storageClient.updateCandidate(currentBlobType, candidate.id, { company_profile: profile }); }
+  catch (err) { console.warn('[profile] speichern fehlgeschlagen:', err.message); }
+}
+
 async function handleAction(action, candidate, extras = {}) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
@@ -1206,21 +1214,30 @@ async function handleAction(action, candidate, extras = {}) {
   }
 
   // Detail sheet: Firmenprofil auf Knopfdruck laden (ROIC.ai mit Key, sonst
-  // Wikipedia de→en; beide browserseitig). Fehlversuch → Button erlaubt Retry.
+  // Wikipedia de→en; beide browserseitig). Ein Treffer wird gekürzt als
+  // company_profile am Kandidaten im Blob gespeichert — danach steht er auf
+  // jedem Gerät ohne erneuten Abruf im Sheet. „neu laden“ (force) holt frisch.
+  // Fehlversuche bleiben nur im Speicher (Button erlaubt Retry), nie im Blob.
   if (action === 'loadProfile') {
-    if (candidate._profile_loading || candidate.company_profile?.description) return;
+    const force = extras?.force === true;
+    if (candidate._profile_loading || (!force && candidate.company_profile?.description)) return;
     const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
+    const before = candidate.company_profile;
     candidate._profile_loading = true; rerender();
     let profile = null;
     try {
       profile = await fetchCompanyProfile(candidate, {
         backendUrl: localStorage.getItem('discovery_backend_url'),
         secret:     localStorage.getItem('discovery_secret'),
-      });
+      }, { force });
     } catch (err) { console.warn('[profile] fetch fehlgeschlagen:', err.message); }
     candidate._profile_loading = false;
-    candidate.company_profile = profile ?? { error: true };
+    const compact = compactProfile(profile);
+    // Neu laden ohne Ergebnis: das gespeicherte Profil behalten.
+    candidate.company_profile = compact ?? (before?.description ? before : { error: true });
     rerender();
+    if (compact) await saveProfile(candidate, compact);
+    else if (force) toast('Kein neueres Profil gefunden – das gespeicherte bleibt.', 'info', 3000);
     return;
   }
 
@@ -1623,6 +1640,12 @@ async function handleAction(action, candidate, extras = {}) {
     const backendUrl = localStorage.getItem('discovery_backend_url');
     const secret     = localStorage.getItem('discovery_secret');
     const c = candidate;
+    // Firmenprofil, das nur im Gerätecache liegt (vor der Blob-Speicherung
+    // geladen): ohne Netz übernehmen und einmalig in den Blob schreiben.
+    if (!c.company_profile?.description) {
+      const hit = compactProfile(cachedCompanyProfile(c));
+      if (hit) { c.company_profile = hit; candidateDetail.render(); saveProfile(c, hit); }
+    }
     const plan = autoFetchPlan(c, {
       force: true,
       busy: !!c._auto_busy,

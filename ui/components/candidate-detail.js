@@ -16,7 +16,7 @@ import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../l
 import { SIGNAL_CLASS, CLUSTER_LABELS, EVENT_LABELS, materialityLabel, fullDate, esc as escCow } from '../lib/cowork-review.js?v=20260924a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
-import { transcriptLlmText } from '../lib/company-profile.js?v=20260807a';
+import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
@@ -628,6 +628,7 @@ function profileHTML(c) {
     ${factsLine}
     <div class="id-profile__foot">
       <button class="id-profile__more" id="profile-more">mehr</button>
+      <button class="id-profile__more id-profile__reload" id="profile-reload" title="Profil neu abrufen${p.fetched_at ? ` (gespeichert ${new Date(p.fetched_at).toLocaleDateString('de-DE')})` : ''}">neu laden</button>
       <span class="id-profile__src">Profil: ${src}${site}</span>
     </div>
   </div>`;
@@ -2892,9 +2893,10 @@ export class CandidateDetail {
     // Watch-Label (nur Watch-Bucket): aktiv beobachtete Ticker markieren.
     this.el.querySelector('#detail-watch')?.addEventListener('pointerup', () => this.onAction?.('toggleWatch', c));
 
-    // Firmenprofil: manueller Abruf per Button (app.js cached in localStorage),
+    // Firmenprofil: manueller Abruf per Button, danach dauerhaft am Kandidaten im Blob (app.js),
     // danach "mehr/weniger"-Toggle; Toggle verschwindet wenn nichts geklemmt ist.
     this.el.querySelector('#profile-load')?.addEventListener('pointerup', () => this.onAction?.('loadProfile', c));
+    this.el.querySelector('#profile-reload')?.addEventListener('pointerup', () => this.onAction?.('loadProfile', c, { force: true }));
     const pText = this.el.querySelector('#profile-text');
     if (pText) {
       const moreBtn = this.el.querySelector('#profile-more');
