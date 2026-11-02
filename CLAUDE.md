@@ -156,6 +156,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   nach „Dauer") und der Detail-Tab „Cowork", beide aus `cowork_review` am
   Kandidaten; gemeinsame Helfer in `lib/cowork-review.js`, Schreibseite in
   `tools/cowork-review/`.
+- **Claude-Knopf** in der Detail-Toolbar (neben ✨): Link auf `claude.ai/new?q=…` mit kurzer
+  Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe plus Kennzahlen),
+  gebaut von `lib/quick-take-prompt.js`. `q` ist nicht offiziell dokumentiert und füllt das
+  Feld nur vor. Eigene Datei, weil `research-prompt.js` in die Netlify-Funktion `research`
+  gebündelt wird.
 - `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
   Die Prompts sind seit Okt. 2026 **Vorlagen mit Platzhaltern** (`PROMPT_TEMPLATES`,
