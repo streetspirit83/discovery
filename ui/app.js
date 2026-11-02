@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027i';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261102b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261102c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -1763,6 +1763,7 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
+  if (action === 'toast') { toast(extras.msg, extras.type); return; }
   if (action === 'openTrigger') {
     openTriggerEditor(candidate, {
       onSaveAlerts: persistAlerts,

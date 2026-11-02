@@ -160,7 +160,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe plus Kennzahlen),
   gebaut von `lib/quick-take-prompt.js`. `q` ist nicht offiziell dokumentiert und füllt das
   Feld nur vor. Eigene Datei, weil `research-prompt.js` in die Netlify-Funktion `research`
-  gebündelt wird. Der Prompt verlangt am Ende immer 3 Alternativen plus einen Link
+  gebündelt wird. Daneben der **Gemini-Knopf**: derselbe Prompt, aber Gemini kennt für den
+  normalen Chat keinen Prompt-Parameter, also kopiert der Knopf und öffnet `gemini.google.com/app`.
+  Trigger-, LS- und Kerzen-Knopf sind aus der Toolbar entfernt (LS und Kerzen holt das Sheet beim
+  Öffnen selbst, Alerts laufen über die Tabellenzeile). Der Prompt verlangt am Ende immer
+  3 konkrete Wettbewerber als Alternativen plus einen Link
   `…/discovery/#add=TICKER:BÖRSE,…&peer=SYM:BÖRSE`. Der öffnet `peer-import-modal.js`
   (Logik in `lib/peer-import.js`): Titel werden über TV geprüft, bei falscher Börse per
   Symbolsuche neu zugeordnet, 1M/3M stehen neben dem Ausgangstitel nur zur Orientierung

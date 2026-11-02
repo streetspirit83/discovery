@@ -1,10 +1,11 @@
 /**
- * Ersteinschätzung per Claude-Link (Claude-Knopf im Detail-Sheet).
+ * Ersteinschätzung per KI-Link (Claude- und Gemini-Knopf im Detail-Sheet).
  *
  * Der Prompt reist komplett in der URL (`claude.ai/new?q=…`), deshalb bewusst
  * kurz und nicht aus den langen Vorlagen in `research-prompt.js`. Der Parameter
  * ist nicht offiziell dokumentiert und füllt das Eingabefeld nur vor; abgeschickt
- * wird in Claude von Hand.
+ * wird in Claude von Hand. Gemini kennt keinen solchen Parameter für den
+ * normalen Chat, dort kopiert der Knopf den Prompt und öffnet die App.
  *
  * Eigene Datei: `research-prompt.js` wird von der Netlify-Funktion `research`
  * mitgebündelt, dieser Knopf soll keinen Backend-Deploy auslösen.
@@ -59,7 +60,7 @@ export function quickTakePrompt(c, { currency = 'USD', date = new Date().toISOSt
     '3. Wettbewerb: Wo steht sie gegenüber den 2–3 wichtigsten Wettbewerbern?',
     '4. Größe: Marktkapitalisierung und Umsatz, verglichen mit diesen Wettbewerbern.',
     '',
-    'Liste am Ende unter „Alternativen:“ immer genau 3 börsennotierte Titel aus demselben Thema oder Umfeld, die gerade interessanter wirken, etwa durch besseres Momentum. Es müssen keine direkten Wettbewerber sein. Je Zeile: Name, Ticker @ Börse, ein Halbsatz Begründung. Die Alternativen zählen nicht zu den 200 Wörtern.',
+    'Liste am Ende unter „Alternativen:“ immer genau 3 börsennotierte Titel aus dem Umfeld, und zwar konkrete Wettbewerber dieses Titels. Bevorzuge die, die gerade interessanter wirken, etwa durch besseres Momentum. Je Zeile: Name, Ticker @ Börse, ein Halbsatz Begründung. Die Alternativen zählen nicht zu den 200 Wörtern.',
     `Schreibe darunter genau diesen Markdown-Link und ersetze nur TICKER und BÖRSE, ohne Leerzeichen: [In Discovery prüfen](${APP_URL}#add=TICKER:BÖRSE,TICKER:BÖRSE,TICKER:BÖRSE&peer=${c.symbol}:${c.exchange})`,
     `Erlaubte Börsen: ${EXCHANGES}.`,
     ...[dataLine(c, currency)].filter(Boolean).flatMap((l) => ['', l]),

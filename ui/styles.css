@@ -476,7 +476,7 @@ td.col-anchor .sym-cell__sub { max-width:100%; overflow:hidden; }
 .link-chip--yahoo:hover { color:var(--ai); border-color:var(--ai); }
 .link-chip--edit:hover  { color:var(--accent); border-color:var(--accent); }
 .link-chip--tf:hover    { color:#f97316; border-color:#f97316; }
-.link-chip--claude:hover { border-color:var(--ai); }
+.link-chip--claude:hover, .link-chip--gemini:hover { border-color:var(--ai); }
 .link-chip--missing { opacity:0.25; cursor:default; pointer-events:none; }
 .link-logo    { width:14px; height:14px; border-radius:3px; object-fit:cover; display:block; pointer-events:none; }
 .link-btn-logo{ width:18px; height:18px; border-radius:3px; object-fit:cover; flex-shrink:0; }
@@ -1950,17 +1950,6 @@ body.has-chart-fs { overflow:hidden; }
   flex:1 1 0; min-width:32px; max-width:44px; height:44px; border-radius:var(--r-2);
 }
 .detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:22px; height:22px; }
-.detail-toolbar__sep { flex:0 0 1px; align-self:stretch; margin:4px 2px; background:var(--border); }
-/* Elf Chips in einer Zeile: unter 420px geben erst Rand und Lücken nach, unter
-   392px (Android 360, iPhone 375) auch die Chips, sonst liefe die Leiste über. */
-@media (max-width:420px) {
-  .detail-toolbar { gap:2px; padding-inline:var(--s-2); }
-  .detail-toolbar__sep { margin-inline:0; }
-}
-@media (max-width:392px) {
-  .detail-toolbar .link-chip { min-width:29px; }
-  .detail-toolbar .link-chip img, .detail-toolbar .link-chip svg { width:20px; height:20px; }
-}
 button.link-chip.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .link-chip--mock { opacity:0.45; }
 .detail-links-edit { padding:var(--s-3) var(--s-4); border-bottom:1px solid var(--border); background:var(--surface-2); }

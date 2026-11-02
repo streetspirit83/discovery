@@ -172,7 +172,7 @@ Sitzt ein Panel über Primärinhalt (Tabelle, iframe, Chart), darf es diesem
 | `.act-btn--promote` / `--dismiss` | Zeilenaktionen (grün/rot) |
 | `.link-chip` | Icon-Only-Link (Abschnitt 4) |
 
-Touch-Ziele ≥ 32px (Ausnahme: Detail-Toolbar auf Handys unter 392px, 29px breit bei 44px Höhe). Hover/aktiv über Token-Farben, nicht über feste Werte.
+Touch-Ziele ≥ 32px. Hover/aktiv über Token-Farben, nicht über feste Werte.
 
 ---
 
