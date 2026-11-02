@@ -1,11 +1,11 @@
 /**
- * Ersteinschätzung per KI-Link (Claude- und Gemini-Knopf im Detail-Sheet).
+ * Ersteinschätzung per KI-Link (Claude-, ChatGPT- und Perplexity-Knopf im Detail-Sheet).
  *
- * Der Prompt reist komplett in der URL (`claude.ai/new?q=…`), deshalb bewusst
- * kurz und nicht aus den langen Vorlagen in `research-prompt.js`. Der Parameter
- * ist nicht offiziell dokumentiert und füllt das Eingabefeld nur vor; abgeschickt
- * wird in Claude von Hand. Gemini kennt keinen solchen Parameter für den
- * normalen Chat, dort kopiert der Knopf den Prompt und öffnet die App.
+ * Der Prompt reist komplett in der URL (`?q=…`), deshalb bewusst kurz und nicht
+ * aus den langen Vorlagen in `research-prompt.js`. Offiziell dokumentiert ist der
+ * Parameter bei keinem der drei. Claude füllt nur vor, Perplexity startet die Suche
+ * sofort; für ChatGPT widersprechen sich die Quellen. Gemini kennt ihn im normalen
+ * Chat nicht und ist deshalb nicht dabei.
  *
  * Eigene Datei: `research-prompt.js` wird von der Netlify-Funktion `research`
  * mitgebündelt, dieser Knopf soll keinen Backend-Deploy auslösen.
@@ -67,6 +67,12 @@ export function quickTakePrompt(c, { currency = 'USD', date = new Date().toISOSt
   ].join('\n');
 }
 
-export function quickTakeUrl(c, opts) {
-  return `https://claude.ai/new?q=${encodeURIComponent(quickTakePrompt(c, opts))}`;
+const CHAT_URLS = {
+  claude: 'https://claude.ai/new?q=',
+  chatgpt: 'https://chatgpt.com/?q=',
+  perplexity: 'https://www.perplexity.ai/search/?q=',
+};
+
+export function chatUrl(target, c, opts) {
+  return `${CHAT_URLS[target]}${encodeURIComponent(quickTakePrompt(c, opts))}`;
 }

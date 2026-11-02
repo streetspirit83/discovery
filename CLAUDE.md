@@ -156,12 +156,12 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   nach „Dauer") und der Detail-Tab „Cowork", beide aus `cowork_review` am
   Kandidaten; gemeinsame Helfer in `lib/cowork-review.js`, Schreibseite in
   `tools/cowork-review/`.
-- **Claude-Knopf** in der Detail-Toolbar (neben ✨): Link auf `claude.ai/new?q=…` mit kurzer
-  Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe plus Kennzahlen),
-  gebaut von `lib/quick-take-prompt.js`. `q` ist nicht offiziell dokumentiert und füllt das
-  Feld nur vor. Eigene Datei, weil `research-prompt.js` in die Netlify-Funktion `research`
-  gebündelt wird. Daneben der **Gemini-Knopf**: derselbe Prompt, aber Gemini kennt für den
-  normalen Chat keinen Prompt-Parameter, also kopiert der Knopf und öffnet `gemini.google.com/app`.
+- **KI-Knöpfe** in der Detail-Toolbar (neben ✨): Claude, ChatGPT und Perplexity, je ein Link mit
+  `?q=…` und derselben kurzen Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe
+  plus Kennzahlen), gebaut von `lib/quick-take-prompt.js` (`chatUrl`). `q` ist nirgends offiziell
+  dokumentiert. Claude füllt nur vor, Perplexity startet sofort, ChatGPT ist laut Quellen unklar.
+  Gemini kennt den Parameter im normalen Chat nicht und ist deshalb nicht dabei. Eigene Datei,
+  weil `research-prompt.js` in die Netlify-Funktion `research` gebündelt wird.
   Trigger-, LS- und Kerzen-Knopf sind aus der Toolbar entfernt (LS und Kerzen holt das Sheet beim
   Öffnen selbst, Alerts laufen über die Tabellenzeile). Der Prompt verlangt am Ende immer
   3 konkrete Wettbewerber als Alternativen plus einen Link
