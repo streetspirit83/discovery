@@ -160,7 +160,13 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe plus Kennzahlen),
   gebaut von `lib/quick-take-prompt.js`. `q` ist nicht offiziell dokumentiert und füllt das
   Feld nur vor. Eigene Datei, weil `research-prompt.js` in die Netlify-Funktion `research`
-  gebündelt wird.
+  gebündelt wird. Der Prompt verlangt am Ende immer 3 Alternativen plus einen Link
+  `…/discovery/#add=TICKER:BÖRSE,…&peer=SYM:BÖRSE`. Der öffnet `peer-import-modal.js`
+  (Logik in `lib/peer-import.js`): Titel werden über TV geprüft, bei falscher Börse per
+  Symbolsuche neu zugeordnet, 1M/3M stehen neben dem Ausgangstitel nur zur Orientierung
+  und filtern nicht. Bestätigt landen sie in der Inbox (Quelle `claude-peer`). Was schon im
+  Workspace liegt, ist nicht wählbar, weil `append_candidate` keine Dubletten prüft. Der
+  Chat schreibt nie selbst; ohne Backend-Verbindung im Browser sperrt das Fenster.
 - `ai-prompt-modal.js` – die fünf Recherche-Prompts eines Titels zum Kopieren
   (reiner Kopier-Dialog, ruft nichts ab und speichert nichts).
   Die Prompts sind seit Okt. 2026 **Vorlagen mit Platzhaltern** (`PROMPT_TEMPLATES`,

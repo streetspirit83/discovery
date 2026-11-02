@@ -23,7 +23,7 @@ import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
-import { quickTakeUrl } from '../lib/quick-take-prompt.js?v=20261102a';
+import { quickTakeUrl } from '../lib/quick-take-prompt.js?v=20261102b';
 
 const TV_LOGO  = 'https://s3.tradingview.com/userpics/6171439-mFQX_big.png';
 const ST_LOGO  = 'https://avatars.githubusercontent.com/u/30304?s=200&v=4';

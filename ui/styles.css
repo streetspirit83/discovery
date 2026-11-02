@@ -2157,6 +2157,21 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .aiq-row.is-pending { opacity:.6; cursor:default; }
 .aiq-foot { display:flex; align-items:center; gap:var(--s-3); }
 .aiq-hint { flex:1; color:var(--muted); font-size:var(--fs-1); }
+.pim-modal { max-width:520px; }
+.pim-modal .modal-header h2 { display:flex; align-items:center; gap:var(--s-2); }
+.pim-modal .modal-header h2 svg { flex:0 0 auto; }
+.pim-row { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-2) 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.pim-row:last-child { border-bottom:0; }
+.pim-row input { width:18px; height:18px; flex:0 0 auto; accent-color:var(--ai); }
+.pim-row small { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; }
+.pim-row.is-off, .pim-row--base { cursor:default; }
+.pim-row.is-off .pim-name { opacity:.6; }
+.pim-name { flex:1; min-width:0; display:flex; flex-direction:column; }
+.pim-name b { font-size:var(--fs-2); }
+.pim-name small { overflow:hidden; text-overflow:ellipsis; }
+.pim-perf { display:flex; gap:var(--s-2); flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.pim-perf b { font-weight:var(--fw-med); }
+.pim-where { flex:0 0 auto; }
 .aip-card {
   border:1px solid var(--border); border-radius:var(--r-2); background:var(--surface-2);
   padding:var(--s-3); margin-bottom:var(--s-3);

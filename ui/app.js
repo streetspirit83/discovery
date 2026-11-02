@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027i';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261102a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261102b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -13,6 +13,7 @@ import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261027h';
+import { openPeerImportModal } from './components/peer-import-modal.js?v=20261102b';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
@@ -37,6 +38,7 @@ import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
+import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261102b';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
@@ -1136,6 +1138,37 @@ async function handleBriefingHash() {
   return openBriefingHit(hit);
 }
 
+/** Link aus dem Claude-Chat (`#add=…&peer=…`): Prüffenster für die Alternativen. */
+function handlePeerHash() {
+  const request = parsePeerHash(location.hash);
+  if (!request) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  openPeerImportModal({
+    request,
+    blocked: useMock
+      ? 'Dieser Browser ist nicht mit deinem Discovery-Backend verbunden. Öffne den Link in dem Browser, in dem die App eingerichtet ist.'
+      : null,
+    backend: {
+      backendUrl: localStorage.getItem('discovery_backend_url'),
+      secret: localStorage.getItem('discovery_secret'),
+    },
+    loadExisting: async () => {
+      const labels = { inbox: 'Inbox', watch: 'Watch', export: 'Export', archive: 'Archiv' };
+      const found = new Map();
+      for (const [bucket, label] of Object.entries(labels)) {
+        const blob = await ensureBlob(bucket);
+        for (const c of blob?.candidates ?? []) found.set(candidateKey(c), `liegt in ${label}`);
+      }
+      return found;
+    },
+    onImport: async (candidates) => {
+      await importCandidates(candidates);
+      await switchBlob('inbox');
+    },
+  });
+  return true;
+}
+
 /** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
 function candidateIdFromHash() {
   const m = /[#&]c=([^&]+)/.exec(location.hash || '');
@@ -2198,11 +2231,11 @@ async function init() {
   // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
   // sheet on load, and on later hash changes (second push while app is open).
   if (candidateIdFromHash()) openCandidateById(candidateIdFromHash());
-  else handleBriefingHash();
+  else if (!handlePeerHash()) handleBriefingHash();
   window.addEventListener('hashchange', () => {
     const id = candidateIdFromHash();
     if (id) openCandidateById(id);
-    else handleBriefingHash();
+    else if (!handlePeerHash()) handleBriefingHash();
   });
 
   // ── Scrim + ESC ──────────────────────────────────────────────────────────────

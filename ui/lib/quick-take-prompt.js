@@ -10,6 +10,9 @@
  * mitgebündelt, dieser Knopf soll keinen Backend-Deploy auslösen.
  */
 
+const APP_URL = 'https://streetspirit83.github.io/discovery/';
+const EXCHANGES = 'NASDAQ, NYSE, AMEX, XETR, LSE, EURONEXT, MIL, BME, SIX, VIE, OMXSTO, OMXCOP, OSL, OMXHEX';
+
 function money(v, cur) {
   return v == null ? null : `${Number(v).toFixed(2)} ${cur}`;
 }
@@ -55,6 +58,10 @@ export function quickTakePrompt(c, { currency = 'USD', date = new Date().toISOSt
     '2. Einordnung: Was macht die Firma, was treibt die Story, was ist der wichtigste offene Punkt?',
     '3. Wettbewerb: Wo steht sie gegenüber den 2–3 wichtigsten Wettbewerbern?',
     '4. Größe: Marktkapitalisierung und Umsatz, verglichen mit diesen Wettbewerbern.',
+    '',
+    'Liste am Ende unter „Alternativen:“ immer genau 3 börsennotierte Titel aus demselben Thema oder Umfeld, die gerade interessanter wirken, etwa durch besseres Momentum. Es müssen keine direkten Wettbewerber sein. Je Zeile: Name, Ticker @ Börse, ein Halbsatz Begründung. Die Alternativen zählen nicht zu den 200 Wörtern.',
+    `Schreibe darunter genau diesen Markdown-Link und ersetze nur TICKER und BÖRSE, ohne Leerzeichen: [In Discovery prüfen](${APP_URL}#add=TICKER:BÖRSE,TICKER:BÖRSE,TICKER:BÖRSE&peer=${c.symbol}:${c.exchange})`,
+    `Erlaubte Börsen: ${EXCHANGES}.`,
     ...[dataLine(c, currency)].filter(Boolean).flatMap((l) => ['', l]),
   ].join('\n');
 }
