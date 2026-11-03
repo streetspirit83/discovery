@@ -30,7 +30,7 @@
  * Momentum-Analyse und Tiefenanalyse (samt ihrer Marken in der Zeile).
  */
 
-import { num, r4, rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103f';
+import { num, r4, rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103g';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
 import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261027c';

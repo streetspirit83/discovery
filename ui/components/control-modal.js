@@ -13,7 +13,7 @@
 
 import { icons } from '../lib/icons.js?v=20261103f';
 import { filterMultiSelect } from './filter-multiselect.js?v=20261103f';
-import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20261103f';
+import { liveOverallScore, liveHealthScore, capSizeFromMC, volRatioPct } from './candidate-list.js?v=20261103g';
 import { monthlyGrowthRate } from '../lib/tv-upside.js';
 import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 

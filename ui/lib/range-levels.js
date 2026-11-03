@@ -85,7 +85,7 @@ function nextLevel(it, p, dir, hist) {
   const near = (a, b) => Math.abs(a - p) - Math.abs(b - p);
   const cs = (it.cl || []).map((c) => +c[0]).filter(beyond).sort(near);
   if (cs.length) return { lvl: cs[0], src: 'Cluster' };
-  const c = hist && hist.c ? h.c.filter((x) => x > 0) : [];
+  const c = hist && hist.c ? hist.c.filter((x) => x > 0) : [];
   if (c.length >= 2 * PW + 1) {
     let piv = [];
     for (let i = PW; i < c.length - PW; i++) { const w = c.slice(i - PW, i + PW + 1), mx = Math.max.apply(null, w), mn = Math.min.apply(null, w); if (c[i] === mx || c[i] === mn) piv.push(c[i]); }

@@ -13,7 +13,7 @@ import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20261103f';
-import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103f';
+import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103g';
 import { candidateTriggeredCount } from '../lib/alerts.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
@@ -2100,17 +2100,22 @@ function rangeOf(c) {
     c.range_override?.sup, c.range_override?.res, c.eur_basis?.f, fxEurUsd].join('|');
   const hit = rangeCache.get(c);
   if (hit?.sig === sig) return hit.val;
-  const { it, ov, lp, hist } = rangeInputs(c, fxEurUsd);
-  const p = lp ?? it.p;
   let val = null;
-  if (p > 0) {
-    const v = rangeView(it, ov, { p }, hist);
-    const dist = (lvl) => (lvl > 0 ? (lvl / p - 1) * 100 : null);
-    val = {
-      sup: v.sup ?? null, res: v.res ?? null, st: v.st, pos: v.pos, conv: it.conv,
-      distSup: dist(v.sup), distRes: dist(v.res), manSup: v.supM, manRes: v.resM,
-      trend: rangeTrend(hist?.c ?? ls10Series(c)?.prices),
-    };
+  // Eine Range-Zelle darf nie die ganze Tabelle mitreissen.
+  try {
+    const { it, ov, lp, hist } = rangeInputs(c, fxEurUsd);
+    const p = lp ?? it.p;
+    if (p > 0) {
+      const v = rangeView(it, ov, { p }, hist);
+      const dist = (lvl) => (lvl > 0 ? (lvl / p - 1) * 100 : null);
+      val = {
+        sup: v.sup ?? null, res: v.res ?? null, st: v.st, pos: v.pos, conv: it.conv,
+        distSup: dist(v.sup), distRes: dist(v.res), manSup: v.supM, manRes: v.resM,
+        trend: rangeTrend(hist?.c ?? ls10Series(c)?.prices),
+      };
+    }
+  } catch (err) {
+    console.warn('[range]', c.symbol, err.message);
   }
   rangeCache.set(c, { sig, val });
   return val;
