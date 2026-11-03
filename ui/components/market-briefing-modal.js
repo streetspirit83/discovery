@@ -147,6 +147,22 @@ function technikBlock(rows, find) {
   </section>`;
 }
 
+/* Volumen-Mover: nachrichtlich, nur Tagesbriefing. Ältere Briefings haben das Feld nicht. */
+function volumeBlock(rows, find) {
+  if (!rows?.length) return '';
+  const num = (v) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `<section class="bf-section"><h3 class="bf-h">Grösste Volumen-Mover</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}${r.earnings ? ' <span class="mb-muted">· Zahlen</span>' : ''}</span>
+        <span class="mb-num">${esc(num(r.rel_vol))}×</span>
+        <span class="mb-num mb-num--sm ${tone(r.chg_1d)}">${esc(pct(r.chg_1d))}</span>
+      </div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
 /* Analystenaktionen: Tagesbriefing und Watchlist-Rückblick. Ältere Briefings haben
    das Feld nicht, dann fehlt der Block. */
 function analystBlock(rows, find) {
@@ -188,6 +204,7 @@ function renderEntry(b, find) {
     ${chartBlock(b.top, b.flop)}
     ${moverBlock('Top Movers', b.top, find)}
     ${moverBlock('Flops', b.flop, find)}
+    ${volumeBlock(b.volume, find)}
     ${analystBlock(b.analyst, find)}
     ${earningsBlock(b.earnings, find)}
     ${technikBlock(b.technik, find)}

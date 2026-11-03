@@ -21,9 +21,10 @@ Nur Quellen vom Handelstag oder Vortag verwenden. Jede Nachrichtenaussage mit Qu
 2. **Marktumfeld:** Kompakte Indextabelle (Leitindizes, SOX, VIX, Rendite, Öl) aus `indices`, stärkste/schwächste Branchen; was hat die Märkte getrieben, und wie fügen sich die beobachteten Werte ein (`breadth`)?
 3. **Top Movers** und **Flops:** kompakte Tabelle (Titel · Sektor · Heute · 1 Woche · Auslöser), darunter je ein kurzer Absatz zu den drei wichtigsten.
 4. **Analysten:** nur wenn `analyst.actions` Hoch- oder Abstufungen enthält, dazu auffällige `clusters` und `consensus_shifts`: kurze Liste (Titel · Haus · Aktion · Kursreaktion). Einzelne Kurszieländerungen weglassen.
-5. **Anstehende Quartalszahlen:** Tabelle (Termin · Titel · 1 Woche · worauf es ankommt).
-6. **Technik in Kürze:** nur die relevantesten Einträge aus `signals` (Ausbrüche/Brüche, Golden/Death Cross, RSI-Extreme), jeweils ein Satz.
-7. **Fazit des Redakteurs:** Einordnung in 4–6 Sätzen – was war Rauschen, was ein echtes Signal, worauf morgen achten.
+5. **Volumen:** kurze Liste aus `movers_volume` (Titel · Vielfaches · Heute), nachrichtlich und ohne eigene Recherche.
+6. **Anstehende Quartalszahlen:** Tabelle (Termin · Titel · 1 Woche · worauf es ankommt).
+7. **Technik in Kürze:** nur die relevantesten Einträge aus `signals` (Ausbrüche/Brüche, Golden/Death Cross, RSI-Extreme), jeweils ein Satz.
+8. **Fazit des Redakteurs:** Einordnung in 4–6 Sätzen – was war Rauschen, was ein echtes Signal, worauf morgen achten.
 
 **Regeln:**
 - Kurze, klare Sätze, keine Floskeln. Zahlen im deutschen Format (+2,4 %).

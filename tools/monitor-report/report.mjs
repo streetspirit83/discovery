@@ -24,6 +24,8 @@ const BRK = 0.005;          // Bruch erst 0,5 % jenseits des Levels (wie Watch R
 const MOVERS = 10;          // Länge der Movers-Listen im JSON
 const DOC_TOP = 8;          // Zeilen je Tabelle im Doc
 const DOC_LIST = 6;         // Titel je Signalzeile im Doc
+const MIN_REL_VOL = 1.5;    // Volumen-Mover: ab diesem Vielfachen des 10-Tage-Schnitts
+const MIN_TURNOVER = 1e6;   // Ø-Tagesumsatz in Notierungswährung; darunter ist „hohes Volumen" Rauschen
 const BIG_MOVE = 5;         // |1D| ab dieser Schwelle gilt als Ausreisser
 const TZ = 'Europe/Berlin';
 
@@ -83,6 +85,7 @@ export const FIELD_GUIDE = {
   'breadth': 'Marktbreite der beobachteten Titel: Anzahl steigender/fallender Werte, Mediane der Kursveränderung, Anteil über SMA50/SMA200, Ø Qualitäts-Score 0–100.',
   'earnings_next_7d': 'Angekündigte Quartalszahlen in den nächsten 7 Tagen (Datum laut TradingView; Uhrzeit vor/nach Börse ist nicht bekannt).',
   'movers_1d': 'Grösste Tagesgewinner (top) und -verlierer (flop) nach Kursveränderung zum Vortagesschluss in %.',
+  'movers_volume': 'Titel mit dem höchsten Handelsvolumen im Verhältnis zum 10-Tage-Schnitt. rel_vol = Vielfaches (2,5 = das 2,5-Fache), ab 1,5, nur mit mindestens 1 Mio. Ø-Tagesumsatz. earnings = Zahlen am Tag oder Vortag. Nur TradingView-Hauptbörse, bei deutschen Titeln also Xetra.',
   'movers_1w': 'Dasselbe auf Wochensicht (Performance 1 Woche in %).',
   'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
   'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
@@ -141,6 +144,21 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     top: byChg.filter((c) => c.tv_data.change_1d > 0).sort((a, b) => b.tv_data.change_1d - a.tv_data.change_1d).slice(0, MOVERS).map(mv),
     flop: byChg.filter((c) => c.tv_data.change_1d < 0).sort((a, b) => a.tv_data.change_1d - b.tv_data.change_1d).slice(0, MOVERS).map(mv),
   };
+  /* Volumen: Vielfaches des 10-Tage-Schnitts statt absoluter Stückzahl, sonst stünden
+     dort immer dieselben Grosswerte. `earnings`: Zahlen am Tag oder Vortag erklären es meist. */
+  const volOf = (c) => {
+    const v = tv(c, 'volume'), avg = tv(c, 'avg_vol_10d'), px = tv(c, 'close');
+    return v > 0 && avg > 0 && px > 0 && avg * px >= MIN_TURNOVER ? v / avg : null;
+  };
+  const movers_volume = tvd.map((c) => ({ c, rel: volOf(c) }))
+    .filter((x) => x.rel >= MIN_REL_VOL)
+    .sort((a, b) => b.rel - a.rel).slice(0, MOVERS)
+    .map(({ c, rel }) => {
+      const last = Number(tv(c, 'earnings_last_date'));
+      const recent = last > 0 && (now.getTime() / 1000 - last) / 86400 <= 1.5;
+      return { ...ref(c), rel_vol: r1(rel), chg_1d: r2(tv(c, 'change_1d')), perf_1w: r2(tv(c, 'perf_w')), ...(recent ? { earnings: true } : {}) };
+    });
+
   const pl = perfLeaders(cands, '1W');
   const wk = (r) => ({ ...ref(r.c), perf_1w: r2(r.perf), perf_1m: r2(tv(r.c, 'perf_1m')) });
   const movers_1w = { top: pl.gainers.slice(0, MOVERS).map(wk), flop: pl.losers.slice(0, MOVERS).map(wk) };
@@ -258,6 +276,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     headlines: [],
     earnings_next_7d,
     movers_1d,
+    movers_volume,
     movers_1w,
     signals,
     stocks,
@@ -434,6 +453,9 @@ ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.top))}
 ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.flop))}
 
 ${analystHtml(rep.analyst)}
+
+${rep.movers_volume?.length ? `<h2>Höchstes relatives Volumen</h2>
+${table(['Titel', 'Volumen', 'Heute', '1 Woche'], rep.movers_volume.slice(0, DOC_TOP).map((x) => [title(x) + (x.earnings ? ' · Zahlen' : ''), `${esc(fmtNum(x.rel_vol))}×`, tPct(x.chg_1d), tPct(x.perf_1w)]))}` : ''}
 
 <h2>Quartalszahlen in den nächsten 7 Tagen</h2>
 ${table(['Termin · Titel', 'Sektor', '1 Woche', '1 Monat', 'RSI'], earnRows)}

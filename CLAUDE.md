@@ -369,7 +369,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   ein Bericht-Objekt (`buildReport`, Schema `discovery-monitor-2.0`: `field_guide`,
   `breadth`, `indices` (Leitindizes/Zins/Rohstoffe/FX aus `BENCHMARKS` in `run.mjs` plus
   die Branchen aus `INDEX_GROUPS`, beides über `fetchIndexRows`), `headlines` = automatische Textbausteine, `earnings_next_7d`,
-  `movers_1d`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
+  `movers_1d`/`movers_volume`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
   lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
   `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
   und „Discovery Monitor.json" (kompakte Tagesfassung für die KI-Auswertung via
@@ -445,6 +445,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,
   median_chg_1d,median_perf_1w,above_sma200_pct,big_moves}, drivers[{text}],
   top/flop[{symbol,exchange,name,sector,chg_1d,perf_1w,reason}],
+  volume[{symbol,exchange,name,rel_vol,chg_1d,earnings?}] (optional, 1:1 aus `movers_volume`: Vielfaches des 10-Tage-Schnitts, nachrichtlich),
   earnings[{date,weekday,symbol,exchange,name,focus}],
   analyst[{symbol,exchange,name,label,dir,firm,rating,target,text}] (optional, auch im Watch-Rückblick),
   technik[{symbol,exchange,name,signal,dir,text}], fazit, sources[{title,url,date}]` —
