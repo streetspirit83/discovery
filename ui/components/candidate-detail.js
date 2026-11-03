@@ -13,7 +13,6 @@ import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261103b';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
-import { SIGNAL_CLASS, CLUSTER_LABELS, EVENT_LABELS, materialityLabel, fullDate, esc as escCow } from '../lib/cowork-review.js?v=20260924a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
@@ -41,8 +40,6 @@ const TABS = [
   { key: 'trade',       label: 'Trade' },
   { key: 'fundamental', label: 'Fund.' },
   { key: 'news',        label: 'News' },
-  { key: 'cowork',      label: 'Cowork' },
-  { key: 'meta',        label: 'Meta' },
 ];
 
 function formatDate(isoStr) {
@@ -170,7 +167,7 @@ function renderToolbar(c) {
       ${chipLink(chatUrl('perplexity', c, { currency: nativeCur(c) }), PERPLEXITY_LOGO, 'Ersteinschätzung in Perplexity', 'link-chip--ai')}
       ${chipLink(scUrl, icons.stethoscope, 'StockConsultant', 'link-chip--sc')}
       ${chipLink(tfUrl, icons.barChart2, 'TraderFox Visualisierung', 'link-chip--tf')}
-      ${chipBtn('detail-edit-links', icons.pencil, 'Links bearbeiten', 'link-chip--edit')}
+      ${chipBtn('detail-edit-links', icons.pencil, 'Bearbeiten', 'link-chip--edit')}
     </div>
     <div class="detail-links-edit" id="detail-links-edit" hidden>
       <div class="link-url-fields">
@@ -191,7 +188,16 @@ function renderToolbar(c) {
           <textarea id="lf-prompt" rows="4"
             placeholder="Eigener Prompt für diesen Titel – ersetzt die Vorlage beim Teleskop-Knopf">${(c.research_prompt ?? '').replace(/</g, '&lt;')}</textarea>
         </div>
+        <div class="link-url-row">
+          <label>Merkliste-Symbol (Fallback)</label>
+          <input type="text" id="lf-merkliste" value="${c.merkliste_symbol ?? ''}" placeholder="z. B. RHM oder RHM.DE">
+          <p class="detail-hint">Zusätzlicher Schlüssel für die Zuordnung zum Merkliste-Portfolio (Einstand &amp; P/L), falls Symbol oder Yahoo-Ticker dort anders heissen.</p>
+        </div>
         <button class="btn btn-sm btn-secondary" id="detail-save-links">Speichern</button>
+      </div>
+      <h4 class="pv-subhead">Screener / Signal-Herkunft (${(c.sources ?? []).length})</h4>
+      <div class="sources-list">
+        ${(c.sources ?? []).map((s, i) => renderSource(s, i)).join('')}
       </div>
     </div>
   `;
@@ -467,7 +473,7 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
-function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
+function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
   const tv = disp.tv;
   const parts = [];
   if (!tv) parts.push(`<p class="pv-empty">Keine TV-Daten – „TV Daten“ in der Tabelle laden.</p>`);
@@ -485,8 +491,10 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
   // (das braucht ein auflösbares Börsensuffix, siehe yahooChartSymbol).
   const barsLoadable = isUsTicker(c) || yahooChartSymbol(c) != null;
   const tdReachable = canTd || barsLoadable;    // 1J shown (data) or loadable
-  // Show 1J when explicitly picked, or when there's no LS chart to fall back to.
-  const want1J = tdReachable && (horizon === '1J' || !canLs);
+  // Kerzen sind der Standard. Fehlen sie und laufen auch nicht gerade an (z. B. US
+  // ohne TwelveData-Key), bleibt die LS-Ansicht, solange niemand 1J gewählt hat.
+  const candlesPending = canTd || c._swing_loading || ui.horizonPicked;
+  const want1J = tdReachable && ((horizon === '1J' && candlesPending) || !canLs);
   const hasLive = Array.isArray(c.ls_quote?.series) && c.ls_quote.series.length > 1;
 
   if (want1J || canLs) {
@@ -562,7 +570,7 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '10T', ui = {}) {
     // Kopf + Chart + Level-Bar + Zoom-Zeile liegen zusammen in `#chart-fs` —
     // dieser Block wandert im Vollbild als Ganzes in den <body> (siehe
     // `enterChartFs`), damit Titel, Horizont-Umschalter und Zoom mitkommen.
-    const profile = want1J || !tdReachable ? profileHTML(c) : '';
+    const profile = profileHTML(c);
     parts.push(`<div class="chart-fs" id="chart-fs">
         <div class="chart-head-row">
           <h4 class="pv-subhead"><span class="chart-fs__sym">${c.symbol}</span>${head}</h4>
@@ -610,8 +618,8 @@ function profileHTML(c) {
   }
   const p = c.company_profile;
   if (!p?.description) {
-    // Manueller Abruf (spart ROIC-Rate-Limit): Button statt Auto-Fetch;
-    // nach einem Fehlversuch bleibt er als "erneut versuchen" stehen.
+    // Das Sheet lädt das Profil beim Öffnen selbst; der Knopf bleibt für den
+    // Fehlerfall und ohne Backend.
     return `<div class="id-profile"><button class="btn btn-sm btn-secondary" id="profile-load">📇 Firmenprofil laden${p?.error ? ' (erneut versuchen)' : ''}</button></div>`;
   }
   const src = String(p.source ?? '').startsWith('wikipedia') ? 'Wikipedia'
@@ -743,62 +751,6 @@ function renderAnalystPanel(c) {
     ${dist ? `<div class="an-dist">${dist.map(([label, n]) => `<div class="an-dist__cell"><b>${n ?? 0}</b><small>${label}</small></div>`).join('')}</div>` : ''}
     ${rows ? `<div class="an-list">${rows}</div>` : ''}
     ${status}`;
-}
-
-/* ── Tab: Cowork-Triage ───────────────────────────────────────────────────
-   Zeigt, was der geplante Tageslauf zu diesem Titel gefunden hat. Rein
-   darstellend: der Tab ruft nichts ab und speichert nichts, die Daten liegen
-   fertig am Kandidaten. Die Quellen stehen als Icon-Only-Links (Styleguide §4). */
-
-function renderCoworkTab(c) {
-  const r = c.cowork_review;
-  if (!r) {
-    return `<p class="pv-muted">Noch kein Cowork-Urteil. Der geplante Lauf sieht die
-      Watchlist täglich um 7:30 Uhr durch und legt sein Ergebnis hier ab.</p>`;
-  }
-
-  const when = fullDate(r.reviewed_at);
-  const foot = `<p class="cow-foot pv-muted">Maschinelle Triage aus öffentlichen Schlagzeilen,
-    geprüft ${when}. Sie ersetzt keine eigene Prüfung und ist keine Anlageempfehlung.</p>`;
-
-  if (r.no_news || !(r.materiality > 0)) {
-    return `<div class="cow-panel">
-      <p class="cow-quiet">${escCow(r.summary || 'Keine relevanten Nachrichten im Zeitfenster gefunden.')}</p>
-      ${foot}
-    </div>`;
-  }
-
-  const cls = SIGNAL_CLASS[r.signal] ?? 'neutral';
-  const chips = (r.event_types ?? [])
-    .filter((e) => e !== 'none')
-    .map((e) => `<span class="cow-chip">${escCow(EVENT_LABELS[e] ?? e)}</span>`)
-    .join('');
-
-  const sources = (r.sources ?? []).map((s) => {
-    const title = `${escCow(s.title ?? 'Quelle')}${s.published ? ` (${escCow(s.published)})` : ''}`;
-    return `<li class="cow-src">
-      <a class="link-chip" href="${escCow(s.url)}" target="_blank" rel="noopener"
-         title="${title}" aria-label="${title}">${icons.newspaper}</a>
-      <span class="cow-src__title">${escCow(s.title ?? s.url)}</span>
-      <span class="cow-src__date">${escCow(s.published ?? '')}</span>
-    </li>`;
-  }).join('');
-
-  return `<div class="cow-panel">
-    <div class="cow-head">
-      <span class="cow-mark cow-mark--${cls} cow-mark--lg" title="${escCow(materialityLabel(r.materiality))}">
-        <span class="cow-mark__dot" aria-hidden="true"></span><span class="cow-mark__num">${r.materiality}</span></span>
-      <div class="cow-head__text">
-        <div class="cow-head__line">${escCow(r.headline || '')}</div>
-        <div class="cow-head__sub">${escCow(materialityLabel(r.materiality))} · ${escCow(CLUSTER_LABELS[r.cluster] ?? r.cluster ?? '')}</div>
-      </div>
-    </div>
-
-    <p class="cow-summary">${escCow(r.summary || '')}</p>
-    ${chips ? `<div class="cow-chips">${chips}</div>` : ''}
-    ${sources ? `<ul class="cow-srcs">${sources}</ul>` : '<p class="pv-muted">Keine Quellen hinterlegt.</p>'}
-    ${foot}
-  </div>`;
 }
 
 /* ── Tab 2: Trade (live values from trade-setup / ls-history-signals) ─────── */
@@ -2007,24 +1959,6 @@ function renderSource(source, idx) {
   `;
 }
 
-function renderMetaTab(c) {
-  return `
-    <h4 class="pv-subhead">Screener / Signal-Herkunft (${c.sources.length})</h4>
-    <div class="sources-list">
-      ${c.sources.map((s, i) => renderSource(s, i)).join('')}
-    </div>
-    <h4 class="pv-subhead">Merkliste-Mapping</h4>
-    <div class="link-url-fields">
-      <div class="link-url-row">
-        <label>Merkliste-Symbol (Fallback)</label>
-        <input type="text" id="lf-merkliste" value="${c.merkliste_symbol ?? ''}" placeholder="z. B. RHM oder RHM.DE">
-      </div>
-      <button class="btn btn-sm btn-secondary" id="detail-save-merkliste">Mapping speichern</button>
-      <p class="detail-hint">Zusätzlicher Schlüssel, um diesen Kandidaten dem Merkliste-Portfolio zuzuordnen (Einstand &amp; P/L), falls Symbol/Yahoo-Symbol nicht matchen.</p>
-    </div>
-  `;
-}
-
 /* ── Enrichment (footer) ──────────────────────────────────────────────────── */
 
 function renderEnrichment(enrichment) {
@@ -2097,7 +2031,8 @@ export class CandidateDetail {
     this.activeTab = 'performance';
     this.altCurrency = false; // false = native currency, true = USD↔EUR switched
     this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
-    this.chartHorizon = '10T'; // Performance chart: '10T' LS-Intraday | '1J' TD-Tageskerzen
+    this.chartHorizon = '1J'; // Performance chart: '1J' TD-Tageskerzen | '10T' LS-Intraday
+    this.horizonPicked = false; // 1J bewusst gewählt: dann auch Ladeknopf statt LS-Rückfall
     this.chartZoom = 'ALL';    // TD-Chart Zoom-Preset (1M/3M/6M/ALL)
     this.showInd = localStorage.getItem('discovery_chart_ind') === '1'; // BB/Supertrend/CCI
     this._chart = null;       // Lightweight Charts instance (destroyed on re-render)
@@ -2672,7 +2607,8 @@ export class CandidateDetail {
     const switched = this.candidate?.id !== candidate.id;
     if (switched) {
       this.activeTab = 'performance'; // Tab 1 onload
-      this.chartHorizon = '10T';      // reset chart horizon per candidate
+      this.chartHorizon = '1J';       // reset chart horizon per candidate
+      this.horizonPicked = false;
       this.exitChartFs();             // Vollbild nicht auf den nächsten Ticker mitnehmen
     }
     this.candidate = candidate;
@@ -2716,14 +2652,12 @@ export class CandidateDetail {
     const tl = tradeLevels(c, disp);
     const fi = forecastInput(c, disp);
     const tabPanels = {
-      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { zoom: this.chartZoom, showInd: this.showInd }),
+      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { horizonPicked: this.horizonPicked, zoom: this.chartZoom, showInd: this.showInd }),
       trend:       renderTrendTab(c),
       forecast:    renderForecastTab(c, disp, fi),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
       fundamental: renderFundamentalTab(c, disp),
       news:        renderNewsTab(c),
-      cowork:      renderCoworkTab(c),
-      meta:        renderMetaTab(c),
     };
 
     this.el.innerHTML = `
@@ -2918,7 +2852,7 @@ export class CandidateDetail {
     // Performance chart horizon toggle (10T LS ⟷ 1J TD candles). Picking 1J
     // when the candles aren't fetched yet runs the Swing-Check on demand.
     const tdLoaded = () => Array.isArray(c.swing_analysis?.ohlc) && c.swing_analysis.ohlc.length >= 2;
-    const pick1J = () => { this.chartHorizon = '1J'; if (tdLoaded()) this.render(); else this.onAction?.('tdQuote', c); };
+    const pick1J = () => { this.chartHorizon = '1J'; this.horizonPicked = true; if (tdLoaded()) this.render(); else this.onAction?.('tdQuote', c); };
     this.el.querySelectorAll('.chart-horizon [data-horizon]').forEach((btn) => {
       btn.addEventListener('pointerup', () => {
         const h = btn.dataset.horizon;
@@ -3013,9 +2947,10 @@ export class CandidateDetail {
       // Leeres Feld heisst „zurück zur Vorlage", nicht „leerer Prompt" — deshalb
       // null statt Leerstring, sonst kopierte der Knopf später nichts.
       const prompt = this.el.querySelector('#lf-prompt')?.value.trim() || null;
+      const merkliste = this.el.querySelector('#lf-merkliste')?.value.trim() || null;
       c.links = newLinks;
       c.research_prompt = prompt;
-      this.onAction?.('saveLinks', c, { links: newLinks, research_prompt: prompt });
+      this.onAction?.('saveLinks', c, { links: newLinks, research_prompt: prompt, merkliste_symbol: merkliste });
       this.render();
     });
 
@@ -3023,12 +2958,6 @@ export class CandidateDetail {
       const notes = this.el.querySelector('#detail-notes').value;
       c.notes = notes;
       this.onAction?.('saveNotes', c, { notes });
-    });
-
-    this.el.querySelector('#detail-save-merkliste')?.addEventListener('pointerup', () => {
-      const value = this.el.querySelector('#lf-merkliste').value.trim() || null;
-      c.merkliste_symbol = value;
-      this.onAction?.('saveMerklisteSymbol', c, { value });
     });
 
     this.el.querySelector('#detail-enrich').addEventListener('pointerup', async () => {

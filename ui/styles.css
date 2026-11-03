@@ -2752,54 +2752,6 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
   .ls-chart { height:clamp(280px, 42vh, 520px); }
 }
 
-/* ═══ Cowork-Triage ═════════════════════════════════════════════════════════
-   Tabellen-Marker, Detail-Tab und Briefing-Modal. Der tägliche Cowork-Lauf
-   legt sein Urteil an `cowork_review` ab, das Briefing im `review`-Blob.     */
-
-/* Marker: Punkt (Richtung) + Ziffer (Relevanz). In der Tabelle klein genug,
-   um neben Bias und S200Ø nicht aufzutrumpfen. */
-.cow-mark {
-  display:inline-flex; align-items:center; gap:var(--s-1);
-  font-variant-numeric:tabular-nums; white-space:nowrap;
-}
-.cow-mark__dot {
-  width:8px; height:8px; border-radius:var(--r-pill);
-  background:var(--muted); flex:0 0 auto;
-}
-.cow-mark__num { font-size:var(--fs-2); font-weight:var(--fw-bold); color:var(--text); }
-.cow-mark--pos     .cow-mark__dot { background:var(--pos); }
-.cow-mark--neg     .cow-mark__dot { background:var(--neg); }
-.cow-mark--neutral .cow-mark__dot { background:var(--muted); }
-.cow-mark--lg { gap:var(--s-2); }
-.cow-mark--lg .cow-mark__dot { width:12px; height:12px; }
-.cow-mark--lg .cow-mark__num { font-size:var(--fs-4); }
-
-/* ── Detail-Tab ─────────────────────────────────────────────────────────── */
-.cow-panel { display:flex; flex-direction:column; gap:var(--s-3); }
-.cow-head  { display:flex; align-items:flex-start; gap:var(--s-3); }
-.cow-head__text  { min-width:0; }
-/* Zweite Zeile immer eine Stufe kleiner als die darüber (Styleguide §2). */
-.cow-head__line  { font-size:var(--fs-4); font-weight:var(--fw-bold); line-height:1.25; }
-.cow-head__sub   { font-size:var(--fs-3); color:var(--muted); }
-.cow-summary     { font-size:var(--fs-2); line-height:1.5; margin:0; }
-.cow-quiet       { font-size:var(--fs-2); color:var(--muted); margin:0; }
-
-.cow-chips { display:flex; flex-wrap:wrap; gap:var(--s-1); }
-.cow-chip {
-  font-size:var(--fs-1); font-weight:var(--fw-med); color:var(--muted);
-  border:1px solid var(--border); background:var(--surface-3);
-  border-radius:var(--r-pill); padding:1px var(--s-2); white-space:nowrap;
-}
-
-.cow-srcs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s-2); }
-.cow-src  { display:flex; align-items:center; gap:var(--s-2); min-width:0; }
-.cow-src__title {
-  font-size:var(--fs-2); min-width:0; flex:1 1 auto;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.cow-src__date { font-size:var(--fs-1); color:var(--muted); flex:0 0 auto; }
-.cow-foot { font-size:var(--fs-1); margin:0; }
-
 /* ── Briefing-Modal ─────────────────────────────────────────────────────── */
 /* Breiter als die Standard-520px: drei Cluster-Kacheln nebeneinander plus
    Fließtext brauchen Platz, sonst bleibt von jedem Cluster-Satz ein Wort. */
@@ -2872,7 +2824,7 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .bf-foot { font-size:var(--fs-1); margin:0; }
 
 /* ── Marktbriefing-Modal (market-briefing-modal.js) ─────────────────────────
-   Baut auf den bf-*-Bausteinen des Cowork-Briefings auf (Kacheln, Notes,
+   Baut auf den bf-*-Bausteinen auf (Kacheln, Notes,
    Abschnittsköpfe); mb-* ergänzt nur, was dort fehlt. */
 .mb-head { display:flex; flex-direction:column; gap:var(--s-2); }
 .mb-dateline {

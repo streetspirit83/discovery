@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103c';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103d';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261103b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261103d';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -17,12 +17,10 @@ import { openPeerImportModal } from './components/peer-import-modal.js?v=2026110
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
-// Cowork-Briefing (review-Blob): seit Okt. 2026 nicht mehr über die Topbar
-// erreichbar – der Zeitungs-Knopf öffnet das Marktbriefing. Modul bleibt liegen.
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103b';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261103c';
+import { renderControlModal } from './components/control-modal.js?v=20261103d';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -1689,6 +1687,11 @@ async function handleAction(action, candidate, extras = {}) {
     // beides steht im selben Bearbeiten-Feld, also gehört es in einen Request.
     candidate.links = extras.links;
     const patch = { links: extras.links };
+    const mappingChanged = 'merkliste_symbol' in extras && (extras.merkliste_symbol ?? null) !== (candidate.merkliste_symbol ?? null);
+    if (mappingChanged) {
+      candidate.merkliste_symbol = extras.merkliste_symbol;
+      patch.merkliste_symbol = extras.merkliste_symbol;
+    }
     if ('research_prompt' in extras) {
       candidate.research_prompt = extras.research_prompt;
       patch.research_prompt = extras.research_prompt;
@@ -1701,7 +1704,12 @@ async function handleAction(action, candidate, extras = {}) {
         return;
       }
     }
-    toast(patch.research_prompt ? 'Links + Prompt gespeichert' : 'Links aktualisiert', 'success', 1500);
+    // Neues Mapping: Einstand und P/L sofort über den neuen Schlüssel zuordnen.
+    if (mappingChanged && merklisteMaps) {
+      applyMerklisteEntries(allBlobs[currentBlobType]?.candidates ?? [], merklisteMaps);
+      candidateList.renderRows();
+    }
+    toast('Gespeichert', 'success', 1500);
   }
 
   /* Detail-Sheet geöffnet: alle vier Quellen frisch holen — LS-Kurs, Kerzen
@@ -1723,6 +1731,11 @@ async function handleAction(action, candidate, extras = {}) {
     if (!c.company_profile?.description) {
       const hit = compactProfile(cachedCompanyProfile(c));
       if (hit) { c.company_profile = hit; candidateDetail.render(); saveProfile(c, hit); }
+    }
+    // Steht direkt unter dem Chart: fehlt es, einmal selbst holen. Ein Treffer landet
+    // im Blob, ein Fehlversuch bleibt für diese Sitzung beim Knopf (spart ROIC-Limit).
+    if (!useMock && !c.company_profile?.description && !c.company_profile?.error) {
+      handleAction('loadProfile', c);
     }
     const plan = autoFetchPlan(c, {
       force: true,
@@ -1834,24 +1847,6 @@ async function handleAction(action, candidate, extras = {}) {
       prefillPriceEur: extras.priceEur,
     });
     return;
-  }
-
-  if (action === 'saveMerklisteSymbol') {
-    candidate.merkliste_symbol = extras.value;
-    if (!useMock) {
-      try {
-        await storageClient.updateCandidate(currentBlobType, candidate.id, { merkliste_symbol: extras.value });
-      } catch (err) {
-        toast(`Mapping speichern fehlgeschlagen: ${err.message}`, 'error');
-        return;
-      }
-    }
-    // Re-apply the merkliste portfolio map so Einstand/P/L pick up the new key.
-    if (merklisteMaps) {
-      applyMerklisteEntries(blob.candidates, merklisteMaps);
-      candidateList.renderRows();
-    }
-    toast('Merkliste-Mapping gespeichert', 'success', 1500);
   }
 
   if (action === 'enriched') {

@@ -120,6 +120,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`).
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
+  Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Der Stift in der Toolbar
+  öffnet das Bearbeiten-Feld: Links, Research-Prompt, Merkliste-Symbol (ein Speichern)
+  und die Signal-Herkunft. Der Perf.-Chart startet mit den Tageskerzen (US TwelveData,
+  sonst Yahoo); ohne Kerzen und ohne laufenden Abruf bleibt LS, bis 1J gewählt wird.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
   geladener TD-Historie Bias-Verlauf, Regime-Statistik, den **SMA200-Trend**
   (Ø-Wachstum je Monat, Richtung 1M/3M, Fenster) und Fragilität.
@@ -150,12 +154,6 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   **Termine der grössten Tagessprünge** aus `swing_analysis.ohlc` mit —
   gefiltert auf ≥ 2,5 × den Median der absoluten Tagesbewegung des Titels,
   damit keine ereignislosen Tage in der Liste landen.
-- `briefing-modal.js` – Tages-Briefings der Cowork-Triage aus dem `review`-Blob
-  (Zeitungs-Knopf in der Topbar; Makro-Cluster als drei Kacheln, Termine,
-  auffällige Titel). Braucht ein Backend. Dazu die Spalte **„Cow"** (Standard
-  nach „Dauer") und der Detail-Tab „Cowork", beide aus `cowork_review` am
-  Kandidaten; gemeinsame Helfer in `lib/cowork-review.js`, Schreibseite in
-  `tools/cowork-review/`.
 - **KI-Knöpfe** in der Detail-Toolbar (neben ✨): Claude, ChatGPT und Perplexity, je ein Link mit
   `?q=…` und derselben kurzen Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe
   plus Kennzahlen), gebaut von `lib/quick-take-prompt.js` (`chatUrl`). `q` ist nirgends offiziell
@@ -246,7 +244,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   ist das persistierte Ergebnis), `sma-trend.js` (Ø-Wachstum und Richtung einer
   SMA-Reihe; **braucht `swing_analysis.sma`** — der Scanner-Wert `sma200` ist nur
   ein Momentwert und trägt keine Richtung).
-- Firmenprofil: `company-profile.js` (ROIC.ai → Wikipedia, auf Knopfdruck im Perf.-Tab).
+- Firmenprofil: `company-profile.js` (ROIC.ai → Wikipedia), steht im Perf.-Tab unter dem Chart
+  und wird beim Öffnen des Sheets einmal geholt, wenn es fehlt.
   Ein Treffer wird **gekürzt am Kandidaten im Blob** gespeichert (`company_profile`,
   `compactProfile`: Text ≤ 3000 Zeichen am Satzende, fünf Fakten, Quelle, `fetched_at` —
   ≤ ~3,5 KB je Titel), Fehlversuche nie. Danach zeigt jedes Gerät das Profil sofort;
@@ -389,7 +388,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   mit `analyst.available:false`. Scanner: `recommendation_buy` = nur Strong Buy, `_over` = Buy,
   `_under` = Sell, `_sell` = Strong Sell, `mark` 1 bis 3 (Gewichte 1/1,5/2/2,5/3). Nicht im
   Score: Der Backtest zeigt keine verlässliche Nachdrift (`docs/ANALYST_BACKTEST.md`).
-  Spalte **„Ana"** (Standard nach „Cow"): Saldo der letzten 30 Tage aus diesem Blob
+  Spalte **„Ana"** (Standard nach „Dauer"): Saldo der letzten 30 Tage aus diesem Blob
   (`netBalance`, nicht-aufzählbar als `analyst_30d`, `loadAnalystEvents` in `app.js`).
 - **Tagesauswertung „Marktbriefing“:** Claude-Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
   (db-Collection `briefings`, Dokument-ID = Handelstag) **und** in der App über den
@@ -401,7 +400,6 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   → „Watch + Archiv“, sonst der eigene Bucket), beim Schliessen kehrt das Modal zurück
   (`returnToMonitor`). Deep Links: `#briefing` öffnet das Modal, `#s=SYMBOL[:BÖRSE]` das
   Detail-Sheet (`handleBriefingHash` in `app.js`; das Artefakt verlinkt Symbole so).
-  Das Cowork-Briefing (`briefing-modal.js`, review-Blob) hat damit keinen Einstieg mehr.
   Indexkacheln (Modal und Artefakt): zwei feste Viererreihen S&P 500 · Nasdaq · HXR · SOX /
   DAX · KOSPI · VIX · Brent, je Label / Tagesveränderung / absoluter Stand; HXR kommt aus
   `indices.sectors`, der Rest aus `indices.benchmarks`. Darunter je drei stärkste und
