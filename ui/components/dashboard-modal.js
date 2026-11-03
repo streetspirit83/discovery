@@ -15,8 +15,8 @@ import { icons } from '../lib/icons.js?v=20261103f';
 import {
   pulse, scoreMovers, momMovers, pchsMovers, perfLeaders,
   macdFlips, rsiExtremes, trends, smaCrosses,
-} from '../lib/dashboard-metrics.js?v=20260807a';
-import { trendRadar } from '../lib/trend-radar.js?v=20260807a';
+} from '../lib/dashboard-metrics.js?v=20261103h';
+import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 const COLLAPSED = 3;

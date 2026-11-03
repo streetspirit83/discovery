@@ -3,7 +3,7 @@ import {
   scoreRingSVG, priceBandHorizontalSVG, priceLevelsTable,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
 } from '../lib/price-viz.js?v=20260807a';
-import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20260807a';
+import { liveOverallScore, liveHealthScore } from '../lib/dashboard-metrics.js?v=20261103h';
 import { icons } from '../lib/icons.js?v=20261103f';
 import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
@@ -17,6 +17,9 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
 import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103b';
+import { rangeInputs, rangeView } from '../lib/range-levels.js?v=20261103h';
+import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261103h';
+import { eurBasisFactor, barsUnitAdj } from '../lib/eur-basis.js?v=20261103h';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
@@ -141,7 +144,7 @@ function curToggle(disp, extraClass = '') {
   const tip = disp.canSwitch
     ? `Preisanzeige umschalten: ${disp.cur} → ${disp.cur === 'USD' ? 'EUR' : 'USD'}`
     : (disp.fx == null ? 'Kein EUR/USD-Kurs – in Einstellungen eintragen oder TV Daten laden' : `Währung ${disp.cur} (nur USD↔EUR umschaltbar)`);
-  const cls = disp.canSwitch ? (disp.factor !== 1 ? ' is-active' : '') : ' cur-toggle--off';
+  const cls = disp.canSwitch ? ((disp.alt ?? disp.factor !== 1) ? ' is-active' : '') : ' cur-toggle--off';
   const glyph = disp.cur === 'USD' ? '$' : disp.cur === 'EUR' ? '€' : disp.cur;
   return `<button type="button" class="cur-toggle${cls} ${extraClass}" title="${tip}" aria-label="${tip}">${glyph}</button>`;
 }
@@ -214,6 +217,7 @@ function lsDisplayFactor(disp) {
 // nur USD↔EUR als Kurs, alles andere bleibt nativ (siehe „LS = EUR" in CLAUDE.md).
 function curDisplayFactor(disp, native) {
   const n = native ?? 'USD';
+  if (disp.barsF != null && n !== 'USD' && n !== 'EUR') return disp.barsF;
   if (n === disp.cur) return 1;
   if (n === 'USD' && disp.cur === 'EUR' && disp.fx) return 1 / disp.fx;
   if (n === 'EUR' && disp.cur === 'USD' && disp.fx) return disp.fx;
@@ -226,6 +230,31 @@ function curDisplayFactor(disp, native) {
 // die stammen zwangsläufig von TD und sind damit USD.
 function barsDisplayFactor(disp, analysis) {
   return curDisplayFactor(disp, analysis?.currency);
+}
+
+// Levels aus Watch Ranges für den Kerzen-Chart; k rechnet sie in die Anzeigewährung um.
+function chartRange(c, disp) {
+  try {
+    const { it, ov, lp, hist } = rangeInputs(c, disp.fx);
+    const p = lp ?? it.p;
+    if (!(p > 0)) return null;
+    const k = it.conv ? lsDisplayFactor(disp) : (disp.cur === it.oc ? 1 : null);
+    return k == null ? null : { v: rangeView(it, ov, { p }, hist), k };
+  } catch (err) {
+    console.warn('[range]', c.symbol, err.message);
+    return null;
+  }
+}
+
+function rangeAlarmBtn(c, disp) {
+  const r = chartRange(c, disp);
+  if (!r || !(r.v.sup > 0 || r.v.res > 0)) return '';
+  const on = rangeAlarmOn(c), a = armedLevels(c);
+  const lvl = (name, v) => (v ? `${name} ${fmtNum(v * r.k, 2)}` : '');
+  const tip = !on ? 'Alarm auf Support und Resistance stellen'
+    : a.sup || a.res ? `Alarm scharf: ${[lvl('Support', a.sup), lvl('Resistance', a.res)].filter(Boolean).join(' · ')}`
+    : 'Alarm an, aber beide Levels sind bereits überschritten';
+  return `<button class="btn btn-sm btn-secondary${on ? ' is-on' : ''}" id="chart-range-alarm" aria-pressed="${on}" title="${tip}" aria-label="${tip}">${icons.bell}Sup/Res</button>`;
 }
 
 // Which Performance-chart horizon can/should render: 10T LS-Intraday vs. 1J
@@ -547,6 +576,7 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
         <div class="chart-level" id="chart-level">
           <span class="chart-level__lbl">Level</span>
           <span class="chart-level__price" id="chart-level-price">—</span>
+          ${want1J ? rangeAlarmBtn(c, disp) : ''}
           <button class="btn btn-sm btn-primary" id="chart-level-add" disabled>＋ Alert setzen</button>
         </div>`;
     }
@@ -2324,6 +2354,28 @@ export class CandidateDetail {
     (a.support ?? []).forEach((z) => zoneLine(z, col('--pos')));
     (a.resistance ?? []).forEach((z) => zoneLine(z, col('--neg')));
 
+    // Watch-Range-Levels wie in Liste und Modal (gestrichelt, EUR → Anzeige), dazu die
+    // Alarme: scharf heisst das Level „Alarm"; ein abweichender Alarm bekommt eine eigene Linie.
+    const rg = chartRange(c, disp);
+    const armed = armedLevels(c);
+    const onLevel = (thr, lvl) => thr > 0 && lvl > 0 && Math.abs(thr / lvl - 1) < 0.002;
+    const rangeLine = (lvl, color, name, thr) => {
+      if (rg && lvl > 0) candle.createPriceLine({ price: lvl * rg.k, color, lineWidth: 2, lineStyle: 2, title: `${name}${onLevel(thr, lvl) ? ' Alarm' : ''}` });
+    };
+    rangeLine(rg?.v.sup, col('--pos'), 'Sup', armed.sup);
+    rangeLine(rg?.v.res, col('--neg'), 'Res', armed.res);
+    const alertF = lsDisplayFactor(disp);
+    if (alertF != null) {
+      for (const al of c.alerts ?? []) {
+        if (!al || al.enabled === false || !(al.threshold > 0) || (al.type !== 'price_above' && al.type !== 'price_below')) continue;
+        if (onLevel(al.threshold, rg?.v.sup) || onLevel(al.threshold, rg?.v.res)) continue;
+        candle.createPriceLine({ price: al.threshold * alertF, color: col('--accent'), lineWidth: 1, lineStyle: 1, title: 'Alert' });
+      }
+    }
+    this.el.querySelector('#chart-range-alarm')?.addEventListener('click', () => {
+      this.onAction?.('rangeAlarm', c, { on: !rangeAlarmOn(c) });
+    });
+
     /* SMA 20/50/100/200 als Kurven statt als waagerechte Linien: der TV-Wert ist
        ein Momentwert, gezeigt werden soll der Verlauf (läuft der Kurs auf die
        SMA200 zu oder von ihr weg? kreuzt die 50 die 200?).
@@ -2585,6 +2637,13 @@ export class CandidateDetail {
   displayInfo(c) {
     const nat = nativeCur(c);
     const fx = resolveFx();
+    // Fremdwährung (SEK, GBX, …): Basis ist EUR wie der LS-Kurs, der Knopf schaltet auf USD.
+    const fB = eurBasisFactor(c);
+    if (fB) {
+      const alt = !!this.altCurrency && fx != null;
+      const factor = alt ? fB * fx : fB;
+      return { tv: convertTv(c.tv_data, factor), cur: alt ? 'USD' : 'EUR', factor, fx, canSwitch: fx != null, alt, barsF: factor * barsUnitAdj(c) };
+    }
     const canSwitch = (nat === 'USD' || nat === 'EUR') && fx != null;
     const cur = this.altCurrency && canSwitch ? (nat === 'USD' ? 'EUR' : 'USD') : nat;
     const factor = cur === nat ? 1 : (nat === 'USD' ? 1 / fx : fx);

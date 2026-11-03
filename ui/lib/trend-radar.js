@@ -15,7 +15,7 @@
  */
 
 import { lsTrend } from './ls-trend.js?v=20260807a';
-import { smaCrosses } from './dashboard-metrics.js?v=20260807a';
+import { smaCrosses } from './dashboard-metrics.js?v=20261103h';
 import { monthlyGrowthRate } from './tv-upside.js';
 
 export function trendScore(c) {

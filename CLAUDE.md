@@ -108,8 +108,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Standard-Ansicht rendert Kopf und Zellen an zwei getrennten Stellen, ein
   Versatz fällt sonst nicht auf. Die Spalten **Sup · Range · Res** (Standard nach „52W")
   zeigen Watch Ranges in der Liste: dieselbe Rechnung wie das Modal (`lib/range-levels.js`),
-  je Titel gecacht (`rangeOf`), Sup und Res sortieren nach Nähe, der Pfeil am Balken ist der
-  5-Tage-Trend ab ±1 %. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
+  je Titel gecacht (`rangeOf`), Sup und Res sortieren nach Nähe. Das Band sieht aus wie im Modal
+  (Schiene, grüne/rote Zone, Kursmarke, ★-Einstand, Pfeil = 5-Tage-Trend ab ±1 %), Abstände ab
+  ±10 % sind eingefärbt, ein scharfes Level trägt die Glocke, ↑/↓ markiert ein gebrochenes Level. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
   sobald einer ausgelöst ist; neue Alarme entstehen weiter über die Aktionsspalte. In der Trade-Ansicht stehen die drei „wohin
   könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
   **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
@@ -137,6 +138,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   gestrichelte Szenarien (Breakout/Status Quo/Breakdown) mit Fächer-Fläche, ATH
   und Fair Value als Linien — Rechnung in `tv-forecast.js`, Spec in
   `docs/FORECAST_SPEC.md`.
+  Der 1J-Chart zeichnet zusätzlich die **Watch-Range-Levels** gestrichelt (`chartRange`, gleiche
+  Rechnung wie Liste und Modal; scharf = Titel „Sup Alarm"/„Res Alarm") und bestehende Preis-Alerts
+  gepunktet. Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
+  `lib/range-alarm.js`, gemeinsam mit dem Modal). Im Archiv gibt es keinen Alarm, dort prüft
+  `check-alerts` nicht. Geänderte Levels zieht weiterhin nur das Öffnen des Range-Modals nach.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
@@ -257,6 +263,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Profile, die vorher nur im localStorage-Cache lagen, übernimmt `detailOpened`
   einmalig ohne Netz in den Blob (`cachedCompanyProfile`). Das Dossier nutzt das
   gespeicherte Profil zuerst.
+- Schreiben: `storage-client.js` serialisiert `updateCandidate`/`bulkUpdateCandidates` je Blob
+  (`#enqueue`) und fasst Aufgelaufenes zu einem Bulk zusammen, weil `update_candidate` ohne Sperre
+  den ganzen Blob liest und schreibt. Parallele Einzelaufrufe überschrieben sich vorher gegenseitig.
 - Misc: `research-prompt.js`, `link-builder.js` (**`tvChartUrl`** baut den
   TradingView-**Chart**-Link `/chart/?symbol=XETR:SAP&interval=1D`; Detail-Sheet
   und Tabelle leiten ihn zur Laufzeit ab, damit auch Kandidaten mit alter
@@ -342,8 +351,12 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
 ## Frontend Conventions
 - **LS = EUR:** Lang & Schwarz quotes are always EUR (the price you'd pay on TR).
   The Price/Standard views convert via the USD/EUR toggle (`convFactor` /
-  `convFromEur` in `candidate-list.js`); only USD↔EUR is convertible — other
-  currencies stay native (shown in the "Wä" column). Live EUR/USD comes from the
+  `convFromEur` in `candidate-list.js`). **Fremdwährungen (SEK, GBX, …)** laufen
+  app-weit über `eurBasisFactor(c)` aus `lib/eur-basis.js`: `eur_basis.f`, sonst LS-Kurs/TV-Schluss.
+  Liste, Detail (`displayInfo`, Basis EUR, Knopf schaltet auf USD), Kerzen (`barsF`, inkl.
+  `barsUnitAdj` für GBP/GBX), Range und Alerts nutzen genau diese Stelle. Ohne beides bleibt der
+  Titel nativ. Marktkapitalisierung und FCF bleiben nativ. `loadEurBasis` in `app.js` holt fehlende
+  Basen im Hintergrund beim Laden des Buckets und beim Öffnen eines Titels. Live EUR/USD comes from the
   TV forex scanner (cached in localStorage), with a manual fallback in Settings.
 - **TR tradability:** `tr-check.js` checks Trade-Republic via LS ISIN search
   (green = listed on LS ⇒ very likely on TR). The TR cell copies the ISIN to the

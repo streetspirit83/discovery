@@ -30,10 +30,11 @@
  * Momentum-Analyse und Tiefenanalyse (samt ihrer Marken in der Zeile).
  */
 
-import { num, r4, rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103g';
+import { num, r4, rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103h';
+import { wantArm, armedLevels, rangeAlarmOn, rangeAlarmPatch } from '../lib/range-alarm.js?v=20261103h';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
-import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261027c';
+import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261103h';
 
 const CSS_URL = new URL('./ranges-modal.css?v=20261025a', import.meta.url).href;
 
@@ -59,26 +60,6 @@ function pct(v, sign) { if (v == null || !isFinite(v)) return ''; const s = Math
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
 function hhmm(iso) { if (!iso) return ''; const d = new Date(iso); if (isNaN(d)) return ''; const today = new Date().toDateString() === d.toDateString(); return (today ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ') + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
 const r4n = (x) => (x == null ? null : r4(x));
-
-const isWr = (a) => String(a?.id ?? '').startsWith('wr_');
-
-function wrAlert(cid, side, level, prev, now) {
-  const sup = side === 'sup';
-  const same = prev && Math.abs((prev.threshold ?? 0) - level) < 1e-6;
-  return {
-    id: `wr_${side}_${cid}`,
-    kind: 'watch',
-    type: sup ? 'price_below' : 'price_above',
-    threshold: level,
-    dir: 'watch',
-    enabled: true,
-    priority: 4,
-    label: `${sup ? 'Support' : 'Resistance'} ${level.toLocaleString('de-DE', { minimumFractionDigits: level >= 1000 ? 0 : 2, maximumFractionDigits: level >= 1000 ? 0 : 2 })} €`,
-    note: 'Watch Ranges',
-    basis: { kind: 'level', source: 'Watch Ranges' },
-    created_at: same && prev.created_at ? prev.created_at : now,
-  };
-}
 
 /* ── Modal ───────────────────────────────────────────────────────────────────── */
 
@@ -153,10 +134,8 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
       if (h) hist[it.id] = h;
       meta[it.id] = { x: normalizeExchange(c.exchange) || c.exchange || '', sec: c.sector || '', sub: c.sub_sector || '', t: isEtf(c) ? 'ETF' : '' };
       flags[it.id] = { s: !!c.in_portfolio, w: !!c.watch_flag, e: num(c.mk_entry) };
-      const wr = (c.alerts ?? []).filter(isWr);
-      if (c.range_alarm === true || wr.length) alarms[it.id] = { on: true };
-      const thr = (side) => num(wr.find((a) => a.id === `wr_${side}_${it.id}`)?.threshold);
-      armed[it.id] = { sup: thr('sup'), res: thr('res') };
+      if (rangeAlarmOn(c)) alarms[it.id] = { on: true };
+      armed[it.id] = armedLevels(c);
     }
     Object.assign(S, { items, ov, live: Object.keys(live).length ? { p: live, at: liveAt } : null, hist, meta, flags, alarms, armed });
   }
@@ -167,27 +146,18 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
   function entryOf(it) { const f = S.flags[it.id]; return f && f.s && f.e > 0 ? +f.e : null; }
   function view(it) { return rangeView(it, S.ov[it.id], price(it), S.hist[it.id]); }
 
-  /* Was scharf sein müsste – überschrittene Levels bekommen keinen Alarm. */
-  function wantArm(v) { return { sup: v.sup && v.p > v.sup ? r4(v.sup) : null, res: v.res && v.p < v.res ? r4(v.res) : null }; }
   function differs(a, b) { if (!a && !b) return false; if (!a || !b) return true; return Math.abs(a - b) / b > 0.002; }
 
   /* Range-Alarme: angehakt = range_alarm; scharf = vorhandene wr_-Alerts. */
   async function syncAlarm(id, on) {
     const it = S.items.find((x) => x.id === id); if (!it) return;
-    const c = it.c, now = new Date().toISOString();
-    const old = Array.isArray(c.alerts) ? c.alerts : [];
-    const prev = (side) => old.find((a) => a?.id === `wr_${side}_${id}`);
-    const w = on ? wantArm(view(it)) : { sup: null, res: null };
-    if (w.sup != null && w.res != null && w.sup >= w.res) { w.sup = null; w.res = null; }
-    const mine = [];
-    if (w.sup != null) mine.push(wrAlert(id, 'sup', w.sup, prev('sup'), now));
-    if (w.res != null) mine.push(wrAlert(id, 'res', w.res, prev('res'), now));
-    const alerts = [...old.filter((a) => !isWr(a)), ...mine];
+    const c = it.c;
+    const { patch, armed: w } = rangeAlarmPatch(c, view(it), on);
     const before = { alerts: c.alerts, range_alarm: c.range_alarm };
-    c.alerts = alerts; c.range_alarm = !!on;
+    Object.assign(c, patch);
     S.aState[id] = 'wait'; render();
     try {
-      if (persist) await persist(id, { alerts, range_alarm: !!on });
+      if (persist) await persist(id, patch);
       S.aState[id] = '';
       S.armed[id] = { sup: w.sup, res: w.res };
       if (on) S.alarms[id] = { on: true }; else delete S.alarms[id];

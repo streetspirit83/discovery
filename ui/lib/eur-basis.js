@@ -52,6 +52,32 @@ export function eurBasisFresh(c, now = Date.now()) {
   return Number.isFinite(at) && now - at < EUR_BASIS_MS;
 }
 
+/**
+ * EUR je Notierungs-Einheit für Titel in Fremdwährung — die eine Stelle, an der die
+ * App das entscheidet. Zuerst die gespeicherte Basis, sonst das Verhältnis LS-Kurs zu
+ * TV-Schluss, damit ein Titel nicht nativ aufblitzt, bis die Basis geladen ist.
+ * null = kein Fremdwährungstitel oder (noch) keine Grundlage.
+ */
+export function eurBasisFactor(c) {
+  if (!needsEurBasis(c)) return null;
+  const f = pos(c.eur_basis?.f);
+  if (f) return f;
+  const ls = pos(c.ls_quote?.price), tv = pos(c.tv_data?.close_1m ?? c.tv_data?.close);
+  return ls && tv ? ls / tv : null;
+}
+
+/**
+ * Kerzen → tv_data-Einheit. Yahoo liefert LSE-Titel teils in GBP, tv_data in GBX;
+ * das Verhältnis der letzten Schlusskurse verrät die Einheit (1, 100 oder 0,01).
+ */
+export function barsUnitAdj(c) {
+  const bars = Array.isArray(c?.swing_analysis?.ohlc) ? c.swing_analysis.ohlc.filter((b) => pos(b?.c)) : [];
+  const tv = pos(c?.tv_data?.close_1m ?? c?.tv_data?.close);
+  if (!bars.length || !tv) return 1;
+  const r = tv / bars[bars.length - 1].c;
+  return r > 50 && r < 200 ? 100 : r > 0.005 && r < 0.02 ? 0.01 : 1;
+}
+
 export const EUR_BASIS_LABEL = { ls: 'LS-Kurse', yahoo: 'Yahoo', fx: 'Wechselkurs' };
 
 async function proxyGet(url, { backendUrl, secret }, headers = { 'User-Agent': 'Mozilla/5.0' }) {
@@ -139,12 +165,7 @@ async function fxSeries(c, auth) {
 function nativeCloses(c) {
   const bars = Array.isArray(c.swing_analysis?.ohlc) ? c.swing_analysis.ohlc.filter((b) => b?.date && pos(b.c)) : [];
   if (!bars.length) return null;
-  const tvClose = pos(c.tv_data?.close_1m ?? c.tv_data?.close);
-  let adj = 1;
-  if (tvClose) {
-    const r = tvClose / bars[bars.length - 1].c;
-    if (r > 50 && r < 200) adj = 100; else if (r > 0.005 && r < 0.02) adj = 0.01;
-  }
+  const adj = barsUnitAdj(c);
   return new Map(bars.map((b) => [String(b.date).slice(0, 10), b.c * adj]));
 }
 

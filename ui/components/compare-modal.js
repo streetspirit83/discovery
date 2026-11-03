@@ -19,7 +19,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
-import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashboard-metrics.js?v=20260807a';
+import { liveOverallScore, liveHealthScore, liveEntryScore } from '../lib/dashboard-metrics.js?v=20261103h';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js?v=20260807a';
 import { classifyCluster, tradeTarget, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';

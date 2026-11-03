@@ -7,7 +7,7 @@
  */
 
 import { computePriceClusters } from './price-cluster.js?v=20260807a';
-import { needsEurBasis } from './eur-basis.js?v=20261027c';
+import { needsEurBasis, eurBasisFactor, barsUnitAdj } from './eur-basis.js?v=20261103h';
 
 export const num = (v) => (v != null && Number.isFinite(+v) && +v > 0 ? +v : null);
 export function r4(x) { return Math.floor(x * 1e4 + 0.5) / 1e4; }
@@ -27,7 +27,7 @@ export function buildRangeItem(c, fx) {
   const tv = c.tv_data ?? {};
   const ccy = String(c.currency ?? '').toUpperCase() || null;
   const eb = c.eur_basis && num(c.eur_basis.f) ? c.eur_basis : null;
-  const fE0 = eb && needsEurBasis(c) ? +eb.f : eurFactor(ccy, fx);
+  const fE0 = eurBasisFactor(c) ?? eurFactor(ccy, fx);
   const conv = fE0 != null;
   const fE = conv ? fE0 : 1;                    // nicht umrechenbar → native Anzeige, ohne LS
   const pN = num(tv.close_1m ?? tv.close);
@@ -71,7 +71,7 @@ export function buildRangeHist(c, it, fx, livePx) {
   const bars = Array.isArray(a?.ohlc) ? a.ohlc.filter((b) => b && num(b.c) && b.date) : [];
   if (bars.length < 2) return null;
   const bc = String(a.currency ?? 'USD').toUpperCase();
-  const f = it.conv ? eurFactor(bc, fx) : (bc === it.oc ? 1 : null);
+  const f = it.conv ? (needsEurBasis(c) ? it.fE * barsUnitAdj(c) : eurFactor(bc, fx)) : (bc === it.oc ? 1 : null);
   if (f == null) return null;
   const t = bars.map((b) => String(b.date).slice(0, 10));
   const cl = bars.map((b) => r4(+b.c * f));

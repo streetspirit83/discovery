@@ -20,6 +20,7 @@
 
 import { evalAlert, alertDir } from './status-logic.js?v=20260807a';
 import { computePriceClusters } from './price-cluster.js?v=20260807a';
+import { eurBasisFactor } from './eur-basis.js?v=20261103h';
 
 export const ALERTS_MUTED_KEY = 'discovery_alerts_muted_all';
 
@@ -55,14 +56,21 @@ export function toEur(v, ccy) {
   return (String(ccy).toUpperCase() === 'USD' && rate) ? +(v / rate).toFixed(4) : v;
 }
 
+/* Wie toEur, kennt aber auch Titel in Fremdwährung (SEK, GBX, …) über die EUR-Basis. */
+function eurOf(v, c) {
+  if (v == null) return null;
+  const f = eurBasisFactor(c);
+  return f ? +(v * f).toFixed(4) : toEur(v, c.currency);
+}
+
 /* The entry price (EUR) the %-options anchor on:
    Merkliste portfolio entry (EUR) → manual 'Mein Entry' (native→EUR) → live LS. */
 export function entryBasisEur(c) {
   if (c.mk_entry != null)        return { value: c.mk_entry, source: 'Merkliste-Entry' };
-  if (c.my_entry != null)        return { value: toEur(c.my_entry, c.currency), source: 'Mein Entry' };
+  if (c.my_entry != null)        return { value: eurOf(c.my_entry, c), source: 'Mein Entry' };
   if (c.ls_quote?.price != null) return { value: c.ls_quote.price, source: 'LS-Kurs' };
   const close = c.tv_data?.close_1m ?? c.tv_data?.close;
-  if (close != null)             return { value: toEur(close, c.currency), source: 'TV-Kurs' };
+  if (close != null)             return { value: eurOf(close, c), source: 'TV-Kurs' };
   return { value: null, source: null };
 }
 
@@ -82,25 +90,25 @@ export function clusterLevelsEur(c) {
   const tv = c.tv_data ?? {};
   const nativeClose = tv.close_1m ?? tv.close;
   if (nativeClose == null) return { sup: null, res: null };
-  const pc = computePriceClusters(tv, { lsHistory: c.ls_history, refPrice: nativeClose, lsToNative: lsToNativeFactor(c.currency) });
+  const pc = computePriceClusters(tv, { lsHistory: c.ls_history, refPrice: nativeClose, lsToNative: eurBasisFactor(c) ? 1 / eurBasisFactor(c) : lsToNativeFactor(c.currency) });
   return {
-    sup: pc?.nearestSup ? toEur(pc.nearestSup.mid, c.currency) : null,
-    res: pc?.nearestRes ? toEur(pc.nearestRes.mid, c.currency) : null,
+    sup: pc?.nearestSup ? eurOf(pc.nearestSup.mid, c) : null,
+    res: pc?.nearestRes ? eurOf(pc.nearestRes.mid, c) : null,
   };
 }
 
 /* Live quote (EUR) for evaluating alerts — LS price primary, TV indicators. */
 export function candidateQuoteEur(c) {
   const tv = c.tv_data ?? {};
-  const price = c.ls_quote?.price ?? toEur(tv.close_1m ?? tv.close, c.currency);
+  const price = c.ls_quote?.price ?? eurOf(tv.close_1m ?? tv.close, c);
   const macd = tv.macd, sig = tv.macd_signal;
   const { sup, res } = clusterLevelsEur(c);
   return {
     price,
     rsi: tv.rsi ?? null,
-    ma20:  toEur(tv.sma20, c.currency),
-    ma50:  toEur(tv.sma50, c.currency),
-    ma200: toEur(tv.sma200, c.currency),
+    ma20:  eurOf(tv.sma20, c),
+    ma50:  eurOf(tv.sma50, c),
+    ma200: eurOf(tv.sma200, c),
     macd_histogram: (macd != null && sig != null) ? +(macd - sig).toFixed(4) : null,
     volume: tv.average_volume ?? null,
     avg_volume: tv.avg_vol_10d ?? tv.average_volume ?? null,

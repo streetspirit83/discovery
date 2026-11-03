@@ -17,7 +17,7 @@ import {
   entryBasisEur, alertSummary, isAlertTriggered, toEur,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert, buildClusterAlert,
   ALERT_KINDS, alertKind,
-} from '../lib/alerts.js?v=20260807a';
+} from '../lib/alerts.js?v=20261103h';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { classifyCluster, tradeTarget } from '../lib/trade-setup.js?v=20260807a';
 

@@ -2,31 +2,33 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103g';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103h';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261103f';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261103h';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
-import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
+import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20261103h';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103f';
-import { triggeredCount } from './lib/alerts.js?v=20260807a';
+import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103f';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103h';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103f';
-import { openRangesModal } from './components/ranges-modal.js?v=20261103g';
-import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261103g';
-import { renderCompareModal } from './components/compare-modal.js?v=20261103f';
-import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
+import { openRangesModal } from './components/ranges-modal.js?v=20261103h';
+import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
+import { rangeInputs, rangeView } from './lib/range-levels.js?v=20261103h';
+import { rangeAlarmPatch } from './lib/range-alarm.js?v=20261103h';
+import { renderControlModal } from './components/control-modal.js?v=20261103h';
+import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
+import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20261103b';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
-import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
+import { trackSignals } from './lib/signal-tracker.js?v=20261103h';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
 import { fetchTvNews } from './lib/tv-news.js?v=20261103b';
 import { netBalance } from './lib/analyst-events.js?v=20261103c';
@@ -339,6 +341,28 @@ function attachAnalystEvents(candidates) {
     // Nicht-aufzählbar: abgeleitet, gehört in keinen Blob-Schreibvorgang.
     Object.defineProperty(c, 'analyst_30d', { value: netBalance(analystEventMap[key]), enumerable: false, writable: true, configurable: true });
   }
+}
+
+/* EUR-Basis für Titel in Fremdwährung (SEK, GBX, …): im Hintergrund, in Wellen von 6,
+   je Titel höchstens ein Versuch pro Sitzung. Ohne Basis rechnet die App über LS/TV-Schluss. */
+const eurBasisTried = new Set();
+async function loadEurBasis(cands, blobType) {
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (useMock || !storageClient || !backendUrl || !secret) return;
+  const due = cands.filter((c) => needsEurBasis(c) && !eurBasisFresh(c) && !eurBasisTried.has(c.id));
+  if (!due.length) return;
+  for (let i = 0; i < due.length; i += 6) {
+    await Promise.allSettled(due.slice(i, i + 6).map(async (c) => {
+      eurBasisTried.add(c.id);
+      const r = await fetchEurBasis(c, { backendUrl, secret });
+      if (r?.error) return;
+      c.eur_basis = r;
+      await storageClient.updateCandidate(blobType, c.id, { eur_basis: r }).catch((e) => console.warn('[eur-basis] speichern:', e.message));
+    }));
+  }
+  candidateList.renderRows();
+  if (candidateDetail.candidate && due.includes(candidateDetail.candidate)) candidateDetail.render();
 }
 
 async function loadAnalystEvents(force = false) {
@@ -917,6 +941,7 @@ async function switchBlob(blobType) {
   else loadAnalystEvents();
   candidateList.setData(allBlobs[blobType].candidates);
   candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
+  loadEurBasis(allBlobs[blobType].candidates, blobType);
   renderBotnav();
   renderFilterbar();
   updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
@@ -1795,6 +1820,7 @@ async function handleAction(action, candidate, extras = {}) {
     rerender();   // Ladezustände sichtbar machen, bevor gewartet wird
     const done = await Promise.allSettled(jobs);
     c._auto_busy = false;
+    loadEurBasis([c], currentBlobType);             // nach den Kerzen: die schärfen den Faktor
     done.filter((d) => d.status === 'rejected')
       .forEach((d) => console.warn('[auto-fetch]', c.symbol, d.reason?.message ?? d.reason));
     rerender();
@@ -1839,6 +1865,26 @@ async function handleAction(action, candidate, extras = {}) {
 
   // Tap on the detail chart → open the Trigger editor with the tapped price
   // (EUR) pre-filled into the manual-price field.
+  // Alarm auf Support/Resistance aus dem Kerzen-Chart — dieselbe Rechnung wie im Range-Modal.
+  if (action === 'rangeAlarm') {
+    const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
+    if (bucket === 'archive') { toast('Im Archiv laufen keine Alarme.', 'error', 3000); return; }
+    const { it, ov, lp, hist } = rangeInputs(candidate, resolveFxRate());
+    const { patch } = rangeAlarmPatch(candidate, rangeView(it, ov, { p: lp ?? it.p }, hist), extras.on);
+    const before = { alerts: candidate.alerts, range_alarm: candidate.range_alarm };
+    const refresh = () => { candidateDetail.render(); candidateList.renderRows(); updateAlertBadge(); };
+    Object.assign(candidate, patch);
+    refresh();
+    try {
+      if (!useMock && storageClient) await storageClient.updateCandidate(bucket, candidate.id, patch);
+    } catch (e) {
+      Object.assign(candidate, before);
+      refresh();
+      toast(`Alarm nicht gespeichert: ${e.message}`, 'error', 4000);
+    }
+    return;
+  }
+
   if (action === 'chartAlert') {
     openTriggerEditor(candidate, {
       onSaveAlerts: persistAlerts,

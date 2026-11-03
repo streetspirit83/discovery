@@ -3,6 +3,8 @@
  * Communicates with the Netlify backend storage function.
  */
 
+const MAX_BATCH = 20;
+
 export class StorageClient {
   constructor({ baseUrl, secret }) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -37,8 +39,40 @@ export class StorageClient {
     return this.#post({ op: 'append_candidate', candidate });
   }
 
-  async updateCandidate(blobType, candidateId, updates) {
-    return this.#post({ op: 'update_candidate', blob_type: blobType, candidate_id: candidateId, updates });
+  /* update_candidate liest und schreibt den ganzen Blob ohne Sperre: zwei Aufrufe
+     zugleich, und der zweite überschreibt den ersten. Deshalb läuft je Blob immer nur
+     ein Schreibvorgang; was währenddessen auflief, geht danach gesammelt als Bulk raus. */
+  #queues = new Map();
+
+  #enqueue(blobType, ups) {
+    return new Promise((resolve, reject) => {
+      const q = this.#queues.get(blobType) ?? { items: [], running: false };
+      this.#queues.set(blobType, q);
+      q.items.push({ ups, resolve, reject });
+      if (!q.running) this.#drain(blobType, q);
+    });
+  }
+
+  updateCandidate(blobType, candidateId, updates) {
+    return this.#enqueue(blobType, [{ candidate_id: candidateId, updates }]);
+  }
+
+  async #drain(blobType, q) {
+    q.running = true;
+    await Promise.resolve();              // alles aus demselben Tick zusammenfassen
+    while (q.items.length) {
+      const batch = q.items.splice(0, MAX_BATCH);
+      const ups = batch.flatMap((b) => b.ups);
+      try {
+        const res = ups.length === 1
+          ? await this.#post({ op: 'update_candidate', blob_type: blobType, candidate_id: ups[0].candidate_id, updates: ups[0].updates })
+          : await this.#post({ op: 'bulk_update_candidates', blob_type: blobType, updates: ups });
+        batch.forEach((b) => b.resolve(res));
+      } catch (err) {
+        batch.forEach((b) => b.reject(err));
+      }
+    }
+    q.running = false;
   }
 
   async moveCandidate(candidateId, fromBlob, toBlob) {
@@ -46,7 +80,7 @@ export class StorageClient {
   }
 
   async bulkUpdateCandidates(blobType, updates) {
-    return this.#post({ op: 'bulk_update_candidates', blob_type: blobType, updates });
+    return this.#enqueue(blobType, updates);
   }
 
   async deleteCandidate(blobType, candidateId) {

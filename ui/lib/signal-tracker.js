@@ -19,7 +19,7 @@
  *       day (±grace), else the live close.
  */
 
-import { smaCrosses, macdFlips, rsiExtremes } from './dashboard-metrics.js?v=20260807a';
+import { smaCrosses, macdFlips, rsiExtremes } from './dashboard-metrics.js?v=20261103h';
 
 export const HORIZONS = [7, 14, 28];                 // calendar days
 export const HORIZON_LABELS = { 7: '1W', 14: '2W', 28: '4W' };

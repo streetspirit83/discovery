@@ -13,13 +13,15 @@ import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20261103f';
-import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103g';
-import { candidateTriggeredCount } from '../lib/alerts.js?v=20260807a';
+import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103h';
+import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261103h';
+import { eurBasisFactor } from '../lib/eur-basis.js?v=20261103h';
+import { candidateTriggeredCount } from '../lib/alerts.js?v=20261103h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { lsTrend } from '../lib/ls-trend.js?v=20260807a';
-import { trendScore } from '../lib/trend-radar.js?v=20260807a';
+import { trendScore } from '../lib/trend-radar.js?v=20261103h';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260807a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
@@ -68,9 +70,11 @@ function typeTag(c) {
   return `<span class="type-tag type-tag--${t}${src === 'name' ? ' type-tag--guess' : ''}" title="${tip}">${TYPE_LABEL[t]}</span>`;
 }
 
-// Conversion factor native → display. Only USD↔EUR is convertible;
-// other currencies stay native (the Wä column shows which).
+// Conversion factor native → display. USD↔EUR über den Live-Kurs, Fremdwährungen
+// (SEK, GBX, …) über die EUR-Basis; ohne Basis bleiben sie nativ (siehe Spalte „Wä").
 function convFactor(c) {
+  const fB = eurBasisFactor(c);
+  if (fB) return displayCurrency === 'EUR' ? fB : fxEurUsd ? fB * fxEurUsd : 1;
   const native = nativeCurrency(c);
   if (native === displayCurrency || !fxEurUsd) return 1;
   if (native === 'USD' && displayCurrency === 'EUR') return 1 / fxEurUsd;
@@ -553,6 +557,8 @@ function demarkCell(c, field) {
 // LS prices are always EUR; TV levels are native. Factor EUR → native
 // (EUR-native 1 · USD-native via FX · sonst null = LS-Level überspringen).
 function lsToNativeFactor(c) {
+  const fB = eurBasisFactor(c);
+  if (fB) return 1 / fB;
   const nat = nativeCurrency(c);
   if (nat === 'EUR') return 1;
   if (nat === 'USD' && fxEurUsd) return fxEurUsd;
@@ -1178,7 +1184,7 @@ export class CandidateList {
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
       cols += this.thNum('range_sup', 'Sup', 'N\u00e4chster Support wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he', 'col-group-start');
       cols += this.thNum('range_pos', 'Range', 'Position des Kurses zwischen Support und Resistance \u00b7 Pfeil: 5-Tage-Trend ab \u00b11 % \u00b7 rot/gr\u00fcn: Bruch oder Ausbruch');
-      cols += this.thNum('range_res', 'Res', 'N\u00e4chste Resistance wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he');
+      cols += this.thNum('range_res', 'Res', 'N\u00e4chste Resistance wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he', 'rg-r');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
@@ -1407,9 +1413,9 @@ export class CandidateList {
           `<td class="num">${ls10CellHTML(c, fmtNum, convFromEur())}</td>` +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
-          `<td class="num col-group-start">${rangeLevelCell(c, 'sup')}</td>` +
-          `<td class="num">${rangeBarCell(c)}</td>` +
-          `<td class="num">${rangeLevelCell(c, 'res')}</td>` +
+          `<td class="num col-group-start rg-s">${rangeLevelCell(c, 'sup')}</td>` +
+          `<td class="rg-b">${rangeBarCell(c)}</td>` +
+          `<td class="rg-r">${rangeLevelCell(c, 'res')}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
@@ -1755,8 +1761,8 @@ function ptTarget(c) {
   }
   const y = c.yh_targets;
   if (y?.mean != null) {
-    const f = convFactorFor(y.currency);
-    if (f == null) return null;   // nur USD↔EUR — sonst lieber nichts zeigen
+    const f = eurBasisFactor(c) && y.currency === c.currency ? convFactor(c) : convFactorFor(y.currency);
+    if (f == null) return null;   // nicht umrechenbar — dann lieber nichts zeigen
     return { value: y.mean * f, src: 'Yahoo',
       low: y.low != null ? y.low * f : null,
       high: y.high != null ? y.high * f : null,
@@ -2097,7 +2103,7 @@ function rangeOf(c) {
   const tv = c.tv_data;
   if (!tv) return null;
   const sig = [tv.fetched_at, tv.close, c.ls_quote?.price, c.ls_history?.length, c.swing_analysis?.checked_at,
-    c.range_override?.sup, c.range_override?.res, c.eur_basis?.f, fxEurUsd].join('|');
+    c.range_override?.sup, c.range_override?.res, c.eur_basis?.f, c.mk_entry, c.in_portfolio, fxEurUsd].join('|');
   const hit = rangeCache.get(c);
   if (hit?.sig === sig) return hit.val;
   let val = null;
@@ -2110,6 +2116,8 @@ function rangeOf(c) {
       const dist = (lvl) => (lvl > 0 ? (lvl / p - 1) * 100 : null);
       val = {
         sup: v.sup ?? null, res: v.res ?? null, st: v.st, pos: v.pos, conv: it.conv,
+        sz: v.sz, rz: v.rz, lo: v.lo, hi: v.hi, p, brk: v.brk,
+        entry: c.in_portfolio && c.mk_entry > 0 ? +c.mk_entry : null,
         distSup: dist(v.sup), distRes: dist(v.res), manSup: v.supM, manRes: v.resM,
         trend: rangeTrend(hist?.c ?? ls10Series(c)?.prices),
       };
@@ -2129,23 +2137,38 @@ function rangeLevelCell(c, side) {
   const manual = side === 'sup' ? r.manSup : r.manRes;
   // Levels liegen in EUR; nicht umrechenbare Währungen bleiben nativ.
   const shown = lvl * (r.conv ? convFromEur() : 1);
-  return `<div class="rng-lvl"${manual ? ' title="Manuell gesetztes Level"' : ''}>
-    <span>${fmtNum(shown, 2)}</span><small>${dist >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(dist), 1)} %</small>
+  const tone = dist >= 10 ? ' up' : dist <= -10 ? ' dn' : '';
+  const armed = rangeAlarmOn(c) && armedLevels(c)[side] ? icons.bell : '';
+  // Nach einem Bruch steht das gebrochene Level auf der anderen Seite — wie im Modal.
+  const broken = r.brk && r.brk.side !== side;
+  const mark = broken ? (r.st === 'up' ? '\u2191 ' : '\u2193 ') : '';
+  const tip = broken ? `${r.st === 'up' ? 'Resistance' : 'Support'} ${fmtNum(r.brk.lvl * (r.conv ? convFromEur() : 1), 2)} um mehr als 0,5 % durchbrochen`
+    : manual ? 'Manuell gesetztes Level' : '';
+  return `<div class="rg-lv${tone}"${tip ? ` title="${tip}"` : ''}>
+    <span>${armed}${fmtNum(shown, 2)}</span><small>${mark}${dist >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(dist), 1)} %</small>
   </div>`;
 }
 
+/* Band wie im Range-Modal: Schiene, Support- und Resistance-Zone, Kursmarke, ★-Einstand,
+   Pfeil für den 5-Tage-Trend. Rechnung und Grenzen kommen aus rangeView. */
 function rangeBarCell(c) {
   const r = rangeOf(c);
-  if (r?.pos == null && !r?.st) return '<span class="muted-dash">—</span>';
-  const x = r.st === 'up' ? 100 : r.st === 'dn' ? 0 : Math.max(0, Math.min(1, r.pos)) * 100;
-  const tone = r.st === 'up' ? ' rng--up' : r.st === 'dn' ? ' rng--dn' : '';
+  if (!r || (r.pos == null && !r.st) || !(r.hi > r.lo)) return '<span class="muted-dash">—</span>';
+  const X = (x) => Math.max(0, Math.min(100, (x - r.lo) / (r.hi - r.lo) * 100));
+  const zone = (z, lvl, cls) => {
+    if (z) return `<i class="${cls}" style="left:${X(z[0]).toFixed(1)}%;width:${Math.max(2, X(z[1]) - X(z[0])).toFixed(1)}%"></i>`;
+    return lvl != null ? `<i class="${cls}" style="left:${(X(lvl) - 1).toFixed(1)}%;width:2%"></i>` : '';
+  };
+  const px = X(r.p);
   const tip = r.st === 'up' ? 'Über der Resistance ausgebrochen' : r.st === 'dn' ? 'Unter den Support gebrochen'
     : `Position in der Range: ${fmtNum(r.pos * 100, 0)} %`;
   const t = r.trend;
   const arrow = t?.dir
-    ? `<span class="rng-trend ${t.dir === 'up' ? 'pos' : 'neg'}" title="5 Tage ${fmtNum(t.ch, 1)} %">${t.dir === 'up' ? icons.arrowUp : icons.arrowDown}</span>`
+    ? `<svg class="rg-tr rg-tr--${t.dir}" style="left:${t.dir === 'up' ? `min(calc(100% - 10px),calc(${px.toFixed(1)}% + 5px))` : `max(0px,calc(${px.toFixed(1)}% - 15px))`}" viewBox="0 0 10 10" aria-hidden="true"><path d="${t.dir === 'up' ? 'M3 2l4 3-4 3' : 'M7 2L3 5l4 3'}"/></svg>`
     : '';
-  return `<span class="rng-wrap" title="${tip}"><span class="rng${tone}"><i style="left:${x.toFixed(0)}%"></i></span>${arrow}</span>`;
+  const trendTip = t ? ` · 5 Tage ${t.ch >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(t.ch), 1)} %` : '';
+  const ek = r.entry ? `<i class="rg-ek${r.entry < r.lo || r.entry > r.hi ? ' rg-ek--out' : ''}" style="left:${X(r.entry).toFixed(1)}%"></i>` : '';
+  return `<div class="rg-trk" title="${tip}${trendTip}"><i class="rg-rail"></i>${zone(r.sz, r.sup, 'rg-zs')}${zone(r.rz, r.res, 'rg-zr')}${ek}<i class="rg-mk${r.st ? ` rg-mk--${r.st}` : ''}" style="left:${px.toFixed(1)}%"></i>${arrow}</div>`;
 }
 
 /* Glocke am Symbol: nur bei aktivem Alarm, farbig sobald einer ausgelöst ist. */

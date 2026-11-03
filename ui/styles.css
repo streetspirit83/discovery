@@ -742,15 +742,30 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
 .signal__dot--none   { background:var(--surface-3); border:1px solid var(--border); }
 
 /* Range-Spalten: Level mit Abstand darunter, dazwischen die Position im Band */
-.rng-lvl { display:flex; flex-direction:column; align-items:flex-end; line-height:1.2; font-variant-numeric:tabular-nums; }
-.rng-lvl small { font-size:var(--fs-1); color:var(--muted); }
-.rng-wrap { display:inline-flex; align-items:center; gap:var(--s-1); }
-.rng { position:relative; display:block; width:56px; height:4px; border-radius:var(--r-pill); background:var(--surface-3); }
-.rng i { position:absolute; top:50%; width:8px; height:8px; margin-left:-4px; transform:translateY(-50%); border-radius:var(--r-pill); background:var(--accent); }
-.rng--up i { background:var(--pos); }
-.rng--dn i { background:var(--neg); }
-.rng-trend { display:inline-flex; width:12px; }
-.rng-trend svg { width:12px; height:12px; display:block; }
+.rg-lv { font-family:var(--font-mono); line-height:1.2; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.rg-lv small { display:block; font-size:var(--fs-1); color:var(--muted); }
+.rg-lv.up, .rg-lv.up small { color:var(--pos); }
+.rg-lv.dn, .rg-lv.dn small { color:var(--neg); }
+.rg-lv svg { width:10px; height:10px; vertical-align:-1px; margin-right:3px; }
+th.rg-r, td.rg-r { text-align:left; }
+th.rg-r .sort-btn { justify-content:flex-start; }
+td.rg-s { padding-right:var(--s-1); }
+td.rg-b { padding-left:var(--s-1); padding-right:var(--s-1); }
+td.rg-r { padding-left:var(--s-1); }
+.rg-trk { position:relative; width:104px; height:26px; }
+.rg-trk i { position:absolute; display:block; }
+.rg-rail { left:0; right:0; top:11px; height:4px; border-radius:2px; background:var(--surface-3); }
+.rg-zs, .rg-zr { top:8px; height:10px; border-radius:2px; box-sizing:border-box; }
+.rg-zs { background:var(--pos-weak); border:1px solid var(--pos); }
+.rg-zr { background:var(--neg-weak); border:1px solid var(--neg); }
+.rg-trk .rg-mk { top:2px; width:4px; height:22px; margin-left:-2px; border-radius:2px; background:var(--text); box-shadow:0 0 0 2px var(--surface); }
+.rg-trk .rg-mk--up { background:var(--pos); }
+.rg-trk .rg-mk--dn { background:var(--neg); }
+.rg-ek { top:1px; width:2px; height:24px; margin-left:-1px; border-radius:1px; background:#c26bff; box-shadow:0 0 4px #c26bff; }
+.rg-ek--out { opacity:.45; }
+.rg-tr { position:absolute; top:8px; width:10px; height:10px; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+.rg-tr--up { stroke:var(--pos); }
+.rg-tr--dn { stroke:var(--neg); }
 
 /* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
 .pl { font-variant-numeric:tabular-nums; }
@@ -1889,6 +1904,10 @@ body.has-chart-fs { overflow:hidden; }
 .chart-level__lbl { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
 .chart-level__price { font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; color:var(--accent); flex:1; }
 .chart-level #chart-level-add { white-space:nowrap; }
+.chart-level #chart-range-alarm { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.chart-level #chart-range-alarm svg { width:14px; height:14px; }
+.chart-level #chart-range-alarm.is-on { color:var(--accent); border-color:var(--accent); }
+.chart-level #chart-range-alarm.is-on svg { fill:currentColor; fill-opacity:.25; }
 .chart-level #chart-level-add:disabled { opacity:.5; }
 /* 1J-candle load prompt / spinner placeholder (same height as the chart) */
 .chart-loading {
