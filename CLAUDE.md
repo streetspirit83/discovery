@@ -106,13 +106,17 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Metrics / Fundamental), sorting, filters, column resize, bulk actions, currency
   toggle. Largest file; header and cell order per view must stay in sync — die
   Standard-Ansicht rendert Kopf und Zellen an zwei getrennten Stellen, ein
-  Versatz fällt sonst nicht auf. In der Trade-Ansicht stehen die drei „wohin
+  Versatz fällt sonst nicht auf. Die Spalten **Sup · Range · Res** (Standard nach „52W")
+  zeigen Watch Ranges in der Liste: dieselbe Rechnung wie das Modal (`lib/range-levels.js`),
+  je Titel gecacht (`rangeOf`), Sup und Res sortieren nach Nähe, der Pfeil am Balken ist der
+  5-Tage-Trend ab ±1 %. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
+  sobald einer ausgelöst ist; neue Alarme entstehen weiter über die Aktionsspalte. In der Trade-Ansicht stehen die drei „wohin
   könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
   **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
   nach dem Potenzial, nicht nach dem angezeigten Preis. In der Standard-Ansicht
   zeigt „10T" (nach PerfW) den LS-Verlauf der letzten zehn Tage als Sparkline —
   aus den Nacht-Snapshots plus Live-Kurs, sortiert nach dem Zuwachs über das
-  Fenster (`ls10Series` in `spark.js`). ETF-Zeilen tragen in der zweiten Zeile der
+  Fenster (`ls10Series` in `spark.js`). Die Intraday-Spalte „Verlauf" ist entfallen. ETF-Zeilen tragen in der zweiten Zeile der
   Symbol-Zelle ein **ETF-Label** (`instrument-type.js`) und die Flächentönung
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**

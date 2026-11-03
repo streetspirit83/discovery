@@ -4,7 +4,7 @@
  * anhaken: `append_candidate` schreibt ohne Dublettenprüfung in die Inbox.
  */
 
-import { icons } from '../lib/icons.js?v=20261027g';
+import { icons } from '../lib/icons.js?v=20261103f';
 import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261103b';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

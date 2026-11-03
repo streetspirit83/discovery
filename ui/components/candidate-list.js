@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20261021a';
+import { icons } from '../lib/icons.js?v=20261103f';
 import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
@@ -12,7 +12,9 @@ import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
-import { sparkCellHTML, atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20260819h';
+import { atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20261103f';
+import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103f';
+import { candidateTriggeredCount } from '../lib/alerts.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
@@ -419,6 +421,10 @@ function sortValue(c, col) {
     case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'analyst_net': return c.analyst_30d?.net ?? null;
+    // Nähe zählt, nicht die Richtung: gebrochene Levels stehen ebenfalls oben.
+    case 'range_sup':   return rangeOf(c)?.distSup != null ? Math.abs(rangeOf(c).distSup) : null;
+    case 'range_res':   return rangeOf(c)?.distRes != null ? Math.abs(rangeOf(c).distRes) : null;
+    case 'range_pos':   return rangeOf(c)?.pos ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -1020,7 +1026,7 @@ export class CandidateList {
       this.sort.direction = this.sort.direction === 'asc' ? 'desc' : 'asc';
     } else {
       this.sort.column    = column;
-      this.sort.direction = textCols.has(column) ? 'asc' : 'desc';
+      this.sort.direction = textCols.has(column) || column === 'range_sup' || column === 'range_res' ? 'asc' : 'desc';
     }
     this.renderRows();
   }
@@ -1150,7 +1156,7 @@ export class CandidateList {
 
     if (this.viewMode === 'standard') {
       // Reihenfolge in vier Bl\u00f6cken (Trenner via col-group-start):
-      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 Verlauf \u00b7 ATRP \u00b7 \u03941T \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W
+      //   Bewegung : LS \u00b7 LS\u0394 \u00b7 ATRP \u00b7 \u03941T \u00b7 PerfW \u00b7 \u00d8Gr/M \u00b7 52W
       //              (heute \u2192 5T \u2192 6M \u2192 1J)
       //   Qualit\u00e4t : Score \u00b7 Bias \u00b7 S200\u00d8 \u00b7 Dauer
       //              (Bias hat die fr\u00fchere \u201eSignal"-Spalte ersetzt \u2014
@@ -1164,13 +1170,15 @@ export class CandidateList {
       cols += this.th('name', 'Name', 'title="Firmenname"');
       cols += this.thNum('ls_price', 'LS', 'Lang & Schwarz Echtzeitkurs (Handelsplatz Trade Republic, EUR) \u00b7 \u201eLS-Kurs\u201c-Button in der Subbar');
       cols += this.thNum('ls_chg', 'LS\u0394', 'Lang & Schwarz Ver\u00e4nderung vs. Vortag');
-      cols += `<th class="num" title="Heutiger Intraday-Verlauf (LS) \u00b7 Tagesspanne im Tooltip">Verlauf</th>`;
       cols += this.thNum('atrp', 'ATRP', 'Average True Range % (Tagesvolatilit\u00e4t) \u00b7 Balken = heutige Bewegung vs. typische ATR-Spanne \u00b7 Sortierung nach aktueller Spread (heutige Bewegung \u00f7 ATR)');
       cols += this.thNum('tv_chg1d', '\u03941T', 'Ver\u00e4nderung heute (1 Tag) laut TradingView-Schlusskursen \u2013 LS\u0394 daneben ist der Live-Stand von Lang & Schwarz');
       cols += this.thNum('tv_perfw', 'PerfW', 'Perf.W \u2013 rollierend ~5 Handelstage');
       cols += this.thNum('ls10', '10T', '10-Tage-Verlauf aus den LS-Nacht-Snapshots + heutigem Live-Kurs \u00b7 Referenzlinie = Kurs vor zehn Tagen \u00b7 sortiert nach dem Zuwachs \u00fcber das Fenster');
       cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
+      cols += this.thNum('range_sup', 'Sup', 'N\u00e4chster Support wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he', 'col-group-start');
+      cols += this.thNum('range_pos', 'Range', 'Position des Kurses zwischen Support und Resistance \u00b7 Pfeil: 5-Tage-Trend ab \u00b11 % \u00b7 rot/gr\u00fcn: Bruch oder Ausbruch');
+      cols += this.thNum('range_res', 'Res', 'N\u00e4chste Resistance wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he');
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
@@ -1338,6 +1346,7 @@ export class CandidateList {
         <div class="sym-cell__top">
           <span class="sym-strong">${c.symbol}</span>
           ${chipLink(tvChartUrl(c) ?? links.tradingview, TV_LOGO, 'TradingView-Chart', 'link-chip--tv')}
+          ${alertBell(c)}
           ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
         </div>
         <div class="sym-cell__sub">
@@ -1392,13 +1401,15 @@ export class CandidateList {
           `<td class="col-name-fit">${nameCell(c)}</td>` +
           `<td class="num">${lsPriceCell(c)}</td>` +
           `<td class="num">${lsChgCell(c)}</td>` +
-          `<td class="num">${sparkCellHTML(c, fmtNum)}</td>` +
           `<td class="num">${atrpCellHTML(c, fmtNum)}</td>` +
           heatPctTd(tv?.change_1d) +
           heatPctTd(tv?.perf_w) +
           `<td class="num">${ls10CellHTML(c, fmtNum, convFromEur())}</td>` +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num col-group-start">${rangeLevelCell(c, 'sup')}</td>` +
+          `<td class="num">${rangeBarCell(c)}</td>` +
+          `<td class="num">${rangeLevelCell(c, 'res')}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
@@ -1466,7 +1477,7 @@ export class CandidateList {
       tr.querySelector('[data-action="toggleWatch"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleWatch', c); });
       tr.querySelector('[data-action="toggleDossier"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('toggleDossier', c); });
       tr.querySelector('[data-action="updateDossier"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); if (!e.currentTarget.disabled) this.onAction?.('updateDossier', c); });
-      tr.querySelector('[data-action="openTrigger"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); });
+      tr.querySelectorAll('[data-action="openTrigger"]').forEach((el) => el.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openTrigger', c); }));
       tr.querySelector('[data-action="openNachkauf"]')?.addEventListener('pointerup', (e) => { e.stopPropagation(); this.onAction?.('openNachkauf', c); });
 
       // TR cell: click copies the ISIN (fallback symbol) to the clipboard so
@@ -2076,6 +2087,70 @@ function heatPctTd(v) {
 // ── Fundamental-Zellen (Standard- UND Fundamental-Ansicht) ───────────────────
 // Beide Ansichten rendern dieselben Funktionen, damit die Formatierung nicht
 // auseinanderläuft, wenn eine von beiden angefasst wird.
+
+/* ── Range (Watch Ranges in der Liste) ───────────────────────────────────────
+   Dieselbe Rechnung wie das Modal (range-levels.js). Die Cluster sind zu teuer für
+   jeden Render über alle Zeilen, deshalb je Titel gecacht, bis sich eine Eingabe ändert. */
+const rangeCache = new WeakMap();
+
+function rangeOf(c) {
+  const tv = c.tv_data;
+  if (!tv) return null;
+  const sig = [tv.fetched_at, tv.close, c.ls_quote?.price, c.ls_history?.length, c.swing_analysis?.checked_at,
+    c.range_override?.sup, c.range_override?.res, c.eur_basis?.f, fxEurUsd].join('|');
+  const hit = rangeCache.get(c);
+  if (hit?.sig === sig) return hit.val;
+  const { it, ov, lp, hist } = rangeInputs(c, fxEurUsd);
+  const p = lp ?? it.p;
+  let val = null;
+  if (p > 0) {
+    const v = rangeView(it, ov, { p }, hist);
+    const dist = (lvl) => (lvl > 0 ? (lvl / p - 1) * 100 : null);
+    val = {
+      sup: v.sup ?? null, res: v.res ?? null, st: v.st, pos: v.pos, conv: it.conv,
+      distSup: dist(v.sup), distRes: dist(v.res), manSup: v.supM, manRes: v.resM,
+      trend: rangeTrend(hist?.c ?? ls10Series(c)?.prices),
+    };
+  }
+  rangeCache.set(c, { sig, val });
+  return val;
+}
+
+function rangeLevelCell(c, side) {
+  const r = rangeOf(c);
+  const lvl = r?.[side];
+  if (!(lvl > 0)) return '<span class="muted-dash">—</span>';
+  const dist = side === 'sup' ? r.distSup : r.distRes;
+  const manual = side === 'sup' ? r.manSup : r.manRes;
+  // Levels liegen in EUR; nicht umrechenbare Währungen bleiben nativ.
+  const shown = lvl * (r.conv ? convFromEur() : 1);
+  return `<div class="rng-lvl"${manual ? ' title="Manuell gesetztes Level"' : ''}>
+    <span>${fmtNum(shown, 2)}</span><small>${dist >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(dist), 1)} %</small>
+  </div>`;
+}
+
+function rangeBarCell(c) {
+  const r = rangeOf(c);
+  if (r?.pos == null && !r?.st) return '<span class="muted-dash">—</span>';
+  const x = r.st === 'up' ? 100 : r.st === 'dn' ? 0 : Math.max(0, Math.min(1, r.pos)) * 100;
+  const tone = r.st === 'up' ? ' rng--up' : r.st === 'dn' ? ' rng--dn' : '';
+  const tip = r.st === 'up' ? 'Über der Resistance ausgebrochen' : r.st === 'dn' ? 'Unter den Support gebrochen'
+    : `Position in der Range: ${fmtNum(r.pos * 100, 0)} %`;
+  const t = r.trend;
+  const arrow = t?.dir
+    ? `<span class="rng-trend ${t.dir === 'up' ? 'pos' : 'neg'}" title="5 Tage ${fmtNum(t.ch, 1)} %">${t.dir === 'up' ? icons.arrowUp : icons.arrowDown}</span>`
+    : '';
+  return `<span class="rng-wrap" title="${tip}"><span class="rng${tone}"><i style="left:${x.toFixed(0)}%"></i></span>${arrow}</span>`;
+}
+
+/* Glocke am Symbol: nur bei aktivem Alarm, farbig sobald einer ausgelöst ist. */
+function alertBell(c) {
+  const n = Array.isArray(c.alerts) ? c.alerts.filter((a) => a && a.enabled !== false).length : 0;
+  if (!n) return '';
+  const fired = candidateTriggeredCount(c);
+  const title = fired ? `${fired} von ${n} Alarmen ausgelöst` : `${n} ${n === 1 ? 'Alarm' : 'Alarme'} aktiv`;
+  return `<button class="sym-bell${fired ? ' sym-bell--fired' : ''}" data-action="openTrigger" title="${title}" aria-label="${title}">${icons.bell}</button>`;
+}
 
 /* Analysten-Saldo, Spalte „Ana": kommt aus dem Blob `analyst`, nur im Speicher am Titel. */
 function analystNetCell(c) {

@@ -363,6 +363,10 @@ input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); cu
 .exch-tag--sub { background:none; border:none; padding:0; font-size:var(--fs-1);
   color:var(--muted); letter-spacing:.02em; }
 /* Zweite Zeile der Symbol-Zelle: Börse + Instrumententyp nebeneinander. */
+.sym-bell { display:inline-flex; align-items:center; background:none; border:0; padding:0; color:var(--muted); cursor:pointer; flex:0 0 auto; }
+.sym-bell svg { width:13px; height:13px; display:block; }
+.sym-bell--fired { color:var(--neg); }
+.sym-bell--fired svg { fill:currentColor; }
 .sym-cell__sub { display:flex; align-items:center; gap:var(--s-1); flex-wrap:nowrap; }
 /* Die Symbol-Spalte endet nach Symbol + TV-Icon: die zweite Zeile darf nie
    breiter werden und in die Nachbarspalte laufen — sie wird abgeschnitten. */
@@ -736,6 +740,17 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
 .signal__dot--yellow { background:#d68910; }
 .signal__dot--red    { background:var(--neg); }
 .signal__dot--none   { background:var(--surface-3); border:1px solid var(--border); }
+
+/* Range-Spalten: Level mit Abstand darunter, dazwischen die Position im Band */
+.rng-lvl { display:flex; flex-direction:column; align-items:flex-end; line-height:1.2; font-variant-numeric:tabular-nums; }
+.rng-lvl small { font-size:var(--fs-1); color:var(--muted); }
+.rng-wrap { display:inline-flex; align-items:center; gap:var(--s-1); }
+.rng { position:relative; display:block; width:56px; height:4px; border-radius:var(--r-pill); background:var(--surface-3); }
+.rng i { position:absolute; top:50%; width:8px; height:8px; margin-left:-4px; transform:translateY(-50%); border-radius:var(--r-pill); background:var(--accent); }
+.rng--up i { background:var(--pos); }
+.rng--dn i { background:var(--neg); }
+.rng-trend { display:inline-flex; width:12px; }
+.rng-trend svg { width:12px; height:12px; display:block; }
 
 /* P/L: percent (primary) + absolute € (secondary), colored via .pos/.neg */
 .pl { font-variant-numeric:tabular-nums; }

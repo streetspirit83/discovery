@@ -8,10 +8,10 @@
  * Opened from the "Markets" slot in the bottom navigation.
  */
 
-import { icons } from '../lib/icons.js?v=20261021a';
-import { renderNewsPanel } from './news-panel.js?v=20261021a';
+import { icons } from '../lib/icons.js?v=20261103f';
+import { renderNewsPanel } from './news-panel.js?v=20261103f';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260807a';
-import { renderIndicesPanel } from './indices-panel.js?v=20261023a';
+import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 

@@ -2,26 +2,26 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103d';
-import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261103d';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103f';
+import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261103f';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
-import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
-import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261027h';
-import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103b';
+import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
+import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
+import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103f';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
-import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103e';
-import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103f';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103f';
+import { openRangesModal } from './components/ranges-modal.js?v=20261103f';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261103d';
-import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
+import { renderControlModal } from './components/control-modal.js?v=20261103f';
+import { renderCompareModal } from './components/compare-modal.js?v=20261103f';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20261103b';
@@ -42,7 +42,7 @@ import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261103b';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
-import { icons } from './lib/icons.js?v=20261027g';
+import { icons } from './lib/icons.js?v=20261103f';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
 import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';

@@ -15,7 +15,7 @@
  * Rein darstellend – das Modal schreibt nie.
  */
 
-import { icons } from '../lib/icons.js?v=20261021a';
+import { icons } from '../lib/icons.js?v=20261103f';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 const nf = (d) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });

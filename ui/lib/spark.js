@@ -33,18 +33,6 @@ export function sparklineSVG(series, prevClose, chg) {
     + `</svg>`;
 }
 
-// Standard-table cell: the LS intraday sparkline, or a dash if no series loaded.
-export function sparkCellHTML(c, fmtNum) {
-  const q = c.ls_quote;
-  const s = q?.series;
-  if (!Array.isArray(s) || s.length < 2) {
-    return '<span class="muted-dash" title="Kein Tagesverlauf – „LS-Kurs“ laden">—</span>';
-  }
-  const lo = q.day_low, hi = q.day_high;
-  const tip = (lo != null && hi != null) ? `Tagesspanne ${fmtNum(lo, 2)}–${fmtNum(hi, 2)}` : 'Tagesverlauf (LS)';
-  return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sparklineSVG(s, q.prev_close, q.change_pct)}</span>`;
-}
-
 /**
  * 10-Tage-LS-Verlauf aus den Nacht-Snapshots (`ls_history`), plus dem heutigen
  * Live-Kurs als letztem Punkt.
