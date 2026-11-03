@@ -287,6 +287,14 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   **Field discipline:** in `tv-enrichment.js` the `TV_COLUMNS` array and the `COL`
   index-map must stay in matching order — a new field means adding it to *both*
   (same position) and mapping it in `buildUpdates()`.
+- **TradingView-News** (`news-headlines.tradingview.com/v2/headlines`, inoffiziell, ohne
+  Key, kein CORS-Header): `lib/tv-news.js`, Detail-Tab „News" neben ROIC. Die Sprache
+  wählt die Quellen: `lang=de` liefert dpa-AFX inkl. „ANALYSE-FLASH", `lang=en` Dow Jones
+  und `tradingview_analyst_updates`; NYSE:BMI ist unter `de` leer. Deshalb XETR → `de`,
+  sonst `en`. `parseAnalystHeadline` erkennt Hoch-/Abstufung, Kursziel, Erstbewertung und
+  Bestätigung (rein, für den Monitor-Lauf wiederverwendbar). Beide Quellen laden getrennt
+  (`company_news`, `tv_news`, nicht-aufzählbar, je 30 min Cache); `mergeNews` mischt nur
+  zur Anzeige. TV-Titel verlinken auf die Google-News-Suche, das Icon auf die Quelle.
 - **Lang & Schwarz** (`www.ls-tc.de`, the Trade-Republic venue): live **EUR**
   intraday quotes. Bulk-Abrufe (LS-Kurse, TR-Check) laufen in Wellen von
   `NET_BATCH` (6) parallel, nicht nacheinander — sequenziell kostete ein Lauf

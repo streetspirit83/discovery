@@ -60,6 +60,8 @@ const ALLOWED_DOMAINS = [
   // Retail-Sentiment im Detail-Sheet (lib/stocktwits-sentiment.js) — öffentlicher
   // Aggregat-Endpoint, kein Key. Pfad-Anker hält die Freigabe auf die API eng.
   /^https:\/\/api\.stocktwits\.com\/api\/2\//,
+  // News-Tab im Detail-Sheet (lib/tv-news.js): Headlines je Symbol.
+  /^https:\/\/news-headlines\.tradingview\.com\/v2\/headlines\?/,
 ];
 
 function isAllowed(url) {

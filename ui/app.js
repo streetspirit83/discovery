@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027i';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261102d';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261103a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -30,6 +30,7 @@ import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
+import { fetchTvNews } from './lib/tv-news.js?v=20261103a';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
@@ -1274,24 +1275,38 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
-  // Detail sheet: News-Tab (ROIC.ai, 30-min-Cache; force = Aktualisieren-Button).
+  // Detail sheet: News-Tab. ROIC und TV laden unabhängig (je 30-min-Cache,
+  // force = Aktualisieren-Button): fällt eine Quelle aus, bleibt die andere stehen.
   if (action === 'loadNews') {
-    if (candidate._news_loading) return;
+    const auth = {
+      backendUrl: localStorage.getItem('discovery_backend_url'),
+      secret:     localStorage.getItem('discovery_secret'),
+    };
+    const force = extras?.force === true;
     const rerender = () => { if (candidateDetail.candidate?.id === candidate.id) candidateDetail.render(); };
-    candidate._news_loading = true; rerender();
-    let news;
-    try {
-      news = await fetchCompanyNews(candidate, {
-        backendUrl: localStorage.getItem('discovery_backend_url'),
-        secret:     localStorage.getItem('discovery_secret'),
-      }, { force: extras?.force === true });
-    } catch (err) {
-      console.warn('[news] fetch fehlgeschlagen:', err.message);
-      news = { error: true, message: err.message };
-    }
-    candidate._news_loading = false;
-    candidate.company_news = news;
-    rerender();
+    // Nicht-aufzählbar: flüchtige Anzeigedaten dürfen in keinen Blob-Schreibvorgang geraten.
+    const keep = (field, value) => Object.defineProperty(candidate, field, {
+      value, enumerable: false, writable: true, configurable: true,
+    });
+    const load = async (flag, field, fetcher) => {
+      if (candidate[flag]) return;
+      if (!force && candidate[field] && !candidate[field].error) return;
+      keep(flag, true); rerender();
+      let news;
+      try {
+        news = await fetcher(candidate, auth, { force });
+      } catch (err) {
+        console.warn(`[news] ${field} fehlgeschlagen:`, err.message);
+        news = { error: true, message: err.message };
+      }
+      keep(field, news);
+      keep(flag, false);
+      rerender();
+    };
+    await Promise.all([
+      load('_news_loading', 'company_news', fetchCompanyNews),
+      load('_tv_news_loading', 'tv_news', fetchTvNews),
+    ]);
     return;
   }
 

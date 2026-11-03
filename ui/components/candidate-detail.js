@@ -17,6 +17,7 @@ import { SIGNAL_CLASS, CLUSTER_LABELS, EVENT_LABELS, materialityLabel, fullDate,
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
+import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103a';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
@@ -638,45 +639,73 @@ function profileHTML(c) {
   </div>`;
 }
 
-/* ── Tab: News (ROIC.ai /v2/company/news, on-demand beim Tab-Öffnen) ───────── */
+/* ── Tab: News (ROIC.ai + TradingView, on-demand beim Tab-Öffnen) ─────────────
+   Beide Quellen laden getrennt und liegen in eigenen Feldern (`company_news`,
+   `tv_news`); gemischt wird nur hier bei der Anzeige. TV-Headlines verlinken auf
+   die Google-News-Suche, das Icon rechts führt zur Quelle. Bestätigungen
+   („belässt", `maintains`) stehen ausgegraut im Verlauf. */
 
-function renderNewsTab(c) {
-  if (c._news_loading) {
-    return `<p class="id-profile--loading"><span class="ls-loading"></span> Lade News (ROIC.ai) …</p>`;
-  }
-  const n = c.company_news;
-  if (!n || n.error) {
-    return `<div class="news-empty">
-      <button class="btn btn-sm btn-secondary" id="news-load">📰 News laden (ROIC.ai)${n?.error ? ' — erneut' : ''}</button>
-      ${n?.error && n.message ? `<p class="pv-muted">Letzter Versuch: ${escProfile(n.message)}</p>` : ''}
-    </div>`;
-  }
-  if (!n.items?.length) {
-    return `<p class="pv-muted">Keine News gefunden.</p>
-      <button class="btn btn-sm btn-secondary" id="news-load">Aktualisieren</button>`;
-  }
-  const fmtDay = (iso) => {
-    if (!iso) return '';
-    const t = new Date(iso);
-    if (Number.isNaN(+t)) return '';
-    const day = t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    // Uhrzeit nur anzeigen, wenn die Quelle eine mitliefert (nicht 00:00).
-    return (t.getHours() || t.getMinutes())
-      ? `${day} ${t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
-      : day;
-  };
-  const rows = n.items.map((it) => `<article class="news-item">
-    <div class="news-item__meta">${fmtDay(it.date)}${it.source ? ` · ${escProfile(it.source)}` : ''}</div>
-    <div class="news-item__title">${it.url
-      ? `<a href="${escProfile(it.url)}" target="_blank" rel="noopener">${escProfile(it.title)}</a>`
+function newsDay(iso) {
+  if (!iso) return '';
+  const t = new Date(iso);
+  if (Number.isNaN(+t)) return '';
+  const day = t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  // Uhrzeit nur anzeigen, wenn die Quelle eine mitliefert (nicht 00:00).
+  return (t.getHours() || t.getMinutes())
+    ? `${day} ${t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+    : day;
+}
+
+function renderNewsItem(it) {
+  const action = it.analyst ? ANALYST_ACTIONS[it.analyst.action] : null;
+  const href = it.origin === 'tv' ? it.search_url : it.url;
+  const tag = action
+    ? ` · <span class="news-item__tag${action.tone ? ` news-item__tag--${action.tone}` : ''}">${escProfile(action.label)}</span>`
+    : '';
+  const sourceLink = it.source_url
+    ? `<a class="link-chip news-item__src" href="${escProfile(it.source_url)}" target="_blank" rel="noopener"
+         title="Quelle öffnen" aria-label="Quelle öffnen">${icons.externalLink}</a>`
+    : '';
+  return `<article class="news-item${it.analyst?.action === 'reiterate' ? ' news-item--quiet' : ''}">
+    <div class="news-item__meta news-item__meta--row">
+      <span>${newsDay(it.date)}${it.source ? ` · ${escProfile(it.source)}` : ''}${tag}</span>${sourceLink}
+    </div>
+    <div class="news-item__title">${href
+      ? `<a href="${escProfile(href)}" target="_blank" rel="noopener"${it.origin === 'tv' ? ' title="Bei Google suchen"' : ''}>${escProfile(it.title)}</a>`
       : escProfile(it.title)}</div>
     ${it.text ? `<p class="news-item__text">${escProfile(it.text)}</p>` : ''}
-  </article>`).join('');
-  const when = n.fetched_at
-    ? new Date(n.fetched_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-  return `${rows}
+  </article>`;
+}
+
+function renderNewsTab(c) {
+  const sources = [['ROIC.ai', c.company_news], ['TradingView', c.tv_news]];
+  const loading = c._news_loading || c._tv_news_loading;
+  const failed = sources.filter(([, n]) => n?.error);
+  const items = mergeNews(c.company_news?.items, c.tv_news?.items);
+  if (!items.length) {
+    if (loading) return `<p class="id-profile--loading"><span class="ls-loading"></span> Lade News …</p>`;
+    if (!c.company_news && !c.tv_news) {
+      return `<div class="news-empty">
+        <button class="btn btn-sm btn-secondary" id="news-load">News laden</button>
+      </div>`;
+    }
+    return `<div class="news-empty">
+      ${failed.length ? '' : '<p class="pv-muted">Keine News gefunden.</p>'}
+      <button class="btn btn-sm btn-secondary" id="news-load">${failed.length ? 'Erneut laden' : 'Aktualisieren'}</button>
+      ${failed.map(([name, n]) => `<p class="pv-muted">${name}: ${escProfile(n.message ?? 'nicht verfügbar')}</p>`).join('')}
+    </div>`;
+  }
+  const stamps = sources.map(([, n]) => n?.fetched_at).filter(Boolean).sort();
+  const when = stamps.length
+    ? new Date(stamps[stamps.length - 1]).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const names = sources.filter(([, n]) => n?.items).map(([name]) => name).join(' · ');
+  const notes = [
+    ...failed.map(([name]) => `${name} nicht verfügbar`),
+    ...(loading ? ['lädt …'] : []),
+  ];
+  return `${items.map(renderNewsItem).join('')}
     <div class="news-foot">
-      <span class="pv-muted">Quelle: ROIC.ai${when ? ` · Stand ${when}` : ''}</span>
+      <span class="pv-muted">Quelle: ${names}${when ? ` · Stand ${when}` : ''}${notes.length ? ` · ${notes.join(' · ')}` : ''}</span>
       <button class="btn btn-sm btn-secondary" id="news-load" data-force="1">Aktualisieren</button>
     </div>`;
 }
@@ -2804,7 +2833,8 @@ export class CandidateDetail {
     this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((btn) => {
       btn.addEventListener('pointerup', () => {
         this.setTab(btn.dataset.tab);
-        if (btn.dataset.tab === 'news' && !c.company_news && !c._news_loading) {
+        if (btn.dataset.tab === 'news'
+            && ((!c.company_news && !c._news_loading) || (!c.tv_news && !c._tv_news_loading))) {
           this.onAction?.('loadNews', c);
         }
       });
