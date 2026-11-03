@@ -107,6 +107,16 @@ export function clusterOf(events, earnings, now = new Date()) {
   return firms[dir].size >= CLUSTER_MIN ? { dir, n: firms[dir].size, days: CLUSTER_DAYS, firms: [...firms[dir]] } : null;
 }
 
+/** Netto-Bilanz für die Listenspalte: Ereignisse mit Richtung im Fenster. */
+export function netBalance(events, days = 30, now = new Date()) {
+  if (!events?.length) return null;
+  const cutoff = new Date(now.getTime() - days * DAY_MS).toISOString();
+  const recent = events.filter((e) => e.at >= cutoff);
+  const count = (dir) => recent.filter((e) => actionDir(e.action) === dir).length;
+  const up = count('up'), down = count('down');
+  return { up, down, net: up - down };
+}
+
 /** Bilanz eines Titels für den Wochenausblick. */
 export function tally(events, now = new Date()) {
   const within = (days) => (events ?? []).filter((e) => e.at >= new Date(now.getTime() - days * DAY_MS).toISOString());

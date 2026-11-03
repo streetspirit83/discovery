@@ -355,7 +355,8 @@ score/signal: the TV scoring specs (`tvtrend*`, `tvfinancialhealth*`,
 `tventryprices*`), and the newer feature handovers
 (`SWING_CHECK_HANDOVER.md`, `BREAKOUT_PROBABILITY_SPEC.md`,
 `BREAKDOWN_PROBABILITY_SPEC.md`, `FORECAST_SPEC.md`). `discovery-workspace-spec.md` has the original
-product spec.
+product spec. `ANALYST_BACKTEST.md`: Event-Studie zu Analystenmeldungen, starke Tagesreaktion,
+keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen.
 
 ## GitHub Actions
 - Adapters run on schedule (daily at 6 AM UTC)
@@ -387,7 +388,9 @@ product spec.
   Fenster. Der Blob hält 180 Tage je Titel. Schlägt der Abruf fehl, erscheint der Bericht
   mit `analyst.available:false`. Scanner: `recommendation_buy` = nur Strong Buy, `_over` = Buy,
   `_under` = Sell, `_sell` = Strong Sell, `mark` 1 bis 3 (Gewichte 1/1,5/2/2,5/3). Nicht im
-  Score, solange kein Backtest die Nachdrift belegt.
+  Score: Der Backtest zeigt keine verlässliche Nachdrift (`docs/ANALYST_BACKTEST.md`).
+  Spalte **„Ana"** (Standard nach „Cow"): Saldo der letzten 30 Tage aus diesem Blob
+  (`netBalance`, nicht-aufzählbar als `analyst_30d`, `loadAnalystEvents` in `app.js`).
 - **Tagesauswertung „Marktbriefing“:** Claude-Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
   (db-Collection `briefings`, Dokument-ID = Handelstag) **und** in der App über den
   Slot „Briefing“ ganz rechts in der unteren Menüleiste (`#nav-briefing`; der Bucket „Watch + Archiv“

@@ -420,6 +420,7 @@ function sortValue(c, col) {
     case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'cow':         return reviewSortValue(c);
+    case 'analyst_net': return c.analyst_30d?.net ?? null;
     case 'tv_health_score':         return tv?.health_score?.total         ?? null;
     case 'tv_cycle_score':          return tv?.cycle_score?.total          ?? null;
     case 'tv_trend_strength_score': return tv?.trend_strength_score?.total ?? null;
@@ -1177,6 +1178,7 @@ export class CandidateList {
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
       cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
       cols += this.thNum('cow', 'Cow', 'Cowork-Triage \u00b7 t\u00e4glicher Nachrichten-Durchgang durch die Watchlist \u00b7 Punkt = Richtung (gr\u00fcn positiv, rot negativ, grau neutral), Ziffer = Relevanz 1\u20133 \u00b7 Strich = nichts Neues \u00b7 Details im Tab \u201eCowork" des Kandidaten');
+      cols += this.thNum('analyst_net', 'Ana', 'Analysten, letzte 30 Tage: Hoch- plus Abstufungen und Kurszieländerungen nach oben / unten \u00b7 sortiert nach dem Saldo \u00b7 erfasst für Augen-Titel und Tages-Movers ab dem Monitor-Lauf \u00b7 sonst leer');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
       cols += this.thNum('tv_div', 'Div%', 'Dividendenrendite \u00b7 Zell-T\u00f6nung gr\u00fcn ab Aussch\u00fcttung, voll ab 5% \u00b7 keine Dividende = keine T\u00f6nung');
       cols += this.thNum('tv_ebitda', 'EBITDA', 'EBITDA \u00b7 Zell-T\u00f6nung nach EBITDA-YoY-Wachstum (voll bei \u00b125%), rot bei negativem EBITDA');
@@ -1405,6 +1407,7 @@ export class CandidateList {
           `<td class="num">${renderSma200Trend(c)}</td>` +
           `<td class="num">${renderTrendAge(c)}</td>` +
           `<td class="num">${renderCowork(c)}</td>` +
+          `<td class="num">${analystNetCell(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +
           `<td class="num"${divTint(tv)}>${divCell(c)}</td>` +
           `<td class="num"${ebitdaTint(tv)}>${ebitdaCell(c)}</td>` +
@@ -2094,6 +2097,13 @@ function heatPctTd(v) {
 // ── Fundamental-Zellen (Standard- UND Fundamental-Ansicht) ───────────────────
 // Beide Ansichten rendern dieselben Funktionen, damit die Formatierung nicht
 // auseinanderläuft, wenn eine von beiden angefasst wird.
+
+/* Analysten-Saldo, Spalte „Ana": kommt aus dem Blob `analyst`, nur im Speicher am Titel. */
+function analystNetCell(c) {
+  const a = c.analyst_30d;
+  if (!a || (!a.up && !a.down)) return '<span class="muted-dash">—</span>';
+  return `<span class="pos">+${a.up}</span>/<span class="neg">\u2212${a.down}</span>`;
+}
 
 function roicCell(c) {
   const v = c.tv_data?.return_on_invested_capital;

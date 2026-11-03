@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103b';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103c';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261103b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -22,7 +22,7 @@ import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103b';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261103b';
+import { renderControlModal } from './components/control-modal.js?v=20261103c';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
@@ -31,6 +31,7 @@ import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
 import { fetchTvNews } from './lib/tv-news.js?v=20261103b';
+import { netBalance } from './lib/analyst-events.js?v=20261103c';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
@@ -315,6 +316,7 @@ function updateAlertBadge() {
 // the candidates as `c.ls_history` (snapshot array) for the Trade-view signals.
 let lsHistoryMap = null;
 
+let analystEventMap = null;
 async function loadLsHistory(force = false) {
   if (useMock || !storageClient) return;
   if (force || !lsHistoryMap) {
@@ -329,6 +331,31 @@ async function loadLsHistory(force = false) {
   const blob = allBlobs[currentBlobType];
   if (!blob?.candidates || !candidateList) return;
   for (const c of blob.candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
+  candidateList.renderRows();
+}
+
+// ── Analysten-Spalte: Blob `analyst`, gefüllt vom Monitor-Lauf ───────────────
+function attachAnalystEvents(candidates) {
+  for (const c of candidates) {
+    const key = `${String(c.symbol ?? '').toUpperCase()}:${normalizeExchange(c.exchange) || c.exchange || ''}`;
+    // Nicht-aufzählbar: abgeleitet, gehört in keinen Blob-Schreibvorgang.
+    Object.defineProperty(c, 'analyst_30d', { value: netBalance(analystEventMap[key]), enumerable: false, writable: true, configurable: true });
+  }
+}
+
+async function loadAnalystEvents(force = false) {
+  if (useMock || !storageClient) return;
+  if (force || !analystEventMap) {
+    try {
+      analystEventMap = (await storageClient.readBlob('analyst'))?.events ?? {};
+    } catch (err) {
+      console.warn('[analyst] load failed:', err.message);
+      return;
+    }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!blob?.candidates || !candidateList) return;
+  attachAnalystEvents(blob.candidates);
   candidateList.renderRows();
 }
 
@@ -888,6 +915,8 @@ async function switchBlob(blobType) {
   } else {
     loadLsHistory();
   }
+  if (analystEventMap) attachAnalystEvents(allBlobs[blobType].candidates);
+  else loadAnalystEvents();
   candidateList.setData(allBlobs[blobType].candidates);
   candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
   renderBotnav();
@@ -2274,6 +2303,7 @@ async function init() {
     await switchBlob(currentBlobType);
     await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
     await loadLsHistory(true);        // re-pull the 10-day LS history (Trade view)
+    await loadAnalystEvents(true);
     toast('Aktualisiert', 'info', 1500);
   });
 
