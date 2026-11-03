@@ -19,7 +19,7 @@
  */
 
 import { normalizeExchange } from './exchange-map.js';
-import { TV_PREFIX_MAP } from './tv-enrichment.js?v=20260831a';
+import { TV_PREFIX_MAP } from './tv-enrichment.js?v=20261103b';
 
 const ENDPOINT = 'https://news-headlines.tradingview.com/v2/headlines';
 const CACHE_PREFIX = 'discovery_tvnews1_';
@@ -151,19 +151,29 @@ const normKey = (s) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, 
 const dayOf = (it) => String(it.date ?? '').slice(0, 10);
 const newestFirst = (a, b) => String(b.date ?? '').localeCompare(String(a.date ?? ''));
 
-/* Dasselbe Haus erscheint je Tag oft mehrfach: Dow Jones meldet Einstufung und
- * Kursziel einzeln, TradingView beides in einer Zeile. Eine Zeile je Haus und Tag
- * genügt; es bleibt die gewichtigste Aktion. */
-function dedupeAnalyst(items) {
-  const best = new Map();
-  for (const it of items) {
-    if (!it.analyst) continue;
-    const key = `${dayOf(it)}|${normKey(it.analyst.firm)}`;
-    const cur = best.get(key);
-    const rank = ANALYST_ACTIONS[it.analyst.action].rank;
-    if (!cur || rank > ANALYST_ACTIONS[cur.analyst.action].rank) best.set(key, it);
+const SAME_EVENT_MS = 18 * 3600e3;
+
+/* Dasselbe Haus erscheint oft mehrfach: Dow Jones meldet Einstufung und Kursziel
+ * einzeln, TradingView beides in einer Zeile. Ein Zeitfenster statt des Kalendertags,
+ * weil beide Meldungen sonst um Mitternacht UTC auseinanderfallen. Es bleibt die
+ * gewichtigste Aktion, bei Gleichstand die mit mehr Angaben.
+ * `read(x)` liefert { at, firm, action, rating, target }. */
+export function collapseAnalyst(items, read) {
+  const groups = new Map();                  // Haus → Treffer, neueste zuerst
+  for (const it of [...items].sort((x, y) => read(y).at.localeCompare(read(x).at))) {
+    const r = read(it);
+    const list = groups.get(normKey(r.firm)) ?? [];
+    groups.set(normKey(r.firm), list);
+    const hit = list.find((g) => Math.abs(Date.parse(g.at) - Date.parse(r.at)) < SAME_EVENT_MS);
+    if (!hit) { list.push({ at: r.at, it, r }); continue; }
+    const score = (x) => ANALYST_ACTIONS[x.action].rank * 10 + (x.rating ? 1 : 0) + (x.target ? 1 : 0);
+    if (score(r) > score(hit.r)) Object.assign(hit, { it, r });
   }
-  const keep = new Set(best.values());
+  return new Set([...groups.values()].flat().map((g) => g.it));
+}
+
+function dedupeAnalyst(items) {
+  const keep = collapseAnalyst(items.filter((it) => it.analyst && it.date), (it) => ({ at: it.date, ...it.analyst }));
   return items.filter((it) => !it.analyst || keep.has(it));
 }
 

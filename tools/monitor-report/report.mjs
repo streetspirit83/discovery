@@ -56,7 +56,8 @@ const weekday = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', timeZon
 /* Kurzreferenz auf einen Titel – in jeder Signal-Liste gleich aufgebaut. */
 /* eye: mit dem Augen-Knopf als aktiv beobachtet markiert – nur gesetzt, wenn wahr (spart Platz). */
 const eyeOf = (c) => (c._bucket === 'watch' && c.watch_flag ? { eye: true } : {});
-const ref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket, ...eyeOf(c) });
+export const stockRef = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null, bucket: c._bucket, ...eyeOf(c) });
+const ref = stockRef;
 /* Schlanke Referenz für die Signal-Listen – Sektor und Bucket stehen in `stocks`. */
 const sref = (c) => ({ symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), bucket: c._bucket, ...eyeOf(c) });
 
@@ -85,6 +86,7 @@ export const FIELD_GUIDE = {
   'movers_1w': 'Dasselbe auf Wochensicht (Performance 1 Woche in %).',
   'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
   'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
+  'analyst': 'Analysten. actions: neue Rating- und Kursziel-Meldungen seit dem letzten Lauf, nur für Augen-Titel und Tages-Movers, wichtigste zuerst (dir up/down, rating = Einstufung, target = Kursziel, after_earnings = Nachlauf bis 2 Tage nach den letzten Zahlen, meist wenig neue Information; chg_1d = Kursreaktion des Handelstags). clusters: mindestens 3 Häuser in dieselbe Richtung binnen days Tagen, ohne Kursziel-Nachlauf. consensus_shifts: Veränderung der Empfehlungsverteilung zum Vortag für alle Titel; mark 1 (Strong Buy) bis 3 (Strong Sell), d_mark < 0 = besser. Quelle TradingView (dpa-AFX, Dow Jones). Nicht jede Meldung erscheint dort.',
   'headlines': 'Automatisch erzeugte, rein datenbasierte Kernsätze – ohne Nachrichtenbezug.',
   'watch_setups': 'Nur vollständige Fassung: Ausgangslage je aktiv beobachtetem Watchlist-Titel (Augen-Markierung, in stocks eye == true) für den Wochenausblick. res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in % (positiv = Marke liegt über dem Kurs, negativ = darunter), res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch in % (0 = am Hoch, +10 = Hoch liegt 10 % über dem Kurs), upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
   'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum), eye = in der App mit dem Augen-Knopf als aktiv beobachtet markiert.',
@@ -384,6 +386,15 @@ ${secRows.length ? `<h3>Branchen (stärkste und schwächste)</h3>
 ${table(['Branche', 'Heute', '1 Woche', '1 Monat'], secRows)}` : ''}`;
 }
 
+function analystHtml(a) {
+  if (!a?.actions?.length) return '';
+  const rows = a.actions.slice(0, DOC_TOP).map((x) => [
+    title(x), tone(x.dir === 'up' ? 1 : x.dir === 'down' ? -1 : 0, esc(x.label)), esc(x.firm),
+    esc([x.rating, x.target].filter(Boolean).join(' · ') || '–'), tPct(x.chg_1d),
+  ]);
+  return `<h2>Analysten</h2>\n${table(['Titel', 'Aktion', 'Haus', 'Einstufung · Ziel', 'Heute'], rows)}`;
+}
+
 export function renderHtml(rep, { jsonName = 'Discovery Monitor.json' } = {}) {
   const day = new Date(rep.generated_at);
   const date = day.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: TZ });
@@ -421,6 +432,8 @@ ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.top))}
 
 <h2>Tagesverlierer</h2>
 ${table(['Titel', 'Sektor', 'Heute', '1 Woche'], moverRows(rep.movers_1d.flop))}
+
+${analystHtml(rep.analyst)}
 
 <h2>Quartalszahlen in den nächsten 7 Tagen</h2>
 ${table(['Termin · Titel', 'Sektor', '1 Woche', '1 Monat', 'RSI'], earnRows)}

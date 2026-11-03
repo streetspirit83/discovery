@@ -271,6 +271,13 @@ const TV_COLUMNS = [
      in `instrument-type.js`. */
   'type',                                      // 131
   'typespecs',                                 // 132
+  /* Rest der Empfehlungsverteilung. Nachgerechnet: `recommendation_buy` ist nur
+     Strong Buy, `_over` Buy, `_under` Sell, `_sell` Strong Sell. `mark` = gewichteter
+     Schnitt mit 1 / 1,5 / 2 / 2,5 / 3, also 1 = Strong Buy, 3 = Strong Sell. */
+  'recommendation_over',                       // 133
+  'recommendation_under',                      // 134
+  'recommendation_mark',                       // 135
+  'earnings_release_date',                     // 136 — letzte Zahlen (Epoch s)
 ];
 
 const COL = {
@@ -416,6 +423,10 @@ recommendMA1M: 53,
   // Instrumententyp
   instrumentType:        131,
   typespecs:             132,
+  recOver:               133,
+  recUnder:              134,
+  recMark:               135,
+  earningsLastDate:      136,
 };
 
 // ─── Proxy POST ───────────────────────────────────────────────────────────────
@@ -635,6 +646,10 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
       rec_buy:              d[COL.recBuy]              ?? null,
       rec_hold:             d[COL.recHold]             ?? null,
       rec_sell:             d[COL.recSell]             ?? null,
+      rec_over:             d[COL.recOver]             ?? null,
+      rec_under:            d[COL.recUnder]            ?? null,
+      rec_mark:             d[COL.recMark]             ?? null,
+      earnings_last_date:   d[COL.earningsLastDate]    ?? null,
       // Trade view fields (weekly/monthly pivots, Demark 1W, 20-day Donchian)
       pivot_r1_1w:          d[COL.pivotR1_1w]          ?? null,
       pivot_r2_1w:          d[COL.pivotR2_1w]          ?? null,

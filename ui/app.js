@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261027i';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261021a';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261103a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261103b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -13,24 +13,24 @@ import { renderAlertModal } from './components/alert-modal.js?v=20260807a';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20260807a';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261021a';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261027h';
-import { openPeerImportModal } from './components/peer-import-modal.js?v=20261102b';
+import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103b';
 import { triggeredCount } from './lib/alerts.js?v=20260807a';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261023a';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261027e';
 // Cowork-Briefing (review-Blob): seit Okt. 2026 nicht mehr über die Topbar
 // erreichbar – der Zeitungs-Knopf öffnet das Marktbriefing. Modul bleibt liegen.
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261101a';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103b';
 import { openRangesModal } from './components/ranges-modal.js?v=20261027c';
 import { fetchEurBasis } from './lib/eur-basis.js?v=20261027c';
-import { renderControlModal } from './components/control-modal.js?v=20261027i';
+import { renderControlModal } from './components/control-modal.js?v=20261103b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261021a';
 import { loadStorageClient } from './lib/storage-client.js?v=20260807a';
 import { enrichBulk } from './lib/claude-api.js';
-import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20260831a';
+import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20261103b';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
 import { trackSignals } from './lib/signal-tracker.js?v=20260807a';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
-import { fetchTvNews } from './lib/tv-news.js?v=20261103a';
+import { fetchTvNews } from './lib/tv-news.js?v=20261103b';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
 import { fetchYahooTargets, yahooSymbol, yahooFresh } from './lib/analyst-targets.js?v=20260819g';
@@ -39,7 +39,7 @@ import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
-import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261102b';
+import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261103b';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
@@ -1303,8 +1303,9 @@ async function handleAction(action, candidate, extras = {}) {
       keep(flag, false);
       rerender();
     };
+    // Der Prog.-Tab braucht nur die Analystenmeldungen, das schont das ROIC-Limit.
     await Promise.all([
-      load('_news_loading', 'company_news', fetchCompanyNews),
+      ...(extras?.tvOnly ? [] : [load('_news_loading', 'company_news', fetchCompanyNews)]),
       load('_tv_news_loading', 'tv_news', fetchTvNews),
     ]);
     return;

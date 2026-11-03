@@ -9,7 +9,7 @@
 
 import { normalizeCandidate } from './import-parser.js';
 import { normalizeExchange } from './exchange-map.js';
-import { fetchTVEnrichment, TV_PREFIX_MAP } from './tv-enrichment.js?v=20260831a';
+import { fetchTVEnrichment, TV_PREFIX_MAP } from './tv-enrichment.js?v=20261103b';
 import { searchSymbols, searchResultToParts } from './symbol-search.js?v=20260807a';
 import { yahooChartSymbol } from './tv-swings.js?v=20260818a';
 

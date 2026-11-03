@@ -147,6 +147,22 @@ function technikBlock(rows, find) {
   </section>`;
 }
 
+/* Analystenaktionen: Tagesbriefing und Watchlist-Rückblick. Ältere Briefings haben
+   das Feld nicht, dann fehlt der Block. */
+function analystBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Analysten</h3>
+    <ul class="mb-list">${rows.map((a) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-chip ${a.dir === 'up' ? 'pos' : a.dir === 'down' ? 'neg' : ''}">${esc(a.label)}</span>
+        ${a.symbol ? symHtml(a, find) : ''}
+        <span class="mb-row__name">${esc(a.name)}</span>
+      </div>
+      <div class="mb-row__why">${esc([a.firm, a.rating, a.target].filter(Boolean).join(' · '))}${a.text ? ` – ${esc(a.text)}` : ''}</div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
 function sourcesBlock(sources) {
   const src = (sources ?? []).map((s) => `<li class="bf-note">
       <span class="bf-note__text">${esc(s.title)}${s.date ? ` <span class="mb-muted">· ${esc(s.date)}</span>` : ''}</span>
@@ -172,6 +188,7 @@ function renderEntry(b, find) {
     ${chartBlock(b.top, b.flop)}
     ${moverBlock('Top Movers', b.top, find)}
     ${moverBlock('Flops', b.flop, find)}
+    ${analystBlock(b.analyst, find)}
     ${earningsBlock(b.earnings, find)}
     ${technikBlock(b.technik, find)}
     ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Fazit des Redakteurs</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
@@ -398,6 +415,7 @@ function renderWatch(b, find) {
     ${moverBlock('Gewinner der Woche', b.top, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
     ${moverBlock('Verlierer der Woche', b.flop, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
     ${newsBlock(b.news, find)}
+    ${analystBlock(b.analyst, find)}
     ${technikBlock(b.technik, find)}
     ${earningsBlock(b.earnings, find, 'Zahlen in der kommenden Woche')}
     ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}

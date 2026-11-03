@@ -9,7 +9,7 @@ import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20260831a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261103b';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
@@ -17,7 +17,7 @@ import { SIGNAL_CLASS, CLUSTER_LABELS, EVENT_LABELS, materialityLabel, fullDate,
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
-import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103a';
+import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103b';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
@@ -708,6 +708,41 @@ function renderNewsTab(c) {
       <span class="pv-muted">Quelle: ${names}${when ? ` · Stand ${when}` : ''}${notes.length ? ` · ${notes.join(' · ')}` : ''}</span>
       <button class="btn btn-sm btn-secondary" id="news-load" data-force="1">Aktualisieren</button>
     </div>`;
+}
+
+/* ── Analysten im Prog.-Tab ───────────────────────────────────────────────────
+   Verteilung aus `tv_data`, Aktionen aus demselben Feed wie der News-Tab. Damit
+   sind sie für jeden Titel da, nicht nur für den Ausschnitt des Monitor-Laufs. */
+
+const fmtShortDay = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+function renderAnalystPanel(c) {
+  const t = c.tv_data;
+  const dist = t && 'rec_over' in t && t.recommendation_total > 0
+    ? [['Str. Buy', t.rec_buy], ['Buy', t.rec_over], ['Hold', t.rec_hold], ['Sell', t.rec_under], ['Str. Sell', t.rec_sell]]
+    : null;
+  const news = c.tv_news;
+  const actions = (news?.items ?? []).filter((it) => it.analyst && it.analyst.action !== 'reiterate').slice(0, 8);
+  if (!dist && !actions.length && news) return '';
+  const rows = actions.map((it) => {
+    const a = ANALYST_ACTIONS[it.analyst.action];
+    const detail = [it.analyst.rating, it.analyst.target].filter(Boolean).join(' · ');
+    return `<div class="an-row">
+      <span class="an-row__day">${fmtShortDay(it.date)}</span>
+      <span class="news-item__tag${a.tone ? ` news-item__tag--${a.tone}` : ''}">${escProfile(a.label)}</span>
+      <a class="an-row__firm" href="${escProfile(it.search_url)}" target="_blank" rel="noopener" title="Bei Google suchen">${escProfile(it.analyst.firm)}</a>
+      ${detail ? `<span class="an-row__detail">${escProfile(detail)}</span>` : ''}
+    </div>`;
+  }).join('');
+  const status = c._tv_news_loading
+    ? '<p class="ph-note"><span class="ls-loading"></span> Lade Analystenmeldungen …</p>'
+    : !news || news.error
+      ? `<button class="btn btn-sm btn-secondary" id="analyst-load">Analystenmeldungen laden</button>`
+      : (actions.length ? '' : '<p class="ph-note">Keine Rating-Meldungen im aktuellen Nachrichtenfenster.</p>');
+  return `<h4 class="pv-subhead">Analysten</h4>
+    ${dist ? `<div class="an-dist">${dist.map(([label, n]) => `<div class="an-dist__cell"><b>${n ?? 0}</b><small>${label}</small></div>`).join('')}</div>` : ''}
+    ${rows ? `<div class="an-list">${rows}</div>` : ''}
+    ${status}`;
 }
 
 /* ── Tab: Cowork-Triage ───────────────────────────────────────────────────
@@ -1643,6 +1678,8 @@ function renderForecastTab(c, disp, fi) {
     ${staleHint}${yhMiss}${yhLoad}
     <p class="ph-note">Start ${fmtNum(fc.p0)} ${cur} (${fi.lsPrice != null ? 'Lang &amp; Schwarz, live' : 'TV-Close'}) ·
       P = Wahrscheinlichkeit unter derselben Lognormal-Annahme, die drei Werte ergänzen sich zu 100 %.</p>`);
+
+  parts.push(renderAnalystPanel(c));
 
   // Kurzfristiges Gegengewicht: die 10-Tage-Heuristik aus der LS-Historie. Sie
   // misst ein Setup von heute, nicht den 6-Monats-Pfad — deshalb eigener Block
@@ -2833,11 +2870,17 @@ export class CandidateDetail {
     this.el.querySelectorAll('.detail-tabs .tab-btn').forEach((btn) => {
       btn.addEventListener('pointerup', () => {
         this.setTab(btn.dataset.tab);
+        if (btn.dataset.tab === 'forecast' && !c.tv_news && !c._tv_news_loading) {
+          this.onAction?.('loadNews', c, { tvOnly: true });
+        }
         if (btn.dataset.tab === 'news'
             && ((!c.company_news && !c._news_loading) || (!c.tv_news && !c._tv_news_loading))) {
           this.onAction?.('loadNews', c);
         }
       });
+    });
+    this.el.querySelector('#analyst-load')?.addEventListener('pointerup', () => {
+      this.onAction?.('loadNews', c, { tvOnly: true });
     });
     // News: manuelles Laden / Aktualisieren (data-force umgeht den Cache).
     this.el.querySelector('#news-load')?.addEventListener('pointerup', (e) => {

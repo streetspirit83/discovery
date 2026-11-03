@@ -15,7 +15,9 @@
  *      Die Kandidaten-Blobs werden NICHT beschrieben.
  *   3. Vortagszustand (Score-Tagesreihe je Titel) aus dem monitor-Blob einsetzen,
  *      damit Deltas, MACD-Wechsel und SMA-Kreuzungen funktionieren.
- *   4. Nach Drive (Ordner MONITOR_FOLDER_ID):
+ *   4. Analysten: Konsens aller Titel gegen den Vortag; Rating-Meldungen für
+ *      Augen-Titel und Tages-Movers (Blob `analyst`, Block `analyst` im Bericht).
+ *   5. Nach Drive (Ordner MONITOR_FOLDER_ID):
  *        „Discovery Monitor"        Google Doc, in place überschrieben (Link bleibt)
  *        „Discovery Monitor.json"   kompakte Tagesfassung für die KI-Auswertung
  *        „Discovery Monitor – vollständig.json"  alle Titel (beide in place überschrieben)
@@ -34,7 +36,11 @@ import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { INDEX_GROUPS, fetchIndexRows } from '../../ui/lib/tv-indices.js';
-import { buildReport, buildIndices, renderHtml, slimReport } from './report.mjs';
+import { fetchTvNews } from '../../ui/lib/tv-news.js';
+import {
+  eventsFromNews, mergeEvents, consensusOf, rollConsensus, buildAnalystBlock, tally,
+} from '../../ui/lib/analyst-events.js';
+import { buildReport, buildIndices, renderHtml, slimReport, stockRef } from './report.mjs';
 
 /* Leitindizes, Zins, Rohstoffe, Währung – Einträge im Format von INDEX_GROUPS,
    damit fetchIndexRows die Ticker-Auflösung übernimmt (mehrere Kandidaten je
@@ -224,12 +230,81 @@ async function main() {
   const indices = await fetchIndices(auth);
   await publish(fresh, stale.filter((c) => fresh.includes(c)), indices, async (snapshots, urls) => {
     await storage(auth, { op: 'write', blob_type: 'monitor', blob: { schema_version: 'discovery-monitor-1.0', report_day: urls.day, doc_url: urls.doc, json_url: urls.json, snapshots } });
-  });
+  }, auth);
+}
+
+const NET_BATCH = 6;
+const FIRST_RUN_WINDOW_MS = 36 * 3600e3;
+
+/* Augen-Titel und Tages-Movers: mehr braucht das Briefing nicht, und jeder Titel
+   kostet eine Proxy-Runde. Der Konsens kommt ohnehin für alle aus dem Bulk-Abruf. */
+function newsTargets(report, fresh) {
+  const moved = new Set([...report.movers_1d.top, ...report.movers_1d.flop].map((x) => x.symbol));
+  for (const s of report.stocks) if (Math.abs(s.chg_1d ?? 0) >= report.breadth.big_move_threshold_pct) moved.add(s.symbol);
+  return fresh.filter((c) => (c._bucket === 'watch' && c.watch_flag) || moved.has(c.symbol));
+}
+
+/* Ergänzt den Bericht um `analyst` und liefert den neuen Blob-Stand. Ein Fehler hier
+   darf den Bericht nie aufhalten: er erscheint dann mit available:false. */
+async function collectAnalyst(report, fresh, auth, now = new Date()) {
+  let stored;
+  try { stored = (await storage(auth, { op: 'read', blob_type: 'analyst' })) ?? {}; }
+  catch (e) {
+    console.warn(`analyst-Blob nicht lesbar (${e.message}) – Bericht ohne Analysten.`);
+    report.analyst = { available: false, reason: 'Blob nicht lesbar' };
+    return null;
+  }
+  // Zweiter Lauf am selben Handelstag: gleiches Fenster, sonst wären die Meldungen weg.
+  // Eigenes Feld statt updated_at: ein leerer Blob trägt dort den Lesezeitpunkt.
+  const since = (stored.day === report.trading_day ? stored.since : stored.run_at)
+    ?? new Date(now.getTime() - FIRST_RUN_WINDOW_MS).toISOString();
+
+  const events = { ...(stored.events ?? {}) };
+  const targets = newsTargets(report, fresh);
+  let failed = 0;
+  for (let i = 0; i < targets.length; i += NET_BATCH) {
+    await Promise.all(targets.slice(i, i + NET_BATCH).map(async (c) => {
+      try {
+        const news = await fetchTvNews(c, auth, { force: true });
+        events[keyOf(c)] = mergeEvents(events[keyOf(c)], eventsFromNews(news.items), now);
+      } catch (e) {
+        failed++;
+        console.warn(`TV-News ${c.symbol}: ${e.message}`);
+      }
+    }));
+  }
+  console.log(`Analysten: ${targets.length - failed}/${targets.length} Titel abgerufen`);
+
+  const consensus = {};
+  for (const c of fresh) {
+    const k = keyOf(c);
+    const rolled = rollConsensus(stored.consensus?.[k], consensusOf(c.tv_data, report.trading_day));
+    if (rolled) consensus[k] = rolled;
+  }
+  report.analyst = buildAnalystBlock(fresh.map((c) => ({
+    ref: stockRef(c),
+    chg_1d: c.tv_data?.change_1d ?? null,
+    earnings: c.tv_data?.earnings_last_date ?? null,
+    events: events[keyOf(c)],
+    consensus: consensus[keyOf(c)],
+  })), { since, scanned: targets.length, failed, now });
+  const setupOf = new Map(fresh.map((c) => [`${c.symbol}|${c.exchange ?? null}`, events[keyOf(c)]]));
+  for (const s of report.watch_setups) s.analyst = tally(setupOf.get(`${s.symbol}|${s.exchange}`), now);
+  return {
+    schema_version: 'discovery-analyst-1.0', day: report.trading_day, since,
+    run_at: now.toISOString(), events, consensus,
+  };
 }
 
 /* Bericht bauen und ausliefern. `saveState` schreibt den Vortagszustand erst nach erfolgreichem Upload. */
-async function publish(fresh, stale, indices, saveState) {
+async function publish(fresh, stale, indices, saveState, auth) {
   const report = buildReport(fresh, stale, new Date(), indices);
+  let analystState = null;
+  try { analystState = await collectAnalyst(report, fresh, auth); }
+  catch (e) {
+    console.warn(`Analysten nicht abrufbar (${e.message}) – Bericht ohne Analysten.`);
+    report.analyst = { available: false, reason: e.message };
+  }
   const full = JSON.stringify({ ...report, variant: 'full' });
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
@@ -269,6 +344,10 @@ async function publish(fresh, stale, indices, saveState) {
   for (const c of fresh) if (c.tv_data?.snapshot?.length) snapshots[c.id] = c.tv_data.snapshot;
   await saveState(snapshots, { day, doc: doc.webViewLink, json: js.webViewLink });
   console.log(`✓ Vortagszustand: ${Object.keys(snapshots).length} Titel`);
+  if (analystState) {
+    await storage(auth, { op: 'write', blob_type: 'analyst', blob: analystState });
+    console.log(`✓ Analysten: ${report.analyst.actions_total} neue Aktionen, ${report.analyst.consensus_shifts.length} Konsens-Änderungen`);
+  }
   return report;
 }
 

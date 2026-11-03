@@ -1605,6 +1605,16 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
   margin:3px 0 0; font-size:var(--fs-1); color:var(--muted); line-height:var(--lh);
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
+/* Analysten im Prog.-Tab */
+.an-dist { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:var(--s-1); }
+.an-dist__cell { display:flex; flex-direction:column; align-items:center; background:var(--surface-2); border-radius:var(--r-1); padding:var(--s-1); min-width:0; }
+.an-dist__cell b { font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.an-dist__cell small { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.an-list { margin-top:var(--s-2); }
+.an-row { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-1) var(--s-2); padding:var(--s-1) 0; font-size:var(--fs-1); border-bottom:1px solid var(--border); }
+.an-row:last-child { border-bottom:none; }
+.an-row__day, .an-row__detail { color:var(--muted); }
+.an-row__firm { color:var(--text); font-weight:var(--fw-med); }
 .news-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }
 .news-empty { display:flex; flex-direction:column; gap:6px; align-items:flex-start; padding:6px 0; }
 /* TD-Chart: Zoom-Presets + Indikator-Toggle · Earnings-Call-Sektion */

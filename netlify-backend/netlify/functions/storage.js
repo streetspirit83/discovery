@@ -15,6 +15,7 @@ const BLOB_NAMES = {
   review: 'discovery-review',
   monitor: 'discovery-monitor',
   market: 'discovery-market',
+  analyst: 'discovery-analyst',
 };
 
 /* Der review-Blob führt keine Kandidaten, sondern Tages-Briefings der
@@ -27,8 +28,9 @@ const BRIEFING_BLOBS = new Set(['review', 'market']);
 
 /* Der monitor-Blob hält den Vortagszustand des täglichen Monitor-Berichts
    (tools/monitor-report): je Titel die Score-Tagesreihe, damit die Deltas auch
-   für Archiv-Titel funktionieren, die die App nie auffrischt. Nur read/write. */
-const STATE_BLOBS = new Set(['monitor']);
+   für Archiv-Titel funktionieren, die die App nie auffrischt. Nur read/write.
+   Ebenso der analyst-Blob: Analystenaktionen je Titel und der Konsens-Vergleichswert. */
+const STATE_BLOBS = new Set(['monitor', 'analyst']);
 
 // Tombstone list: symbol:exchange keys of candidates the user hard-deleted
 // from the inbox. Keeps the scheduled adapters from re-adding them WITHOUT

@@ -295,6 +295,7 @@ in `netlify-backend/netlify/functions/scrape-proxy.js` and POST
   Bestätigung (rein, für den Monitor-Lauf wiederverwendbar). Beide Quellen laden getrennt
   (`company_news`, `tv_news`, nicht-aufzählbar, je 30 min Cache); `mergeNews` mischt nur
   zur Anzeige. TV-Titel verlinken auf die Google-News-Suche, das Icon auf die Quelle.
+  Prog.-Tab: Verteilung aus `tv_data` plus Aktionen aus demselben Feed (`tvOnly`, ohne ROIC).
 - **Lang & Schwarz** (`www.ls-tc.de`, the Trade-Republic venue): live **EUR**
   intraday quotes. Bulk-Abrufe (LS-Kurse, TR-Check) laufen in Wellen von
   `NET_BATCH` (6) parallel, nicht nacheinander — sequenziell kostete ein Lauf
@@ -379,6 +380,14 @@ product spec.
   je Tag Doc + vollständiges JSON. TV-Daten holt die Action für alle Titel frisch, die
   Kandidaten-Blobs beschreibt sie **nicht**. Der Vortagszustand (Score-Tagesreihe je
   Titel) liegt im Blob **`monitor`** — ohne ihn gäbe es für Archiv-Titel keine Deltas.
+  **Analysten (Block `analyst`, Blob `analyst`, Logik `ui/lib/analyst-events.js`):** Konsens
+  aller Titel gegen den Vortag (`consensus_shifts`, aus dem Scanner) und neue Rating-Meldungen
+  für Augen-Titel plus Tages-Movers (`actions`, `clusters`, je Titel eine Proxy-Runde über
+  `fetchTvNews`). `since` = letzter Lauf; ein zweiter Lauf am selben Handelstag behält das
+  Fenster. Der Blob hält 180 Tage je Titel. Schlägt der Abruf fehl, erscheint der Bericht
+  mit `analyst.available:false`. Scanner: `recommendation_buy` = nur Strong Buy, `_over` = Buy,
+  `_under` = Sell, `_sell` = Strong Sell, `mark` 1 bis 3 (Gewichte 1/1,5/2/2,5/3). Nicht im
+  Score, solange kein Backtest die Nachdrift belegt.
 - **Tagesauswertung „Marktbriefing“:** Claude-Artefakt https://claude.ai/artifact/KH7R1DGvxGsoyHbSemtmLY
   (db-Collection `briefings`, Dokument-ID = Handelstag) **und** in der App über den
   Slot „Briefing“ ganz rechts in der unteren Menüleiste (`#nav-briefing`; der Bucket „Watch + Archiv“
@@ -436,6 +445,7 @@ product spec.
   median_chg_1d,median_perf_1w,above_sma200_pct,big_moves}, drivers[{text}],
   top/flop[{symbol,exchange,name,sector,chg_1d,perf_1w,reason}],
   earnings[{date,weekday,symbol,exchange,name,focus}],
+  analyst[{symbol,exchange,name,label,dir,firm,rating,target,text}] (optional, auch im Watch-Rückblick),
   technik[{symbol,exchange,name,signal,dir,text}], fazit, sources[{title,url,date}]` —
   je Eintrag genau EIN Symbol), dann (1) ins Artefakt schreiben (ArtifactData `set`) und
   (2) `gh workflow run market-briefing.yml -f payload="$(cat briefing.json)"` →
