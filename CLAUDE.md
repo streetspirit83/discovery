@@ -465,6 +465,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   und -ausblick“ So 9:34 Uhr (liest „Discovery Monitor – vollständig.json“, filtert `eye == true`,
   Prognose-Check → Methode anpassen → Ranking).
   Jede überspringt einen Eintrag, der im Artefakt schon steht.
+  Nur für die App, ohne Artefakt: „Discovery Scout“ Sa 10:41 Uhr, „Discovery Rankings“ So 11:23 Uhr, „Discovery Rotation Archiv/Watchlist“ So 11:47 Uhr; alle drei lesen „Discovery Rankings.json“ und speichern über `market-briefing.yml`.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
   Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,
   indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,
