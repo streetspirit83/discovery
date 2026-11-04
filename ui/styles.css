@@ -747,6 +747,13 @@ a.act-btn--dossier { display:inline-flex; align-items:center; justify-content:ce
 .rg-lv.up, .rg-lv.up small { color:var(--pos); }
 .rg-lv.dn, .rg-lv.dn small { color:var(--neg); }
 .rg-lv svg { width:10px; height:10px; vertical-align:-1px; margin-right:3px; }
+.rg-al { font-style:normal; color:var(--accent); }
+.rg-al svg { display:inline-block; }
+.rg-al--fired { color:var(--neg); }
+.rg-al--fired svg { fill:currentColor; }
+.rg-al--moved, .rg-al--dead { color:var(--warn); }
+.rg-al--dead { opacity:.7; }
+.rg-brk { font-weight:var(--fw-bold); color:var(--text); }
 th.rg-r, td.rg-r { text-align:left; }
 th.rg-r .sort-btn { justify-content:flex-start; }
 td.rg-s { padding-right:var(--s-1); }
@@ -1904,11 +1911,21 @@ body.has-chart-fs { overflow:hidden; }
 .chart-level__lbl { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
 .chart-level__price { font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; color:var(--accent); flex:1; }
 .chart-level #chart-level-add { white-space:nowrap; }
-.chart-level #chart-range-alarm { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
-.chart-level #chart-range-alarm svg { width:14px; height:14px; }
-.chart-level #chart-range-alarm.is-on { color:var(--accent); border-color:var(--accent); }
-.chart-level #chart-range-alarm.is-on svg { fill:currentColor; fill-opacity:.25; }
+#chart-range-alarm { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+#chart-range-alarm svg { width:14px; height:14px; }
+#chart-range-alarm.is-on { color:var(--accent); border-color:var(--accent); }
+#chart-range-alarm.is-on svg { fill:currentColor; fill-opacity:.25; }
 .chart-level #chart-level-add:disabled { opacity:.5; }
+.range-edit { margin-top:var(--s-2); padding:var(--s-2); background:var(--surface-3); border-radius:var(--r-1); display:flex; flex-direction:column; gap:var(--s-2); }
+.range-edit__grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-2); }
+.range-edit__f { display:flex; flex-direction:column; gap:2px; min-width:0; font-size:var(--fs-1); color:var(--muted); }
+.range-edit__in { width:100%; min-height:32px; padding:var(--s-1) var(--s-2); box-sizing:border-box; font-family:var(--font-mono); font-size:var(--fs-3); color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); }
+.range-edit__in:focus { outline:none; border-color:var(--accent); }
+.range-edit__f small { font-size:var(--fs-1); font-variant-numeric:tabular-nums; }
+.range-edit__acts { display:flex; flex-wrap:wrap; gap:var(--s-2); }
+.range-edit__msg { margin:0; font-size:var(--fs-1); color:var(--neg); }
+.range-edit__msg:empty { display:none; }
+.range-edit__hint { margin:0; font-size:var(--fs-1); color:var(--muted); line-height:1.35; }
 /* 1J-candle load prompt / spinner placeholder (same height as the chart) */
 .chart-loading {
   display:flex; align-items:center; justify-content:center; gap:8px;

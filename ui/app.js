@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261103h';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261104a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261103h';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261104a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -18,10 +18,10 @@ import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103h';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103f';
-import { openRangesModal } from './components/ranges-modal.js?v=20261103h';
+import { openRangesModal } from './components/ranges-modal.js?v=20261104a';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
-import { rangeInputs, rangeView } from './lib/range-levels.js?v=20261103h';
-import { rangeAlarmPatch } from './lib/range-alarm.js?v=20261103h';
+import { rangeInputs, rangeView, rangeOverride } from './lib/range-levels.js?v=20261104a';
+import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104a';
 import { renderControlModal } from './components/control-modal.js?v=20261103h';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
@@ -1885,6 +1885,30 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
+  // Support/Resistance von Hand, beide leer = zurück auf auto. Ein aktiver Alarm zieht sofort mit.
+  if (action === 'rangeLevels') {
+    const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
+    const before = { range_override: candidate.range_override, alerts: candidate.alerts, range_alarm: candidate.range_alarm };
+    const refresh = () => { candidateDetail.render(); candidateList.renderRows(); updateAlertBadge(); };
+    const patch = { range_override: rangeOverride(rangeInputs(candidate, resolveFxRate()).it, extras.sup, extras.res) };
+    candidate.range_override = patch.range_override;
+    if (bucket !== 'archive' && rangeAlarmOn(candidate)) {
+      const { it, ov, lp, hist } = rangeInputs(candidate, resolveFxRate());
+      Object.assign(patch, rangeAlarmPatch(candidate, rangeView(it, ov, { p: lp ?? it.p }, hist), true).patch);
+    }
+    Object.assign(candidate, patch);
+    refresh();
+    try {
+      if (!useMock && storageClient) await storageClient.updateCandidate(bucket, candidate.id, patch);
+      toast(patch.range_override ? 'Levels gespeichert.' : 'Zurück auf auto.', 'success', 2000);
+    } catch (e) {
+      Object.assign(candidate, before);
+      refresh();
+      toast(`Levels nicht gespeichert: ${e.message}`, 'error', 4000);
+    }
+    return;
+  }
+
   if (action === 'chartAlert') {
     openTriggerEditor(candidate, {
       onSaveAlerts: persistAlerts,
@@ -2254,9 +2278,10 @@ async function init() {
 
   // Init components
   candidateList = new CandidateList({
-    onSelect: (candidate) => {
+    onSelect: (candidate, opts) => {
       candidateDetail.show(candidate);
       openDetailSheet();
+      if (opts?.level) candidateDetail.focusLevel(opts.level);
     },
     onAction: handleAction,
     onBulkAction: handleBulkAction,

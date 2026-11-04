@@ -15,8 +15,16 @@
  * detectors + cluster/RSI/volume facts), ISIN line; action buttons 🔍 Discovery
  * (deep link to the detail sheet) + 📈 TV-Chart. One bundled push per ticker.
  *
- * Schedule: every 20 min, 11-20 UTC Mon-Fri (~13:00-22:40 CEST in summer; one
- * hour earlier in winter — Netlify cron is UTC, no DST).
+ * Preisalarme sehen jeden LS-Kurs seit dem letzten Lauf, nicht nur den letzten:
+ * ein Ausschlag zwischen zwei Läufen feuert also auch.
+ *
+ * Range-Alarme (wr_sup_/wr_res_): Berührung des Levels = Push „erreicht". Bruch
+ * (> 0,5 % jenseits, rangeView) = zweiter Push „gebrochen", danach stehen die
+ * Alarme auf den neuen Levels. Nachgezogen wird hier bei jedem Lauf mit derselben
+ * Rechnung wie in der App (ui/lib/range-levels.js, range-alarm.js).
+ *
+ * Schedule: every 20 min, 7-21 UTC Mon-Fri (siehe config unten) — Netlify cron is
+ * UTC, no DST.
  */
 
 import { getStore } from '@netlify/blobs';
@@ -25,6 +33,9 @@ import { fetchLsPrice, fetchYahooPrice, fetchEurUsd } from './lib/ls-quote.js';
 import { sendNtfy } from './lib/notify.js';
 import { composePush } from './lib/push-composer.js';
 import { computePriceClusters } from './lib/price-cluster.js';
+import { rangeInputs, rangeView } from '../../../ui/lib/range-levels.js';
+import { rangeAlarmOn, rangeAlarmPatch, armedLevels, levelMoved, isWr } from '../../../ui/lib/range-alarm.js';
+import { eurBasisFactor } from '../../../ui/lib/eur-basis.js';
 
 const NTFY_TOPIC = process.env.DISC_NTFY_TOPIC || 'disc-alerts-q4w8r2v';
 const SOURCE_BLOBS = ['discovery-inbox', 'discovery-watch', 'discovery-export'];
@@ -32,6 +43,9 @@ const CONFIG_KEY  = 'discovery-config';
 const STATE_KEY   = 'discovery-alert-state';
 const TRIG_KEY    = 'discovery-alert-trig';
 const HISTORY_KEY = 'discovery-ls-history';
+const BREAK_KEY   = 'discovery-range-breaks';
+const NET_BATCH   = 6;                       // LS-Abrufe je Welle (wie in der UI)
+const BREAK_REPUSH_MS = 24 * 60 * 60 * 1000; // gleicher Bruch höchstens einmal am Tag
 
 const MERKLISTE_BLOB_URL = 'https://merkliste-app.netlify.app/.netlify/functions/blob';
 
@@ -73,6 +87,67 @@ function portfolioFor(c, bySym) {
 
 const enabled = (a) => a && a.enabled !== false;
 
+/* LS liefert Berliner Ortszeit als wäre sie UTC (gemessen: letzter Punkt lag eine
+   Stunde „in der Zukunft"). Abstand zu echter Zeit für den Zeitpunkt `date`. */
+export function berlinOffsetMs(date) {
+  const p = {};
+  for (const { type, value } of new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Berlin', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(date)) p[type] = +value;
+  const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return wall - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/* Preisalarme, die nur ein Ausschlag seit dem letzten Lauf ausgelöst hat. Ein Alarm
+   sieht nur Kurse nach seiner Anlage, sonst feuerte ein frisch verschobener sofort. */
+export function wickHits(alerts, ticks) {
+  const out = [];
+  for (const a of alerts) {
+    if (a.group || a._trig || !(a.threshold > 0)) continue;
+    const test = a.type === 'price_below' ? (p) => p <= a.threshold
+      : a.type === 'price_above' ? (p) => p >= a.threshold : null;
+    if (!test) continue;
+    const from = Date.parse(a.created_at ?? '') || 0;
+    if (ticks.some(([t, p]) => t >= from && test(p))) out.push({ ...a, _trig: true, _wick: true });
+  }
+  return out;
+}
+
+/* Soll-Zustand der Range-Alarme eines Titels. null = nichts rechenbar. */
+function rangeState(c, price, snapshots, eurUsd) {
+  try {
+    const { it, ov, hist } = rangeInputs({ ...c, ls_quote: { price }, ls_history: snapshots }, eurUsd);
+    if (!it.conv) return null;                 // Levels nicht in EUR, Alarme vergleichen EUR
+    return { v: rangeView(it, ov, { p: price }, hist) };
+  } catch (e) {
+    console.warn(`[range] ${c.symbol}: ${e.message}`);
+    return null;
+  }
+}
+
+/* Neue wr_-Alerts in den Blob: frisch lesen, direkt schreiben, damit das Fenster zu
+   Speichervorgängen der App so klein wie möglich bleibt. Geht ein Alarm dabei doch
+   verloren, setzt ihn der nächste Lauf neu. */
+async function writeRearm(store, blobKey, byId) {
+  const doc = await store.get(blobKey, { type: 'json' });
+  if (!Array.isArray(doc?.candidates)) return 0;
+  const now = new Date().toISOString();
+  let n = 0;
+  for (const c of doc.candidates) {
+    const wr = byId.get(c.id);
+    if (!wr || !rangeAlarmOn(c)) continue;   // inzwischen abgeschaltet: nicht wieder anlegen
+    c.alerts = [...(Array.isArray(c.alerts) ? c.alerts : []).filter((a) => !isWr(a)), ...wr];
+    c.range_alarm = true;
+    c.last_updated_at = now;
+    n++;
+  }
+  if (!n) return 0;
+  doc.updated_at = now;
+  await store.setJSON(blobKey, doc);
+  return n;
+}
+
 export default async () => {
   const startedAt = new Date().toISOString();
   console.log(`[disc-alerts] Start ${startedAt}`);
@@ -84,51 +159,88 @@ export default async () => {
 
   // Collect candidates with >=1 enabled alert (dedup by id across blobs).
   const byId = new Map();
+  const blobOf = new Map();
   for (const key of SOURCE_BLOBS) {
     const blob = await store.get(key, { type: 'json' }).catch(() => null);
     for (const c of blob?.candidates ?? []) {
-      if (Array.isArray(c.alerts) && c.alerts.some(enabled) && !byId.has(c.id)) byId.set(c.id, c);
+      const active = (Array.isArray(c.alerts) && c.alerts.some(enabled)) || rangeAlarmOn(c);
+      if (active && !byId.has(c.id)) { byId.set(c.id, c); blobOf.set(c.id, key); }
     }
   }
   const candidates = [...byId.values()];
   console.log(`[disc-alerts] ${candidates.length} Kandidaten mit aktiven Alerts · muted=${muted}`);
   if (!candidates.length) return new Response('no alerts', { status: 200 });
 
-  const [prevStateDoc, prevTrigDoc, histDoc, mkBySym] = await Promise.all([
+  const [prevStateDoc, prevTrigDoc, histDoc, mkBySym, prevBreakDoc] = await Promise.all([
     store.get(STATE_KEY,   { type: 'json' }).catch(() => null),
     store.get(TRIG_KEY,    { type: 'json' }).catch(() => null),
     store.get(HISTORY_KEY, { type: 'json' }).catch(() => null),
     fetchMerklisteMap(),
+    store.get(BREAK_KEY,   { type: 'json' }).catch(() => null),
   ]);
   const prevState = prevStateDoc?.state ?? {};
   const prevTrig  = prevTrigDoc?.triggered ?? {};
   const lsHistory = histDoc?.history ?? {};
 
   const eurUsd = await fetchEurUsd();
-  const toEur = (v, ccy) => (String(ccy).toUpperCase() === 'USD' && eurUsd && v != null) ? +(v / eurUsd).toFixed(4) : v;
+  // Native → EUR. Weder EUR noch USD (SEK, GBX): über die EUR-Basis, sonst null —
+  // ein unumgerechneter Wert würde gegen EUR-Schwellen falsche Alarme auslösen.
+  const toEur = (v, c) => {
+    if (v == null) return null;
+    const ccy = String(c.currency ?? '').toUpperCase();
+    if (!ccy || ccy === 'EUR') return v;
+    if (ccy === 'USD') return eurUsd ? +(v / eurUsd).toFixed(4) : null;
+    const f = eurBasisFactor(c);
+    return f ? +(v * f).toFixed(4) : null;
+  };
+
+  // Fenster für die Ausschläge: alles nach dem letzten Lauf.
+  const nowMs = Date.now();
+  const lastRunMs = prevStateDoc?.updatedAt ?? nowMs - 25 * 60 * 1000;
+  const lsShift = berlinOffsetMs(new Date(nowMs));
+
+  // Kurse in Wellen: der Lauf darf die 30 s einer geplanten Funktion nie reissen,
+  // sonst wird der Zustand gar nicht mehr gespeichert.
+  const quotes = new Map();
+  const fetchQuote = async (c) => {
+    const ls = await fetchLsPrice(c).catch(() => null);
+    if (ls?.price != null) return ls;
+    if (!(c.yahoo_symbol || c.symbol)) return null;
+    const y = await fetchYahooPrice(c.yahoo_symbol || c.symbol).catch(() => null);
+    return { price: toEur(y, c), points: null };
+  };
+  for (let i = 0; i < candidates.length; i += NET_BATCH) {
+    await Promise.allSettled(candidates.slice(i, i + NET_BATCH).map(async (c) => {
+      quotes.set(c.id, await fetchQuote(c));
+    }));
+  }
 
   const newState = { ...prevState };
   const newTrig  = {};
+  // Beim allerersten Lauf nur den Stand merken: bestehende Brüche sind keine Neuigkeit.
+  const firstBreakRun = !prevBreakDoc;
+  const prevBreaks = prevBreakDoc?.breaks ?? {};
+  const newBreaks = { ...prevBreaks };
+  const rearm = new Map();     // blobKey → Map(id → wr-Alerts)
   let pushCount = 0;
 
   for (const c of candidates) {
     const ccy = c.currency;
-    // Primary LS (EUR); fallback Yahoo (native → EUR).
-    let price = null;
-    const ls = await fetchLsPrice(c).catch(() => null);
-    if (ls?.price != null) {
-      price = ls.price;
-    } else if (c.yahoo_symbol || c.symbol) {
-      const y = await fetchYahooPrice(c.yahoo_symbol || c.symbol).catch(() => null);
-      price = toEur(y, ccy);
-    }
+    const quote = quotes.get(c.id) ?? null;
+    const price = quote?.price ?? null;
+    if (price == null) console.warn(`[disc-alerts] kein Kurs für ${c.symbol}`);
+    const ticks = (quote?.points ?? [])
+      .filter((p) => Array.isArray(p) && p[1] != null)
+      .map((p) => [p[0] - lsShift, p[1]])
+      .filter(([t]) => t > lastRunMs);
 
     const tv = c.tv_data ?? {};
     // Dynamic cluster levels for cross_below_sup / cross_above_res: compute the
     // clusters in native currency (LS/EUR levels → native via lsToNative), then
     // convert the nearest zone midpoints to EUR to compare with the EUR price.
     const ccyU = String(ccy).toUpperCase();
-    const lsToNative = ccyU === 'EUR' ? 1 : ccyU === 'USD' ? (eurUsd ?? null) : null;
+    const basisF = eurBasisFactor(c);
+    const lsToNative = ccyU === 'EUR' ? 1 : ccyU === 'USD' ? (eurUsd ?? null) : basisF ? 1 / basisF : null;
     const nativeClose = tv.close_1m ?? tv.close;
     const pc = nativeClose != null
       ? computePriceClusters(tv, { lsHistory: lsHistory[c.id]?.snapshots ?? null, refPrice: nativeClose, lsToNative })
@@ -136,19 +248,19 @@ export default async () => {
     const q = {
       price,
       rsi: tv.rsi ?? null,
-      ma20:  toEur(tv.ema20, ccy),
-      ma50:  toEur(tv.ema50, ccy),
-      ma200: toEur(tv.ema200, ccy),
-      macd_histogram: (tv.macd != null && tv.macd_signal != null) ? toEur(tv.macd - tv.macd_signal, ccy) : null,
+      ma20:  toEur(tv.ema20, c),
+      ma50:  toEur(tv.ema50, c),
+      ma200: toEur(tv.ema200, c),
+      macd_histogram: (tv.macd != null && tv.macd_signal != null) ? toEur(tv.macd - tv.macd_signal, c) : null,
       volume: tv.average_volume ?? null,
       avg_volume: tv.avg_vol_10d ?? tv.average_volume ?? null,
-      sup: pc?.nearestSup ? toEur(pc.nearestSup.mid, ccy) : null,
-      res: pc?.nearestRes ? toEur(pc.nearestRes.mid, ccy) : null,
+      sup: pc?.nearestSup ? toEur(pc.nearestSup.mid, c) : null,
+      res: pc?.nearestRes ? toEur(pc.nearestRes.mid, c) : null,
     };
 
-    const activeAlerts = c.alerts.filter(enabled);
+    const activeAlerts = (Array.isArray(c.alerts) ? c.alerts : []).filter(enabled);
     const { alerts: evaled } = evaluateAlerts(activeAlerts, q);
-    const triggered = evaled.filter((a) => a._trig);
+    const triggered = [...evaled.filter((a) => a._trig), ...wickHits(evaled, ticks)];
     const status = computeStatus({ alerts: activeAlerts }, q);
 
     const prevKey     = prevState[c.id] ?? 'halten';
@@ -167,16 +279,54 @@ export default async () => {
     const statusChanged = prevKey !== status.key && status.key !== 'halten';
     const hasNewTrigger = newlyTriggered.length > 0;
 
-    console.log(`[eval] ${c.symbol}: px=${price != null ? price.toFixed(2) : '—'} → ${status.key} (prev ${prevKey}) new=${newlyTriggered.map((a) => a.type).join(',') || '—'}`);
+    // Range-Alarm: Bruch melden und Alarme auf die aktuellen Levels ziehen.
+    const alarmOn = rangeAlarmOn(c) && price != null;
+    const rs = alarmOn ? rangeState(c, price, lsHistory[c.id]?.snapshots ?? null, eurUsd) : null;
+    const brk = rs?.v.brk ?? null;
+    let breakAlert = null;
+    if (brk) {
+      const prev = prevBreaks[c.id];
+      const same = prev && prev.side === brk.side && !levelMoved(prev.lvl, brk.lvl);
+      const isNew = !same || nowMs - (prev.at ?? 0) > BREAK_REPUSH_MS;
+      if (isNew && firstBreakRun) newBreaks[c.id] = { side: brk.side, lvl: brk.lvl, at: nowMs };
+      else if (isNew) {
+        breakAlert = {
+          id: `wr_brk_${brk.side}_${c.id}`, type: 'range_break', kind: 'watch', priority: 4, _trig: true,
+          side: brk.side, threshold: brk.lvl, nextSup: rs.v.sup, nextRes: rs.v.res,
+        };
+      }
+    }
+    const moved = [];
+    // Ein von Hand deaktivierter Range-Alarm bleibt deaktiviert.
+    if (rs && !(Array.isArray(c.alerts) ? c.alerts : []).some((a) => isWr(a) && a.enabled === false)) {
+      const { patch, armed } = rangeAlarmPatch(c, rs.v, true);
+      const old = armedLevels(c);
+      for (const side of ['sup', 'res']) if (levelMoved(armed[side], old[side])) moved.push(`wr_${side}_${c.id}`);
+      if (moved.length) {
+        const key = blobOf.get(c.id);
+        if (!rearm.has(key)) rearm.set(key, new Map());
+        rearm.get(key).set(c.id, patch.alerts.filter(isWr));
+        console.log(`[range] ${c.symbol}: Alarm ${old.sup ?? '—'}/${old.res ?? '—'} → ${armed.sup ?? '—'}/${armed.res ?? '—'}`);
+      }
+    }
+    // Verschobener Alarm = neues Level, darf wieder feuern.
+    if (moved.length) newTrig[c.id] = newTrig[c.id].filter((id) => !moved.includes(id));
 
-    if (muted || (!statusChanged && !hasNewTrigger)) {
+    console.log(`[eval] ${c.symbol}: px=${price != null ? price.toFixed(2) : '—'} ticks=${ticks.length} → ${status.key} (prev ${prevKey}) new=${newlyTriggered.map((a) => a.type).join(',') || '—'}${breakAlert ? ' BRUCH' : ''}`);
+
+    if (muted || (!statusChanged && !hasNewTrigger && !breakAlert)) {
       // Mute: Statuswechsel ebenfalls nicht festschreiben, damit er nach dem
       // Unmute noch als Wechsel erkannt und gepusht wird.
       if (muted && statusChanged) newState[c.id] = prevKey;
       continue;
     }
 
-    const shown = statusChanged ? triggered : newlyTriggered;
+    // Fällt die Berührung in denselben Lauf wie der Bruch, reicht der Bruch-Push.
+    const shown = [
+      ...(statusChanged ? triggered : newlyTriggered)
+        .filter((a) => !(breakAlert && a.id === `wr_${breakAlert.side}_${c.id}`)),
+      ...(breakAlert ? [breakAlert] : []),
+    ];
     if (!shown.length) continue;
     const push = composePush({
       c,
@@ -189,7 +339,8 @@ export default async () => {
     console.log(`[ALERT] ${push.title}\n${push.message}`);
     const sent = await sendNtfy(NTFY_TOPIC, push).catch((e) => { console.error(`[ntfy] ${e.message}`); return false; });
     if (sent) {
-      newTrig[c.id] = triggered.map((a) => a.id);   // jetzt gesehen
+      newTrig[c.id] = triggered.map((a) => a.id).filter((id) => !moved.includes(id));   // jetzt gesehen
+      if (breakAlert) newBreaks[c.id] = { side: breakAlert.side, lvl: breakAlert.threshold, at: nowMs };
       pushCount++;
     } else {
       // Fehlgeschlagen → Zustand nicht festschreiben, nächster Lauf pusht erneut.
@@ -202,15 +353,18 @@ export default async () => {
   await Promise.allSettled([
     store.setJSON(STATE_KEY, { state: newState, updatedAt: now }),
     store.setJSON(TRIG_KEY,  { triggered: newTrig, updatedAt: now }),
+    store.setJSON(BREAK_KEY, { breaks: newBreaks, updatedAt: now }),
   ]);
-  console.log(`[disc-alerts] Fertig: ${pushCount} Push(es)${muted ? ' (muted)' : ''}`);
+  let moved = 0;
+  for (const [key, ids] of rearm) moved += await writeRearm(store, key, ids).catch((e) => { console.error(`[range] ${key}: ${e.message}`); return 0; });
+  console.log(`[disc-alerts] Fertig: ${pushCount} Push(es)${muted ? ' (muted)' : ''} · ${moved} Alarm(e) nachgezogen`);
   return new Response(JSON.stringify({ pushes: pushCount, candidates: candidates.length, muted }), {
     status: 200, headers: { 'Content-Type': 'application/json' },
   });
 };
 
-// 7-20 UTC deckt auch den Handelsvormittag ab (9-22 CEST im Sommer,
-// 8-21 CET im Winter) — vorher begann der Check erst um 13:00 CEST.
+// 7-21 UTC: 8:00-22:40 Uhr im Winter, 9:00-23:40 Uhr im Sommer. Deckt damit den
+// US-Schluss um 22:00 Uhr ab; LS handelt bis 23:00 Uhr.
 export const config = {
-  schedule: '*/20 7-20 * * 1-5',
+  schedule: '*/20 7-21 * * 1-5',
 };

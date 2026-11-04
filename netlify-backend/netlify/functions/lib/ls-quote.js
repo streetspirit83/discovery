@@ -63,7 +63,7 @@ export async function fetchLsPrice(candidate) {
   if (price == null) return null;
   const prevClose = chart.prevClose;
   const change_pct = (prevClose != null && prevClose !== 0) ? (price - prevClose) / prevClose * 100 : null;
-  return { price, prev_close: prevClose, change_pct, ls_id: chart.id, source: 'ls' };
+  return { price, prev_close: prevClose, change_pct, ls_id: chart.id, source: 'ls', points: chart.points };
 }
 
 /* Full intraday snapshot for the daily history: downsampled series + day range. */

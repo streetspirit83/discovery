@@ -6,7 +6,7 @@
  * Format wie die Function watch-alarms). Ein überschrittenes Level bekommt keinen Alarm.
  */
 
-import { r4 } from './range-levels.js?v=20261103h';
+import { r4 } from './range-levels.js?v=20261104a';
 
 export const isWr = (a) => String(a?.id ?? '').startsWith('wr_');
 
@@ -33,11 +33,31 @@ export function wantArm(v) {
   return { sup: v.sup && v.p > v.sup ? r4(v.sup) : null, res: v.res && v.p < v.res ? r4(v.res) : null };
 }
 
+/** Zwei Levels gelten ab 0,2 % als verschieden (fehlende Seite zählt als Änderung). */
+export function levelMoved(a, b) {
+  if (!a && !b) return false;
+  if (!a || !b) return true;
+  return Math.abs(a - b) / b > 0.002;
+}
+
 /** Scharfgestellte Levels eines Titels. */
 export function armedLevels(c) {
   const list = Array.isArray(c?.alerts) ? c.alerts : [];
   const thr = (side) => { const v = +list.find((a) => a?.id === `wr_${side}_${c.id}`)?.threshold; return v > 0 ? v : null; };
   return { sup: thr('sup'), res: thr('res') };
+}
+
+/**
+ * Zustand der Glocke an einem angezeigten Level. `lvl`, `p` in EUR.
+ * '' kein Alarm · armed scharf · fired ausgelöst · moved steht auf anderem Level · dead Archiv
+ */
+export function levelAlarm(c, side, lvl, p, { archived = false } = {}) {
+  if (!rangeAlarmOn(c)) return { state: '', thr: null };
+  const thr = armedLevels(c)[side];
+  if (!thr) return { state: '', thr: null };
+  if (archived) return { state: 'dead', thr };
+  if (levelMoved(thr, lvl)) return { state: 'moved', thr };
+  return { state: (side === 'sup' ? p <= thr : p >= thr) ? 'fired' : 'armed', thr };
 }
 
 export const rangeAlarmOn = (c) => c?.range_alarm === true || (Array.isArray(c?.alerts) && c.alerts.some(isWr));
@@ -47,6 +67,14 @@ export function rangeAlarmPatch(c, v, on, now = new Date().toISOString()) {
   const old = Array.isArray(c.alerts) ? c.alerts : [];
   const prev = (side) => old.find((a) => a?.id === `wr_${side}_${c.id}`);
   const w = on ? wantArm(v) : { sup: null, res: null };
+  /* Kurs liegt am Level, aber noch unter der Bruch-Schwelle von 0,5 %: Alarm stehen lassen,
+     sonst fiele er weg und käme beim Rückweg als neuer Alarm wieder. */
+  if (on && !v.st) {
+    for (const side of ['sup', 'res']) {
+      const thr = +prev(side)?.threshold;
+      if (w[side] == null && thr > 0 && v[side] > 0 && !levelMoved(thr, v[side])) w[side] = thr;
+    }
+  }
   if (w.sup != null && w.res != null && w.sup >= w.res) { w.sup = null; w.res = null; }
   const mine = [];
   if (w.sup != null) mine.push(wrAlert(c.id, 'sup', w.sup, prev('sup'), now));

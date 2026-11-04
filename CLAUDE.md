@@ -110,7 +110,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   zeigen Watch Ranges in der Liste: dieselbe Rechnung wie das Modal (`lib/range-levels.js`),
   je Titel gecacht (`rangeOf`), Sup und Res sortieren nach Nähe. Das Band sieht aus wie im Modal
   (Schiene, grüne/rote Zone, Kursmarke, ★-Einstand, Pfeil = 5-Tage-Trend ab ±1 %), Abstände ab
-  ±10 % sind eingefärbt, ein scharfes Level trägt die Glocke, ↑/↓ markiert ein gebrochenes Level. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
+  ±10 % sind eingefärbt, die Glocke zeigt den Alarm am Level (`levelAlarm`: scharf, rot = ausgelöst, Warnfarbe = steht auf anderem Level oder im Archiv), ↑/↓ markiert ein gebrochenes Level und ist reine Anzeige (ab 0,5 %, kein Push). Tippen auf Sup/Res öffnet das Eingabefeld im Detail-Sheet. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
   sobald einer ausgelöst ist; neue Alarme entstehen weiter über die Aktionsspalte. In der Trade-Ansicht stehen die drei „wohin
   könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
   **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
@@ -140,9 +140,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `docs/FORECAST_SPEC.md`.
   Der 1J-Chart zeichnet zusätzlich die **Watch-Range-Levels** gestrichelt (`chartRange`, gleiche
   Rechnung wie Liste und Modal; scharf = Titel „Sup Alarm"/„Res Alarm") und bestehende Preis-Alerts
-  gepunktet. Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
-  `lib/range-alarm.js`, gemeinsam mit dem Modal). Im Archiv gibt es keinen Alarm, dort prüft
-  `check-alerts` nicht. Geänderte Levels zieht weiterhin nur das Öffnen des Range-Modals nach.
+  gepunktet. Unter dem Chart steht die Level-Eingabe (`rangeEditorHTML`, Aktion `rangeLevels`): Support und
+  Resistance in Anzeigewährung, leer = auto, „Auf auto zurück", dazu der Knopf „Sup/Res" für den
+  Range-Alarm (Aktion `rangeAlarm`, `lib/range-alarm.js`, gemeinsam mit Modal und Server). Eingaben
+  überstehen ein `render()` über `rangeDraft`. Im Archiv gibt es keinen Alarm, dort prüft
+  `check-alerts` nicht. Geänderte Levels zieht `check-alerts` bei jedem Lauf nach.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
@@ -473,6 +475,20 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   „Discovery Monitor – Prompt.md“ im Drive-Ordner.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
+
+## Alerts (`check-alerts`, alle 20 min, 7–21 UTC)
+Die App ist die einzige Quelle für Levels und Alarme (`range_override`, `range_alarm`, `wr_sup_/wr_res_<id>`).
+`check-alerts` importiert dafür `ui/lib/range-levels.js`, `range-alarm.js` und `eur-basis.js` direkt, die Rechnung
+kann also nicht auseinanderlaufen.
+- **Alarm vs. Bruch:** Alarm feuert bei Berührung des Levels (Push „erreicht"). Bruch = > 0,5 % jenseits
+  (`rangeView`): zweiter Push „gebrochen", danach stehen die Alarme auf den neuen Levels. Gleicher Bruch
+  höchstens alle 24 h (Blob `discovery-range-breaks`, der erste Lauf merkt sich nur den Stand). Fällt
+  beides in einen Lauf, geht nur der Bruch-Push raus. Zwischen Level und 0,5 % bleibt der Alarm stehen.
+- **Ausschläge:** Preisalarme prüfen alle LS-Kurse seit dem letzten Lauf (`wickHits`), ein Alarm nur Kurse nach
+  seinem `created_at`. **LS-Zeitstempel sind Berliner Ortszeit, nicht UTC** (`berlinOffsetMs`).
+- **Währung:** `toEur` rechnet SEK/GBX über `eurBasisFactor`; ohne Basis `null` statt Heimatwährung gegen EUR.
+- `watch-alarms.js` und `tools/watch-ranges/alarm_sync.py` gehören zum alten Artefakt-Abgleich und sind
+  nicht mehr die Quelle: Läuft der Abgleich noch, überschreibt `check-alerts` ihn im nächsten Lauf.
 
 ## Netlify Setup
 Deploy `netlify-backend/` directory. Set environment variables:

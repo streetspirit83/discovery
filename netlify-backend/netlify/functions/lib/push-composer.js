@@ -58,16 +58,24 @@ const round0 = (v) => Math.round(v);
 
 export function triggerLine(a, q) {
   const kind = alertKind(a);
-  const lbl = a.label ? ` (${a.label})` : '';
-  const px = fmtEur(q.price);
+  // Range-Alarme tragen das Level schon im Kopf, das Label wäre doppelt.
+  const wr = String(a.id ?? '').startsWith('wr_');
+  const lbl = a.label && !wr ? ` (${a.label})` : '';
+  // Nur zwischen zwei Läufen berührt: der letzte Kurs liegt wieder diesseits.
+  const px = a._wick ? 'kurzzeitig' : fmtEur(q.price);
   switch (a.type) {
     case 'price_above': {
-      const head = kind === 'stop' ? '⛔ Stop-Loss' : kind === 'buy' ? '🟢 Buy-Level' : '🎯 Target erreicht';
+      const head = kind === 'stop' ? '⛔ Stop-Loss' : kind === 'buy' ? '🟢 Buy-Level' : wr ? '🎯 Resistance erreicht' : '🎯 Target erreicht';
       return `${head}: ${px} ≥ ${fmtEur(a.threshold)}${lbl}`;
     }
     case 'price_below': {
-      const head = kind === 'stop' ? '⛔ Stop-Loss' : kind === 'buy' ? '🟢 Buy-Level' : '⚠️ Support gebrochen';
+      const head = kind === 'stop' ? '⛔ Stop-Loss' : kind === 'buy' ? '🟢 Buy-Level' : wr ? '⚠️ Support erreicht' : '⚠️ Level erreicht';
       return `${head}: ${px} ≤ ${fmtEur(a.threshold)}${lbl}`;
+    }
+    case 'range_break': {
+      const sup = a.side === 'sup';
+      const next = [a.nextSup ? `Support ${fmtEur(a.nextSup)}` : '', a.nextRes ? `Resistance ${fmtEur(a.nextRes)}` : ''].filter(Boolean).join(' · ');
+      return `${sup ? '🔻 Support' : '🔺 Resistance'} gebrochen: ${px} (Level ${fmtEur(a.threshold)})${next ? `\nNeue Alarme: ${next}` : ''}`;
     }
     case 'ma20_below':  return `📉 Kurs unter EMA20: ${px} ≤ ${fmtEur(q.ma20)}`;
     case 'ma50_below':  return `📉 Kurs unter EMA50: ${px} ≤ ${fmtEur(q.ma50)}`;

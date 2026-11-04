@@ -130,6 +130,36 @@ export function rangeView(it, over, pr, hist) {
   return { sup, res, bSup, bRes, supM: supM && !st, resM: resM && !st, sz, rz, lo, hi, pos, st, brk, nl, p, pr };
 }
 
+/** Eingabe „72,50" → Zahl. Leer = null, ungültig = NaN. */
+export function parseLevel(s) {
+  s = String(s ?? '').trim();
+  s = s.indexOf(',') >= 0 ? s.replace(/\./g, '').replace(',', '.') : s;
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? n : NaN;
+}
+
+/**
+ * Manuelle Levels prüfen. `s`, `r`, `v` in derselben Einheit, `fmt` für die Meldung.
+ * Leere Felder = angezeigtes Level. Nach einem Bruch werden beide Seiten fest gespeichert,
+ * sonst würde die alte, gebrochene Gegenseite den Bruch sofort wieder auslösen.
+ * → { err } oder { sup, res }
+ */
+export function resolveLevels(v, s, r, fmt) {
+  if (Number.isNaN(s) || Number.isNaN(r)) return { err: 'Bitte eine positive Zahl eingeben, z. B. 72,50.' };
+  const fs = s != null ? s : v.sup, fr = r != null ? r : v.res;
+  if (fs != null && fr != null && fs >= fr) return { err: 'Support muss unter der Resistance liegen.' };
+  if (v.p > 0 && fs > 0 && v.p < fs * (1 - BRK)) return { err: `Support liegt über dem Kurs (${fmt(v.p)}) und würde sofort als Bruch zählen.` };
+  if (v.p > 0 && fr > 0 && v.p > fr * (1 + BRK)) return { err: `Resistance liegt unter dem Kurs (${fmt(v.p)}) und würde sofort als Bruch zählen.` };
+  return v.brk ? { sup: fs, res: fr } : { sup: s, res: r };
+}
+
+/** Wert für `range_override` (nativ). Beide Seiten leer = zurück auf auto. */
+export function rangeOverride(it, sup, res, now = new Date().toISOString()) {
+  if (sup == null && res == null) return null;
+  return { sup: sup != null ? r4(sup / it.fE) : null, res: res != null ? r4(res / it.fE) : null, at: now };
+}
+
 /** Veränderung über 5 Handelstage aus einer Schlusskurs-Reihe. Richtung ab ±1 %. */
 export function rangeTrend(closes) {
   if (!Array.isArray(closes) || closes.length < 6) return null;

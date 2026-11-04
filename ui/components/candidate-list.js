@@ -13,8 +13,8 @@ import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20261103f';
-import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103h';
-import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261103h';
+import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261104a';
+import { levelAlarm } from '../lib/range-alarm.js?v=20261104a';
 import { eurBasisFactor } from '../lib/eur-basis.js?v=20261103h';
 import { candidateTriggeredCount } from '../lib/alerts.js?v=20261103h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
@@ -1401,6 +1401,7 @@ export class CandidateList {
       </div></td>`;
 
       let dataCols;
+      const archived = this.bucket === 'archive' || c._bucket === 'archive';
       if (this.viewMode === 'standard') {
         // Reihenfolge MUSS mit renderThead() (Standard-Zweig) übereinstimmen.
         dataCols =
@@ -1413,9 +1414,9 @@ export class CandidateList {
           `<td class="num">${ls10CellHTML(c, fmtNum, convFromEur())}</td>` +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
-          `<td class="num col-group-start rg-s">${rangeLevelCell(c, 'sup')}</td>` +
+          `<td class="num col-group-start rg-s">${rangeLevelCell(c, 'sup', archived)}</td>` +
           `<td class="rg-b">${rangeBarCell(c)}</td>` +
-          `<td class="rg-r">${rangeLevelCell(c, 'res')}</td>` +
+          `<td class="rg-r">${rangeLevelCell(c, 'res', archived)}</td>` +
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
@@ -1462,7 +1463,8 @@ export class CandidateList {
       // open the detail sheet.
       tr.addEventListener('pointerup', (e) => {
         if (e.target.closest('input, button, a, .tr-check')) return;
-        this.onSelect?.(c);
+        // Sup/Res führen direkt ins Eingabefeld des Detail-Sheets.
+        this.onSelect?.(c, { level: e.target.closest('[data-level]')?.dataset.level ?? null });
       });
       tr.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onSelect?.(c); }
@@ -2129,7 +2131,15 @@ function rangeOf(c) {
   return val;
 }
 
-function rangeLevelCell(c, side) {
+/* Glocke am Level: scharf, ausgelöst, abweichend oder im Archiv wirkungslos. */
+const ALARM_TIP = {
+  armed: (x) => `Alarm scharf auf ${x}: Push bei Berührung, zweiter Push beim Bruch`,
+  fired: (x) => `Alarm ausgelöst: Kurs hat ${x} erreicht`,
+  moved: (x) => `Alarm steht noch auf ${x}, nicht auf diesem Level. Der Server zieht ihn im nächsten Lauf nach`,
+  dead:  (x) => `Alarm auf ${x} feuert nicht: Im Archiv prüft der Server keine Alarme`,
+};
+
+function rangeLevelCell(c, side, archived = false) {
   const r = rangeOf(c);
   const lvl = r?.[side];
   if (!(lvl > 0)) return '<span class="muted-dash">—</span>';
@@ -2138,14 +2148,22 @@ function rangeLevelCell(c, side) {
   // Levels liegen in EUR; nicht umrechenbare Währungen bleiben nativ.
   const shown = lvl * (r.conv ? convFromEur() : 1);
   const tone = dist >= 10 ? ' up' : dist <= -10 ? ' dn' : '';
-  const armed = rangeAlarmOn(c) && armedLevels(c)[side] ? icons.bell : '';
+  const f = r.conv ? convFromEur() : 1;
+  const al = r.conv ? levelAlarm(c, side, lvl, r.p, { archived }) : { state: '', thr: null };
+  const bell = al.state ? `<i class="rg-al rg-al--${al.state}">${icons.bell}</i>` : '';
   // Nach einem Bruch steht das gebrochene Level auf der anderen Seite — wie im Modal.
   const broken = r.brk && r.brk.side !== side;
-  const mark = broken ? (r.st === 'up' ? '\u2191 ' : '\u2193 ') : '';
-  const tip = broken ? `${r.st === 'up' ? 'Resistance' : 'Support'} ${fmtNum(r.brk.lvl * (r.conv ? convFromEur() : 1), 2)} um mehr als 0,5 % durchbrochen`
-    : manual ? 'Manuell gesetztes Level' : '';
-  return `<div class="rg-lv${tone}"${tip ? ` title="${tip}"` : ''}>
-    <span>${armed}${fmtNum(shown, 2)}</span><small>${mark}${dist >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(dist), 1)} %</small>
+  const mark = broken ? `<b class="rg-brk">${r.st === 'up' ? '\u2191' : '\u2193'}</b> ` : '';
+  const tips = [];
+  if (broken) {
+    const lbl = `${r.st === 'up' ? 'Resistance' : 'Support'} ${fmtNum(r.brk.lvl * f, 2)} um mehr als 0,5 % durchbrochen`;
+    tips.push(al.state && al.state !== 'dead' ? `${lbl} (mit Alarm)` : `${lbl}. Nur Anzeige: kein Alarm, kein Push`);
+  }
+  if (al.state) tips.push(ALARM_TIP[al.state](fmtNum(al.thr * f, 2)));
+  if (manual) tips.push('Manuell gesetztes Level');
+  tips.push('Tippen zum Einstellen');
+  return `<div class="rg-lv${tone}" data-level="${side}" title="${tips.join(' \u00b7 ')}">
+    <span>${bell}${fmtNum(shown, 2)}</span><small>${mark}${dist >= 0 ? '+' : '\u2212'}${fmtNum(Math.abs(dist), 1)} %</small>
   </div>`;
 }
 

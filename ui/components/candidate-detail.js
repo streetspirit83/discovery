@@ -17,8 +17,8 @@ import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
 import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103b';
-import { rangeInputs, rangeView } from '../lib/range-levels.js?v=20261103h';
-import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261103h';
+import { rangeInputs, rangeView, parseLevel, resolveLevels } from '../lib/range-levels.js?v=20261104a';
+import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261104a';
 import { eurBasisFactor, barsUnitAdj } from '../lib/eur-basis.js?v=20261103h';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
@@ -239,7 +239,7 @@ function chartRange(c, disp) {
     const p = lp ?? it.p;
     if (!(p > 0)) return null;
     const k = it.conv ? lsDisplayFactor(disp) : (disp.cur === it.oc ? 1 : null);
-    return k == null ? null : { v: rangeView(it, ov, { p }, hist), k };
+    return k == null ? null : { v: rangeView(it, ov, { p }, hist), k, it };
   } catch (err) {
     console.warn('[range]', c.symbol, err.message);
     return null;
@@ -255,6 +255,37 @@ function rangeAlarmBtn(c, disp) {
     : a.sup || a.res ? `Alarm scharf: ${[lvl('Support', a.sup), lvl('Resistance', a.res)].filter(Boolean).join(' · ')}`
     : 'Alarm an, aber beide Levels sind bereits überschritten';
   return `<button class="btn btn-sm btn-secondary${on ? ' is-on' : ''}" id="chart-range-alarm" aria-pressed="${on}" title="${tip}" aria-label="${tip}">${icons.bell}Sup/Res</button>`;
+}
+
+/* Support und Resistance von Hand einstellen. Felder in Anzeigewährung, leer = auto.
+   `draft` hält Eingaben über ein render() hinweg (LS und Kerzen laden nach dem Öffnen nach). */
+function rangeEditorHTML(c, disp, { draft = null, archived = false } = {}) {
+  const r = chartRange(c, disp);
+  if (!r) return '';
+  const { v, k, it } = r;
+  const auto = (x) => (x > 0 ? fmtNum(x * k, 2) : '–');
+  const value = (side, manual, lvl) => draft?.[side] ?? (manual ? fmtNum(lvl * k, 2) : '');
+  const field = (side, label, manual, lvl, shown, autoLvl) => `<label class="range-edit__f">
+      <span>${label} (${disp.cur})</span>
+      <input class="range-edit__in" id="range-${side}" inputmode="decimal" autocomplete="off"
+        value="${value(side, manual, lvl)}" placeholder="${auto(shown)}">
+      <small>${manual ? 'manuell · ' : ''}auto ${auto(autoLvl)}</small>
+    </label>`;
+  return `<div class="range-edit" id="range-edit">
+    <div class="range-edit__grid">
+      ${field('sup', 'Support', v.supM, v.bSup, v.sup, it.as)}
+      ${field('res', 'Resistance', v.resM, v.bRes, v.res, it.ar)}
+    </div>
+    <div class="range-edit__acts">
+      <button class="btn btn-sm btn-primary" id="range-save">Speichern</button>
+      <button class="btn btn-sm btn-secondary" id="range-auto">Auf auto zurück</button>
+      ${archived ? '' : rangeAlarmBtn(c, disp)}
+    </div>
+    <p class="range-edit__msg" id="range-msg" role="status"></p>
+    <p class="range-edit__hint">${archived
+      ? 'Im Archiv prüft der Server keine Alarme. Levels lassen sich trotzdem speichern.'
+      : 'Alarm: Push bei Berührung, zweiter Push beim Bruch, danach steht er auf dem nächsten Level. ↑ ↓ in der Liste: Kurs mehr als 0,5 % jenseits des Levels, nur Anzeige.'}</p>
+  </div>`;
 }
 
 // Which Performance-chart horizon can/should render: 10T LS-Intraday vs. 1J
@@ -576,7 +607,6 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
         <div class="chart-level" id="chart-level">
           <span class="chart-level__lbl">Level</span>
           <span class="chart-level__price" id="chart-level-price">—</span>
-          ${want1J ? rangeAlarmBtn(c, disp) : ''}
           <button class="btn btn-sm btn-primary" id="chart-level-add" disabled>＋ Alert setzen</button>
         </div>`;
     }
@@ -610,6 +640,8 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
   } else {
     parts.push(ls10dChartHTML(c, disp) + profileHTML(c));
   }
+
+  parts.push(rangeEditorHTML(c, disp, ui));
 
   // 3. Trend-Band (horizontal): 52W-Range + ATH-Cap, SMAs/Bollinger/Pivots/
   //    Donchian-Ticks, Cluster. Darunter alle Kurs-Level als ausklappbare
@@ -2372,9 +2404,6 @@ export class CandidateDetail {
         candle.createPriceLine({ price: al.threshold * alertF, color: col('--accent'), lineWidth: 1, lineStyle: 1, title: 'Alert' });
       }
     }
-    this.el.querySelector('#chart-range-alarm')?.addEventListener('click', () => {
-      this.onAction?.('rangeAlarm', c, { on: !rangeAlarmOn(c) });
-    });
 
     /* SMA 20/50/100/200 als Kurven statt als waagerechte Linien: der TV-Wert ist
        ein Momentwert, gezeigt werden soll der Verlauf (läuft der Kurs auf die
@@ -2665,6 +2694,7 @@ export class CandidateDetail {
   show(candidate) {
     const switched = this.candidate?.id !== candidate.id;
     if (switched) {
+      this.rangeDraft = null;
       this.activeTab = 'performance'; // Tab 1 onload
       this.chartHorizon = '1J';       // reset chart horizon per candidate
       this.horizonPicked = false;
@@ -2676,6 +2706,42 @@ export class CandidateDetail {
        TR · Yahoo-Kursziele). Nur beim Titelwechsel, nicht bei jedem `show()`
        desselben Titels — sonst löste jedes erneute Öffnen dieselbe Runde aus. */
     if (switched) this.onAction?.('detailOpened', candidate);
+  }
+
+  /* Aus den Listenzellen Sup/Res: Perf.-Tab und das passende Feld. */
+  focusLevel(side) {
+    if (this.activeTab !== 'performance') this.setTab('performance');
+    const input = this.el.querySelector(`#range-${side}`);
+    if (!input) return;
+    input.scrollIntoView({ block: 'center' });
+    input.focus({ preventScroll: true });
+    input.select();
+  }
+
+  bindRangeEditor(c, disp) {
+    const box = this.el.querySelector('#range-edit');
+    if (!box) return;
+    const inSup = box.querySelector('#range-sup'), inRes = box.querySelector('#range-res');
+    const keep = () => { this.rangeDraft = { sup: inSup.value, res: inRes.value }; };
+    inSup.addEventListener('input', keep);
+    inRes.addEventListener('input', keep);
+    const msg = (t) => { box.querySelector('#range-msg').textContent = t; };
+    box.querySelector('#range-save').addEventListener('click', () => {
+      const r = chartRange(c, disp);
+      if (!r) return;
+      const toUnit = (el) => { const n = parseLevel(el.value); return n == null || Number.isNaN(n) ? n : n / r.k; };
+      const lv = resolveLevels(r.v, toUnit(inSup), toUnit(inRes), (x) => `${fmtNum(x * r.k, 2)} ${disp.cur}`);
+      if (lv.err) { msg(lv.err); return; }
+      this.rangeDraft = null;
+      this.onAction?.('rangeLevels', c, { sup: lv.sup, res: lv.res });
+    });
+    box.querySelector('#range-auto').addEventListener('click', () => {
+      this.rangeDraft = null;
+      this.onAction?.('rangeLevels', c, { sup: null, res: null });
+    });
+    box.querySelector('#chart-range-alarm')?.addEventListener('click', () => {
+      this.onAction?.('rangeAlarm', c, { on: !rangeAlarmOn(c) });
+    });
   }
 
   hide() {
@@ -2711,7 +2777,10 @@ export class CandidateDetail {
     const tl = tradeLevels(c, disp);
     const fi = forecastInput(c, disp);
     const tabPanels = {
-      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, { horizonPicked: this.horizonPicked, zoom: this.chartZoom, showInd: this.showInd }),
+      performance: renderPerformanceTab(c, disp, pc, tl, this.chartHorizon, {
+        horizonPicked: this.horizonPicked, zoom: this.chartZoom, showInd: this.showInd,
+        draft: this.rangeDraft, archived: this.bucket === 'archive' || c._bucket === 'archive',
+      }),
       trend:       renderTrendTab(c),
       forecast:    renderForecastTab(c, disp, fi),
       trade:       renderTradeTab(c, disp, pc, tl, this.tradeSide),
@@ -2888,6 +2957,8 @@ export class CandidateDetail {
         this.render();
       });
     });
+
+    this.bindRangeEditor(c, disp);
 
     // Interactive price chart — LS-intraday (10T) or TD candles (1J) per horizon.
     this.initChart(c, disp, pc, tl);

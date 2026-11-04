@@ -30,8 +30,8 @@
  * Momentum-Analyse und Tiefenanalyse (samt ihrer Marken in der Zeile).
  */
 
-import { num, r4, rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261103h';
-import { wantArm, armedLevels, rangeAlarmOn, rangeAlarmPatch } from '../lib/range-alarm.js?v=20261103h';
+import { num, r4, rangeInputs, rangeView, rangeTrend, parseLevel, resolveLevels, rangeOverride } from '../lib/range-levels.js?v=20261104a';
+import { wantArm, armedLevels, rangeAlarmOn, rangeAlarmPatch } from '../lib/range-alarm.js?v=20261104a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
 import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261103h';
@@ -279,6 +279,7 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
       '<label>Resistance (' + cu + ')<input class="r" id="res-' + id + '" inputmode="decimal" value="' + (v.resM ? fmt(v.bRes) : '') + '" placeholder="' + fmt(v.brk ? v.res : it.ar) + '"><span class="auto">auto ' + fmt(it.ar) + (it.rl ? ' · ' + esc(it.rl) : '') + '</span></label></div>' +
       (cl ? '<div><div class="hint" style="margin-bottom:6px">Cluster (Zahl = Stärke) antippen, um sie zu übernehmen</div><div class="cls">' + cl + '</div></div>' : '') +
       (v.brk ? '<div class="hint">' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.brk.lvl) + ' € gebrochen → wird ' + (v.brk.side === 'res' ? 'Support' : 'Resistance') + '. Neue ' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.nl.lvl) + ' € aus ' + esc(v.nl.src) + (v.nl.n ? ' (' + v.nl.n + (v.nl.n === 1 ? ' Berührung)' : ' Berührungen)') : '') + '. Gilt auch über manuelle Levels; Alarme ziehen automatisch nach. Eigene Levels hier eintragen und speichern – leere Felder übernehmen das angezeigte Level.</div>' : '') +
+      '<div class="hint">Glocke: Push bei Berührung, zweiter Push beim Bruch, danach steht der Alarm auf dem nächsten Level. ↑ ↓: Kurs mehr als 0,5 % jenseits des Levels, nur Anzeige.</div>' +
       '<div class="acts"><button class="btn pri" data-act="save">Speichern</button><button class="btn" data-act="auto">Auf auto zurück</button></div>' +
       '<div class="msg" id="msg-' + id + '" role="status"></div></div>';
   }
@@ -454,13 +455,12 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     ingest(cands); render(); syncBtn();
   }
 
-  function parseNum(s) { s = String(s || '').trim(); s = s.indexOf(',') >= 0 ? s.replace(/\./g, '').replace(',', '.') : s; if (!s) return null; const n = Number(s); return isFinite(n) && n > 0 ? n : NaN; }
   function msg(id, t) { const m = $('msg-' + id); if (m) m.textContent = t; }
   // Overrides werden nativ gespeichert (range_override liest auch watch-ranges.js).
   async function save(id, sup, res) {
     const it = S.items.find((x) => x.id === id); if (!it) return;
     const c = it.c, prev = c.range_override;
-    const ro = sup == null && res == null ? null : { sup: sup != null ? r4(sup / it.fE) : null, res: res != null ? r4(res / it.fE) : null, at: new Date().toISOString() };
+    const ro = rangeOverride(it, sup, res);
     c.range_override = ro;
     if (ro) S.ov[id] = { sup, res }; else delete S.ov[id];
     try {
@@ -562,16 +562,10 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
     const cl = e.target.closest('.cl'); if (cl) { $(cl.dataset.side + '-' + id).value = fmt(Number(cl.dataset.lvl)); return; }
     const act = e.target.closest('[data-act]'); if (!act) return;
     if (act.dataset.act === 'auto') { save(id, null, null); return; }
-    let s = parseNum($('sup-' + id).value), r = parseNum($('res-' + id).value);
-    if (Number.isNaN(s) || Number.isNaN(r)) { msg(id, 'Bitte eine positive Zahl eingeben, z. B. 72,50.'); return; }
-    /* Leere Felder = aktuell angezeigtes Level (nach Bruch das neue, sonst auto). Nach einem Bruch werden beide Seiten fest gespeichert,
-       sonst würde die alte, gebrochene Gegenseite den Bruch sofort wieder auslösen und die Eingabe überstimmen. */
-    const it = S.items.find((x) => x.id === id), v = view(it), fs = s != null ? s : v.sup, fr = r != null ? r : v.res;
-    if (fs != null && fr != null && fs >= fr) { msg(id, 'Support muss unter der Resistance liegen.'); return; }
-    if (v.p > 0 && fs > 0 && v.p < fs * (1 - BRK)) { msg(id, 'Support liegt über dem Kurs (' + fmt(v.p) + ' €) und würde sofort als Bruch zählen.'); return; }
-    if (v.p > 0 && fr > 0 && v.p > fr * (1 + BRK)) { msg(id, 'Resistance liegt unter dem Kurs (' + fmt(v.p) + ' €) und würde sofort als Bruch zählen.'); return; }
-    if (v.brk) { s = fs; r = fr; }
-    msg(id, ''); save(id, s, r);
+    const it = S.items.find((x) => x.id === id);
+    const lv = resolveLevels(view(it), parseLevel($('sup-' + id).value), parseLevel($('res-' + id).value), (x) => fmt(x) + ' €');
+    if (lv.err) { msg(id, lv.err); return; }
+    msg(id, ''); save(id, lv.sup, lv.res);
   });
 
   /* Daten */
