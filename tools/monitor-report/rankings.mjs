@@ -209,7 +209,7 @@ function pick(scored, n, cap) {
   return out;
 }
 
-export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
+export function buildRankings(cands, { tradingDay = null, stale = [], depotChecked = true } = {}) {
   const staleKeys = new Set(stale.map(keyOf));
   const all = cands
     .map((c) => metricsOf({ ...c, _stale: staleKeys.has(keyOf(c)) }))
@@ -269,7 +269,7 @@ export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
 
   /* Rotation abwärts: Watchlist → Archiv. Nie Augen-Titel oder Depot-Titel (mk_shares). Kandidat, wenn keine
      Liste stark ist; Reihenfolge nach Schwäche. */
-  const movable = watch.filter((m) => liquid(m) && !m.eye && !m.held);
+  const movable = depotChecked ? watch.filter((m) => liquid(m) && !m.eye && !m.held) : [];
   const demoteWeights = [['overall', -0.3], ['perf_6m', -0.2], ['perf_3m', -0.2], ['health', -0.2], ['trend', -0.1]];
   const demoteHits = movable.map((m) => {
     const lists = listsOf(m);
@@ -286,7 +286,10 @@ export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
     note: 'Rankings zeigen nur den Watch-Bucket. Rotation: promote nur aus dem Archiv, demote nur aus der Watchlist ohne Augen- und Depot-Titel. Score = Filter-Score 0–100, keine Empfehlung.',
     universe: { watch: watch.length, archive: archive.length, eye: watch.filter((m) => m.eye).length, stale: stale.length },
     config: CONFIG,
-    data_notes: missingRate.length ? [`Währung ohne Umrechnungskurs (als USD behandelt): ${missingRate.join(', ')}`] : [],
+    data_notes: [
+      ...(missingRate.length ? [`Währung ohne Umrechnungskurs (als USD behandelt): ${missingRate.join(', ')}`] : []),
+      ...(depotChecked ? [] : ['Merkliste nicht lesbar: keine Abgabe-Vorschläge, damit keine Depot-Titel vorgeschlagen werden.']),
+    ],
     rankings,
     rotation: {
       promote: {

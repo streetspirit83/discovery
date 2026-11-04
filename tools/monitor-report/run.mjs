@@ -34,6 +34,7 @@ import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
 import { buildRankings } from './rankings.mjs';
+import { fetchMerklisteEntries, applyMerklisteEntries } from '../../ui/lib/merkliste-import.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { INDEX_GROUPS, fetchIndexRows } from '../../ui/lib/tv-indices.js';
@@ -307,7 +308,13 @@ async function publish(fresh, stale, indices, saveState, auth) {
     report.analyst = { available: false, reason: e.message };
   }
   const full = JSON.stringify({ ...report, variant: 'full' });
-  const rankings = JSON.stringify(buildRankings(fresh, { tradingDay: report.trading_day, stale }));
+  // Depot-Stand lebt nur in der Merkliste. Ohne ihn werden keine Abgabe-Vorschläge gemacht.
+  let depotChecked = false;
+  try {
+    applyMerklisteEntries(fresh, await fetchMerklisteEntries(auth));
+    depotChecked = true;
+  } catch (e) { console.warn(`Merkliste nicht lesbar (${e.message}) – Rotation ohne Abgabe-Vorschläge.`); }
+  const rankings = JSON.stringify(buildRankings(fresh, { tradingDay: report.trading_day, stale, depotChecked }));
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
   const fullName = `${NAME} – vollständig.json`;
