@@ -1505,6 +1505,13 @@ td.rg-r { padding-left:var(--s-1); }
 
 /* Kind selector (Watch · Buy · Stop-Loss) — one explicit intent per alert */
 .alert-kind { display:flex; gap:var(--s-1); margin-bottom:var(--s-3); }
+.alert-side { display:flex; gap:var(--s-1); margin-bottom:var(--s-2); }
+.alert-side__btn { flex:1 1 0; min-width:0; min-height:44px; padding:var(--s-1) var(--s-2); display:flex; flex-direction:column; align-items:center; gap:1px; font-family:var(--font-ui); font-size:var(--fs-2); font-weight:var(--fw-med); color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); cursor:pointer; touch-action:manipulation; }
+.alert-side__btn small { font-size:var(--fs-1); font-weight:var(--fw-reg); color:var(--muted); font-variant-numeric:tabular-nums; }
+.alert-side__btn--sup.is-active { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
+.alert-side__btn--res.is-active { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
+.alert-side__btn.is-active small { color:inherit; }
+.alert-side__hint { margin:var(--s-1) 0 0; font-size:var(--fs-1); color:var(--muted); line-height:1.35; }
 .alert-kind__btn {
   flex:1 1 0; min-width:0; display:inline-flex; align-items:center; justify-content:center; gap:4px;
   padding:var(--s-2) var(--s-1); border:1px solid var(--border); border-radius:var(--r-1);
@@ -1911,21 +1918,11 @@ body.has-chart-fs { overflow:hidden; }
 .chart-level__lbl { font-size:var(--fs-1); color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
 .chart-level__price { font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; color:var(--accent); flex:1; }
 .chart-level #chart-level-add { white-space:nowrap; }
-#chart-range-alarm { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
-#chart-range-alarm svg { width:14px; height:14px; }
-#chart-range-alarm.is-on { color:var(--accent); border-color:var(--accent); }
-#chart-range-alarm.is-on svg { fill:currentColor; fill-opacity:.25; }
+.chart-level #chart-range-alarm { display:inline-flex; align-items:center; gap:var(--s-1); white-space:nowrap; }
+.chart-level #chart-range-alarm svg { width:14px; height:14px; }
+.chart-level #chart-range-alarm.is-on { color:var(--accent); border-color:var(--accent); }
+.chart-level #chart-range-alarm.is-on svg { fill:currentColor; fill-opacity:.25; }
 .chart-level #chart-level-add:disabled { opacity:.5; }
-.range-edit { margin-top:var(--s-2); padding:var(--s-2); background:var(--surface-3); border-radius:var(--r-1); display:flex; flex-direction:column; gap:var(--s-2); }
-.range-edit__grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-2); }
-.range-edit__f { display:flex; flex-direction:column; gap:2px; min-width:0; font-size:var(--fs-1); color:var(--muted); }
-.range-edit__in { width:100%; min-height:32px; padding:var(--s-1) var(--s-2); box-sizing:border-box; font-family:var(--font-mono); font-size:var(--fs-3); color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:var(--r-1); }
-.range-edit__in:focus { outline:none; border-color:var(--accent); }
-.range-edit__f small { font-size:var(--fs-1); font-variant-numeric:tabular-nums; }
-.range-edit__acts { display:flex; flex-wrap:wrap; gap:var(--s-2); }
-.range-edit__msg { margin:0; font-size:var(--fs-1); color:var(--neg); }
-.range-edit__msg:empty { display:none; }
-.range-edit__hint { margin:0; font-size:var(--fs-1); color:var(--muted); line-height:1.35; }
 /* 1J-candle load prompt / spinner placeholder (same height as the chart) */
 .chart-loading {
   display:flex; align-items:center; justify-content:center; gap:8px;

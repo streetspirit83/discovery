@@ -15,14 +15,14 @@ function wrAlert(cid, side, level, prev, now) {
   const same = prev && Math.abs((prev.threshold ?? 0) - level) < 1e-6;
   return {
     id: `wr_${side}_${cid}`,
-    kind: 'watch',
+    kind: prev?.kind ?? 'watch',               // im Alert-Fenster gewählte Art bleibt beim Nachziehen
     type: sup ? 'price_below' : 'price_above',
     threshold: level,
-    dir: 'watch',
+    dir: prev?.dir ?? 'watch',
     enabled: true,
     priority: 4,
     label: `${sup ? 'Support' : 'Resistance'} ${level.toLocaleString('de-DE', { minimumFractionDigits: level >= 1000 ? 0 : 2, maximumFractionDigits: level >= 1000 ? 0 : 2 })} €`,
-    note: 'Watch Ranges',
+    note: prev?.note ?? 'Watch Ranges',
     basis: { kind: 'level', source: 'Watch Ranges' },
     created_at: same && prev.created_at ? prev.created_at : now,
   };

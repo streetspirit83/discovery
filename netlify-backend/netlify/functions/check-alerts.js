@@ -20,7 +20,8 @@
  *
  * Range-Alarme (wr_sup_/wr_res_): Berührung des Levels = Push „erreicht". Bruch
  * (> 0,5 % jenseits, rangeView) = zweiter Push „gebrochen", danach stehen die
- * Alarme auf den neuen Levels. Nachgezogen wird hier bei jedem Lauf mit derselben
+ * Alarme auf den neuen Levels. Ein gebrochenes manuelles Level wird dabei gelöscht:
+ * Es gilt wieder die dynamische Systematik. Nachgezogen wird bei jedem Lauf mit derselben
  * Rechnung wie in der App (ui/lib/range-levels.js, range-alarm.js).
  *
  * Schedule: every 20 min, 7-21 UTC Mon-Fri (siehe config unten) — Netlify cron is
@@ -129,16 +130,19 @@ function rangeState(c, price, snapshots, eurUsd) {
 /* Neue wr_-Alerts in den Blob: frisch lesen, direkt schreiben, damit das Fenster zu
    Speichervorgängen der App so klein wie möglich bleibt. Geht ein Alarm dabei doch
    verloren, setzt ihn der nächste Lauf neu. */
-async function writeRearm(store, blobKey, byId) {
+async function writeRearm(store, blobKey, byId) {  // byId: id → { wr?, override? }
   const doc = await store.get(blobKey, { type: 'json' });
   if (!Array.isArray(doc?.candidates)) return 0;
   const now = new Date().toISOString();
   let n = 0;
   for (const c of doc.candidates) {
-    const wr = byId.get(c.id);
-    if (!wr || !rangeAlarmOn(c)) continue;   // inzwischen abgeschaltet: nicht wieder anlegen
-    c.alerts = [...(Array.isArray(c.alerts) ? c.alerts : []).filter((a) => !isWr(a)), ...wr];
-    c.range_alarm = true;
+    const up = byId.get(c.id);
+    if (!up) continue;
+    if (up.override !== undefined) c.range_override = up.override;
+    if (up.wr && rangeAlarmOn(c)) {          // inzwischen abgeschaltet: nicht wieder anlegen
+      c.alerts = [...(Array.isArray(c.alerts) ? c.alerts : []).filter((a) => !isWr(a)), ...up.wr];
+      c.range_alarm = true;
+    }
     c.last_updated_at = now;
     n++;
   }
@@ -163,7 +167,8 @@ export default async () => {
   for (const key of SOURCE_BLOBS) {
     const blob = await store.get(key, { type: 'json' }).catch(() => null);
     for (const c of blob?.candidates ?? []) {
-      const active = (Array.isArray(c.alerts) && c.alerts.some(enabled)) || rangeAlarmOn(c);
+      const manual = +c.range_override?.sup > 0 || +c.range_override?.res > 0;
+      const active = (Array.isArray(c.alerts) && c.alerts.some(enabled)) || rangeAlarmOn(c) || manual;
       if (active && !byId.has(c.id)) { byId.set(c.id, c); blobOf.set(c.id, key); }
     }
   }
@@ -221,7 +226,12 @@ export default async () => {
   const firstBreakRun = !prevBreakDoc;
   const prevBreaks = prevBreakDoc?.breaks ?? {};
   const newBreaks = { ...prevBreaks };
-  const rearm = new Map();     // blobKey → Map(id → wr-Alerts)
+  const rearm = new Map();     // blobKey → Map(id → { wr, override })
+  const planRearm = (c, up) => {
+    const key = blobOf.get(c.id);
+    if (!rearm.has(key)) rearm.set(key, new Map());
+    rearm.get(key).set(c.id, { ...rearm.get(key).get(c.id), ...up });
+  };
   let pushCount = 0;
 
   for (const c of candidates) {
@@ -281,10 +291,23 @@ export default async () => {
 
     // Range-Alarm: Bruch melden und Alarme auf die aktuellen Levels ziehen.
     const alarmOn = rangeAlarmOn(c) && price != null;
-    const rs = alarmOn ? rangeState(c, price, lsHistory[c.id]?.snapshots ?? null, eurUsd) : null;
+    const snaps = lsHistory[c.id]?.snapshots ?? null;
+    const over = c.range_override ?? {};
+    const hasManual = +over.sup > 0 || +over.res > 0;
+    let rs = (alarmOn || (hasManual && price != null)) ? rangeState(c, price, snaps, eurUsd) : null;
     const brk = rs?.v.brk ?? null;
+    let view = c;                    // Stand, aus dem die Alarme entstehen
+    // Reisst ein manuelles Level, gilt für diese Seite wieder die dynamische Systematik.
+    if (brk && +over[brk.side] > 0) {
+      const rest = { ...over, [brk.side]: null };
+      const override = +rest.sup > 0 || +rest.res > 0 ? rest : null;
+      view = { ...c, range_override: override };
+      rs = rangeState(view, price, snaps, eurUsd) ?? rs;
+      planRearm(c, { override });
+      console.log(`[range] ${c.symbol}: manuelles ${brk.side} ${brk.lvl} gebrochen → auto`);
+    }
     let breakAlert = null;
-    if (brk) {
+    if (brk && alarmOn) {
       const prev = prevBreaks[c.id];
       const same = prev && prev.side === brk.side && !levelMoved(prev.lvl, brk.lvl);
       const isNew = !same || nowMs - (prev.at ?? 0) > BREAK_REPUSH_MS;
@@ -292,20 +315,18 @@ export default async () => {
       else if (isNew) {
         breakAlert = {
           id: `wr_brk_${brk.side}_${c.id}`, type: 'range_break', kind: 'watch', priority: 4, _trig: true,
-          side: brk.side, threshold: brk.lvl, nextSup: rs.v.sup, nextRes: rs.v.res,
+          side: brk.side, threshold: brk.lvl, nextSup: rs.v.sup, nextRes: rs.v.res, lvlAfter: rs.v.brk?.lvl ?? brk.lvl,
         };
       }
     }
     const moved = [];
     // Ein von Hand deaktivierter Range-Alarm bleibt deaktiviert.
-    if (rs && !(Array.isArray(c.alerts) ? c.alerts : []).some((a) => isWr(a) && a.enabled === false)) {
-      const { patch, armed } = rangeAlarmPatch(c, rs.v, true);
+    if (alarmOn && rs && !(Array.isArray(c.alerts) ? c.alerts : []).some((a) => isWr(a) && a.enabled === false)) {
+      const { patch, armed } = rangeAlarmPatch(view, rs.v, true);
       const old = armedLevels(c);
       for (const side of ['sup', 'res']) if (levelMoved(armed[side], old[side])) moved.push(`wr_${side}_${c.id}`);
       if (moved.length) {
-        const key = blobOf.get(c.id);
-        if (!rearm.has(key)) rearm.set(key, new Map());
-        rearm.get(key).set(c.id, patch.alerts.filter(isWr));
+        planRearm(c, { wr: patch.alerts.filter(isWr) });
         console.log(`[range] ${c.symbol}: Alarm ${old.sup ?? '—'}/${old.res ?? '—'} → ${armed.sup ?? '—'}/${armed.res ?? '—'}`);
       }
     }
@@ -340,7 +361,7 @@ export default async () => {
     const sent = await sendNtfy(NTFY_TOPIC, push).catch((e) => { console.error(`[ntfy] ${e.message}`); return false; });
     if (sent) {
       newTrig[c.id] = triggered.map((a) => a.id).filter((id) => !moved.includes(id));   // jetzt gesehen
-      if (breakAlert) newBreaks[c.id] = { side: breakAlert.side, lvl: breakAlert.threshold, at: nowMs };
+      if (breakAlert) newBreaks[c.id] = { side: breakAlert.side, lvl: breakAlert.lvlAfter, at: nowMs };
       pushCount++;
     } else {
       // Fehlgeschlagen → Zustand nicht festschreiben, nächster Lauf pusht erneut.

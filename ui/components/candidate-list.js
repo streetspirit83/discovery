@@ -14,7 +14,7 @@ import { normalizeExchange } from '../lib/exchange-map.js';
 import { megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
 import { atrpCellHTML, ls10CellHTML, ls10Series } from '../lib/spark.js?v=20261103f';
 import { rangeInputs, rangeView, rangeTrend } from '../lib/range-levels.js?v=20261104a';
-import { levelAlarm } from '../lib/range-alarm.js?v=20261104a';
+import { levelAlarm } from '../lib/range-alarm.js?v=20261104b';
 import { eurBasisFactor } from '../lib/eur-basis.js?v=20261103h';
 import { candidateTriggeredCount } from '../lib/alerts.js?v=20261103h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
@@ -1463,8 +1463,10 @@ export class CandidateList {
       // open the detail sheet.
       tr.addEventListener('pointerup', (e) => {
         if (e.target.closest('input, button, a, .tr-check')) return;
-        // Sup/Res führen direkt ins Eingabefeld des Detail-Sheets.
-        this.onSelect?.(c, { level: e.target.closest('[data-level]')?.dataset.level ?? null });
+        // Sup/Res führen direkt ins Alert-Fenster, passende Seite vorgewählt.
+        const level = e.target.closest('[data-level]')?.dataset.level;
+        if (level) { this.onAction?.('openTrigger', c, { side: level }); return; }
+        this.onSelect?.(c);
       });
       tr.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onSelect?.(c); }

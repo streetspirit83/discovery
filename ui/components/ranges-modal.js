@@ -31,7 +31,7 @@
  */
 
 import { num, r4, rangeInputs, rangeView, rangeTrend, parseLevel, resolveLevels, rangeOverride } from '../lib/range-levels.js?v=20261104a';
-import { wantArm, armedLevels, rangeAlarmOn, rangeAlarmPatch } from '../lib/range-alarm.js?v=20261104a';
+import { wantArm, armedLevels, rangeAlarmOn, rangeAlarmPatch } from '../lib/range-alarm.js?v=20261104b';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { isEtf } from '../lib/instrument-type.js?v=20260831a';
 import { needsEurBasis, eurBasisFresh, EUR_BASIS_LABEL } from '../lib/eur-basis.js?v=20261103h';
@@ -278,8 +278,8 @@ export function openRangesModal({ getCandidates, getFx, persist, refreshLs, onOp
       '<div class="grid2"><label>Support (' + cu + ')<input class="s" id="sup-' + id + '" inputmode="decimal" value="' + (v.supM ? fmt(v.bSup) : '') + '" placeholder="' + fmt(v.brk ? v.sup : it.as) + '"><span class="auto">auto ' + fmt(it.as) + (it.sl ? ' · ' + esc(it.sl) : '') + '</span></label>' +
       '<label>Resistance (' + cu + ')<input class="r" id="res-' + id + '" inputmode="decimal" value="' + (v.resM ? fmt(v.bRes) : '') + '" placeholder="' + fmt(v.brk ? v.res : it.ar) + '"><span class="auto">auto ' + fmt(it.ar) + (it.rl ? ' · ' + esc(it.rl) : '') + '</span></label></div>' +
       (cl ? '<div><div class="hint" style="margin-bottom:6px">Cluster (Zahl = Stärke) antippen, um sie zu übernehmen</div><div class="cls">' + cl + '</div></div>' : '') +
-      (v.brk ? '<div class="hint">' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.brk.lvl) + ' € gebrochen → wird ' + (v.brk.side === 'res' ? 'Support' : 'Resistance') + '. Neue ' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.nl.lvl) + ' € aus ' + esc(v.nl.src) + (v.nl.n ? ' (' + v.nl.n + (v.nl.n === 1 ? ' Berührung)' : ' Berührungen)') : '') + '. Gilt auch über manuelle Levels; Alarme ziehen automatisch nach. Eigene Levels hier eintragen und speichern – leere Felder übernehmen das angezeigte Level.</div>' : '') +
-      '<div class="hint">Glocke: Push bei Berührung, zweiter Push beim Bruch, danach steht der Alarm auf dem nächsten Level. ↑ ↓: Kurs mehr als 0,5 % jenseits des Levels, nur Anzeige.</div>' +
+      (v.brk ? '<div class="hint">' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.brk.lvl) + ' € gebrochen → wird ' + (v.brk.side === 'res' ? 'Support' : 'Resistance') + '. Neue ' + (v.brk.side === 'res' ? 'Resistance ' : 'Support ') + fmt(v.nl.lvl) + ' € aus ' + esc(v.nl.src) + (v.nl.n ? ' (' + v.nl.n + (v.nl.n === 1 ? ' Berührung)' : ' Berührungen)') : '') + '. Ein gebrochenes manuelles Level fällt beim nächsten Server-Lauf auf auto zurück, Alarme ziehen nach. Eigene Levels hier eintragen und speichern – leere Felder übernehmen das angezeigte Level.</div>' : '') +
+      '<div class="hint">Glocke: Push bei Berührung, zweiter Push beim Bruch, danach steht der Alarm auf dem nächsten Level. Reisst ein manuelles Level, gilt wieder auto. ↑ ↓: Kurs mehr als 0,5 % jenseits des Levels, nur Anzeige.</div>' +
       '<div class="acts"><button class="btn pri" data-act="save">Speichern</button><button class="btn" data-act="auto">Auf auto zurück</button></div>' +
       '<div class="msg" id="msg-' + id + '" role="status"></div></div>';
   }

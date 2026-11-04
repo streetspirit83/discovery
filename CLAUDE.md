@@ -110,7 +110,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   zeigen Watch Ranges in der Liste: dieselbe Rechnung wie das Modal (`lib/range-levels.js`),
   je Titel gecacht (`rangeOf`), Sup und Res sortieren nach Nähe. Das Band sieht aus wie im Modal
   (Schiene, grüne/rote Zone, Kursmarke, ★-Einstand, Pfeil = 5-Tage-Trend ab ±1 %), Abstände ab
-  ±10 % sind eingefärbt, die Glocke zeigt den Alarm am Level (`levelAlarm`: scharf, rot = ausgelöst, Warnfarbe = steht auf anderem Level oder im Archiv), ↑/↓ markiert ein gebrochenes Level und ist reine Anzeige (ab 0,5 %, kein Push). Tippen auf Sup/Res öffnet das Eingabefeld im Detail-Sheet. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
+  ±10 % sind eingefärbt, die Glocke zeigt den Alarm am Level (`levelAlarm`: scharf, rot = ausgelöst, Warnfarbe = steht auf anderem Level oder im Archiv), ↑/↓ markiert ein gebrochenes Level und ist reine Anzeige (ab 0,5 %, kein Push). Tippen auf Sup/Res öffnet das Alert-Fenster mit vorgewählter Seite. Eine Glocke hinter dem TV-Icon zeigt aktive Alarme, rot gefüllt,
   sobald einer ausgelöst ist; neue Alarme entstehen weiter über die Aktionsspalte. In der Trade-Ansicht stehen die drei „wohin
   könnte es gehen"-Werte nebeneinander: **Target** (eigenes Cluster-Ziel) ·
   **PTØ** (Analysten-Konsens, TV) · **Fair** (Reverse-DCF). Alle drei sortieren
@@ -140,10 +140,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `docs/FORECAST_SPEC.md`.
   Der 1J-Chart zeichnet zusätzlich die **Watch-Range-Levels** gestrichelt (`chartRange`, gleiche
   Rechnung wie Liste und Modal; scharf = Titel „Sup Alarm"/„Res Alarm") und bestehende Preis-Alerts
-  gepunktet. Unter dem Chart steht die Level-Eingabe (`rangeEditorHTML`, Aktion `rangeLevels`): Support und
-  Resistance in Anzeigewährung, leer = auto, „Auf auto zurück", dazu der Knopf „Sup/Res" für den
-  Range-Alarm (Aktion `rangeAlarm`, `lib/range-alarm.js`, gemeinsam mit Modal und Server). Eingaben
-  überstehen ein `render()` über `rangeDraft`. Im Archiv gibt es keinen Alarm, dort prüft
+  gepunktet. Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
+  `lib/range-alarm.js`, gemeinsam mit Modal und Server). Manuelle Levels setzt das Alert-Fenster. Im Archiv gibt es keinen Alarm, dort prüft
   `check-alerts` nicht. Geänderte Levels zieht `check-alerts` bei jedem Lauf nach.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
@@ -484,6 +482,10 @@ kann also nicht auseinanderlaufen.
   (`rangeView`): zweiter Push „gebrochen", danach stehen die Alarme auf den neuen Levels. Gleicher Bruch
   höchstens alle 24 h (Blob `discovery-range-breaks`, der erste Lauf merkt sich nur den Stand). Fällt
   beides in einen Lauf, geht nur der Bruch-Push raus. Zwischen Level und 0,5 % bleibt der Alarm stehen.
+- **Manuelle Levels:** gelten in Liste, Chart und Alarm, bis sie reissen. Dann löscht `check-alerts` die Seite aus
+  `range_override`, es gilt wieder auto (auch ohne Alarm, deshalb prüft der Lauf alle Titel mit `range_override`).
+  Gesetzt werden sie im Alert-Fenster (`trigger-modal.js`, Knöpfe Support/Resistance über dem Preisfeld, Feld leer
+  = auto mit Alarm) oder im Range-Modal. Löschen eines Range-Alarms im Alert-Fenster nimmt beide Seiten und `range_alarm`.
 - **Ausschläge:** Preisalarme prüfen alle LS-Kurse seit dem letzten Lauf (`wickHits`), ein Alarm nur Kurse nach
   seinem `created_at`. **LS-Zeitstempel sind Berliner Ortszeit, nicht UTC** (`berlinOffsetMs`).
 - **Währung:** `toEur` rechnet SEK/GBX über `eurBasisFactor`; ohne Basis `null` statt Heimatwährung gegen EUR.

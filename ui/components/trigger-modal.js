@@ -4,6 +4,9 @@
  * Every alert carries exactly one explicit intent — Watch · Buy · Stop-Loss —
  * chosen in the segmented control at the top, plus an optional free-text note.
  * Both are applied to whatever level you add next:
+ *   • Support / Resistance für Liste und Chart setzen: Knopf wählen, Preis ins Feld darunter.
+ *     Das ist das Level selbst (range_override) plus Range-Alarm, kein einzelner Preis-Alert.
+ *     Reisst es, fällt es auf das automatische Level zurück (check-alerts).
  *   • Predefined Support / Resistance / Target levels (from the price clusters
  *     and the trade-setup target — the same ones the Trade view shows)
  *   • %-from-entry stop/target (preset or manual %)
@@ -16,7 +19,7 @@
 import {
   entryBasisEur, alertSummary, isAlertTriggered, toEur,
   buildManualPriceAlert, buildEntryPctAlert, buildPresetAlert, buildClusterAlert,
-  ALERT_KINDS, alertKind,
+  ALERT_KINDS, alertKind, kindToDir,
 } from '../lib/alerts.js?v=20261103h';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { classifyCluster, tradeTarget } from '../lib/trade-setup.js?v=20260807a';
@@ -86,11 +89,13 @@ function predefinedLevels(c) {
 
 /**
  * @param {object} c candidate (mutated: c.alerts)
- * @param {object} opts { onSaveAlerts, onSaved, toast, prefillPriceEur }
+ * @param {object} opts { onSaveAlerts, onSaved, toast, prefillPriceEur, range }
+ *   range: { info(c), save(c, side, value, meta) } — Levels aus Watch Ranges; ohne bleiben die Knöpfe weg.
+ *   presetSide: 'sup' | 'res' — Seite vorgewählt (Tipp auf Sup/Res in der Liste).
  *   prefillPriceEur: a price (EUR) tapped on the detail chart — pre-filled into
  *   the manual-price field with the direction set from the current price.
  */
-export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPriceEur = null } = {}) {
+export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPriceEur = null, range = null, presetSide = null } = {}) {
   if (!c) return;
   if (!Array.isArray(c.alerts)) c.alerts = [];
   const basis = entryBasisEur(c);
@@ -99,6 +104,9 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
   const canCluster = !!(c.tv_data && (c.tv_data.close_1m ?? c.tv_data.close) != null);
 
   let kind = 'watch'; // current intent for the next alert added
+  const rangeNow = () => range?.info(c) ?? null;
+  // 'sup' | 'res': das Preisfeld setzt das Level statt eines Preis-Alerts
+  let side = presetSide && rangeNow() ? presetSide : null;
 
   const sub = document.createElement('div');
   sub.className = 'modal-overlay id-sub-overlay';
@@ -111,6 +119,22 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
       <div class="modal-body">
         <div class="alert-kind" role="tablist" aria-label="Alert-Art">
           ${KIND_ORDER.map((k) => `<button class="alert-kind__btn alert-kind__btn--${k}${k === kind ? ' is-active' : ''}" data-kind="${k}" role="tab" aria-selected="${k === kind}">${ALERT_KINDS[k].emoji} ${ALERT_KINDS[k].label}</button>`).join('')}
+        </div>
+        ${rangeNow() ? `<div class="alert-side" role="group" aria-label="Level setzen">
+          <button class="alert-side__btn alert-side__btn--sup" data-side="sup" aria-pressed="false"></button>
+          <button class="alert-side__btn alert-side__btn--res" data-side="res" aria-pressed="false"></button>
+        </div>` : ''}
+        <div class="alert-add__group" id="idt-manual">
+          <label for="idt-price" id="idt-price-lbl">Manueller Preis-Alert (€)</label>
+          <div class="alert-add__manual">
+            <select id="idt-dir" class="dir-select" aria-label="Richtung">
+              <option value="above">≥</option>
+              <option value="below">≤</option>
+            </select>
+            <input type="number" step="any" inputmode="decimal" id="idt-price" placeholder="Preis in €">
+            <button class="btn btn-primary" id="idt-add-price" aria-label="Hinzufügen">＋</button>
+          </div>
+          <p class="alert-side__hint" id="idt-side-hint" hidden></p>
         </div>
         <div class="alert-add__group">
           <label for="idt-note">Notiz (optional) – wird an den nächsten Alert gehängt</label>
@@ -154,18 +178,6 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
             </div>
           </div>
 
-          <div class="alert-add__group">
-            <label>Manueller Preis-Alert (€)</label>
-            <div class="alert-add__manual">
-              <select id="idt-dir" class="dir-select" aria-label="Richtung">
-                <option value="above">≥</option>
-                <option value="below">≤</option>
-              </select>
-              <input type="number" step="any" inputmode="decimal" id="idt-price" placeholder="Preis in €">
-              <button class="btn btn-primary" id="idt-add-price" aria-label="Hinzufügen">＋</button>
-            </div>
-          </div>
-
           <div class="alert-tier">Gleitende Durchschnitte · Kurs live, SMA aus TV-Daten</div>
           <div class="alert-add__group">
             <div class="alert-add__presets">
@@ -190,9 +202,9 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
   const listEl = sub.querySelector('#idt-list');
   const noteEl = sub.querySelector('#idt-note');
 
-  function persist() {
+  function persist(extra) {
     onSaved?.();
-    Promise.resolve(onSaveAlerts?.(c.id, c.alerts)).catch((err) =>
+    Promise.resolve(onSaveAlerts?.(c.id, c.alerts, extra)).catch((err) =>
       toast?.(`Alert nicht gespeichert: ${err.message}`, 'error'));
   }
 
@@ -236,6 +248,38 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
     });
   });
 
+  // Support / Resistance: Knopf wählt das Ziel des Preisfelds, nochmal tippen hebt es auf.
+  const priceInput = sub.querySelector('#idt-price');
+  const dirSel = sub.querySelector('#idt-dir');
+  const sideName = { sup: 'Support', res: 'Resistance' };
+  function renderSide() {
+    const info = rangeNow();
+    sub.querySelectorAll('.alert-side__btn').forEach((b) => {
+      const s = b.dataset.side, on = s === side;
+      const manual = s === 'sup' ? info?.supM : info?.resM;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+      b.innerHTML = `${sideName[s]}<small>${fmtEur(info?.[s])}${manual ? ' · manuell' : ''}</small>`;
+    });
+    const lbl = sub.querySelector('#idt-price-lbl'), hint = sub.querySelector('#idt-side-hint');
+    dirSel.disabled = !!side;
+    if (side) dirSel.value = side === 'sup' ? 'below' : 'above';
+    priceInput.placeholder = side ? `${sideName[side]} in €` : 'Preis in €';
+    lbl.textContent = side ? `${sideName[side]} setzen (€)` : 'Manueller Preis-Alert (€)';
+    if (side) {
+      const auto = side === 'sup' ? info?.autoSup : info?.autoRes;
+      hint.textContent = `Gilt in Liste und Chart, der Alarm geht an. Reisst das Level, gilt wieder auto (${fmtEur(auto)}). Feld leer und ＋ = auto mit Alarm.`;
+    } else {
+      hint.textContent = 'Support/Resistance: Push bei Berührung, zweiter Push beim Bruch, danach steht der Alarm auf dem nächsten Level. ↑ ↓ in der Liste zeigen nur den Bruch an, ohne Push.';
+    }
+    hint.hidden = !info;
+  }
+  sub.querySelectorAll('.alert-side__btn').forEach((btn) => btn.addEventListener('pointerup', () => {
+    side = side === btn.dataset.side ? null : btn.dataset.side;
+    renderSide();
+    if (side) priceInput.focus();
+  }));
+
   // Predefined Support / Resistance / Target chips
   sub.querySelectorAll('[data-lvl]').forEach((btn) => btn.addEventListener('pointerup', () => {
     const lvl = levels.find((l) => l.id === btn.dataset.lvl);
@@ -261,8 +305,19 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
   });
 
   // Manual price
-  sub.querySelector('#idt-add-price').addEventListener('pointerup', () => {
-    const price = parseFloat(sub.querySelector('#idt-price').value);
+  sub.querySelector('#idt-add-price').addEventListener('pointerup', async () => {
+    const price = parseFloat(priceInput.value);
+    if (side) {
+      if (priceInput.value !== '' && !(price > 0)) { toast?.('Preis eingeben', 'error'); return; }
+      const res = await range.save(c, side, price > 0 ? price : null, { kind, dir: kindToDir(kind), note: note() });
+      if (res?.err) { toast?.(res.err, 'error', 4000); return; }
+      priceInput.value = '';
+      noteEl.value = '';
+      side = null;
+      renderSide();
+      renderList();
+      return;
+    }
     if (!Number.isFinite(price)) { toast?.('Preis eingeben', 'error'); return; }
     const cmp = sub.querySelector('#idt-dir').value;
     addAlert(buildManualPriceAlert({ cmp, priceEur: +price.toFixed(4), kind, note: note() }));
@@ -281,7 +336,17 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
     const a = c.alerts.find((x) => x.id === li?.dataset.id);
     if (!a) return;
     if (btn.dataset.act === 'toggle') a.enabled = a.enabled === false;
-    else if (btn.dataset.act === 'del') c.alerts = c.alerts.filter((x) => x.id !== a.id);
+    else if (btn.dataset.act === 'del') {
+      /* Range-Alarme gehören zusammen: Der Server würde eine einzeln gelöschte Seite neu anlegen. */
+      if (String(a.id).startsWith('wr_')) {
+        c.alerts = c.alerts.filter((x) => !String(x.id).startsWith('wr_'));
+        c.range_alarm = false;
+        renderList();
+        persist({ range_alarm: false });
+        return;
+      }
+      c.alerts = c.alerts.filter((x) => x.id !== a.id);
+    }
     renderList();
     persist();
   });
@@ -305,5 +370,7 @@ export function openTriggerEditor(c, { onSaveAlerts, onSaved, toast, prefillPric
     priceEl.focus();
   }
 
+  if (rangeNow()) renderSide();
   renderList();
+  if (side) priceInput.focus();
 }

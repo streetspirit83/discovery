@@ -2,15 +2,15 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261104a';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261104b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261104a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261104b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
-import { openTriggerEditor } from './components/trigger-modal.js?v=20261103h';
+import { openTriggerEditor } from './components/trigger-modal.js?v=20261104b';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103f';
@@ -18,11 +18,11 @@ import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103h';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103f';
-import { openRangesModal } from './components/ranges-modal.js?v=20261104a';
+import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
-import { rangeInputs, rangeView, rangeOverride } from './lib/range-levels.js?v=20261104a';
-import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104a';
-import { renderControlModal } from './components/control-modal.js?v=20261103h';
+import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
+import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
+import { renderControlModal } from './components/control-modal.js?v=20261104b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
 import { enrichBulk } from './lib/claude-api.js';
@@ -277,10 +277,66 @@ async function runLsQuoteForSelection(idsArg) {
 // ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
 // Replaces the former Intra-Day modal: lists every candidate that has alerts,
 // with a global mute and per-alert enable/disable. Persists enabled-changes.
-function persistAlerts(id, alerts) {
+function persistAlerts(id, alerts, extra = {}) {
   if (useMock || !storageClient) return Promise.resolve();
-  return storageClient.updateCandidate(currentBlobType, id, { alerts });
+  return storageClient.updateCandidate(currentBlobType, id, { alerts, ...extra });
 }
+
+/* Levels eines Titels für das Alert-Fenster (EUR). null = keine Range rechenbar. */
+function rangeLevelInfo(c) {
+  try {
+    const { it, ov, lp, hist } = rangeInputs(c, resolveFxRate());
+    const p = lp ?? it.p;
+    if (!(p > 0)) return null;
+    const v = rangeView(it, ov, { p }, hist);
+    return { sup: v.sup, res: v.res, supM: v.supM, resM: v.resM, autoSup: it.as, autoRes: it.ar };
+  } catch (err) {
+    console.warn('[range]', c.symbol, err.message);
+    return null;
+  }
+}
+
+/* Manuelle Levels speichern. `arm` schaltet den Range-Alarm ein, `meta` gibt der Seite `side`
+   Art und Notiz aus dem Alert-Fenster. Ein aktiver Alarm zieht immer mit. */
+async function applyRangeLevels(candidate, sup, res, { arm = false, side = null, meta = null } = {}) {
+  const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
+  const fx = resolveFxRate();
+  const before = { range_override: candidate.range_override, alerts: candidate.alerts, range_alarm: candidate.range_alarm };
+  const refresh = () => { candidateDetail.render(); candidateList.renderRows(); updateAlertBadge(); };
+  const patch = { range_override: rangeOverride(rangeInputs(candidate, fx).it, sup, res) };
+  candidate.range_override = patch.range_override;
+  if (bucket !== 'archive' && (arm || rangeAlarmOn(candidate))) {
+    const { it, ov, lp, hist } = rangeInputs(candidate, fx);
+    Object.assign(patch, rangeAlarmPatch(candidate, rangeView(it, ov, { p: lp ?? it.p }, hist), true).patch);
+    const al = side && meta ? patch.alerts.find((a) => a.id === `wr_${side}_${candidate.id}`) : null;
+    if (al) { al.kind = meta.kind; al.dir = meta.dir; if (meta.note) al.note = meta.note; }
+  }
+  Object.assign(candidate, patch);
+  refresh();
+  try {
+    if (!useMock && storageClient) await storageClient.updateCandidate(bucket, candidate.id, patch);
+    toast(patch.range_override ? 'Levels gespeichert.' : 'Zurück auf auto.', 'success', 2000);
+  } catch (e) {
+    Object.assign(candidate, before);
+    refresh();
+    toast(`Levels nicht gespeichert: ${e.message}`, 'error', 4000);
+  }
+}
+
+/* Eine Seite aus dem Alert-Fenster setzen, `value` null = zurück auf auto. Die andere bleibt. */
+async function saveRangeLevel(c, side, value, meta) {
+  const { it, ov, lp, hist } = rangeInputs(c, resolveFxRate());
+  const v = rangeView(it, ov, { p: lp ?? it.p }, hist);
+  const keep = (s) => (s === 'sup' ? (v.supM ? v.bSup : null) : (v.resM ? v.bRes : null));
+  const sup = side === 'sup' ? value : keep('sup'), res = side === 'res' ? value : keep('res');
+  const fmt = (x) => `${x.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  const lv = resolveLevels(v, sup, res, fmt);
+  if (lv.err) return lv;
+  await applyRangeLevels(c, lv.sup, lv.res, { arm: true, side, meta });
+  return {};
+}
+
+const rangeEditorOpts = { info: rangeLevelInfo, save: saveRangeLevel };
 
 function openAlertModal() {
   const blob = allBlobs[currentBlobType];
@@ -293,7 +349,8 @@ function openAlertModal() {
     // Tap a row → open the alert editor (add / modify alerts).
     onOpenEditor: (candidate) => {
       openTriggerEditor(candidate, {
-        onSaveAlerts: (id, alerts) => { const p = persistAlerts(id, alerts); candidateList?.renderRows(); updateAlertBadge(); return p; },
+        range: rangeEditorOpts,
+        onSaveAlerts: (id, alerts, extra) => { const p = persistAlerts(id, alerts, extra); candidateList?.renderRows(); updateAlertBadge(); return p; },
         onSaved: () => { candidateList?.renderRows(); updateAlertBadge(); },
         toast,
       });
@@ -1850,6 +1907,8 @@ async function handleAction(action, candidate, extras = {}) {
   if (action === 'openTrigger') {
     openTriggerEditor(candidate, {
       onSaveAlerts: persistAlerts,
+      range: rangeEditorOpts,
+      presetSide: extras?.side ?? null,
       onSaved: () => candidateList.renderRows(),
       toast,
     });
@@ -1885,33 +1944,10 @@ async function handleAction(action, candidate, extras = {}) {
     return;
   }
 
-  // Support/Resistance von Hand, beide leer = zurück auf auto. Ein aktiver Alarm zieht sofort mit.
-  if (action === 'rangeLevels') {
-    const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
-    const before = { range_override: candidate.range_override, alerts: candidate.alerts, range_alarm: candidate.range_alarm };
-    const refresh = () => { candidateDetail.render(); candidateList.renderRows(); updateAlertBadge(); };
-    const patch = { range_override: rangeOverride(rangeInputs(candidate, resolveFxRate()).it, extras.sup, extras.res) };
-    candidate.range_override = patch.range_override;
-    if (bucket !== 'archive' && rangeAlarmOn(candidate)) {
-      const { it, ov, lp, hist } = rangeInputs(candidate, resolveFxRate());
-      Object.assign(patch, rangeAlarmPatch(candidate, rangeView(it, ov, { p: lp ?? it.p }, hist), true).patch);
-    }
-    Object.assign(candidate, patch);
-    refresh();
-    try {
-      if (!useMock && storageClient) await storageClient.updateCandidate(bucket, candidate.id, patch);
-      toast(patch.range_override ? 'Levels gespeichert.' : 'Zurück auf auto.', 'success', 2000);
-    } catch (e) {
-      Object.assign(candidate, before);
-      refresh();
-      toast(`Levels nicht gespeichert: ${e.message}`, 'error', 4000);
-    }
-    return;
-  }
-
   if (action === 'chartAlert') {
     openTriggerEditor(candidate, {
       onSaveAlerts: persistAlerts,
+      range: rangeEditorOpts,
       onSaved: () => candidateList.renderRows(),
       toast,
       prefillPriceEur: extras.priceEur,
@@ -2278,10 +2314,9 @@ async function init() {
 
   // Init components
   candidateList = new CandidateList({
-    onSelect: (candidate, opts) => {
+    onSelect: (candidate) => {
       candidateDetail.show(candidate);
       openDetailSheet();
-      if (opts?.level) candidateDetail.focusLevel(opts.level);
     },
     onAction: handleAction,
     onBulkAction: handleBulkAction,
