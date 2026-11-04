@@ -33,6 +33,7 @@ import { google } from 'googleapis';
 import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
+import { buildRankings } from './rankings.mjs';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { INDEX_GROUPS, fetchIndexRows } from '../../ui/lib/tv-indices.js';
@@ -306,6 +307,7 @@ async function publish(fresh, stale, indices, saveState, auth) {
     report.analyst = { available: false, reason: e.message };
   }
   const full = JSON.stringify({ ...report, variant: 'full' });
+  const rankings = JSON.stringify(buildRankings(fresh, { tradingDay: report.trading_day, stale }));
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
   const fullName = `${NAME} – vollständig.json`;
@@ -317,6 +319,7 @@ async function publish(fresh, stale, indices, saveState, auth) {
     await writeFile('monitor-report.html', html);
     await writeFile('monitor-report.json', json);
     await writeFile('monitor-report.full.json', full);
+    await writeFile('monitor-report.rankings.json', rankings);
     console.log(`DRY_RUN: monitor-report.html + .json geschrieben (${report.stocks.length} Aktien), kein Upload, kein Blob.`);
     return report;
   }
@@ -329,6 +332,8 @@ async function publish(fresh, stale, indices, saveState, auth) {
   console.log(`✓ ${jsonName} (${Math.round(json.length / 1024)} KB): ${js.webViewLink}`);
   const fj = await upsertFile(d, folder, fullName, JSON_MIME, full);
   console.log(`✓ ${fullName} (${Math.round(full.length / 1024)} KB): ${fj.webViewLink}`);
+  const rk = await upsertFile(d, folder, 'Discovery Rankings.json', JSON_MIME, rankings);
+  console.log(`✓ Discovery Rankings.json (${Math.round(rankings.length / 1024)} KB): ${rk.webViewLink}`);
   const prompt = await readFile(new URL('./PROMPT.md', import.meta.url), 'utf8').catch(() => null);
   if (prompt) {
     const p = await upsertFile(d, folder, `${NAME} – Prompt.md`, MD_MIME, prompt);
