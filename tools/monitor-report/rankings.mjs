@@ -5,8 +5,8 @@
  *
  * Trennung (bindend): Rankings zeigen NUR den Watch-Bucket. Die Rotation prüft
  * getrennt `promote` (nur Archiv: was gehört in die Watchlist?) und `demote`
- * (nur Watchlist ohne Augen-Titel: was kann ins Archiv?). Das Archiv taucht in
- * den Rankings nie auf, und Augen-Titel werden nie zum Verschieben vorgeschlagen.
+ * (nur Watchlist ohne Augen- und Depot-Titel: was kann ins Archiv?). Das Archiv
+ * taucht in den Rankings nie auf, Augen- und Depot-Titel nie als Abgabe-Vorschlag.
  *
  * Verfahren je Liste: erst Ausschlussfilter (`gate`), dann Score 0–100 aus
  * Perzentilen (`score`), danach die besten CONFIG.candidates Titel, höchstens
@@ -33,6 +33,10 @@ export const CONFIG = {
   capGrowth: 1e9,
   capPullback: 1e9,
   capSolid: 5e9,
+  minHealthSolid: 60,        // Health Score ausserhalb von Finance
+  maxBetaSolid: 1.5,
+  maxFairUpside: 200,        // darüber ist der Reverse-DCF nicht belastbar (zyklischer oder gehebelter FCF)
+  demoteMaxStrength: 60,     // stärkster Listen-Score, unter dem ein Watch-Titel als Abgabe-Kandidat gilt
 };
 
 /* Börsenwert kommt in Notierungswährung. Grobe Kurse genügen: sie entscheiden
@@ -60,7 +64,8 @@ export function metricsOf(c) {
   try { pc = p > 0 ? computePriceClusters(t, { lsHistory: c.ls_history ?? null, refPrice: t.close_1m ?? p }) : null; }
   catch { pc = null; }
   const fair = t.market_cap != null ? fairValue(t) : null;
-  const fairUp = fair && !fair.error && fair.price > 0 ? (fair.fair_price / fair.price - 1) * 100 : null;
+  const fairRaw = fair && !fair.error && fair.price > 0 ? (fair.fair_price / fair.price - 1) * 100 : null;
+  const fairUp = fairRaw != null && fairRaw <= CONFIG.maxFairUpside ? fairRaw : null;
   const hi1 = num(t.high_1m), lo1 = num(t.low_1m);
   const v10 = num(t.avg_vol_10d), v30 = num(t.average_volume_30d_calc);
   const debt = num(t.total_debt_to_ebitda_fy);
@@ -68,6 +73,7 @@ export function metricsOf(c) {
   return {
     symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null,
     sub_sector: c.sub_sector ?? null, bucket: c._bucket, eye: c._bucket === 'watch' && !!c.watch_flag,
+    held: Number(c.mk_shares) > 0,
     currency: c.currency ?? null, close: p,
     cap_usd: capRaw != null ? capRaw * (rate ?? 1) : null, cap_rate_known: rate != null,
     perf_1w: num(t.perf_w), perf_1m: num(t.perf_1m), perf_3m: num(t.perf_3m), perf_6m: num(t.perf_6m),
@@ -141,7 +147,8 @@ export const LISTS = {
     label: 'Solide Anlage', question: 'Was ist die robusteste Anlage?',
     gate: (m) => m.cap_usd >= CONFIG.capSolid && (isFinance(m)
       ? m.roe >= 8
-      : m.fcf_margin > 0 && m.op_margin > 0 && (m.debt_ebitda == null || m.debt_ebitda <= 4)),
+      : m.fcf_margin > 0 && m.op_margin > 0 && m.health >= CONFIG.minHealthSolid
+        && (m.debt_ebitda == null || m.debt_ebitda <= 4) && (m.beta == null || m.beta <= CONFIG.maxBetaSolid)),
     weights: (m) => (isFinance(m) ? solidFinanceWeights : solidWeights),
     ai: 'Bilanzrisiken, Rechtsstreit, Guidance, Burggraben, Bewertung gegenüber der Historie.',
   },
@@ -246,23 +253,29 @@ export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
   }
   for (const r of Object.values(rankings)) for (const c of r.candidates) c.lists = seen.get(keyOf(c));
 
-  /* Rotation aufwärts: Archiv → Watchlist. Massstab: stärkster Listen-Score, je weiterer bestandener Filter +5. */
+  /* Stärkste Listen eines Titels, beste zuerst. */
+  const listsOf = (m) => Object.keys(LISTS)
+    .filter((k) => passes(k, m))
+    .map((k) => ({ key: k, score: scoreList(LISTS[k], m, tableOf(k)) }))
+    .filter((x) => x.score != null)
+    .sort((a, b) => b.score - a.score);
+
+  /* Rotation aufwärts: Archiv → Watchlist. Mindestens zwei bestandene Listen; Massstab = Mittel der beiden besten. */
   const promoteHits = archive.filter(liquid).map((m) => {
-    const lists = Object.keys(LISTS)
-      .filter((k) => passes(k, m))
-      .map((k) => ({ key: k, score: scoreList(LISTS[k], m, tableOf(k)) }))
-      .filter((x) => x.score != null)
-      .sort((a, b) => b.score - a.score);
-    if (!lists.length) return null;
-    return { m, score: round(Math.min(100, lists[0].score + (lists.length - 1) * 5), 1), lists };
+    const lists = listsOf(m);
+    return lists.length >= 2 ? { m, score: round((lists[0].score + lists[1].score) / 2, 1), lists } : null;
   }).filter(Boolean);
   const promote = pick(promoteHits, CONFIG.rotationCandidates, CONFIG.sectorCap);
 
-  /* Rotation abwärts: Watchlist → Archiv. Nie Augen-Titel; nur wer keine Liste besteht und technisch oder operativ schwach ist. */
-  const weak = watch.filter((m) => liquid(m) && !m.eye && !Object.keys(LISTS).some((k) => passes(k, m))
-    && (m.above_sma200 === false || (m.overall != null && m.overall < 45) || (m.health != null && m.health < 40)));
+  /* Rotation abwärts: Watchlist → Archiv. Nie Augen-Titel oder Depot-Titel (mk_shares). Kandidat, wenn keine
+     Liste stark ist; Reihenfolge nach Schwäche. */
+  const movable = watch.filter((m) => liquid(m) && !m.eye && !m.held);
   const demoteWeights = [['overall', -0.3], ['perf_6m', -0.2], ['perf_3m', -0.2], ['health', -0.2], ['trend', -0.1]];
-  const demoteHits = weak.map((m) => ({ m, score: scoreBy(pct, m, demoteWeights) })).filter((x) => x.score != null);
+  const demoteHits = movable.map((m) => {
+    const lists = listsOf(m);
+    const strength = lists[0]?.score ?? 0;
+    return strength < CONFIG.demoteMaxStrength ? { m, score: scoreBy(pct, m, demoteWeights), strength, lists } : null;
+  }).filter((x) => x && x.score != null);
   const demote = [...demoteHits].sort((a, b) => b.score - a.score || a.m.symbol.localeCompare(b.m.symbol)).slice(0, CONFIG.rotationCandidates);
 
   const missingRate = [...new Set(all.filter((m) => !m.cap_rate_known).map((m) => m.currency))];
@@ -270,7 +283,7 @@ export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
   return {
     schema: 'discovery-rankings-1.0',
     trading_day: tradingDay,
-    note: 'Rankings zeigen nur den Watch-Bucket. Rotation: promote nur aus dem Archiv, demote nur aus der Watchlist ohne Augen-Titel. Score = Filter-Score 0–100, keine Empfehlung.',
+    note: 'Rankings zeigen nur den Watch-Bucket. Rotation: promote nur aus dem Archiv, demote nur aus der Watchlist ohne Augen- und Depot-Titel. Score = Filter-Score 0–100, keine Empfehlung.',
     universe: { watch: watch.length, archive: archive.length, eye: watch.filter((m) => m.eye).length, stale: stale.length },
     config: CONFIG,
     data_notes: missingRate.length ? [`Währung ohne Umrechnungskurs (als USD behandelt): ${missingRate.join(', ')}`] : [],
@@ -281,8 +294,8 @@ export function buildRankings(cands, { tradingDay = null, stale = [] } = {}) {
         candidates: promote.map((x, i) => ({ pos: i + 1, ...row(x.m, x.score, { lists: x.lists.map((l) => l.key), best_list: x.lists[0].key }) })),
       },
       demote: {
-        label: 'Watchlist → Archiv', funnel: { universe: watch.filter((m) => !m.eye).length, passed_gate: demoteHits.length, candidates: demote.length },
-        candidates: demote.map((x, i) => ({ pos: i + 1, ...row(x.m, x.score) })),
+        label: 'Watchlist → Archiv', funnel: { universe: movable.length, passed_gate: demoteHits.length, candidates: demote.length },
+        candidates: demote.map((x, i) => ({ pos: i + 1, ...row(x.m, x.score, { best_strength: x.strength, lists: x.lists.map((l) => l.key) }) })),
       },
     },
   };
