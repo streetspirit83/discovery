@@ -14,8 +14,8 @@
  * Listengrösse. Die Perzentile laufen über Watch + Archiv, damit Scores beider
  * Buckets vergleichbar sind; die Auswahl bleibt strikt nach Bucket getrennt.
  *
- * Die KI macht daraus später je Liste die Top 10 (Recherche und Einschätzung
- * gehören nicht hierher).
+ * Die KI bewertet diese Listen später (Recherche und Einschätzung gehören nicht
+ * hierher); die Auswahl steht mit dem Filter fest.
  */
 
 import { liveHealthScore, liveOverallScore } from '../../ui/lib/dashboard-metrics.js';
@@ -24,9 +24,9 @@ import { trendScore } from '../../ui/lib/trend-radar.js';
 import { fairValue } from '../../ui/lib/tv-reverse-dcf.js';
 
 export const CONFIG = {
-  candidates: 20,            // je Ranking
+  candidates: 12,            // je Ranking
   sectorCap: 5,              // höchstens so viele Titel je Sektor
-  rotationCandidates: 20,    // je Richtung
+  rotationCandidates: 12,    // je Richtung
   minCoverage: 0.6,          // Mindestanteil vorhandener Score-Gewichte
   capMomentum: 0.3e9,
   capBreakout: 0.3e9,
@@ -71,7 +71,7 @@ export function metricsOf(c) {
   const debt = num(t.total_debt_to_ebitda_fy);
   const fcfM = num(t.free_cash_flow_margin_ttm) ?? num(t.free_cash_flow_margin_fy);
   return {
-    symbol: c.symbol, exchange: c.exchange ?? null, name: nameOf(c), sector: c.sector ?? null,
+    symbol: c.symbol, exchange: c.exchange ?? null, isin: c.isin ?? null, name: nameOf(c), sector: c.sector ?? null,
     sub_sector: c.sub_sector ?? null, bucket: c._bucket, eye: c._bucket === 'watch' && !!c.watch_flag,
     held: Number(c.mk_shares) > 0,
     currency: c.currency ?? null, close: p,
@@ -196,12 +196,13 @@ function row(m, score, extra = {}) {
   };
 }
 
-/* Beste Titel nach Score, höchstens `cap` je Sektor. */
+/* Beste Titel nach Score, höchstens `cap` je Sektor; je Firma (ISIN) nur ein Listing. */
 function pick(scored, n, cap) {
-  const bySector = new Map(), out = [];
+  const bySector = new Map(), firms = new Set(), out = [];
   for (const x of [...scored].sort((a, b) => b.score - a.score || a.m.symbol.localeCompare(b.m.symbol))) {
     const s = x.m.sector ?? '–';
-    if ((bySector.get(s) ?? 0) >= cap) continue;
+    if ((bySector.get(s) ?? 0) >= cap || (x.m.isin && firms.has(x.m.isin))) continue;
+    if (x.m.isin) firms.add(x.m.isin);
     bySector.set(s, (bySector.get(s) ?? 0) + 1);
     out.push(x);
     if (out.length === n) break;
