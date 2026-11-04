@@ -11,13 +11,14 @@
  * denselben Tag ersetzt das alte Briefing.
  *
  * Arten (Feld kind): daily (Tagesbriefing, Standard), preview (Wochenvorschau),
- * watch (Watchlist-Rückblick); je Art und Tag ein Eintrag.
+ * watch (Watchlist-Rückblick), scout (neue Titel), ranking und rotation (Monitor-Reiter
+ * „Rankings“); je Art und Tag ein Eintrag.
  *
  * Env: DISCOVERY_BACKEND_URL, DISCOVERY_SECRET, PAYLOAD | DELETE_DAY (+ DELETE_KIND), optional DRY_RUN=1
  */
 
 const KEEP = 30;                  // je Art
-const KINDS = ['daily', 'preview', 'watch'];
+const KINDS = ['daily', 'preview', 'watch', 'scout', 'ranking', 'rotation'];
 const kindOf = (b) => b?.kind ?? 'daily';
 const keyOf = (b) => `${kindOf(b)}:${b?.day}`;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,10 +48,21 @@ function validate(b) {
   if (!KINDS.includes(kindOf(b))) errs.push(`kind muss ${KINDS.join('|')} sein`);
   if (!b.title) errs.push('title fehlt');
   if (!b.lead) errs.push('lead fehlt');
-  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news', 'ranking']) {
+  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news', 'ranking', 'items', 'promote', 'demote']) {
     if (b[k] != null && !Array.isArray(b[k]) && !(k === 'indices' && typeof b[k] === 'object')) errs.push(`${k} hat das falsche Format`);
   }
   return errs;
+}
+
+/* Rang der Vorwoche je Liste. has_prev unterscheidet „neu“ von „erster Lauf“. */
+function addPrevRanks(entry, list) {
+  const prev = list.filter((b) => b.kind === 'ranking' && b.day < entry.day).sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+  entry.has_prev = !!prev;
+  if (!prev) return;
+  for (const [key, l] of Object.entries(entry.lists ?? {})) {
+    const old = new Map((prev.lists?.[key]?.items ?? []).map((x) => [`${x.symbol}:${x.exchange}`, x.rank]));
+    for (const it of l.items ?? []) it.prev_rank = old.get(`${it.symbol}:${it.exchange}`) ?? null;
+  }
 }
 
 async function main() {
@@ -67,6 +79,7 @@ async function main() {
   const doc = (await storage({ op: 'read', blob_type: 'market' })) ?? {};
   const delKey = del ? `${process.env.DELETE_KIND || 'daily'}:${del}` : null;
   const list = (Array.isArray(doc.briefings) ? doc.briefings : []).filter((b) => keyOf(b) !== (delKey ?? keyOf(entry)));
+  if (entry?.kind === 'ranking') addPrevRanks(entry, list);
   if (entry) list.push(entry);
   list.sort((a, b) => (a.day < b.day ? 1 : -1));
   // höchstens KEEP je Art, neueste zuerst

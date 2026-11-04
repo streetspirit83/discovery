@@ -39,18 +39,18 @@ export function parsePeerHash(hash) {
 
 export const candidateKey = (c) => `${String(c.symbol).toUpperCase()}:${normalizeExchange(c.exchange)}`;
 
-function draft({ symbol, exchange }, peer) {
+function draft({ symbol, exchange, adapter = 'claude-peer', note = null }, peer) {
   return normalizeCandidate({
     symbol,
     exchange,
     yahoo_symbol: yahooChartSymbol({ symbol, exchange }) ?? symbol,
     sources: [{
-      adapter: 'claude-peer',
+      adapter,
       source_url: '',
       discovered_at: new Date().toISOString(),
       signal_type: 'manual',
       raw_signal: peer ? { peer: peer.symbol } : {},
-      info_snippet: peer ? `Claude-Alternative zu ${peer.symbol}` : 'Claude-Alternative',
+      info_snippet: note ?? (peer ? `Claude-Alternative zu ${peer.symbol}` : 'Claude-Alternative'),
     }],
   });
 }
@@ -89,7 +89,7 @@ export async function resolveTickers(tickers, peer, backend) {
 
   for (const r of open) {
     const hit = await relist(r.symbol);
-    r.candidate = hit ? draft({ symbol: hit.symbol, exchange: hit.exchange }, peer) : null;
+    r.candidate = hit ? draft({ ...r, symbol: hit.symbol, exchange: hit.exchange }, peer) : null;
     if (hit) { r.exchange = normalizeExchange(hit.exchange); }
   }
   const retry = open.filter((r) => r.candidate);

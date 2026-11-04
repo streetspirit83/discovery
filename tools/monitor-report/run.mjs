@@ -314,7 +314,12 @@ async function publish(fresh, stale, indices, saveState, auth) {
     applyMerklisteEntries(fresh, await fetchMerklisteEntries(auth));
     depotChecked = true;
   } catch (e) { console.warn(`Merkliste nicht lesbar (${e.message}) – Rotation ohne Abgabe-Vorschläge.`); }
-  const rankings = JSON.stringify(buildRankings(fresh, { tradingDay: report.trading_day, stale, depotChecked }));
+  const inbox = await storage(auth, { op: 'read', blob_type: 'inbox' }).catch(() => null);
+  const rankings = JSON.stringify({
+    ...buildRankings(fresh, { tradingDay: report.trading_day, stale, depotChecked }),
+    // Für den Scout: alles, was schon im Workspace liegt, gilt nicht als neu.
+    known_symbols: [...new Set([...fresh, ...(inbox?.candidates ?? [])].map((c) => c.symbol))].sort(),
+  });
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
   const fullName = `${NAME} – vollständig.json`;

@@ -12,7 +12,7 @@
  * das Detail-Sheet; beim Schliessen des Sheets kehrt das Modal zurück
  * (`ctrl.hide/show`, wie das Monitor-Dashboard).
  *
- * Rein darstellend – das Modal schreibt nie.
+ * Das Modal schreibt nie selbst; der Inbox-Knopf im Scout übergibt an die App.
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
@@ -223,6 +223,41 @@ function calendarBlock(days) {
       <ul class="mb-cal">${(d.items ?? []).map((it) => `<li>${it.time ? `<span class="mb-date">${esc(it.time)}</span> ` : ''}${esc(it.text ?? it)}</li>`).join('')}</ul>
     </li>`).join('')}</ul>
   </section>`;
+}
+
+/* ── Scout (kind "scout", wöchentlich) ───────────────────────────────────── */
+
+function scoutItem(x, i, find) {
+  const hit = find(x.symbol, x.exchange);
+  const action = hit
+    ? `<span class="mb-scout__where">liegt in ${esc(BUCKET_NAMES[hit.bucket] ?? hit.bucket)}</span>`
+    : `<button type="button" class="btn btn-secondary mb-scout__add" data-scout="${i}">${icons.plus} In Inbox</button>`;
+  const line = (label, text) => (text ? `<p class="mb-scout__line"><b>${label}:</b> ${esc(text)}</p>` : '');
+  return `<li class="mb-scout">
+    <div class="mb-scout__head">
+      <span class="mb-scout__id">${symHtml(x, find)} <span class="pv-muted">${esc(x.name ?? '')}</span></span>
+      ${x.category ? `<span class="mb-tag">${esc(x.category)}</span>` : ''}
+    </div>
+    <p class="mb-scout__text">${esc(x.thesis ?? '')}</p>
+    ${line('Auslöser', x.catalyst)}
+    ${line('Dagegen', x.counter)}
+    <div class="mb-scout__foot">${action}</div>
+  </li>`;
+}
+
+function renderScout(b, find) {
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Scout · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    <section class="bf-section"><h3 class="bf-h">Neue Titel</h3>
+      <ul class="mb-list">${(b.items ?? []).map((x, i) => scoutItem(x, i, find)).join('')}</ul>
+    </section>
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
 }
 
 function renderPreview(b, find) {
@@ -460,12 +495,16 @@ function addToc(root) {
   if (head) head.insertAdjacentHTML('afterend', nav); else root.insertAdjacentHTML('afterbegin', nav);
 }
 
+const BUCKET_NAMES = { inbox: 'Inbox', watch: 'Watchlist', archive: 'Archiv', export: 'Export' };
+
 const KINDS = [
   { key: 'daily',   label: 'Tag',       render: (b, f) => renderEntry(b, f),   empty: 'Noch kein Tagesbriefing gespeichert. Es entsteht dienstags bis samstags morgens für den Vortag.' },
   { key: 'preview', label: 'Woche',     render: (b, f) => renderPreview(b, f), empty: 'Noch keine Wochenvorschau gespeichert. Sie entsteht montags morgens.' },
   { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags, mit Ausblick auf die neue Woche.' },
+  { key: 'scout',   label: 'Scout',     render: (b, f) => renderScout(b, f),   empty: 'Noch kein Scout gespeichert. Er entsteht einmal pro Woche.' },
 ];
-const kindOf = (b) => (KINDS.some((k) => k.key === b?.kind) ? b.kind : 'daily');
+/* Einträge ohne kind sind alte Tagesbriefings. `ranking` und `rotation` liegen im selben Blob, gehören aber in den Monitor. */
+const kindOf = (b) => b?.kind ?? 'daily';
 
 /**
  * @param {object}   opts
@@ -513,6 +552,7 @@ export function renderMarketBriefingModal(opts = {}) {
   const body = overlay.querySelector('#mb-body');
   const pick = overlay.querySelector('#mb-pick');
   let index = { bySym: new Map(), byId: new Map() };
+  let current = [];
 
   /* Symbol (+ Börse) → Kandidat. Ohne passende Börse gewinnt der erste Treffer
      in der Reihenfolge, in der loadCandidates liefert (Watch zuerst). */
@@ -525,6 +565,8 @@ export function renderMarketBriefingModal(opts = {}) {
 
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   body.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-scout]');
+    if (add) { opts.onScoutAdd?.(current[Number(pick.value) || 0]?.items?.[Number(add.dataset.scout)]); return; }
     const go = e.target.closest('[data-goto]');
     if (go) { body.querySelector(`#${go.dataset.goto}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const btn = e.target.closest('.mb-sym[data-id]');
@@ -540,7 +582,9 @@ export function renderMarketBriefingModal(opts = {}) {
         opts.loadBriefings?.() ?? [],
         opts.loadCandidates?.().catch(() => []) ?? [],
       ]);
-      briefings = Array.isArray(list) ? list.filter((b) => b?.day).sort((a, b) => (a.day < b.day ? 1 : -1)) : [];
+      briefings = Array.isArray(list)
+        ? list.filter((b) => b?.day && KINDS.some((k) => k.key === kindOf(b))).sort((a, b) => (a.day < b.day ? 1 : -1))
+        : [];
       for (const c of cands ?? []) {
         const k = String(c.symbol ?? '').toUpperCase();
         if (!index.bySym.has(k)) index.bySym.set(k, []);
@@ -552,7 +596,6 @@ export function renderMarketBriefingModal(opts = {}) {
       return;
     }
     const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
-    let current = [];
     const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
     const showKind = (key) => {
       tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });

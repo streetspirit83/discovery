@@ -447,6 +447,14 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   höchstens ±0,02 je Faktor); `method{version,weights,penalties,rules[{text}]}` ist der Stand
   nach dem Check. Die Methode lebt in `watch_method/current` (+ `watch_method/v<N>` als Historie)
   — so korrigiert sich die Einschätzung Woche für Woche, ohne den Aufgaben-Prompt anzufassen.
+  **Scout (`kind: scout`, nur App, Reiter im Briefing):** `week_label, title, lead, items[{symbol,exchange,
+  name,category,thesis,catalyst,counter}], fazit, sources`. Der Inbox-Knopf öffnet das Prüffenster der
+  Chat-Alternativen (`openImportCheck` in `app.js`, Quelle `ai-scout`); Titel im Workspace zeigen ihren Bucket.
+  **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`), liest
+  die neuesten Einträge aus dem market-Blob. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
+  `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
+  beide Arten aus.
   Modal und Artefakt setzen über jedes Briefing ein nummeriertes Inhaltsverzeichnis mit
   Sprungknöpfen (`addToc`; Knöpfe statt `#`-Links, weil der Hash in der App Deep Links trägt).
   Im market-Blob je Art und Tag ein Eintrag (30 je Art); im
@@ -471,7 +479,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   `tools/market-briefing/push.mjs` schreibt in den market-Blob (Upsert je Tag;
   `-f delete_day=JJJJ-MM-TT` löscht). Für andere KIs liegt der Prompt als
   „Discovery Monitor – Prompt.md“ im Drive-Ordner.
-- **Rankings-Filter (`tools/monitor-report/rankings.mjs`, reine Logik):** Der Monitor-Lauf schreibt zusätzlich „Discovery Rankings.json“ in denselben Drive-Ordner. **Strikte Trennung:** `rankings.*` (momentum, solid, growth, pullback, breakout) enthalten nur den Watch-Bucket, `rotation.promote` nur das Archiv, `rotation.demote` nur die Watchlist ohne Augen- und Depot-Titel (Depot live aus der Merkliste, `fetchMerklisteEntries`; ist sie nicht lesbar, bleibt `demote` leer). Je Liste Ausschlussfilter, dann Score aus Perzentilen über Watch + Archiv, höchstens `CONFIG.candidates` Titel und `CONFIG.sectorCap` je Sektor. Finanzwerte (`sector == 'Finance'`) haben eigene Filter, weil FCF und Reverse-DCF dort wenig aussagen. Börsenwert grob nach USD umgerechnet (`USD_PER`), nur für Mindestgrössen. Die Auswahl steht mit dem Filter fest (12 je Liste und Richtung, je Firma ein Listing); die Wochen-KI bewertet sie nur.
+- **Rankings-Filter (`tools/monitor-report/rankings.mjs`, reine Logik):** Der Monitor-Lauf schreibt zusätzlich „Discovery Rankings.json“ in denselben Drive-Ordner. **Strikte Trennung:** `rankings.*` (momentum, solid, growth, pullback, breakout) enthalten nur den Watch-Bucket, `rotation.promote` nur das Archiv, `rotation.demote` nur die Watchlist ohne Augen- und Depot-Titel (Depot live aus der Merkliste, `fetchMerklisteEntries`; ist sie nicht lesbar, bleibt `demote` leer). Je Liste Ausschlussfilter, dann Score aus Perzentilen über Watch + Archiv, höchstens `CONFIG.candidates` Titel und `CONFIG.sectorCap` je Sektor. Finanzwerte (`sector == 'Finance'`) haben eigene Filter, weil FCF und Reverse-DCF dort wenig aussagen. Börsenwert grob nach USD umgerechnet (`USD_PER`), nur für Mindestgrössen. Die Auswahl steht mit dem Filter fest (12 je Liste und Richtung, je Firma ein Listing); die Wochen-KI bewertet sie nur. `known_symbols` listet alles aus Watch, Archiv und Inbox für den Scout.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 

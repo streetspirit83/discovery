@@ -17,6 +17,7 @@ import {
   macdFlips, rsiExtremes, trends, smaCrosses,
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
+import { rankingsHtml } from './rankings-panel.js?v=20261104l';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 const COLLAPSED = 3;
@@ -60,7 +61,7 @@ const hint = (txt) => `<p class="dash-hint">${esc(txt)}</p>`;
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { perfWindow: '1W', expanded: new Set() };
@@ -233,12 +234,52 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <h2 class="dash-title">${icons.activity}<span>Monitor · ${esc(BUCKET_LABELS[bucket] ?? bucket)}</span></h2>
         <button class="modal-close" id="dash-close" aria-label="Schließen">✕</button>
       </div>
+      <div class="tab-bar dash-tabs" role="tablist">
+        <button class="tab-btn active" data-dash-tab="overview" role="tab" aria-selected="true">Übersicht</button>
+        <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
+      </div>
       <div class="modal-body dash-body">${bodyHtml()}</div>
     </div>`;
   document.body.appendChild(overlay);
 
   const bodyEl = overlay.querySelector('.dash-body');
   const rerender = () => { bodyEl.innerHTML = bodyHtml(); };
+
+  /* Reiter Rankings: lädt beim ersten Öffnen aus dem market-Blob. Bewusst nicht
+     auf den aktiven Bucket bezogen, die Listen gelten immer für die Watchlist. */
+  const rk = { tab: 'overview', seg: 'momentum', data: null };
+  const renderRankings = () => {
+    if (rk.tab !== 'rankings' || !rk.data) return;
+    bodyEl.innerHTML = rankingsHtml({ ...rk.data, seg: rk.seg });
+    bodyEl.querySelector('.rk-seg__btn.is-active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  };
+  async function showRankings() {
+    if (rk.data) { renderRankings(); return; }
+    bodyEl.innerHTML = '<p class="dash-muted"><span class="ls-loading"></span> Lade Rankings …</p>';
+    try {
+      rk.data = await loadRankings();
+      renderRankings();
+    } catch (err) {
+      if (rk.tab === 'rankings') bodyEl.innerHTML = `<p class="dash-muted">Rankings konnten nicht geladen werden: ${esc(err.message)}</p>`;
+    }
+  }
+  overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
+    rk.tab = b.dataset.dashTab;
+    overlay.querySelectorAll('[data-dash-tab]').forEach((t) => {
+      const on = t === b;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+    bodyEl.scrollTop = 0;
+    if (rk.tab === 'rankings') showRankings(); else rerender();
+  }));
+  // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
+  bodyEl.addEventListener('click', (e) => {
+    const seg = e.target.closest('[data-rk-seg]');
+    if (seg) { rk.seg = seg.dataset.rkSeg; renderRankings(); return; }
+    const row = e.target.closest('[data-rk-id]');
+    if (row) onOpenHit?.(rk.data?.byId?.get(row.dataset.rkId), ctrl);
+  });
 
   const hidden = () => overlay.style.display === 'none';
   const ctrl = {

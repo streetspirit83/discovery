@@ -13,11 +13,11 @@ import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20261104b';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
-import { openPeerImportModal } from './components/peer-import-modal.js?v=20261103f';
+import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261103h';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261103f';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261104l';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
@@ -40,7 +40,7 @@ import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
-import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261103b';
+import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261104k';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
@@ -1225,8 +1225,30 @@ function openMarketBriefing(kind = null) {
     loadBriefings: async () => (await storageClient.readBlob('market'))?.briefings ?? [],
     loadCandidates: briefingCandidates,
     onOpenCandidate: (hit, ctrl) => openBriefingHit(hit, ctrl),
+    onScoutAdd: openScoutImport,
     kind,
   });
+}
+
+/* Neueste Rankings und Rotation aus dem market-Blob, dazu die Symbol-Auflösung. */
+async function loadRankings() {
+  const [market, cands] = await Promise.all([storageClient.readBlob('market'), briefingCandidates()]);
+  const latest = (kind) => (market?.briefings ?? []).filter((b) => b.kind === kind).sort((a, b) => (a.day < b.day ? 1 : -1))[0] ?? null;
+  const byId = new Map(cands.map((c) => [c.id, c]));
+  const find = (symbol, exchange) => {
+    const list = cands.filter((c) => String(c.symbol ?? '').toUpperCase() === String(symbol ?? '').toUpperCase());
+    return list.find((c) => String(c.exchange ?? '').toUpperCase() === String(exchange ?? '').toUpperCase()) ?? list[0] ?? null;
+  };
+  return { ranking: latest('ranking'), rotation: latest('rotation'), find, byId };
+}
+
+/** Scout-Titel: dasselbe Prüffenster wie die Alternativen aus dem Chat. */
+function openScoutImport(item) {
+  if (!item?.symbol) return;
+  openImportCheck({
+    items: [{ symbol: String(item.symbol).toUpperCase(), exchange: normalizeExchange(item.exchange) || '', adapter: 'ai-scout', note: item.thesis ?? 'KI-Scout' }],
+    peer: null,
+  }, 'Scout-Titel');
 }
 
 /**
@@ -1253,8 +1275,14 @@ function handlePeerHash() {
   const request = parsePeerHash(location.hash);
   if (!request) return false;
   history.replaceState(null, '', location.pathname + location.search);
+  openImportCheck(request);
+  return true;
+}
+
+function openImportCheck(request, title) {
   openPeerImportModal({
     request,
+    title,
     blocked: useMock
       ? 'Dieser Browser ist nicht mit deinem Discovery-Backend verbunden. Öffne den Link in dem Browser, in dem die App eingerichtet ist.'
       : null,
@@ -1276,7 +1304,6 @@ function handlePeerHash() {
       await switchBlob('inbox');
     },
   });
-  return true;
 }
 
 /** Candidate id from a `#c=<id>` deep link (ntfy push → detail sheet). */
@@ -2617,6 +2644,8 @@ async function init() {
     renderDashboardModal({
       candidates,
       bucket: currentBlobType,
+      loadRankings,
+      onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
       onOpenDetail: (candidate, ctrl) => {
         ctrl?.hide();                        // keep the dashboard mounted, just hidden
         returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes

@@ -5,7 +5,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
-import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261103b';
+import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261104k';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -37,15 +37,16 @@ function rowHtml(r, i, existing) {
  * @param {{backendUrl:string, secret:string}} o.backend
  * @param {() => Promise<Map<string,string>>} o.loadExisting  Schlüssel → Bucket-Name
  * @param {(cands:object[]) => Promise<void>} o.onImport
+ * @param {string} [o.title]  Überschrift des Fensters
  */
-export function openPeerImportModal({ request, blocked = null, backend, loadExisting, onImport }) {
+export function openPeerImportModal({ request, blocked = null, backend, loadExisting, onImport, title = 'Alternativen' }) {
   const { items, peer } = request;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal pim-modal" role="dialog" aria-modal="true" aria-label="Alternativen prüfen">
       <div class="modal-header">
-        <h2>${icons.sparkles} Alternativen${peer ? ` zu ${esc(peer.symbol)}` : ''}</h2>
+        <h2>${icons.sparkles} ${esc(title)}${peer ? ` zu ${esc(peer.symbol)}` : ''}</h2>
         <button class="icon-btn" id="pim-close" aria-label="Schließen">${icons.xMark}</button>
       </div>
       <div class="modal-body" id="pim-body">
