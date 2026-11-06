@@ -1,0 +1,618 @@
+/**
+ * Marktbriefing-Modal – die finanzjournalistische Tagesauswertung.
+ *
+ * Liest den `market`-Blob (bis zu 30 Briefings, neueste zuerst; geschrieben von
+ * Claude auf „Go“ über die Action market-briefing.yml) und zeigt je Tag:
+ * Schlagzeile und Lead, Indizes, Marktbreite, Treiber, Top/Flop mit Auslöser,
+ * Earnings, Technik, Fazit und Quellen. Dieselben Inhalte wie das Claude-
+ * Artefakt „Marktbriefing“ – das Artefakt selbst lässt sich nicht einbetten
+ * (claude.ai sendet `frame-ancestors 'self'`).
+ *
+ * Symbole, die in Watch/Archiv/Inbox/Export liegen, sind antippbar und öffnen
+ * das Detail-Sheet; beim Schliessen des Sheets kehrt das Modal zurück
+ * (`ctrl.hide/show`, wie das Monitor-Dashboard).
+ *
+ * Das Modal schreibt nie selbst; der Inbox-Knopf im Scout übergibt an die App.
+ */
+
+import { icons } from '../lib/icons.js?v=20261103f';
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+const nf = (d) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (v, d = 1) => (v == null || Number.isNaN(+v) ? '–' : `${+v > 0 ? '+' : +v < 0 ? '−' : ''}${nf(d).format(Math.abs(+v))} %`);
+const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+const longDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const shortDay = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+/* Indexkacheln: zwei feste Vierergruppen → je Gruppe EINE Zeile (Styleguide §5).
+   HXR (Cybersecurity) kommt aus den Branchenindizes, der Rest aus den Benchmarks. */
+const INDEX_ROWS = [
+  ['SPX', 'IXIC', 'HXR', 'SOX'],
+  ['DAX', 'KOSPI', 'VIX', 'BRENT'],
+];
+const SHORT = { SPX: 'S&P 500', IXIC: 'Nasdaq', HXR: 'HXR', SOX: 'SOX', DAX: 'DAX', KOSPI: 'KOSPI', VIX: 'VIX', BRENT: 'Brent' };
+/* Kachel-Prozent ohne Leerzeichen – vier Spalten am Handy sind schmal. */
+const pctT = (v) => pct(v).replace(' %', '%');
+const absVal = (v) => (v == null ? '–' : nf(Math.abs(v) >= 1000 ? 0 : 2).format(v));
+
+function indexTile(x, code) {
+  if (!x) return `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(SHORT[code] ?? code)}</div><div class="mb-idx__day">–</div><div class="mb-idx__abs">–</div></div>`;
+  return `<div class="bf-tile mb-idx" title="${esc(x.name)}">
+    <div class="bf-tile__label">${esc(SHORT[x.code] ?? x.name)}</div>
+    <div class="mb-idx__day ${tone(x.chg_1d)}">${esc(pctT(x.chg_1d))}</div>
+    <div class="mb-idx__abs">${esc(absVal(x.value))}</div>
+  </div>`;
+}
+
+function indicesBlock(ix) {
+  const all = new Map([...(ix?.sectors ?? []), ...(ix?.benchmarks ?? [])].map((x) => [x.code, x]));
+  if (!all.size) return '';
+  const rows = INDEX_ROWS
+    .map((codes) => `<div class="bf-tiles">${codes.map((c) => indexTile(all.get(c), c)).join('')}</div>`).join('');
+  const sec = ix?.sectors ?? [];
+  const secItem = (x) => `<li class="mb-sec"><span class="mb-sec__name">${esc(x.name)}</span><span class="mb-num ${tone(x.chg_1d)}">${esc(pct(x.chg_1d))}</span></li>`;
+  const secBlock = sec.length >= 6 ? `<div class="mb-secs">
+      <div><div class="mb-sub">Stärkste Branchen</div><ul class="mb-list">${sec.slice(0, 3).map(secItem).join('')}</ul></div>
+      <div><div class="mb-sub">Schwächste Branchen</div><ul class="mb-list">${sec.slice(-3).reverse().map(secItem).join('')}</ul></div>
+    </div>` : '';
+  return `<section class="bf-section"><h3 class="bf-h">Indizes <span class="mb-tag">· heute</span></h3>${rows}${secBlock}</section>`;
+}
+
+function breadthBlock(br) {
+  if (!br) return '';
+  const n = (br.advancers ?? 0) + (br.decliners ?? 0);
+  const ap = n ? Math.round(br.advancers / n * 100) : 0;
+  const tile = (label, val, cls = '') => `<div class="bf-tile"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  return `<section class="bf-section"><h3 class="bf-h">Marktbreite der beobachteten Aktien</h3>
+    <div class="bf-tiles">
+      ${tile('Median', pct(br.median_chg_1d), tone(br.median_chg_1d))}
+      ${tile('1 Woche', pct(br.median_perf_1w), tone(br.median_perf_1w))}
+      ${tile('> SMA200', br.above_sma200_pct != null ? `${br.above_sma200_pct} %` : '–')}
+      ${tile('> ±5 %', br.big_moves ?? '–')}
+    </div>
+    ${n ? `<div class="mb-adv" aria-hidden="true"><i class="pos" style="width:${ap}%"></i><i class="neg" style="width:${100 - ap}%"></i></div>
+    <div class="mb-advlab"><span>${br.advancers} im Plus</span><span>${br.decliners} im Minus</span></div>` : ''}
+  </section>`;
+}
+
+/* Symbol als Knopf, wenn der Titel im Workspace liegt – sonst reiner Text. */
+function symHtml(x, find) {
+  const hit = find(x.symbol, x.exchange);
+  return hit
+    ? `<button type="button" class="mb-sym" data-id="${esc(hit.id)}" title="Detail öffnen">${esc(x.symbol)}</button>`
+    : `<span class="mb-sym mb-sym--plain">${esc(x.symbol)}</span>`;
+}
+
+function chartBlock(top, flop) {
+  const rows = [...(top ?? []).slice(0, 6), ...(flop ?? []).slice(0, 6).reverse()].filter((r) => r.chg_1d != null);
+  if (!rows.length) return '';
+  const max = Math.max(...rows.map((r) => Math.abs(r.chg_1d)), 1);
+  return `<section class="bf-section"><h3 class="bf-h">Top &amp; Flop des Tages</h3>
+    <div class="mb-chart">${rows.map((r) => {
+      const w = Math.max(1, Math.abs(r.chg_1d) / max * 100);
+      return `<div class="mb-bar">
+        <span class="mb-bar__name">${esc(r.name)}</span>
+        <span class="mb-bar__track">
+          <span class="mb-bar__half">${r.chg_1d < 0 ? `<i class="neg" style="width:${w}%"></i>` : ''}</span>
+          <span class="mb-bar__half">${r.chg_1d >= 0 ? `<i class="pos" style="width:${w}%"></i>` : ''}</span>
+        </span>
+        <span class="mb-num ${tone(r.chg_1d)}">${esc(pct(r.chg_1d))}</span>
+      </div>`;
+    }).join('')}</div>
+  </section>`;
+}
+
+/* main/sub: welche Kennzahl gross und welche klein daneben steht – im
+   Tagesbriefing heute/1W, im Watchlist-Rückblick 1W/1M. */
+function moverBlock(title, rows, find, { main = 'chg_1d', sub = 'perf_1w', subTag = '1W' } = {}) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}${r.sector ? ` <span class="mb-muted">· ${esc(r.sector)}</span>` : ''}</span>
+        <span class="mb-num ${tone(r[main])}">${esc(pct(r[main]))}</span>
+        <span class="mb-num mb-num--sm ${tone(r[sub])}">${esc(pct(r[sub]))} <span class="mb-tag">${subTag}</span></span>
+      </div>
+      <div class="mb-row__why">${esc(r.reason || 'kein eindeutiger Nachrichtenauslöser')}</div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function earningsBlock(rows, find, title = 'Anstehende Quartalszahlen') {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <ul class="mb-list">${rows.map((e) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-date">${esc(e.weekday ?? '')} ${esc(e.date ? `${e.date.slice(8, 10)}.${e.date.slice(5, 7)}.` : '')}</span>
+        ${symHtml(e, find)}
+        <span class="mb-row__name">${esc(e.name)}${e.watch ? ' <span class="mb-chip">Watch</span>' : ''}</span>
+      </div>
+      ${e.focus ? `<div class="mb-row__why">${esc(e.focus)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function technikBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Technik in Kürze</h3>
+    <ul class="mb-list">${rows.map((t) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-chip ${t.dir === 'up' ? 'pos' : t.dir === 'down' ? 'neg' : ''}">${esc(t.signal)}</span>
+        ${t.symbol ? symHtml(t, find) : ''}
+        <span class="mb-row__name">${esc(t.name)}</span>
+      </div>
+      ${t.text ? `<div class="mb-row__why">${esc(t.text)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+/* Volumen-Mover: nachrichtlich, nur Tagesbriefing. Ältere Briefings haben das Feld nicht. */
+function volumeBlock(rows, find) {
+  if (!rows?.length) return '';
+  const num = (v) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `<section class="bf-section"><h3 class="bf-h">Grösste Volumen-Mover</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}${r.earnings ? ' <span class="mb-muted">· Zahlen</span>' : ''}</span>
+        <span class="mb-num">${esc(num(r.rel_vol))}×</span>
+        <span class="mb-num mb-num--sm ${tone(r.chg_1d)}">${esc(pct(r.chg_1d))}</span>
+      </div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+/* Analystenaktionen: Tagesbriefing und Watchlist-Rückblick. Ältere Briefings haben
+   das Feld nicht, dann fehlt der Block. */
+function analystBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Analysten</h3>
+    <ul class="mb-list">${rows.map((a) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-chip ${a.dir === 'up' ? 'pos' : a.dir === 'down' ? 'neg' : ''}">${esc(a.label)}</span>
+        ${a.symbol ? symHtml(a, find) : ''}
+        <span class="mb-row__name">${esc(a.name)}</span>
+      </div>
+      <div class="mb-row__why">${esc([a.firm, a.rating, a.target].filter(Boolean).join(' · '))}${a.text ? ` – ${esc(a.text)}` : ''}</div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function sourcesBlock(sources) {
+  const src = (sources ?? []).map((s) => `<li class="bf-note">
+      <span class="bf-note__text">${esc(s.title)}${s.date ? ` <span class="mb-muted">· ${esc(s.date)}</span>` : ''}</span>
+      ${s.url ? `<a class="link-chip" href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(s.title)}">${icons.externalLink}</a>` : ''}
+    </li>`).join('');
+  return `${src ? `<section class="bf-section"><h3 class="bf-h">Quellen</h3><ul class="bf-notes">${src}</ul></section>` : ''}
+    <p class="bf-foot pv-muted">Einordnung von Claude, keine Anlageberatung.</p>`;
+}
+
+function renderEntry(b, find) {
+  if (!b) return '<p class="pv-muted">Für diesen Tag liegt kein Briefing vor.</p>';
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">${esc(longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${indicesBlock(b.indices)}
+    ${breadthBlock(b.breadth)}
+    ${b.drivers?.length ? `<section class="bf-section"><h3 class="bf-h">Was die Märkte bewegt hat</h3>
+      <ul class="mb-drivers">${b.drivers.map((d) => `<li>${esc(d.text ?? d)}</li>`).join('')}</ul></section>` : ''}
+    ${chartBlock(b.top, b.flop)}
+    ${moverBlock('Top Movers', b.top, find)}
+    ${moverBlock('Flops', b.flop, find)}
+    ${volumeBlock(b.volume, find)}
+    ${analystBlock(b.analyst, find)}
+    ${earningsBlock(b.earnings, find)}
+    ${technikBlock(b.technik, find)}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Fazit des Redakteurs</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+
+/* ── Wochenvorschau (kind "preview", montags) ─────────────────────────────── */
+
+function calendarBlock(days) {
+  if (!days?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Termine der Woche</h3>
+    <ul class="mb-list">${days.map((d) => `<li class="mb-row">
+      <div class="mb-row__head"><span class="mb-date">${esc(d.weekday ?? '')} ${esc(d.date ? `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}.` : '')}</span></div>
+      <ul class="mb-cal">${(d.items ?? []).map((it) => `<li>${it.time ? `<span class="mb-date">${esc(it.time)}</span> ` : ''}${esc(it.text ?? it)}</li>`).join('')}</ul>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+/* ── Scout (kind "scout", wöchentlich) ───────────────────────────────────── */
+
+function scoutItem(x, i, find) {
+  const hit = find(x.symbol, x.exchange);
+  const action = hit
+    ? `<span class="mb-scout__where">liegt in ${esc(BUCKET_NAMES[hit.bucket] ?? hit.bucket)}</span>`
+    : `<button type="button" class="btn btn-secondary mb-scout__add" data-scout="${i}">${icons.plus} In Inbox</button>`;
+  const line = (label, text) => (text ? `<p class="mb-scout__line"><b>${label}:</b> ${esc(text)}</p>` : '');
+  return `<li class="mb-scout">
+    <div class="mb-scout__head">
+      <span class="mb-scout__id">${symHtml(x, find)} <span class="pv-muted">${esc(x.name ?? '')}</span></span>
+      ${x.category ? `<span class="mb-tag">${esc(x.category)}</span>` : ''}
+    </div>
+    <p class="mb-scout__text">${esc(x.thesis ?? '')}</p>
+    ${line('Auslöser', x.catalyst)}
+    ${line('Dagegen', x.counter)}
+    <div class="mb-scout__foot">${action}</div>
+  </li>`;
+}
+
+function renderScout(b, find) {
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Scout · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    <section class="bf-section"><h3 class="bf-h">Neue Titel</h3>
+      <ul class="mb-list">${(b.items ?? []).map((x, i) => scoutItem(x, i, find)).join('')}</ul>
+    </section>
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+function renderPreview(b, find) {
+  const themes = (b.themes ?? []).map((t) => `<li>${esc(t.text ?? t)}</li>`).join('');
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Wochenvorschau · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${indicesBlock(b.indices)}
+    ${themes ? `<section class="bf-section"><h3 class="bf-h">Themen der Woche</h3><ul class="mb-drivers">${themes}</ul></section>` : ''}
+    ${calendarBlock(b.calendar)}
+    ${earningsBlock(b.earnings, find, 'Quartalszahlen der Woche')}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Worauf es ankommt</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${sourcesBlock(b.sources)}`;
+}
+
+/* ── Watchlist-Rückblick (kind "watch", wöchentlich) ─────────────────────── */
+
+function watchStats(st) {
+  if (!st) return '';
+  const tile = (label, val, cls = '') => `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  const n = (st.up ?? 0) + (st.down ?? 0);
+  const ap = n ? Math.round(st.up / n * 100) : 0;
+  return `<section class="bf-section"><h3 class="bf-h">Watchlist in Zahlen</h3>
+    <div class="bf-tiles">
+      ${tile('Titel', st.n ?? '–')}
+      ${tile('Median 1W', pct(st.median_1w), tone(st.median_1w))}
+      ${tile('Median 1M', pct(st.median_1m), tone(st.median_1m))}
+      ${tile('Über SMA200', st.above_sma200_pct != null ? `${st.above_sma200_pct} %` : '–')}
+    </div>
+    ${n ? `<div class="mb-adv" aria-hidden="true"><i class="pos" style="width:${ap}%"></i><i class="neg" style="width:${100 - ap}%"></i></div>
+    <div class="mb-advlab"><span>${st.up} mit Wochenplus</span><span>${st.down} mit Wochenminus</span></div>` : ''}
+  </section>`;
+}
+
+function perfChart(title, rows, key = 'perf_1w') {
+  const r = (rows ?? []).filter((x) => x[key] != null);
+  if (!r.length) return '';
+  const max = Math.max(...r.map((x) => Math.abs(x[key])), 1);
+  return `<section class="bf-section"><h3 class="bf-h">${esc(title)}</h3>
+    <div class="mb-chart">${r.map((x) => {
+      const w = Math.max(1, Math.abs(x[key]) / max * 100);
+      return `<div class="mb-bar">
+        <span class="mb-bar__name">${esc(x.name)}</span>
+        <span class="mb-bar__track">
+          <span class="mb-bar__half">${x[key] < 0 ? `<i class="neg" style="width:${w}%"></i>` : ''}</span>
+          <span class="mb-bar__half">${x[key] >= 0 ? `<i class="pos" style="width:${w}%"></i>` : ''}</span>
+        </span>
+        <span class="mb-num ${tone(x[key])}">${esc(pct(x[key]))}</span>
+      </div>`;
+    }).join('')}</div>
+  </section>`;
+}
+
+function newsBlock(rows, find) {
+  if (!rows?.length) return '';
+  return `<section class="bf-section"><h3 class="bf-h">Meldungen der Woche</h3>
+    <ul class="mb-list">${rows.map((r) => `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}</span>
+        ${r.perf_1w != null ? `<span class="mb-num ${tone(r.perf_1w)}">${esc(pct(r.perf_1w))} <span class="mb-tag">1W</span></span>` : ''}
+        ${r.url ? `<a class="link-chip" href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.headline ?? 'Quelle')}" aria-label="${esc(r.headline ?? 'Quelle')}">${icons.externalLink}</a>` : ''}
+      </div>
+      ${r.headline ? `<div class="mb-row__lead">${esc(r.headline)}</div>` : ''}
+      ${r.text ? `<div class="mb-row__why">${esc(r.text)}</div>` : ''}
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+/* KI-Wochenausblick für Watch-Titel: Breakout-Kandidaten mit Chance, Potenzial,
+   Risiko und Katalysator; darunter Titel mit erhöhtem Rückschlagrisiko. */
+const CHANCE = { hoch: 'pos', mittel: '', gering: 'neg' };
+function outlookBlock(o, find) {
+  if (!o || (!o.text && !o.candidates?.length)) return '';
+  const num = (v, d = 2) => (v == null ? null : nf(Math.abs(v) >= 1000 ? 0 : d).format(v));
+  const cand = (o.candidates ?? []).map((c) => {
+    const meta = [
+      c.target != null ? `Ziel ${num(c.target)}` : null,
+      c.stop != null ? `Stopp ${num(c.stop)}${c.risk_pct != null ? ` (${pct(-Math.abs(c.risk_pct))})` : ''}` : null,
+      c.catalyst || null,
+    ].filter(Boolean).join(' · ');
+    return `<li class="mb-row">
+      <div class="mb-row__head">
+        ${symHtml(c, find)}
+        <span class="mb-row__name">${esc(c.name)}</span>
+        ${c.potential_pct != null ? `<span class="mb-num pos">${esc(pct(c.potential_pct))}</span>` : ''}
+      </div>
+      <div class="mb-row__chips">
+        ${c.setup ? `<span class="mb-chip">${esc(c.setup)}</span>` : ''}
+        ${c.chance ? `<span class="mb-chip ${CHANCE[c.chance] ?? ''}">Chance ${esc(c.chance)}</span>` : ''}
+      </div>
+      ${meta ? `<div class="mb-row__why">${esc(meta)}</div>` : ''}
+      ${c.reason ? `<div class="mb-row__text">${esc(c.reason)}</div>` : ''}
+    </li>`;
+  }).join('');
+  const risks = (o.risks ?? []).map((r) => `<li class="mb-row"><div class="mb-row__head">${symHtml(r, find)}<span class="mb-row__name">${esc(r.name)}</span></div><div class="mb-row__why">${esc(r.text)}</div></li>`).join('');
+  return `<section class="bf-section"><h3 class="bf-h">Ausblick auf die Woche <span class="mb-tag">· KI-Einschätzung</span></h3>
+    ${o.text ? `<p class="bf-summary">${esc(o.text)}</p>` : ''}
+    ${cand ? `<div class="mb-sub">Breakout- und Wachstumskandidaten</div><ul class="mb-list">${cand}</ul>` : ''}
+    ${risks ? `<div class="mb-sub">Erhöhtes Rückschlagrisiko</div><ul class="mb-list">${risks}</ul>` : ''}
+    <p class="bf-foot pv-muted">Chance und Potenzial sind eine Einschätzung aus Kursdaten, Widerständen und Nachrichtenlage, keine Prognose und keine Empfehlung.</p>
+  </section>`;
+}
+
+/* Ranking aller Augen-Titel für die kommende Woche (Score 0–100). */
+const num2 = (v, d = 2) => (v == null ? null : nf(Math.abs(v) >= 1000 ? 0 : d).format(v));
+function rankingBlock(rows, find) {
+  if (!rows?.length) return '';
+  const items = rows.map((r) => {
+    const sc = Math.round(r.score ?? r.base ?? 0);
+    const chips = [
+      r.chance ? `<span class="mb-chip ${CHANCE[r.chance] ?? ''}">Chance ${esc(r.chance)}</span>` : '',
+      r.setup ? `<span class="mb-chip">${esc(r.setup)}</span>` : '',
+      r.potential_pct != null ? `<span class="mb-chip pos">Pot. ${esc(pct(r.potential_pct))}</span>` : '',
+      r.risk_pct != null ? `<span class="mb-chip neg">Risiko ${esc(pct(-Math.abs(r.risk_pct)))}</span>` : '',
+      r.crv != null ? `<span class="mb-chip">CRV ${esc(num2(r.crv, 1))}</span>` : '',
+    ].join('');
+    const meta = [r.target != null ? `Ziel ${num2(r.target)}` : null, r.stop != null ? `Stopp ${num2(r.stop)}` : null, r.catalyst || null].filter(Boolean).join(' · ');
+    return `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-rank__no">${esc(r.rank)}</span>
+        ${symHtml(r, find)}
+        <span class="mb-row__name">${esc(r.name)}</span>
+        <span class="mb-rank__score" title="Score ${sc} von 100${r.adj ? ` (Basis ${Math.round(r.base)}, KI ${r.adj > 0 ? '+' : '−'}${Math.abs(r.adj)})` : ''}"><i style="width:${Math.max(2, Math.min(100, sc))}%"></i><b>${sc}</b></span>
+      </div>
+      <div class="mb-row__chips">${chips}</div>
+      ${meta ? `<div class="mb-row__why">${esc(meta)}</div>` : ''}
+      ${r.note ? `<div class="mb-row__text">${esc(r.note)}</div>` : ''}
+    </li>`;
+  }).join('');
+  return `<section class="bf-section" data-toc="Ranking"><h3 class="bf-h">Ranking der Woche <span class="mb-tag">· ${rows.length} Titel</span></h3>
+    <p class="bf-foot pv-muted">Score 0–100: regelbasierter Basis-Score aus den Kursdaten (Gewichte unter „Methode“) plus begründete KI-Korrektur aus Nachrichten und Terminen. Chance hoch ab 70, mittel ab 50.</p>
+    <ol class="mb-list mb-rank">${items}</ol>
+  </section>`;
+}
+
+/* Prognose-Check: Ranking der Vorwoche gegen die tatsächliche Wochenbewegung. */
+const VERDICT = { Treffer: 'pos', Fehlschlag: 'neg', teilweise: '' };
+function reviewBlock(rv, find) {
+  if (!rv) return '';
+  const head = `<section class="bf-section" data-toc="Prognose-Check"><h3 class="bf-h">Prognose-Check <span class="mb-tag">· Vorwoche</span></h3>`;
+  if (!rv.available) return `${head}<p class="bf-summary">${esc(rv.text || 'Noch kein Ranking der Vorwoche vorhanden.')}</p>${lessons(rv)}</section>`;
+  const tile = (label, val, cls = '') => `<div class="bf-tile mb-idx"><div class="bf-tile__label">${esc(label)}</div><div class="mb-idx__day ${cls}">${esc(val)}</div></div>`;
+  const items = (rv.items ?? []).filter((x) => x.verdict).map((x) => `<li class="mb-row">
+      <div class="mb-row__head">
+        <span class="mb-rank__no">${esc(x.rank)}</span>
+        ${symHtml(x, find)}
+        <span class="mb-row__name">${esc(x.name)}</span>
+        <span class="mb-chip ${VERDICT[x.verdict] ?? ''}">${esc(x.verdict)}</span>
+        <span class="mb-num ${tone(x.perf_1w)}">${esc(pct(x.perf_1w))}</span>
+      </div>
+      ${x.why ? `<div class="mb-row__why">${esc(x.why)}</div>` : ''}
+    </li>`).join('');
+  return `${head}
+    <div class="bf-tiles">
+      ${tile('Treffer', rv.hit_rate_pct != null ? `${rv.hit_rate_pct} %` : '–')}
+      ${tile('Rangkorr.', rv.spearman != null ? nf(2).format(rv.spearman) : '–', tone(rv.spearman))}
+      ${tile('Top-Drittel', pct(rv.top_third_avg), tone(rv.top_third_avg))}
+      ${tile('Flop-Drittel', pct(rv.bottom_third_avg), tone(rv.bottom_third_avg))}
+    </div>
+    ${rv.summary ? `<p class="bf-summary">${esc(rv.summary)}</p>` : ''}
+    ${items ? `<div class="mb-sub">Einzelbewertung (oberes und unteres Drittel des Rankings vom ${esc(rv.prev_day ? shortDay(rv.prev_day) : '–')})</div><ul class="mb-list">${items}</ul>` : ''}
+    ${lessons(rv)}
+  </section>`;
+}
+function lessons(rv) {
+  const l = (rv.lessons ?? []).map((x) => `<li>${esc(x.text ?? x)}</li>`).join('');
+  const w = (rv.weight_changes ?? []).map((c) => `<li><b>${esc(FACTOR[c.factor] ?? c.factor)}</b> ${esc(nf(2).format(c.old))} → ${esc(nf(2).format(c.new))}${c.reason ? ` <span class="mb-muted">· ${esc(c.reason)}</span>` : ''}</li>`).join('');
+  return `${l ? `<div class="mb-sub">Lehren für die neue Woche</div><ul class="mb-drivers">${l}</ul>` : ''}
+    ${w ? `<div class="mb-sub">Angepasste Gewichte</div><ul class="mb-drivers">${w}</ul>` : ''}`;
+}
+
+/* Methode: aktuelle Gewichte und Regeln – lernt Woche für Woche (watch_method). */
+const FACTOR = { trend: 'Trend-Radar', bias: 'Bias', quality: 'Qualitäts-Score', breakout: 'Ausbruchsnähe', crv: 'Chance/Risiko', sma: 'SMA-Lage', delta: 'Score-Dynamik' };
+function methodBlock(m) {
+  if (!m?.weights) return '';
+  const max = Math.max(...Object.values(m.weights), 0.01);
+  const bars = Object.entries(m.weights).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="mb-bar mb-bar--w">
+      <span class="mb-bar__name">${esc(FACTOR[k] ?? k)}</span>
+      <span class="mb-wbar"><i style="width:${v / max * 100}%"></i></span>
+      <span class="mb-num">${esc(Math.round(v * 100))} %</span>
+    </div>`).join('');
+  const rules = (m.rules ?? []).map((r) => `<li>${esc(r.text ?? r)}</li>`).join('');
+  return `<section class="bf-section" data-toc="Methode"><h3 class="bf-h">Methode <span class="mb-tag">· Version ${esc(m.version ?? 1)}</span></h3>
+    <div class="mb-chart">${bars}</div>
+    ${rules ? `<div class="mb-sub">Regeln aus den bisherigen Prognose-Checks</div><ul class="mb-drivers">${rules}</ul>` : ''}
+  </section>`;
+}
+
+function renderWatch(b, find) {
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Watchlist · Rückblick und Ausblick · ${esc(b.week_label ?? longDay(b.day))}</div>
+      <h3 class="mb-title">${esc(b.title)}</h3>
+      <p class="bf-summary">${esc(b.lead)}</p>
+      ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+    </header>
+    ${watchStats(b.stats)}
+    ${rankingBlock(b.ranking, find)}
+    ${outlookBlock(b.outlook, find)}
+    ${reviewBlock(b.review, find)}
+    ${perfChart('Stärkste und schwächste Titel der Woche', [...(b.top ?? []), ...(b.flop ?? []).slice().reverse()])}
+    ${moverBlock('Gewinner der Woche', b.top, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
+    ${moverBlock('Verlierer der Woche', b.flop, find, { main: 'perf_1w', sub: 'perf_1m', subTag: '1M' })}
+    ${newsBlock(b.news, find)}
+    ${analystBlock(b.analyst, find)}
+    ${technikBlock(b.technik, find)}
+    ${earningsBlock(b.earnings, find, 'Zahlen in der kommenden Woche')}
+    ${b.fazit ? `<section class="bf-section"><h3 class="bf-h">Einordnung</h3><div class="mb-fazit">${esc(b.fazit)}</div></section>` : ''}
+    ${methodBlock(b.method)}
+    ${sourcesBlock(b.sources)}`;
+}
+
+/* Inhaltsverzeichnis: nummeriert jeden Abschnitt, setzt eine Sprungliste unter
+   den Kopf und an jede Überschrift einen Knopf zurück. Knöpfe statt #-Links,
+   weil der Hash in der App Deep Links trägt (#briefing, #s=…). */
+function addToc(root) {
+  const secs = [...root.children].filter((s) => s.matches('section.bf-section') && s.querySelector(':scope > h3.bf-h'));
+  if (secs.length < 3) return;
+  const items = secs.map((s, i) => {
+    const h = s.querySelector(':scope > h3.bf-h');
+    const label = s.dataset.toc || [...h.childNodes].filter((n) => !(n.nodeType === 1 && n.classList.contains('mb-tag'))).map((n) => n.textContent).join('').trim();
+    s.id = `mb-s${i + 1}`;
+    s.classList.add('mb-part');
+    h.insertAdjacentHTML('afterbegin', `<span class="mb-secno">${i + 1}</span>`);
+    h.insertAdjacentHTML('beforeend', `<button type="button" class="mb-up" data-goto="mb-toc" title="Zum Inhalt" aria-label="Zum Inhalt">${icons.arrowUp}</button>`);
+    return `<li><button type="button" class="mb-toc__a" data-goto="mb-s${i + 1}"><span class="mb-secno">${i + 1}</span><span>${esc(label)}</span></button></li>`;
+  });
+  const nav = `<nav class="mb-toc" id="mb-toc" aria-label="Inhalt"><div class="mb-sub">Inhalt</div><ol>${items.join('')}</ol></nav>`;
+  const head = root.querySelector(':scope > .mb-head');
+  if (head) head.insertAdjacentHTML('afterend', nav); else root.insertAdjacentHTML('afterbegin', nav);
+}
+
+const BUCKET_NAMES = { inbox: 'Inbox', watch: 'Watchlist', archive: 'Archiv', export: 'Export' };
+
+const KINDS = [
+  { key: 'daily',   label: 'Tag',       render: (b, f) => renderEntry(b, f),   empty: 'Noch kein Tagesbriefing gespeichert. Es entsteht dienstags bis samstags morgens für den Vortag.' },
+  { key: 'preview', label: 'Woche',     render: (b, f) => renderPreview(b, f), empty: 'Noch keine Wochenvorschau gespeichert. Sie entsteht montags morgens.' },
+  { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags, mit Ausblick auf die neue Woche.' },
+  { key: 'scout',   label: 'Scout',     render: (b, f) => renderScout(b, f),   empty: 'Noch kein Scout gespeichert. Er entsteht einmal pro Woche.' },
+];
+/* Einträge ohne kind sind alte Tagesbriefings. `ranking` und `rotation` liegen im selben Blob, gehören aber in den Monitor. */
+const kindOf = (b) => b?.kind ?? 'daily';
+
+/**
+ * @param {object}   opts
+ * @param {function} opts.loadBriefings    – async () => Briefing[] (neueste zuerst)
+ * @param {function} opts.loadCandidates   – async () => [{id, symbol, exchange, bucket}]
+ * @param {function} opts.onOpenCandidate  – (hit, ctrl) => void
+ * @returns {object} ctrl {hide, show, close}
+ */
+export function renderMarketBriefingModal(opts = {}) {
+  const existing = document.getElementById('mb-modal-overlay');
+  if (existing) { existing.style.display = ''; return null; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'mb-modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal briefing-modal" role="dialog" aria-modal="true" aria-label="Marktbriefing">
+      <div class="modal-header">
+        <h2>${icons.newspaper} Marktbriefing</h2>
+        <div class="modal-header-actions">
+          <select class="bf-pick" id="mb-pick" aria-label="Handelstag wählen"></select>
+          <button class="icon-btn" id="mb-close" aria-label="Schließen">${icons.xMark}</button>
+        </div>
+      </div>
+      <div class="tab-bar mb-tabs" role="tablist">
+        ${KINDS.map((k, i) => `<button class="tab-btn${i ? '' : ' active'}" data-kind="${k.key}" role="tab" aria-selected="${!i}">${esc(k.label)}</button>`).join('')}
+      </div>
+      <div class="modal-body" id="mb-body">
+        <p class="pv-muted"><span class="ls-loading"></span> Lade Briefing …</p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const hidden = () => overlay.style.display === 'none';
+  const ctrl = {
+    hide: () => { overlay.style.display = 'none'; },
+    show: () => { overlay.style.display = ''; },
+    close: () => { document.removeEventListener('keydown', onKey); overlay.remove(); },
+  };
+  const onKey = (e) => { if (e.key === 'Escape' && !hidden()) ctrl.close(); };
+  overlay.querySelector('#mb-close').addEventListener('pointerup', ctrl.close);
+  overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) ctrl.close(); });
+  document.addEventListener('keydown', onKey);
+
+  const body = overlay.querySelector('#mb-body');
+  const pick = overlay.querySelector('#mb-pick');
+  let index = { bySym: new Map(), byId: new Map() };
+  let current = [];
+
+  /* Symbol (+ Börse) → Kandidat. Ohne passende Börse gewinnt der erste Treffer
+     in der Reihenfolge, in der loadCandidates liefert (Watch zuerst). */
+  const find = (symbol, exchange) => {
+    const list = index.bySym.get(String(symbol ?? '').toUpperCase());
+    if (!list?.length) return null;
+    if (exchange) return list.find((c) => String(c.exchange ?? '').toUpperCase() === String(exchange).toUpperCase()) ?? list[0];
+    return list[0];
+  };
+
+  // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
+  body.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-scout]');
+    if (add) { opts.onScoutAdd?.(current[Number(pick.value) || 0]?.items?.[Number(add.dataset.scout)]); return; }
+    const go = e.target.closest('[data-goto]');
+    if (go) { body.querySelector(`#${go.dataset.goto}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    const btn = e.target.closest('.mb-sym[data-id]');
+    if (!btn) return;
+    const hit = index.byId.get(btn.dataset.id);
+    if (hit) opts.onOpenCandidate?.(hit, ctrl);
+  });
+
+  (async () => {
+    let briefings = [];
+    try {
+      const [list, cands] = await Promise.all([
+        opts.loadBriefings?.() ?? [],
+        opts.loadCandidates?.().catch(() => []) ?? [],
+      ]);
+      briefings = Array.isArray(list)
+        ? list.filter((b) => b?.day && KINDS.some((k) => k.key === kindOf(b))).sort((a, b) => (a.day < b.day ? 1 : -1))
+        : [];
+      for (const c of cands ?? []) {
+        const k = String(c.symbol ?? '').toUpperCase();
+        if (!index.bySym.has(k)) index.bySym.set(k, []);
+        index.bySym.get(k).push(c);
+        index.byId.set(c.id, c);
+      }
+    } catch (err) {
+      body.innerHTML = `<p class="pv-muted">Briefing konnte nicht geladen werden: ${esc(err.message)}</p>`;
+      return;
+    }
+    const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
+    const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
+    const showKind = (key) => {
+      tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
+      current = briefings.filter((b) => kindOf(b) === key);
+      if (!current.length) {
+        pick.hidden = true;
+        body.innerHTML = `<p class="pv-muted">${esc(KINDS.find((k) => k.key === key).empty)}</p>`;
+        return;
+      }
+      pick.hidden = false;
+      pick.innerHTML = current.map((b, i) => `<option value="${i}">${esc(shortDay(b.day))}</option>`).join('');
+      mount(0);
+    };
+    pick.addEventListener('change', () => mount(Number(pick.value)));
+    tabs.forEach((t) => t.addEventListener('click', () => showKind(t.dataset.kind)));
+    showKind(opts.kind && KINDS.some((k) => k.key === opts.kind) ? opts.kind : 'daily');
+  })();
+
+  return ctrl;
+}
