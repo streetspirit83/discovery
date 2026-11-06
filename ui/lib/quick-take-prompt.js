@@ -73,6 +73,11 @@ const CHAT_URLS = {
   perplexity: 'https://www.perplexity.ai/search/?q=',
 };
 
+/** Beliebigen Prompt als neuen Chat öffnen (claude | chatgpt | perplexity). */
+export function promptUrl(target, prompt) {
+  return `${CHAT_URLS[target]}${encodeURIComponent(prompt ?? '')}`;
+}
+
 export function chatUrl(target, c, opts) {
-  return `${CHAT_URLS[target]}${encodeURIComponent(quickTakePrompt(c, opts))}`;
+  return promptUrl(target, quickTakePrompt(c, opts));
 }

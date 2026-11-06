@@ -858,6 +858,7 @@ td.rg-r { padding-left:var(--s-1); }
 .bulk-btn--del { color:var(--neg); }
 .bulk-btn--del:hover { background:var(--neg); border-color:var(--neg); color:#fff; }
 .bulk-tvlogo { width:30px; height:30px; border-radius:5px; display:block; }
+.bulk-btn--ai svg { width:22px; height:22px; display:block; }
 .bulk-btn--neg    { background:var(--neg-weak); border-color:var(--neg); color:var(--neg); }
 .bulk-btn--pos    { background:var(--pos-weak); border-color:var(--pos); color:var(--pos); }
 .bulk-btn--ai     { background:var(--ai-weak);  border-color:var(--ai);  color:var(--ai); }
@@ -3036,6 +3037,11 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .rk-move--new { color:var(--accent); }
 .rk-note { margin:var(--s-1) 0 0; font-size:var(--fs-1); line-height:1.4; }
 .rk-tags { margin:var(--s-1) 0 0; font-size:var(--fs-1); color:var(--muted); }
+.rk-weekly > summary { cursor:pointer; list-style:none; }
+.rk-weekly > summary::-webkit-details-marker { display:none; }
+.rk-weekly > summary::after { content:'▸'; margin-left:auto; color:var(--muted); }
+.rk-weekly[open] > summary::after { content:'▾'; }
+.rk-weekly .dash-card { border:0; padding:0; }
 
 /* Briefing: Scout */
 .mb-scout { display:flex; flex-direction:column; gap:var(--s-1); padding:var(--s-2) 0; border-bottom:1px solid var(--border); }

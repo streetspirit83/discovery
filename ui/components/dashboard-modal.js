@@ -18,7 +18,8 @@ import {
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
-import { rankingsHtml } from './rankings-panel.js?v=20261104l';
+import { liveRankingsHtml, weeklyRankingsHtml } from './rankings-panel.js?v=20261106c';
+import { liveRankings } from '../lib/rankings-filter.js?v=20261106c';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 const COLLAPSED = 3;
@@ -259,23 +260,32 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   const bodyEl = overlay.querySelector('.dash-body');
   const rerender = () => { bodyEl.innerHTML = bodyHtml(); };
 
-  /* Reiter Rankings: lädt beim ersten Öffnen aus dem market-Blob. Bewusst nicht
-     auf den aktiven Bucket bezogen, die Listen gelten immer für die Watchlist. */
-  const rk = { tab: 'overview', seg: 'momentum', data: null };
+  /* Reiter Rankings – eine Seite ohne Unterreiter:
+     1. technische Listen live aus den Kandidaten des aktiven Buckets (ohne KI;
+        bei „Watch + Archiv" nur die Watchlist, Perzentile über beide),
+     2. darunter einklappbar das KI-Wochenranking vom Sonntag aus dem market-Blob. */
+  const rk = { tab: 'overview', data: null, err: null, loading: false, weeklyOpen: false, live: null };
+  const scope = bucket === 'all' ? 'Watchlist' : (BUCKET_LABELS[bucket] ?? bucket);
+  const weeklyBody = () => (rk.err ? `<p class="dash-muted">KI-Wochenranking konnte nicht geladen werden: ${esc(rk.err)}</p>`
+    : rk.data ? weeklyRankingsHtml(rk.data)
+    : '<p class="dash-muted"><span class="ls-loading"></span> Lade KI-Wochenranking …</p>');
   const renderRankings = () => {
-    if (rk.tab !== 'rankings' || !rk.data) return;
-    bodyEl.innerHTML = rankingsHtml({ ...rk.data, seg: rk.seg });
-    bodyEl.querySelector('.rk-seg__btn.is-active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (rk.tab !== 'rankings') return;
+    rk.live ??= liveRankings(candidates, { bucket, n: 8 });
+    bodyEl.innerHTML = `${liveRankingsHtml(rk.live, scope)}
+      <details class="dash-card rk-weekly"${rk.weeklyOpen ? ' open' : ''}>
+        <summary class="dash-card__head"><span class="dash-card__icon">${icons.sparkles ?? ''}</span><h3>KI-Wochenranking (Sonntag)</h3></summary>
+        <div class="dash-card__body">${weeklyBody()}</div>
+      </details>`;
+    bodyEl.querySelector('.rk-weekly')?.addEventListener('toggle', (e) => { rk.weeklyOpen = e.target.open; });
   };
   async function showRankings() {
-    if (rk.data) { renderRankings(); return; }
-    bodyEl.innerHTML = '<p class="dash-muted"><span class="ls-loading"></span> Lade Rankings …</p>';
-    try {
-      rk.data = await loadRankings();
-      renderRankings();
-    } catch (err) {
-      if (rk.tab === 'rankings') bodyEl.innerHTML = `<p class="dash-muted">Rankings konnten nicht geladen werden: ${esc(err.message)}</p>`;
-    }
+    renderRankings();
+    if (rk.data || rk.loading || !loadRankings) return;
+    rk.loading = true;
+    try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
+    rk.loading = false;
+    renderRankings();
   }
   overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
     rk.tab = b.dataset.dashTab;
@@ -289,8 +299,12 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', (e) => {
-    const seg = e.target.closest('[data-rk-seg]');
-    if (seg) { rk.seg = seg.dataset.rkSeg; renderRankings(); return; }
+    const live = e.target.closest('[data-rk-live]');
+    if (live) {
+      const cand = candidates.find((c) => c.id === live.dataset.rkLive);
+      if (cand) onOpenDetail?.(cand, ctrl);
+      return;
+    }
     const row = e.target.closest('[data-rk-id]');
     if (row) onOpenHit?.(rk.data?.byId?.get(row.dataset.rkId), ctrl);
   });

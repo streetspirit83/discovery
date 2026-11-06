@@ -24,6 +24,7 @@ import { lsTrend } from '../lib/ls-trend.js?v=20260807a';
 import { trendScore } from '../lib/trend-radar.js?v=20261103h';
 import { computeMtfa } from '../lib/tv-mtfa-score.js?v=20260807a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
+import { CLAUDE_LOGO, PERPLEXITY_LOGO } from '../lib/ai-logos.js?v=20261106c';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
@@ -1562,19 +1563,20 @@ export class CandidateList {
       <button class="bulk-btn bulk-btn--icon" id="bulk-export" title="Exportieren" aria-label="Export">${icons.briefcase}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-promote" title="Promoten (Watchlist)" aria-label="Promoten">${icons.bookmark}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-dismiss" title="Ablehnen (Archiv)" aria-label="Ablehnen">${icons.archive}</button>
-      <button class="bulk-btn bulk-btn--icon" id="bulk-enrich" title="AI-Enrichment" aria-label="Enrich">${icons.sparkles}</button>
-      <button class="bulk-btn bulk-btn--icon" id="bulk-copy-prompt" title="Research-Prompt kopieren" aria-label="Research-Prompt">${icons.clipboard}</button>
+      <button class="bulk-btn bulk-btn--icon bulk-btn--ai" id="bulk-claude" title="Research-Prompt der Auswahl in neuem Claude-Chat öffnen" aria-label="Research in Claude">${CLAUDE_LOGO}</button>
+      <button class="bulk-btn bulk-btn--icon bulk-btn--ai" id="bulk-perplexity" title="Research-Prompt der Auswahl in Perplexity öffnen" aria-label="Research in Perplexity">${PERPLEXITY_LOGO}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-tr-check" title="TR-Check (Trade Republic)" aria-label="TR-Check">${icons.cart}</button>
       <button class="bulk-btn bulk-btn--icon" id="bulk-compare" title="Auswahl vergleichen (ab 2 Tickern)" aria-label="Vergleichen">${icons.scale}</button>`;
     ba.querySelector('#bulk-dismiss').addEventListener('pointerup', () => this.onBulkAction?.('dismiss', [...this.selected]));
     ba.querySelector('#bulk-promote').addEventListener('pointerup', () => this.onBulkAction?.('promote', [...this.selected]));
     ba.querySelector('#bulk-export').addEventListener('pointerup',  () => this.onBulkAction?.('export',  [...this.selected]));
-    ba.querySelector('#bulk-enrich').addEventListener('pointerup',  () => this.onBulkAction?.('enrich',  [...this.selected]));
     ba.querySelector('#bulk-compare').addEventListener('pointerup', () => this.onBulkAction?.('compare', [...this.selected]));
     ba.querySelector('#bulk-tv-data').addEventListener('pointerup', () => this.onBulkAction?.('tv-data', [...this.selected]));
     ba.querySelector('#bulk-tr-check').addEventListener('pointerup', () => this.onBulkAction?.('tr-check', [...this.selected]));
     ba.querySelector('#bulk-ls-quote').addEventListener('pointerup', () => this.onBulkAction?.('ls-quote', [...this.selected]));
-    ba.querySelector('#bulk-copy-prompt').addEventListener('pointerup', () => this.onBulkAction?.('copy-prompt', [...this.selected]));
+    // click statt pointerup: window.open braucht eine echte Nutzergeste, sonst blockt der Popup-Blocker.
+    ba.querySelector('#bulk-claude').addEventListener('click', () => this.onBulkAction?.('ai-claude', [...this.selected]));
+    ba.querySelector('#bulk-perplexity').addEventListener('click', () => this.onBulkAction?.('ai-perplexity', [...this.selected]));
     ba.querySelector('#bulk-delete').addEventListener('pointerup',  () => this.onBulkAction?.('delete',  [...this.selected]));
     ba.querySelector('#bulk-clear').addEventListener('pointerup',   () => this.clearSelection());
   }

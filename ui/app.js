@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261106b';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261106c';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261104b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261106c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -16,13 +16,13 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261106b';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261106c';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261106b';
+import { renderControlModal } from './components/control-modal.js?v=20261106c';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
 import { enrichBulk } from './lib/claude-api.js';
@@ -39,6 +39,7 @@ import { fetchLsQuote } from './lib/ls-intraday.js?v=20261026a';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
+import { promptUrl } from './lib/quick-take-prompt.js?v=20261106c';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
 import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261104k';
 import { buildLinks } from './lib/link-builder.js';
@@ -2025,10 +2026,41 @@ async function fetchTdBars(candidate) {
   return result;
 }
 
+const AI_URL_MAX = 12000;   // längere Links kappen die Chat-Seiten bzw. Proxys
+
+/** Text in die Zwischenablage, mit Textarea-Fallback (file:// ohne Clipboard-API). */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* Fallback */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  const ok = document.execCommand('copy');
+  ta.remove();
+  return ok;
+}
+
 async function handleBulkAction(action, ids) {
   const blob = allBlobs[currentBlobType];
   if (!blob) return;
   const targets = blob.candidates.filter((c) => ids.includes(c.id));
+
+  /* Research-Prompt der Auswahl direkt als neuen Chat öffnen (Claude / Perplexity).
+     Synchron vor jedem await, sonst fällt die Nutzergeste weg und der Popup-Blocker greift.
+     Zu lange Links (viele Titel) öffnen den leeren Chat; der Prompt liegt dann in der Zwischenablage. */
+  if (action === 'ai-claude' || action === 'ai-perplexity') {
+    if (!targets.length) return;
+    const target = action === 'ai-claude' ? 'claude' : 'perplexity';
+    const prompt = buildResearchPrompt(targets);
+    let url = promptUrl(target, prompt);
+    const tooLong = url.length > AI_URL_MAX;
+    if (tooLong) { url = promptUrl(target, ''); copyText(prompt); }
+    window.open(url, '_blank', 'noopener');
+    toast(tooLong
+      ? `Prompt für ${targets.length} Ticker zu lang für den Link – kopiert, im Chat einfügen`
+      : `Research-Prompt für ${targets.length} Ticker in ${target === 'claude' ? 'Claude' : 'Perplexity'} geöffnet`,
+    tooLong ? 'info' : 'success', 4000);
+    return;
+  }
 
   // Vergleich: reine Ansicht auf bereits geladenen Daten – kein Schreibzugriff.
   if (action === 'compare') {
@@ -2139,20 +2171,7 @@ async function handleBulkAction(action, ids) {
 
   if (action === 'copy-prompt') {
     const prompt = buildResearchPrompt(targets);
-    try {
-      await navigator.clipboard.writeText(prompt);
-    } catch {
-      // Clipboard API unavailable (e.g. file:// without permission) → textarea fallback
-      const ta = document.createElement('textarea');
-      ta.value = prompt;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
-      if (!ok) { toast('Kopieren fehlgeschlagen – Clipboard nicht verfügbar', 'error'); return; }
-    }
+    if (!(await copyText(prompt))) { toast('Kopieren fehlgeschlagen – Clipboard nicht verfügbar', 'error'); return; }
     toast(`📋 Research-Prompt für ${targets.length} Ticker kopiert – in AI-Suche einfügen`, 'success', 4000);
     return;
   }

@@ -147,6 +147,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   it replaced the former Intra-Day modal). `intraday-modal.js` still exists but is
   **no longer imported** (dead code).
 - `trigger-modal.js` – per-symbol alert editor (price / MA / indicator presets).
+- **Bulk-Leiste:** Claude- und Perplexity-Knopf öffnen den Research-Prompt der Auswahl (`buildResearchPrompt`) direkt als
+  neuen Chat (`promptUrl` in `quick-take-prompt.js`, Logos in `lib/ai-logos.js`); Links über 12 000 Zeichen öffnen den leeren
+  Chat und legen den Prompt in die Zwischenablage. Sie ersetzen die früheren Knöpfe „AI-Enrichment" und „Prompt kopieren".
 - `nachkauf-modal.js` – Nachkauf/Teilverkauf calculator for ★ portfolio tickers
   (Standard view row action). Pure calculator, EUR only — it reads `mk_entry` /
   `mk_shares` (merkliste) + the LS quote and persists nothing.
@@ -450,8 +453,11 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   **Scout (`kind: scout`, nur App, Reiter im Briefing):** `week_label, title, lead, items[{symbol,exchange,
   name,category,thesis,catalyst,counter}], fazit, sources`. Der Inbox-Knopf öffnet das Prüffenster der
   Chat-Alternativen (`openImportCheck` in `app.js`, Quelle `ai-scout`); Titel im Workspace zeigen ihren Bucket.
-  **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`), liest
-  die neuesten Einträge aus dem market-Blob. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`) ist seit
+  Nov. 2026 **eine Seite ohne Unterreiter**: oben die fünf Listen **technisch live** aus den Kandidaten des aktiven
+  Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
+  Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag samt
+  Rotation aus den neuesten Einträgen des market-Blobs. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
   {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
   `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
   beide Arten aus.
@@ -480,7 +486,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   `tools/market-briefing/push.mjs` schreibt in den market-Blob (Upsert je Tag;
   `-f delete_day=JJJJ-MM-TT` löscht). Für andere KIs liegt der Prompt als
   „Discovery Monitor – Prompt.md“ im Drive-Ordner.
-- **Rankings-Filter (`tools/monitor-report/rankings.mjs`, reine Logik):** Der Monitor-Lauf schreibt zusätzlich „Discovery Rankings.json“ in denselben Drive-Ordner. **Strikte Trennung:** `rankings.*` (momentum, solid, growth, pullback, breakout) enthalten nur den Watch-Bucket, `rotation.promote` nur das Archiv, `rotation.demote` nur die Watchlist ohne Augen- und Depot-Titel (Depot live aus der Merkliste, `fetchMerklisteEntries`; ist sie nicht lesbar, bleibt `demote` leer). Je Liste Ausschlussfilter, dann Score aus Perzentilen über Watch + Archiv, höchstens `CONFIG.candidates` Titel und `CONFIG.sectorCap` je Sektor. Finanzwerte (`sector == 'Finance'`) haben eigene Filter, weil FCF und Reverse-DCF dort wenig aussagen. Börsenwert grob nach USD umgerechnet (`USD_PER`), nur für Mindestgrössen. Die Auswahl steht mit dem Filter fest (12 je Liste und Richtung, je Firma ein Listing); die Wochen-KI bewertet sie nur. `known_symbols` listet alles aus Watch, Archiv und Inbox für den Scout.
+- **Rankings-Filter (`ui/lib/rankings-filter.js`, reine Logik; `tools/monitor-report/rankings.mjs` reicht sie nur weiter):** Das Bias (`computeBias`, −100…+100) ist Kennzahl `bias`: Gewicht in allen fünf Listen, Filter Momentum und Ausbruch nur mit Bias > 0, Rücksetzer ohne Bias ≤ −60. Der Monitor-Lauf schreibt zusätzlich „Discovery Rankings.json“ in denselben Drive-Ordner. **Strikte Trennung:** `rankings.*` (momentum, solid, growth, pullback, breakout) enthalten nur den Watch-Bucket, `rotation.promote` nur das Archiv, `rotation.demote` nur die Watchlist ohne Augen- und Depot-Titel (Depot live aus der Merkliste, `fetchMerklisteEntries`; ist sie nicht lesbar, bleibt `demote` leer). Je Liste Ausschlussfilter, dann Score aus Perzentilen über Watch + Archiv, höchstens `CONFIG.candidates` Titel und `CONFIG.sectorCap` je Sektor. Finanzwerte (`sector == 'Finance'`) haben eigene Filter, weil FCF und Reverse-DCF dort wenig aussagen. Börsenwert grob nach USD umgerechnet (`USD_PER`), nur für Mindestgrössen. Die Auswahl steht mit dem Filter fest (12 je Liste und Richtung, je Firma ein Listing); die Wochen-KI bewertet sie nur. `known_symbols` listet alles aus Watch, Archiv und Inbox für den Scout.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
