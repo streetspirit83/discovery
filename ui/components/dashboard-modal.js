@@ -17,6 +17,7 @@ import {
   macdFlips, rsiExtremes, trends, smaCrosses,
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
+import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
 import { rankingsHtml } from './rankings-panel.js?v=20261104l';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
@@ -141,6 +142,18 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     return parts.join('<div class="dash-sep"></div>');
   }
 
+  // SMA200-Extreme: weitester Abstand des Kurses über/unter der 200-Tage-Linie
+  // (gleiche Rechnung wie der Monitor-Bericht, lib/sma200-extremes.js).
+  function sma200Body() {
+    const { above, below } = sma200Extremes(candidates, EXPANDED);
+    if (!above.length && !below.length) return empty('Keine SMA200-Daten.');
+    const row = (r, dir) => rowEl(r, `<span class="dash-num ${dir}">${fmtPct(r.dist)}</span>`, dir === 'pos' ? 'up' : 'down');
+    const parts = [];
+    if (above.length) parts.push(`<div class="dash-sub dash-sub--pos">Weit darüber · überdehnt</div>` + section('s200.above', above, (r) => row(r, 'pos')));
+    if (below.length) parts.push(`<div class="dash-sub dash-sub--neg">Weit darunter · abgestraft</div>` + section('s200.below', below, (r) => row(r, 'neg')));
+    return parts.join('<div class="dash-sep"></div>');
+  }
+
   // Trend-Radar: einzelne Werte des Buckets nach kurzfristigem Trend-Score,
   // ersetzt das Signal-Scoreboard (der Recorder läuft im Hintergrund weiter).
   function radarBody() {
@@ -218,6 +231,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       ${card('gauge', 'PCHS / Zyklus · Δ vs. Vortag', dynamicsBody(pchsMovers(candidates), (r) => r.pchs, (r) => r.dPchs, 'pchs'))}
       ${card('activity', 'Signale & Extreme', signalsBody())}
       ${card('arrowUpDown', 'SMA-Kreuzungen · Δ vs. Vortag', smaBody())}
+      ${card('arrowUpDown', 'Abstand zur SMA200 · Extreme', sma200Body())}
       ${card('candlestick', 'Trend-Radar · Einzelwerte', radarBody())}
       ${card('sparkles', 'Trends · 1W·1M·3M gerichtet · ØGr/M', trendsBody())}
     `;

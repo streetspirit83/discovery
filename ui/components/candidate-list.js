@@ -698,6 +698,13 @@ function chunked(arr, size) {
 
 /* SMA200-Trend-Spalte. Steht in Standard UND Trade, deshalb einmal definiert:
    Renderer in `renderSma200Trend` (weiter unten, Funktionsdeklaration). */
+/* Abstand LS-Kurs ↔ SMA200 in %. Steht in Standard (nach „S200Ø") und Preis (nach „SMA200"). */
+const S200D_COL = {
+  key: 'tv_sma200_dist', label: '%S200', num: true,
+  title: 'Abstand des LS-Kurses zur SMA 200 in % (ohne LS-Kurs: TV-Schluss) · positiv = Kurs über der Linie · sortiert nach Abstand',
+  fmt: (c) => { const d = smaDistPct(c, c.tv_data?.sma200); return `<span class="${posNegClass(d)}">${d == null ? '—' : (d >= 0 ? '+' : '−') + fmtNum(Math.abs(d), 1) + '%'}</span>`; },
+};
+
 const SMA200_COL = {
   key: 'sma200_trend', label: 'S200Ø', num: true,
   title: 'SMA200-Trend aus den geladenen Tageskerzen (TwelveData US / Yahoo sonst): Ø Wachstum der 200-Tage-Linie je Monat (geometrisch über das ganze Fenster) · Pfeil = Richtung der letzten ~21 Handelstage (▲ steigend · ▼ fallend · → seitwärts, Totband ±0,5%) · sortiert nach dem Ø-Wachstum',
@@ -785,7 +792,7 @@ const VIEWS = {
     { key:'tv_sma50',   label:'SMA50',  title:'SMA 50 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma50)}">${fmtPrice(c, c.tv_data?.sma50)}</span>` },
     { key:'tv_sma100',  label:'SMA100', title:'SMA 100 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma100)}">${fmtPrice(c, c.tv_data?.sma100)}</span>` },
     { key:'tv_sma200',  label:'SMA200', title:'SMA 200 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma200)}">${fmtPrice(c, c.tv_data?.sma200)}</span>` },
-    { key:'tv_sma200_dist', label:'%S200', title:'Abstand des LS-Kurses zur SMA 200 in % (ohne LS-Kurs: TV-Schluss) · positiv = Kurs über der Linie · sortiert nach Abstand', num:true, fmt:c=>{const d=smaDistPct(c, c.tv_data?.sma200);return `<span class="${posNegClass(d)}">${d==null?'—':(d>=0?'+':'−')+fmtNum(Math.abs(d),1)+'%'}</span>`;} },
+    S200D_COL,
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
     { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },
@@ -1196,6 +1203,7 @@ export class CandidateList {
       cols += this.thNum('tv_overall_score', 'Score', 'Overall Score 0\u2013100 \u00b7 alle weiteren Scores in der \u201eScore\u201c-Ansicht, Metadaten in \u201eMeta\u201c', 'col-group-start');
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
+      cols += this.thNum(S200D_COL.key, S200D_COL.label, S200D_COL.title);
       cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
       cols += this.thNum('analyst_net', 'Ana', 'Analysten, letzte 30 Tage: Hoch- plus Abstufungen und Kurszieländerungen nach oben / unten \u00b7 sortiert nach dem Saldo \u00b7 erfasst für Augen-Titel und Tages-Movers ab dem Monitor-Lauf \u00b7 sonst leer');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
@@ -1428,6 +1436,7 @@ export class CandidateList {
           `<td class="num col-group-start">${renderOverallScore(liveOverallScore(tv))}</td>` +
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
+          `<td class="num">${S200D_COL.fmt(c)}</td>` +
           `<td class="num">${renderTrendAge(c)}</td>` +
           `<td class="num">${analystNetCell(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +

@@ -122,7 +122,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
-  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). In der Preis-Ansicht steht neben „SMA200" die Spalte **„%S200"**: Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`).
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Karte „Abstand zur SMA200 · Extreme" aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Der Stift in der Toolbar

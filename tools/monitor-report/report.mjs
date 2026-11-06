@@ -18,6 +18,7 @@ import {
 } from '../../ui/lib/dashboard-metrics.js';
 import { trendRadar, trendScore } from '../../ui/lib/trend-radar.js';
 import { computeUpsidePotential } from '../../ui/lib/tv-upside.js';
+import { sma200DistPct, sma200Extremes } from '../../ui/lib/sma200-extremes.js';
 
 export const SCHEMA = 'discovery-monitor-2.0';
 const BRK = 0.005;          // Bruch erst 0,5 % jenseits des Levels (wie Watch Ranges)
@@ -78,7 +79,7 @@ function rangeState(c) {
 }
 
 /* Abstand des Schlusskurses zur SMA200 in % (positiv = Kurs über der Linie). */
-const sma200Dist = (t) => (t?.close > 0 && t?.sma200 > 0 ? r1((t.close / t.sma200 - 1) * 100) : null);
+const sma200Dist = (t) => r1(sma200DistPct(t));
 
 /* ── Bericht als Objekt ───────────────────────────────────────────────────── */
 
@@ -185,7 +186,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
   const radar = trendRadar(cands);
   const ranges = cands.map((c) => ({ c, r: rangeState(c) })).filter((x) => x.r);
   const bias = tvd.map((c) => ({ c, b: computeBias(c.tv_data) })).filter((x) => x.b);
-  const d200 = tvd.map((c) => ({ c, d: sma200Dist(c.tv_data) })).filter((x) => x.d != null);
+  const d200 = sma200Extremes(tvd, SMA200_X);
   const alerts = [];
   for (const c of cands) for (const a of c.alerts ?? []) {
     if (a.enabled === false) continue;
@@ -209,8 +210,8 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     broken_trends: tr.broken.map((r) => ({ ...sref(r.c), monthly_growth_pct: r2(r.ogrm) })),
     bias_bullish: bias.filter((x) => x.b.score >= 50).sort((a, b) => b.b.score - a.b.score).map((x) => ({ ...sref(x.c), bias: Math.round(x.b.score) })),
     bias_bearish: bias.filter((x) => x.b.score <= -50).sort((a, b) => a.b.score - b.b.score).map((x) => ({ ...sref(x.c), bias: Math.round(x.b.score) })),
-    sma200_far_above: d200.filter((x) => x.d > 0).sort((a, b) => b.d - a.d).slice(0, SMA200_X).map((x) => ({ ...sref(x.c), dist_sma200_pct: x.d })),
-    sma200_far_below: d200.filter((x) => x.d < 0).sort((a, b) => a.d - b.d).slice(0, SMA200_X).map((x) => ({ ...sref(x.c), dist_sma200_pct: x.d })),
+    sma200_far_above: d200.above.map((x) => ({ ...sref(x.c), dist_sma200_pct: r1(x.dist) })),
+    sma200_far_below: d200.below.map((x) => ({ ...sref(x.c), dist_sma200_pct: r1(x.dist) })),
     alerts,
   };
 
