@@ -26,7 +26,8 @@ const DOC_TOP = 8;          // Zeilen je Tabelle im Doc
 const DOC_LIST = 6;         // Titel je Signalzeile im Doc
 const MIN_REL_VOL = 1.5;    // Volumen-Mover: ab diesem Vielfachen des 10-Tage-Schnitts
 const MIN_TURNOVER = 1e6;   // Ø-Tagesumsatz in Notierungswährung; darunter ist „hohes Volumen" Rauschen
-const BIG_MOVE = 5;         // |1D| ab dieser Schwelle gilt als Ausreisser
+const BIG_MOVE = 5;
+const SMA200_X = 10;        // Länge der SMA200-Extremlisten (weiteste Abstände über/unter der Linie)         // |1D| ab dieser Schwelle gilt als Ausreisser
 const TZ = 'Europe/Berlin';
 
 /* ── Helfer ───────────────────────────────────────────────────────────────── */
@@ -76,6 +77,9 @@ function rangeState(c) {
   return null;
 }
 
+/* Abstand des Schlusskurses zur SMA200 in % (positiv = Kurs über der Linie). */
+const sma200Dist = (t) => (t?.close > 0 && t?.sma200 > 0 ? r1((t.close / t.sma200 - 1) * 100) : null);
+
 /* ── Bericht als Objekt ───────────────────────────────────────────────────── */
 
 export const FIELD_GUIDE = {
@@ -87,12 +91,12 @@ export const FIELD_GUIDE = {
   'movers_1d': 'Grösste Tagesgewinner (top) und -verlierer (flop) nach Kursveränderung zum Vortagesschluss in %.',
   'movers_volume': 'Titel mit dem höchsten Handelsvolumen im Verhältnis zum 10-Tage-Schnitt. rel_vol = Vielfaches (2,5 = das 2,5-Fache), ab 1,5, nur mit mindestens 1 Mio. Ø-Tagesumsatz. earnings = Zahlen am Tag oder Vortag. Nur TradingView-Hauptbörse, bei deutschen Titeln also Xetra.',
   'movers_1w': 'Dasselbe auf Wochensicht (Performance 1 Woche in %).',
-  'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
+  'signals': 'Technische Ereignisse des Tages. range_*: Kurs über Widerstand bzw. unter Unterstützung (level in Notierungswährung, pct = Abstand). macd_*: MACD-Histogramm wechselt das Vorzeichen. sma_cross_*: Kurs- oder Linienkreuzung der gleitenden Durchschnitte. rsi_*: RSI ≤ 30 bzw. ≥ 70. score_*/momentum_*: Veränderung der Scores (0–100) zum Vortag. trend_radar: Titel, die gerade einen Aufwärtstrend ausbilden (fresh = heute frisch gedreht). clean/broken_trends: 1W, 1M und 3M alle positiv bzw. alle negativ. bias_*: gerichtetes Trend-Bias −100…+100, ab ±50. sma200_far_above/sma200_far_below: die je 10 Titel mit dem grössten Abstand des Schlusskurses über bzw. unter der SMA200 (dist_sma200_pct in %) – weit darüber = überdehnt, Rücksetzer-Risiko; weit darunter = stark abgestraft, Trend gebrochen oder Gegenbewegung möglich. alerts: vom Nutzer gesetzte, heute ausgelöste Kursalarme.',
   'indices': 'Leitindizes, Zinsen, Rohstoffe und Währungen (benchmarks) sowie US-Branchenindizes (sectors, absteigend nach Tagesveränderung). chg_1d/perf_* in %; bei Renditen (US10Y) ist value die Rendite in % und chg_abs die Veränderung in Prozentpunkten.',
   'analyst': 'Analysten. actions: neue Rating- und Kursziel-Meldungen seit dem letzten Lauf, nur für Augen-Titel und Tages-Movers, wichtigste zuerst (dir up/down, rating = Einstufung, target = Kursziel, after_earnings = Nachlauf bis 2 Tage nach den letzten Zahlen, meist wenig neue Information; chg_1d = Kursreaktion des Handelstags). clusters: mindestens 3 Häuser in dieselbe Richtung binnen days Tagen, ohne Kursziel-Nachlauf. consensus_shifts: Veränderung der Empfehlungsverteilung zum Vortag für alle Titel; mark 1 (Strong Buy) bis 3 (Strong Sell), d_mark < 0 = besser. Quelle TradingView (dpa-AFX, Dow Jones). Nicht jede Meldung erscheint dort.',
   'headlines': 'Automatisch erzeugte, rein datenbasierte Kernsätze – ohne Nachrichtenbezug.',
-  'watch_setups': 'Nur vollständige Fassung: Ausgangslage je aktiv beobachtetem Watchlist-Titel (Augen-Markierung, in stocks eye == true) für den Wochenausblick. res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in % (positiv = Marke liegt über dem Kurs, negativ = darunter), res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch in % (0 = am Hoch, +10 = Hoch liegt 10 % über dem Kurs), upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
-  'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum), eye = in der App mit dem Augen-Knopf als aktiv beobachtet markiert.',
+  'watch_setups': 'Nur vollständige Fassung: Ausgangslage je aktiv beobachtetem Watchlist-Titel (Augen-Markierung, in stocks eye == true) für den Wochenausblick. dist_sma200_pct = Abstand des Kurses zur SMA200 in %, res/sup = nächste Widerstands-/Unterstützungszone (Preis-Cluster, Notierungswährung), res_dist_pct/sup_dist_pct = Abstand vom Kurs in % (positiv = Marke liegt über dem Kurs, negativ = darunter), res_strength = Gewicht der Zone, high_52w_dist_pct = Abstand zum 52-Wochen-Hoch in % (0 = am Hoch, +10 = Hoch liegt 10 % über dem Kurs), upside_pct/downside_pct = statistisch-strukturelle Spanne für etwa einen Monat (Volatilität, Drift, nächste Marke), pt_upside_pct = Abstand zum Analysten-Kursziel, trend = Trend-Radar 0–100 (trend_fresh = heute gedreht), signals = Signal-Listen, in denen der Titel heute steht.',
+  'stocks': 'Alle Titel mit Kennzahlen. chg_1d/perf_* in %, close in currency, rsi 0–100, dist_sma200_pct = Abstand des Schlusskurses zur SMA200 in % (positiv = darüber), score = Qualitäts-Score 0–100 (d_score = Veränderung zum Vortag), bias −100…+100, pt_avg = Analysten-Kursziel Ø, earnings_next = nächster Zahlentermin (ISO-Datum), eye = in der App mit dem Augen-Knopf als aktiv beobachtet markiert.',
 };
 
 /* Indexzeilen aus fetchIndexRows (ui/lib/tv-indices.js) → schlanke Einträge. */
@@ -181,6 +185,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
   const radar = trendRadar(cands);
   const ranges = cands.map((c) => ({ c, r: rangeState(c) })).filter((x) => x.r);
   const bias = tvd.map((c) => ({ c, b: computeBias(c.tv_data) })).filter((x) => x.b);
+  const d200 = tvd.map((c) => ({ c, d: sma200Dist(c.tv_data) })).filter((x) => x.d != null);
   const alerts = [];
   for (const c of cands) for (const a of c.alerts ?? []) {
     if (a.enabled === false) continue;
@@ -204,6 +209,8 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
     broken_trends: tr.broken.map((r) => ({ ...sref(r.c), monthly_growth_pct: r2(r.ogrm) })),
     bias_bullish: bias.filter((x) => x.b.score >= 50).sort((a, b) => b.b.score - a.b.score).map((x) => ({ ...sref(x.c), bias: Math.round(x.b.score) })),
     bias_bearish: bias.filter((x) => x.b.score <= -50).sort((a, b) => a.b.score - b.b.score).map((x) => ({ ...sref(x.c), bias: Math.round(x.b.score) })),
+    sma200_far_above: d200.filter((x) => x.d > 0).sort((a, b) => b.d - a.d).slice(0, SMA200_X).map((x) => ({ ...sref(x.c), dist_sma200_pct: x.d })),
+    sma200_far_below: d200.filter((x) => x.d < 0).sort((a, b) => a.d - b.d).slice(0, SMA200_X).map((x) => ({ ...sref(x.c), dist_sma200_pct: x.d })),
     alerts,
   };
 
@@ -220,6 +227,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
       rsi: r1(tv(c, 'rsi')),
       above_sma50: close != null && tv(c, 'sma50') != null ? close > c.tv_data.sma50 : null,
       above_sma200: close != null && tv(c, 'sma200') != null ? close > c.tv_data.sma200 : null,
+      dist_sma200_pct: sma200Dist(c.tv_data),
       score: c.tv_data ? liveOverallScore(c.tv_data)?.total ?? null : null,
       d_score: dScore.get(c) ?? null,
       bias: biasOf.get(c) ?? null,
@@ -252,6 +260,7 @@ export function buildReport(cands, stale, now = new Date(), indices = null) {
       trend: ts?.score ?? null, trend_fresh: ts?.fresh ?? false,
       above_sma50: p != null && t.sma50 != null ? p > t.sma50 : null,
       above_sma200: p != null && t.sma200 != null ? p > t.sma200 : null,
+      dist_sma200_pct: sma200Dist(t),
       res: r2(res?.mid), res_dist_pct: dist(res?.mid), res_strength: res?.score != null ? r1(res.score) : null,
       sup: r2(sup?.mid), sup_dist_pct: dist(sup?.mid),
       high_52w_dist_pct: dist(t.price_52_week_high),
@@ -348,6 +357,10 @@ export function headlines(rep) {
   if (s.rsi_oversold.length) rsi.push(`überverkauft (RSI ≤ 30): ${names(s.rsi_oversold)}`);
   if (rsi.length) { const t = rsi.join('; '); out.push(`${t[0].toUpperCase()}${t.slice(1)}.`); }
 
+  const fa = s.sma200_far_above ?? [], fb = s.sma200_far_below ?? [];
+  const dx = (arr) => arr.slice(0, 3).map((x) => `${x.name} (${fmtPct(x.dist_sma200_pct, 0)})`).join(', ');
+  if (fa.length || fb.length) out.push(`Am weitesten von der 200-Tage-Linie entfernt: ${[fa.length && `darüber ${dx(fa)}`, fb.length && `darunter ${dx(fb)}`].filter(Boolean).join('; ')}.`);
+
   if (b.above_sma200_pct != null) {
     out.push(b.above_sma200_pct >= 60
       ? `Das Trendbild bleibt intakt: ${b.above_sma200_pct} % der Titel notieren über ihrer 200-Tage-Linie, ${b.above_sma50_pct ?? '–'} % über der 50-Tage-Linie.`
@@ -384,6 +397,8 @@ const SIGNAL_ROWS = [
   ['macd_bearish', 'MACD dreht negativ', 'Momentum wechselt ins Negative.', (x) => short(x)],
   ['rsi_overbought', 'Überkauft (RSI ≥ 70)', 'Stark gelaufen, Konsolidierung wahrscheinlicher.', (x) => `${short(x)} ${Math.round(x.rsi)}`],
   ['rsi_oversold', 'Überverkauft (RSI ≤ 30)', 'Stark abverkauft, technische Gegenbewegung möglich.', (x) => `${short(x)} ${Math.round(x.rsi)}`],
+  ['sma200_far_above', 'Weit über SMA200', 'Grösster Abstand über der 200-Tage-Linie – überdehnt, Rücksetzer-Risiko.', (x) => `${short(x)} ${tPct(x.dist_sma200_pct)}`],
+  ['sma200_far_below', 'Weit unter SMA200', 'Grösster Abstand unter der 200-Tage-Linie – Trend gebrochen, Gegenbewegung möglich.', (x) => `${short(x)} ${tPct(x.dist_sma200_pct)}`],
   ['score_up', 'Score verbessert', 'Qualitäts-Score (0–100) gegenüber Vortag gestiegen.', (x) => `${short(x)} ${tone(1, `+${x.delta}`)}`],
   ['score_down', 'Score verschlechtert', 'Qualitäts-Score gegenüber Vortag gefallen.', (x) => `${short(x)} ${tone(-1, `−${Math.abs(x.delta)}`)}`],
   ['clean_trends', 'Saubere Aufwärtstrends', '1 Woche, 1 Monat und 3 Monate im Plus.', (x) => short(x)],

@@ -122,7 +122,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
-  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`).
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). In der Preis-Ansicht steht neben „SMA200" die Spalte **„%S200"**: Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`).
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Der Stift in der Toolbar
@@ -386,7 +386,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   ein Bericht-Objekt (`buildReport`, Schema `discovery-monitor-2.0`: `field_guide`,
   `breadth`, `indices` (Leitindizes/Zins/Rohstoffe/FX aus `BENCHMARKS` in `run.mjs` plus
   die Branchen aus `INDEX_GROUPS`, beides über `fetchIndexRows`), `headlines` = automatische Textbausteine, `earnings_next_7d`,
-  `movers_1d`/`movers_volume`/`movers_1w`, `signals`, `stocks`), daraus rendert `renderHtml` die
+  `movers_1d`/`movers_volume`/`movers_1w`, `signals`, `stocks`) — `signals.sma200_far_above`/`sma200_far_below` listen je 10 Titel mit dem weitesten Abstand über/unter der SMA200, `stocks` und `watch_setups` tragen `dist_sma200_pct`, daraus rendert `renderHtml` die
   lesbare Kurzfassung — Doc und JSON laufen so nie auseinander. In den Drive-Ordner
   `MONITOR_FOLDER_ID` (Standard wie `INDICES_FOLDER_ID`): „Discovery Monitor" (Doc)
   und „Discovery Monitor.json" (kompakte Tagesfassung für die KI-Auswertung via

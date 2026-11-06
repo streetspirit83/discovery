@@ -23,7 +23,7 @@ Nur Quellen vom Handelstag oder Vortag verwenden. Jede Nachrichtenaussage mit Qu
 4. **Analysten:** nur wenn `analyst.actions` Hoch- oder Abstufungen enthält, dazu auffällige `clusters` und `consensus_shifts`: kurze Liste (Titel · Haus · Aktion · Kursreaktion). Einzelne Kurszieländerungen weglassen.
 5. **Volumen:** kurze Liste aus `movers_volume` (Titel · Vielfaches · Heute), nachrichtlich und ohne eigene Recherche.
 6. **Anstehende Quartalszahlen:** Tabelle (Termin · Titel · 1 Woche · worauf es ankommt).
-7. **Technik in Kürze:** nur die relevantesten Einträge aus `signals` (Ausbrüche/Brüche, Golden/Death Cross, RSI-Extreme), jeweils ein Satz.
+7. **Technik in Kürze:** nur die relevantesten Einträge aus `signals` (Ausbrüche/Brüche, Golden/Death Cross, RSI-Extreme, SMA200-Extreme aus `sma200_far_above`/`sma200_far_below`), jeweils ein Satz.
 8. **Fazit des Redakteurs:** Einordnung in 4–6 Sätzen – was war Rauschen, was ein echtes Signal, worauf morgen achten.
 
 **Regeln:**

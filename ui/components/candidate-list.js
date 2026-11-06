@@ -108,18 +108,24 @@ function convFromEur() {
 // 'neg' (red) when it sits above the price. Compared in display currency so the
 // LS price (EUR) and the native SMA are apples-to-apples. Reference = live LS
 // price, else the TV close.
+function smaRefDisplay(c) {
+  const ls = c.ls_quote?.price;
+  if (ls != null) return ls * convFromEur();
+  const close = c.tv_data?.close_1m ?? c.tv_data?.close;
+  return close == null ? null : close * convFactor(c);
+}
 function smaVsPriceClass(c, smaNative) {
   if (smaNative == null) return '';
-  const ls = c.ls_quote?.price;
-  let refDisplay;
-  if (ls != null) {
-    refDisplay = ls * convFromEur();
-  } else {
-    const close = c.tv_data?.close_1m ?? c.tv_data?.close;
-    if (close == null) return '';
-    refDisplay = close * convFactor(c);
-  }
+  const refDisplay = smaRefDisplay(c);
+  if (refDisplay == null) return '';
   return smaNative * convFactor(c) <= refDisplay ? 'pos' : 'neg';
+}
+// Abstand des Kurses zur SMA in % (positiv = Kurs über der SMA). Gleiche Referenz
+// wie smaVsPriceClass: LS-Kurs, sonst TV-Schluss; beide Seiten in Anzeigewährung.
+function smaDistPct(c, smaNative) {
+  const refDisplay = smaRefDisplay(c);
+  const sma = smaNative != null ? smaNative * convFactor(c) : null;
+  return refDisplay != null && sma > 0 ? (refDisplay / sma - 1) * 100 : null;
 }
 
 // ── Price setup situation (Preis view) ──────────────────────────────────────
@@ -437,6 +443,7 @@ function sortValue(c, col) {
     case 'tv_sma50':  return tv?.sma50 ?? null;
     case 'tv_sma100': return tv?.sma100 ?? null;
     case 'tv_sma200': return tv?.sma200 ?? null;
+    case 'tv_sma200_dist': return smaDistPct(c, tv?.sma200);
     case 'tv_macd':   return tv?.macd ?? null;
     case 'tv_adx':    return tv?.adx ?? null;
     case 'tv_cci':    return tv?.cci20_1m ?? null;
@@ -778,6 +785,7 @@ const VIEWS = {
     { key:'tv_sma50',   label:'SMA50',  title:'SMA 50 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs',  num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma50)}">${fmtPrice(c, c.tv_data?.sma50)}</span>` },
     { key:'tv_sma100',  label:'SMA100', title:'SMA 100 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma100)}">${fmtPrice(c, c.tv_data?.sma100)}</span>` },
     { key:'tv_sma200',  label:'SMA200', title:'SMA 200 · grün = unter LS-Kurs (Kurs über SMA), rot = über LS-Kurs', num:true, fmt:c=>`<span class="${smaVsPriceClass(c, c.tv_data?.sma200)}">${fmtPrice(c, c.tv_data?.sma200)}</span>` },
+    { key:'tv_sma200_dist', label:'%S200', title:'Abstand des LS-Kurses zur SMA 200 in % (ohne LS-Kurs: TV-Schluss) · positiv = Kurs über der Linie · sortiert nach Abstand', num:true, fmt:c=>{const d=smaDistPct(c, c.tv_data?.sma200);return `<span class="${posNegClass(d)}">${d==null?'—':(d>=0?'+':'−')+fmtNum(Math.abs(d),1)+'%'}</span>`;} },
     { key:'tv_h1m',     label:'H1M',    title:'Hoch 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_1m) },
     { key:'tv_l1m',     label:'L1M',    title:'Tief 1 Monat',                     num:true, fmt:c=>fmtPrice(c, c.tv_data?.low_1m) },
     { key:'tv_h3m',     label:'H3M',    title:'Hoch 3 Monate',                    num:true, fmt:c=>fmtPrice(c, c.tv_data?.high_3m) },
