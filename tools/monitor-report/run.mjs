@@ -33,7 +33,8 @@ import { google } from 'googleapis';
 import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
-import { buildRankings } from './rankings.mjs';
+import { buildRankings, PICK_WEIGHTS } from './rankings.mjs';
+import { updateOutcomes, reviewPicks, nextMethod } from '../../ui/lib/daily-picks.js';
 import { fetchMerklisteEntries, applyMerklisteEntries } from '../../ui/lib/merkliste-import.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
@@ -315,8 +316,13 @@ async function publish(fresh, stale, indices, saveState, auth) {
     depotChecked = true;
   } catch (e) { console.warn(`Merkliste nicht lesbar (${e.message}) – Rotation ohne Abgabe-Vorschläge.`); }
   const inbox = await storage(auth, { op: 'read', blob_type: 'inbox' }).catch(() => null);
+  const picks = await dailyPicksCheck(fresh, report.trading_day, auth);
+  const rkObj = buildRankings(fresh, { tradingDay: report.trading_day, stale, depotChecked,
+    pickWeights: picks.method.weights, pickMethodVersion: picks.method.version });
+  rkObj.daily_picks.review = picks.review;
+  rkObj.daily_picks.method = { version: picks.method.version, updated_day: picks.method.updated_day ?? null, last_changes: picks.method.last_changes ?? [] };
   const rankings = JSON.stringify({
-    ...buildRankings(fresh, { tradingDay: report.trading_day, stale, depotChecked }),
+    ...rkObj,
     // Für den Scout: alles, was schon im Workspace liegt, gilt nicht als neu.
     known_symbols: [...new Set([...fresh, ...(inbox?.candidates ?? [])].map((c) => c.symbol))].sort(),
   });
@@ -361,11 +367,49 @@ async function publish(fresh, stale, indices, saveState, auth) {
   for (const c of fresh) if (c.tv_data?.snapshot?.length) snapshots[c.id] = c.tv_data.snapshot;
   await saveState(snapshots, { day, doc: doc.webViewLink, json: js.webViewLink });
   console.log(`✓ Vortagszustand: ${Object.keys(snapshots).length} Titel`);
+  await picks.save().catch((e) => console.warn(`Tagessieger-Check nicht gespeichert (${e.message}).`));
   if (analystState) {
     await storage(auth, { op: 'write', blob_type: 'analyst', blob: analystState });
     console.log(`✓ Analysten: ${report.analyst.actions_total} neue Aktionen, ${report.analyst.consensus_shifts.length} Konsens-Änderungen`);
   }
   return report;
+}
+
+/* Tagessieger: Kurse nach 1 und 5 Handelstagen nachtragen, Treffer-Check rechnen,
+   Gewichte höchstens alle 5 Handelstage anpassen (lib/daily-picks.js). Stand im
+   market-Blob (`picks_method`, Einträge `kind: 'picks'`). Ein Fehler hier hält den
+   Bericht nie auf – dann rechnet die Vorauswahl mit den Startgewichten. */
+async function dailyPicksCheck(fresh, day, auth) {
+  const price = new Map(fresh.filter((c) => c.tv_data?.close > 0)
+    .map((c) => [`${String(c.symbol).toUpperCase()}:${String(c.exchange ?? '').toUpperCase()}`, Number(c.tv_data.close)]));
+  const priceOf = (s, e) => price.get(`${String(s).toUpperCase()}:${String(e ?? '').toUpperCase()}`) ?? null;
+  const base = { version: 0, weights: PICK_WEIGHTS };
+  let market = null;
+  try { market = await storage(auth, { op: 'read', blob_type: 'market' }); }
+  catch (e) { console.warn(`market-Blob nicht lesbar (${e.message}) – Tagessieger ohne Treffer-Check.`); }
+  if (!market) return { method: base, review: null, save: async () => {} };
+  let method = market.picks_method?.weights ? market.picks_method : base;
+  const measured = updateOutcomes(market.briefings, priceOf, day);
+  const review = reviewPicks(market.briefings, method.weights);
+  const next = nextMethod(method, review, day);
+  if (next) {
+    console.log(`Tagessieger: Gewichte v${method.version} → v${next.version}: ${next.last_changes.map((c) => `${c.factor} ${c.old}→${c.new}`).join(', ')}`);
+    method = next;
+  }
+  console.log(`Tagessieger: ${measured} Messungen nachgetragen · Stichprobe ${review.sample} · Treffer 5T ${review.chosen.hit_5d_pct ?? '–'} %`);
+  return {
+    method, review,
+    // Beim Speichern frisch lesen: zwischen Lesen und Schreiben kann ein Briefing dazugekommen sein.
+    save: async () => {
+      if (DRY_RUN || (!measured && !next)) return;
+      const cur = (await storage(auth, { op: 'read', blob_type: 'market' })) ?? {};
+      updateOutcomes(cur.briefings, priceOf, day);
+      await storage(auth, { op: 'write', blob_type: 'market', blob: {
+        ...cur, picks_method: method, updated_at: new Date().toISOString(),
+      } });
+      console.log(`✓ Tagessieger-Check gespeichert (Methode v${method.version})`);
+    },
+  };
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

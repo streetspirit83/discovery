@@ -472,6 +472,19 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   Prognose-Check → Methode anpassen → Ranking).
   Jede überspringt einen Eintrag, der im Artefakt schon steht.
   Nur für die App, ohne Artefakt: „Discovery Scout“ Sa 10:41 Uhr, „Discovery Rankings“ So 11:23 Uhr, „Discovery Rotation Archiv/Watchlist“ So 11:47 Uhr; alle drei lesen „Discovery Rankings.json“ und speichern über `market-briefing.yml`.
+  **Tagessieger (`kind: picks`, nur App, seit Nov. 2026):** geplante Aufgabe „Discovery Tagessieger“ Mo–Fr 7:53 Uhr. Liest
+  `daily_picks` aus „Discovery Rankings.json“ (technische Vorauswahl, **nur Watchlist**, 15 Titel, höchstens 4 je Sektor:
+  `dailyPickPool` in `lib/rankings-filter.js`, Gate SMA50 drüber, RSI 40–78, Bias > −20, ≥ 1 Mrd. USD; Score aus
+  `PICK_WEIGHTS`), recherchiert News/Termine und wählt **5 Tagessieger**. Eintrag: `day, trading_day, title, lead,
+  picks[{rank,symbol,exchange,name,close,score,setup,catalyst,risk,reason}], pool` (pool = `daily_picks.pool` 1:1, mit
+  `factors` je Titel). `push.mjs` hält 260 Einträge dieser Art und lässt andere Blob-Felder stehen. **Treffer-Check und
+  Lernschleife** (`lib/daily-picks.js`) laufen im Monitor (`dailyPicksCheck` in `run.mjs`): je Pool-Titel `perf_1d`/
+  `perf_5d` gegen `close` nachtragen, `reviewPicks` (Tagessieger vs. übriger Pool, Spearman je Faktor), `nextMethod`
+  passt die Gewichte höchstens alle 5 Handelstage um ±0,02 an (ab 30 Messungen) → market-Blob `picks_method`
+  {version, weights, updated_day, history, last_changes}; `daily_picks.review`/`.method` stehen auch in Rankings.json.
+  App: Monitor-Reiter „Tagessieger“ (`components/daily-picks-panel.js`: heute · Treffer-Check · Bestenliste · Verlauf),
+  Abzeichen (Lucide-Pokal, `pick-badge`) neben dem Symbol in Watch und „Watch + Archiv“ für die neuesten 5
+  (`daily_pick`, nicht-aufzählbar, `loadDailyPicks` in `app.js`). Keine Kauf- oder Verkaufsempfehlung.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des
   Handelstags recherchieren, Briefing-JSON bauen (`day, title, lead, data_note?,
   indices{benchmarks,sectors}` 1:1 aus dem Monitor, `breadth{advancers,decliners,

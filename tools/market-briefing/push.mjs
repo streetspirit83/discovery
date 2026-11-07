@@ -12,13 +12,16 @@
  *
  * Arten (Feld kind): daily (Tagesbriefing, Standard), preview (Wochenvorschau),
  * watch (Watchlist-Rückblick), scout (neue Titel), ranking und rotation (Monitor-Reiter
- * „Rankings“); je Art und Tag ein Eintrag.
+ * „Rankings“), picks (Tagessieger, Monitor-Reiter „Tagessieger“); je Art und Tag ein Eintrag.
+ * Tagessieger bleiben ein Jahr (KEEP_KIND), weil Bestenliste und Treffer-Check daraus rechnen.
+ * Felder ausser `briefings` (z. B. `picks_method` vom Monitor-Lauf) bleiben erhalten.
  *
  * Env: DISCOVERY_BACKEND_URL, DISCOVERY_SECRET, PAYLOAD | DELETE_DAY (+ DELETE_KIND), optional DRY_RUN=1
  */
 
 const KEEP = 30;                  // je Art
-const KINDS = ['daily', 'preview', 'watch', 'scout', 'ranking', 'rotation'];
+const KEEP_KIND = { picks: 260 };  // Ausnahmen
+const KINDS = ['daily', 'preview', 'watch', 'scout', 'ranking', 'rotation', 'picks'];
 const kindOf = (b) => b?.kind ?? 'daily';
 const keyOf = (b) => `${kindOf(b)}:${b?.day}`;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,8 +51,13 @@ function validate(b) {
   if (!KINDS.includes(kindOf(b))) errs.push(`kind muss ${KINDS.join('|')} sein`);
   if (!b.title) errs.push('title fehlt');
   if (!b.lead) errs.push('lead fehlt');
-  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news', 'ranking', 'items', 'promote', 'demote']) {
+  for (const k of ['top', 'flop', 'earnings', 'technik', 'drivers', 'sources', 'indices', 'calendar', 'themes', 'news', 'ranking', 'items', 'promote', 'demote', 'picks', 'pool']) {
     if (b[k] != null && !Array.isArray(b[k]) && !(k === 'indices' && typeof b[k] === 'object')) errs.push(`${k} hat das falsche Format`);
+  }
+  if (kindOf(b) === 'picks') {
+    if (!Array.isArray(b.picks) || !b.picks.length) errs.push('picks fehlt');
+    else if (b.picks.some((p) => !p?.symbol || !(Number(p.close) > 0))) errs.push('jeder Tagessieger braucht symbol und close');
+    if (b.trading_day != null && !DAY.test(b.trading_day)) errs.push('trading_day ist kein JJJJ-MM-TT');
   }
   return errs;
 }
@@ -84,7 +92,7 @@ async function main() {
   list.sort((a, b) => (a.day < b.day ? 1 : -1));
   // höchstens KEEP je Art, neueste zuerst
   const seen = {};
-  const briefings = list.filter((b) => (seen[kindOf(b)] = (seen[kindOf(b)] ?? 0) + 1) <= KEEP);
+  const briefings = list.filter((b) => (seen[kindOf(b)] = (seen[kindOf(b)] ?? 0) + 1) <= (KEEP_KIND[kindOf(b)] ?? KEEP));
 
   if (process.env.DRY_RUN === '1') {
     console.log(`DRY_RUN: ${briefings.length} Briefings, neuestes ${briefings[0]?.day ?? '–'}`);
@@ -92,7 +100,7 @@ async function main() {
   }
   await storage({
     op: 'write', blob_type: 'market',
-    blob: { schema_version: 'discovery-market-1.0', blob_type: 'market', updated_at: new Date().toISOString(), briefings },
+    blob: { ...doc, schema_version: 'discovery-market-1.0', blob_type: 'market', updated_at: new Date().toISOString(), briefings },
   });
   console.log(del ? `✓ ${delKey} gelöscht` : `✓ ${entry.day} gespeichert (${kindOf(entry)})`, `· ${briefings.length} Briefings im Blob`);
 }

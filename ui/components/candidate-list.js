@@ -1,4 +1,4 @@
-import { icons } from '../lib/icons.js?v=20261103f';
+import { icons } from '../lib/icons.js?v=20261107a';
 import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computeHealthScore } from '../lib/tv-health-score.js';
 import { computeEntryScore }  from '../lib/tv-entry-score.js';
@@ -1368,6 +1368,7 @@ export class CandidateList {
       const symHtml = `<div class="sym-cell">
         <div class="sym-cell__top">
           <span class="sym-strong">${c.symbol}</span>
+          ${c.daily_pick ? `<span class="pick-badge" title="Tagessieger ${new Date(`${c.daily_pick.day}T12:00:00`).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} · Platz ${c.daily_pick.rank ?? '–'}" aria-label="Tagessieger">${icons.trophy}</span>` : ''}
           ${chipLink(tvChartUrl(c) ?? links.tradingview, TV_LOGO, 'TradingView-Chart', 'link-chip--tv')}
           ${alertBell(c)}
           ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}

@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261106c';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261107a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261106c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -16,13 +16,14 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261106c';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107a';
+import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261106c';
+import { renderControlModal } from './components/control-modal.js?v=20261107a';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
 import { enrichBulk } from './lib/claude-api.js';
@@ -421,6 +422,28 @@ async function loadEurBasis(cands, blobType) {
   }
   candidateList.renderRows();
   if (candidateDetail.candidate && due.includes(candidateDetail.candidate)) candidateDetail.render();
+}
+
+// ── Tagessieger-Abzeichen: neueste Einträge `picks` im market-Blob ───────────
+let dailyPickMap = null;
+function attachDailyPicks(candidates) {
+  for (const c of candidates) {
+    const key = `${String(c.symbol ?? '').toUpperCase()}:${String(c.exchange ?? '').toUpperCase()}`;
+    // Nicht-aufzählbar: abgeleitet, gehört in keinen Blob-Schreibvorgang. Nur Watchlist.
+    const hit = c._bucket === 'archive' || (currentBlobType !== 'watch' && currentBlobType !== 'all') ? null : dailyPickMap?.get(key) ?? null;
+    Object.defineProperty(c, 'daily_pick', { value: hit, enumerable: false, writable: true, configurable: true });
+  }
+}
+async function loadDailyPicks(force = false) {
+  if (useMock || !storageClient) return;
+  if (force || !dailyPickMap) {
+    try { dailyPickMap = latestPickKeys((await storageClient.readBlob('market'))?.briefings ?? []); }
+    catch (err) { console.warn('[daily-picks] load failed:', err.message); return; }
+  }
+  const blob = allBlobs[currentBlobType];
+  if (!blob?.candidates || !candidateList) return;
+  attachDailyPicks(blob.candidates);
+  candidateList.renderRows();
 }
 
 async function loadAnalystEvents(force = false) {
@@ -997,6 +1020,8 @@ async function switchBlob(blobType) {
   }
   if (analystEventMap) attachAnalystEvents(allBlobs[blobType].candidates);
   else loadAnalystEvents();
+  if (dailyPickMap) attachDailyPicks(allBlobs[blobType].candidates);
+  else loadDailyPicks();
   candidateList.setData(allBlobs[blobType].candidates);
   candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
   loadEurBasis(allBlobs[blobType].candidates, blobType);
@@ -1240,7 +1265,8 @@ async function loadRankings() {
     const list = cands.filter((c) => String(c.symbol ?? '').toUpperCase() === String(symbol ?? '').toUpperCase());
     return list.find((c) => String(c.exchange ?? '').toUpperCase() === String(exchange ?? '').toUpperCase()) ?? list[0] ?? null;
   };
-  return { ranking: latest('ranking'), rotation: latest('rotation'), find, byId };
+  return { ranking: latest('ranking'), rotation: latest('rotation'), find, byId,
+    briefings: market?.briefings ?? [], method: market?.picks_method ?? null };
 }
 
 /** Scout-Titel: dasselbe Prüffenster wie die Alternativen aus dem Chat. */
@@ -2451,6 +2477,7 @@ async function init() {
     await loadMerklisteEntries(true); // re-pull merkliste Einstand prices
     await loadLsHistory(true);        // re-pull the 10-day LS history (Trade view)
     await loadAnalystEvents(true);
+    loadDailyPicks(true);
     toast('Aktualisiert', 'info', 1500);
   });
 

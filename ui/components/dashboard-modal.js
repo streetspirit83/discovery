@@ -19,7 +19,8 @@ import {
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
 import { liveRankingsHtml, weeklyRankingsHtml } from './rankings-panel.js?v=20261106c';
-import { liveRankings } from '../lib/rankings-filter.js?v=20261106c';
+import { liveRankings } from '../lib/rankings-filter.js?v=20261107a';
+import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 const COLLAPSED = 3;
@@ -252,6 +253,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       <div class="tab-bar dash-tabs" role="tablist">
         <button class="tab-btn active" data-dash-tab="overview" role="tab" aria-selected="true">Übersicht</button>
         <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
+        <button class="tab-btn" data-dash-tab="picks" role="tab" aria-selected="false">Tagessieger</button>
       </div>
       <div class="modal-body dash-body">${bodyHtml()}</div>
     </div>`;
@@ -286,6 +288,23 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
     rk.loading = false;
     renderRankings();
+    renderPicks();
+  }
+  /* Reiter Tagessieger: Einträge `picks` aus dem market-Blob (derselbe Abruf wie die Rankings). */
+  const renderPicks = () => {
+    if (rk.tab !== 'picks') return;
+    bodyEl.innerHTML = rk.err ? `<p class="dash-muted">Tagessieger konnten nicht geladen werden: ${esc(rk.err)}</p>`
+      : rk.data ? dailyPicksHtml(rk.data)
+      : '<p class="dash-muted"><span class="ls-loading"></span> Lade Tagessieger …</p>';
+  };
+  async function showPicks() {
+    renderPicks();
+    if (rk.data || rk.loading || !loadRankings) return;
+    rk.loading = true;
+    try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
+    rk.loading = false;
+    renderRankings();
+    renderPicks();
   }
   overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
     rk.tab = b.dataset.dashTab;
@@ -295,7 +314,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       t.setAttribute('aria-selected', String(on));
     });
     bodyEl.scrollTop = 0;
-    if (rk.tab === 'rankings') showRankings(); else rerender();
+    if (rk.tab === 'rankings') showRankings(); else if (rk.tab === 'picks') showPicks(); else rerender();
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', (e) => {

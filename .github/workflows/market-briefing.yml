@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       delete_kind:
-        description: 'Art des zu löschenden Briefings (daily, preview, watch)'
+        description: 'Art des zu löschenden Briefings (daily, preview, watch, scout, ranking, rotation, picks)'
         required: false
         type: string
 

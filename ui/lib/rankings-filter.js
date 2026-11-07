@@ -44,6 +44,18 @@ export const CONFIG = {
   maxBetaSolid: 1.5,
   maxFairUpside: 200,        // darüber ist der Reverse-DCF nicht belastbar (zyklischer oder gehebelter FCF)
   demoteMaxStrength: 60,     // stärkster Listen-Score, unter dem ein Watch-Titel als Abgabe-Kandidat gilt
+  pickCandidates: 15,        // Tagessieger: Vorauswahl für die KI (sie wählt 5)
+  pickSectorCap: 4,
+  capPick: 1e9,
+};
+
+/* Tagessieger (werktags, nur Watchlist): kurzfristige Signallage für die nächsten
+   Handelstage. Gewicht > 0: grösser ist besser, < 0: kleiner ist besser. Die
+   Gewichte lernen über den Treffer-Check nach (lib/daily-picks.js, Stand im
+   market-Blob `picks_method`); dies hier ist nur der Startwert. */
+export const PICK_WEIGHTS = {
+  bias: 0.2, trend: 0.15, perf_1m: 0.15, perf_1w: 0.1, trend_strength: 0.1,
+  high_near: 0.1, res_dist: -0.1, vol_ratio: 0.1,
 };
 
 /* Börsenwert kommt in Notierungswährung. Grobe Kurse genügen: sie entscheiden
@@ -222,7 +234,7 @@ function pick(scored, n, cap) {
   return out;
 }
 
-const SCORE_KEYS = ['perf_1m', 'perf_3m', 'perf_6m', 'trend', 'trend_strength', 'high_dist', 'health', 'fcf_margin', 'roic',
+const SCORE_KEYS = ['perf_1w', 'perf_1m', 'perf_3m', 'perf_6m', 'trend', 'trend_strength', 'high_dist', 'health', 'fcf_margin', 'roic',
   'volatility', 'fair_upside', 'roe', 'beta', 'rev_growth', 'ebitda_growth', 'fcf_growth', 'eps_growth', 'gross_margin',
   'rsi', 'off_low_1m', 'res_dist', 'range_1m', 'vol_ratio', 'overall', 'bias'];
 
@@ -232,10 +244,34 @@ function scorer(all) {
   // Nähe zum Hoch: kleiner Abstand ist gut – fürs Momentum wird das Perzentil gedreht.
   const hd = pct.high_dist;
   const momPct = { ...pct, high_dist: (v) => { const p = hd(v); return p == null ? null : 1 - p; } };
+  pct.high_near = (v) => { const p = hd(v); return p == null ? null : 1 - p; };
   const scoreList = (def, m, table = pct) => scoreBy(table, m, def.weights(m));
   const tableOf = (key) => (key === 'momentum' ? momPct : pct);
   const passes = (key, m) => liquid(m) && !!LISTS[key].gate(m);
   return { pct, scoreList, tableOf, passes };
+}
+
+/* Tagessieger-Vorauswahl: Aufwärtstrend intakt, nicht überhitzt, kein negatives Bias.
+   `factors` = Perzentil je Faktor in Wirkrichtung (0…1) – daraus lernt der Treffer-Check. */
+const pickGate = (m) => liquid(m) && m.bucket === 'watch' && m.cap_usd >= CONFIG.capPick && m.above_sma50 === true
+  && m.rsi != null && m.rsi >= 40 && m.rsi < 78 && (m.bias == null || m.bias > -20);
+
+export function dailyPickPool(all, pct, weights = PICK_WEIGHTS) {
+  const entries = Object.entries(weights).filter(([k, w]) => w && pct[k]);
+  const src = (m, k) => (k === 'high_near' ? m.high_dist : m[k]);
+  const hits = all.filter(pickGate).map((m) => {
+    const factors = {};
+    for (const [k, w] of entries) {
+      const p = pct[k](src(m, k));
+      if (p != null) factors[k] = round(w > 0 ? p : 1 - p, 3);
+    }
+    const all_ = entries.reduce((a, [, w]) => a + Math.abs(w), 0);
+    const have = entries.filter(([k]) => factors[k] != null);
+    const g = have.reduce((a, [, w]) => a + Math.abs(w), 0);
+    const score = g / all_ >= CONFIG.minCoverage ? round((have.reduce((a, [k, w]) => a + factors[k] * Math.abs(w), 0) / g) * 100, 1) : null;
+    return score == null ? null : { m, score, factors };
+  }).filter(Boolean);
+  return { passed: hits.length, chosen: pick(hits, CONFIG.pickCandidates, CONFIG.pickSectorCap) };
 }
 
 /**
@@ -269,7 +305,7 @@ export function liveRankings(cands, { bucket = 'watch', n = CONFIG.candidates } 
   return { pool: pool.length, lists };
 }
 
-export function buildRankings(cands, { tradingDay = null, stale = [], depotChecked = true } = {}) {
+export function buildRankings(cands, { tradingDay = null, stale = [], depotChecked = true, pickWeights = PICK_WEIGHTS, pickMethodVersion = 0 } = {}) {
   const staleKeys = new Set(stale.map(keyOf));
   const all = cands
     .map((c) => metricsOf({ ...c, _stale: staleKeys.has(keyOf(c)) }))
@@ -328,6 +364,9 @@ export function buildRankings(cands, { tradingDay = null, stale = [], depotCheck
   }).filter((x) => x && x.score != null);
   const demote = [...demoteHits].sort((a, b) => b.score - a.score || a.m.symbol.localeCompare(b.m.symbol)).slice(0, CONFIG.rotationCandidates);
 
+  /* Tagessieger: nur Watch, Vorauswahl für die KI (sie wählt 5 aus diesen). */
+  const dp = dailyPickPool(watch, pct, pickWeights);
+
   const missingRate = [...new Set(all.filter((m) => !m.cap_rate_known).map((m) => m.currency))];
 
   return {
@@ -350,6 +389,14 @@ export function buildRankings(cands, { tradingDay = null, stale = [], depotCheck
         label: 'Watchlist → Archiv', funnel: { universe: movable.length, passed_gate: demoteHits.length, candidates: demote.length },
         candidates: demote.map((x, i) => ({ pos: i + 1, ...row(x.m, x.score, { best_strength: x.strength, lists: x.lists.map((l) => l.key) }) })),
       },
+    },
+    daily_picks: {
+      label: 'Tagessieger', question: 'Welche 5 Watchlist-Titel haben für die nächsten Handelstage die beste Signallage?',
+      method_version: pickMethodVersion, weights: pickWeights,
+      funnel: { universe: watch.length, passed_gate: dp.passed, candidates: dp.chosen.length },
+      candidates: dp.chosen.map((x, i) => ({ pos: i + 1, ...row(x.m, x.score, { perf_1w: round(x.m.perf_1w, 1) }) })),
+      // 1:1 als `pool` in den Tagessieger-Eintrag übernehmen – daraus rechnet der Treffer-Check.
+      pool: dp.chosen.map((x) => ({ symbol: x.m.symbol, exchange: x.m.exchange, close: round(x.m.close, 4), score: x.score, factors: x.factors })),
     },
   };
 }
