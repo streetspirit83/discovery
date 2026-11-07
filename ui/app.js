@@ -950,13 +950,24 @@ async function loadBlob(blobType) {
 
 /* Frischen Stand nachladen und die Sicht damit neu aufbauen, wenn der Bucket
    (oder „Watch + Archiv“ für watch/archive) gerade angezeigt wird. */
+let revalidating = 0, revalidated = false;
 async function revalidateBlob(blobType, shown) {
-  let fresh;
-  try { fresh = await fetchBlob(blobType); }
-  catch (err) { console.warn(`[cache] ${blobType} nicht aktualisiert:`, err.message); return; }
-  if (allBlobs[blobType] !== shown) return;          // inzwischen anders geladen
-  allBlobs[blobType] = fresh;
-  scheduleViewRefresh();
+  revalidating++;
+  try {
+    const fresh = await fetchBlob(blobType);
+    performance.mark(`blob:${blobType}:revalidated`);
+    // Unverändert (gleicher Zeitstempel) oder inzwischen anders geladen → nichts tun.
+    if (allBlobs[blobType] === shown && fresh?.updated_at !== shown?.updated_at) {
+      allBlobs[blobType] = fresh;
+      revalidated = true;
+    }
+  } catch (err) {
+    console.warn(`[cache] ${blobType} nicht aktualisiert:`, err.message);
+  } finally {
+    // Erst neu zeichnen, wenn alle gleichzeitig angestossenen Buckets da sind
+    // (bei „Watch + Archiv“ beide) – eine Neuzeichnung statt zwei.
+    if (--revalidating === 0 && revalidated) { revalidated = false; scheduleViewRefresh(); }
+  }
 }
 let viewRefreshT = 0;
 function scheduleViewRefresh() {

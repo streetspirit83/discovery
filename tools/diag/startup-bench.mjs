@@ -26,7 +26,7 @@ async function run(ctx, bucket, label) {
     window.__lt = 0; window.__ltMs = 0;
     try { new PerformanceObserver((l) => { for (const e of l.getEntries()) { window.__lt++; window.__ltMs += e.duration; } }).observe({ type: 'longtask', buffered: true }); } catch {}
     window.__renders = 0;
-    const mo = new MutationObserver((m) => { for (const x of m) if (x.target.tagName === 'TBODY' && x.addedNodes.length) { window.__renders++; break; } });
+    const mo = new MutationObserver((m) => { for (const x of m) if (x.target.tagName === 'TBODY' && x.addedNodes.length) { window.__renders++; window.__firstRow ??= performance.now(); break; } });
     document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true }));
   });
   const prof = process.env.PROFILE && label === 'kalt';
@@ -65,9 +65,9 @@ async function run(ctx, bucket, label) {
   console.log(`   Marken: ${marks}`);
   const m = await page.evaluate(() => ({
     fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? null,
-    n: document.querySelectorAll('tbody tr').length, lt: window.__lt, ltMs: window.__ltMs, renders: window.__renders,
+    n: document.querySelectorAll('tbody tr').length, first: window.__firstRow, lt: window.__lt, ltMs: window.__ltMs, renders: window.__renders,
   }));
-  console.log(`${bucket.padEnd(6)} ${label.padEnd(5)} shell ${s(m.fcp ?? 0)} · rows ${s(rows)} (${m.n} Zeilen) · settled ${s(settled)} · ${reqs} Anfragen (${js} Skripte), ${(bytes / 1024 / 1024).toFixed(2)} MB · Long Tasks ${m.lt} = ${s(m.ltMs)} · Listen-Zeichnungen ${m.renders}`);
+  console.log(`${bucket.padEnd(6)} ${label.padEnd(5)} shell ${s(m.fcp ?? 0)} · erste Zeile ${s(m.first ?? 0)} · rows (Playwright) ${s(rows)} (${m.n} Zeilen) · settled ${s(settled)} · ${reqs} Anfragen (${js} Skripte), ${(bytes / 1024 / 1024).toFixed(2)} MB · Long Tasks ${m.lt} = ${s(m.ltMs)} · Listen-Zeichnungen ${m.renders}`);
   await page.close();
 }
 
