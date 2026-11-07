@@ -19,6 +19,7 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
+import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107c';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
@@ -26,7 +27,7 @@ import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/rang
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
 import { renderControlModal } from './components/control-modal.js?v=20261107b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
-import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
+import { loadStorageClient } from './lib/storage-client.js?v=20261107c';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20261103b';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
@@ -901,17 +902,76 @@ function closeRunSheet() {
 }
 
 // ── Data loading ───────────────────────────────────────────────────────────────
+/* Schneller Start: beim ERSTEN Laden eines Buckets in dieser Sitzung den letzten Stand
+   aus IndexedDB zeigen (lib/blob-cache.js) und den frischen im Hintergrund holen.
+   Jedes spätere Laden (nach Verschieben, Löschen, Aktualisieren) geht direkt an den
+   Server – sonst blitzte nach einer Aktion kurz der alte Stand auf. */
+const blobSeen = new Set();
+const backendBase = () => localStorage.getItem('discovery_backend_url') ?? '';
+
+async function fetchBlob(blobType) {
+  // Kam während des Lesens ein Schreibvorgang dazwischen, einmal nachlesen.
+  const seq = storageClient.writeSeq;
+  let blob = await storageClient.readBlob(blobType);
+  if (storageClient.writeSeq !== seq || storageClient.pending) {
+    await storageClient.writesSettled?.();
+    blob = await storageClient.readBlob(blobType);
+  }
+  idle(() => cachePut(backendBase(), blobType, blob));
+  return blob;
+}
+const idle = (f) => (window.requestIdleCallback ?? ((g) => setTimeout(g, 300)))(f);
+
 async function loadBlob(blobType) {
   if (useMock) {
     const map = { inbox: MOCK_INBOX, archive: MOCK_ARCHIVE, export: MOCK_EXPORT, watch: MOCK_WATCH };
     return structuredClone(map[blobType] ?? { schema_version: 'discovery-1.0', blob_type: blobType, updated_at: new Date().toISOString(), candidates: [] });
   }
+  const first = !blobSeen.has(blobType);
+  blobSeen.add(blobType);
+  if (first) {
+    const cached = await cacheGet(backendBase(), blobType);
+    if (cached?.blob?.candidates) {
+      revalidateBlob(blobType, cached.blob);
+      return cached.blob;
+    }
+  }
   try {
-    return await storageClient.readBlob(blobType);
+    return await fetchBlob(blobType);
   } catch (err) {
     toast(`Fehler beim Laden: ${err.message}`, 'error');
     return { schema_version: 'discovery-1.0', blob_type: blobType, updated_at: new Date().toISOString(), candidates: [] };
   }
+}
+
+/* Frischen Stand nachladen und die Sicht damit neu aufbauen, wenn der Bucket
+   (oder „Watch + Archiv“ für watch/archive) gerade angezeigt wird. */
+async function revalidateBlob(blobType, shown) {
+  let fresh;
+  try { fresh = await fetchBlob(blobType); }
+  catch (err) { console.warn(`[cache] ${blobType} nicht aktualisiert:`, err.message); return; }
+  if (allBlobs[blobType] !== shown) return;          // inzwischen anders geladen
+  allBlobs[blobType] = fresh;
+  scheduleViewRefresh();
+}
+let viewRefreshT = 0;
+function scheduleViewRefresh() {
+  clearTimeout(viewRefreshT);
+  viewRefreshT = setTimeout(async () => {
+    const b = currentBlobType;
+    const inView = (t) => t === b || (b === 'all' && (t === 'watch' || t === 'archive'));
+    if (!['inbox', 'archive', 'export', 'watch'].some((t) => inView(t) && allBlobs[t])) return;
+    const y = window.scrollY, openId = candidateDetail?.candidate?.id;
+    const sel = new Set(candidateList.selected);
+    await switchBlob(b);
+    for (const id of sel) candidateList.selected.add(id);
+    if (sel.size) { candidateList.renderRows(); }
+    window.scrollTo(0, y);
+    if (openId) {
+      const c = allBlobs[b]?.candidates?.find((x) => x.id === openId);
+      if (c && candidateDetail.candidate?.id === openId) { candidateDetail.candidate = c; candidateDetail.render(); }
+    }
+  }, 60);
 }
 
 // ── Watch + Archiv (Bucket „all") ──────────────────────────────────────────────

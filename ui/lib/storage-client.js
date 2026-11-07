@@ -9,9 +9,28 @@ export class StorageClient {
   constructor({ baseUrl, secret }) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.secret = secret;
+    this.writeSeq = 0;   // zählt Schreibvorgänge – app.js erkennt so, ob ein Hintergrund-Lesen schon veraltet ist
+    this.pending = 0;    // laufende Schreibvorgänge
+    this.#idleWaiters = [];
+  }
+
+  #idleWaiters;
+  /** Wartet, bis kein Schreibvorgang mehr läuft. */
+  writesSettled() {
+    return this.pending === 0 ? Promise.resolve() : new Promise((r) => this.#idleWaiters.push(r));
   }
 
   async #post(body) {
+    if (String(body.op ?? '').startsWith('read')) return this.#send(body);
+    this.writeSeq++;
+    this.pending++;
+    try { return await this.#send(body); }
+    finally {
+      if (--this.pending === 0) { const w = this.#idleWaiters; this.#idleWaiters = []; w.forEach((r) => r()); }
+    }
+  }
+
+  async #send(body) {
     const res = await fetch(`${this.baseUrl}/api/storage`, {
       method: 'POST',
       headers: {
