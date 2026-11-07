@@ -1,0 +1,20 @@
+name: Diagnose – Startzeit der App
+on:
+  workflow_dispatch:
+    inputs:
+      buckets: { description: 'Buckets, kommagetrennt', default: 'all,watch' }
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: tools/dossier } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node ../diag/startup-bench.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          BUCKETS: ${{ inputs.buckets }}
