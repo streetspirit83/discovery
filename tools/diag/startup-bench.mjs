@@ -37,6 +37,7 @@ async function run(ctx, bucket, label) {
   const rows = Date.now() - t0;
   await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
   const settled = Date.now() - t0;
+  await page.waitForTimeout(4000);   // Hintergrundarbeit (Cache schreiben) abschliessen lassen
   if (prof) {
     const { profile } = await cdp.send('Profiler.stop');
     const self = new Map(), byId = new Map(profile.nodes.map((n) => [n.id, n]));
