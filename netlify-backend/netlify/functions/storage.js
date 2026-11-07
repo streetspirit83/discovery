@@ -89,6 +89,20 @@ function respond(statusCode, body) {
   });
 }
 
+/* Antwort, deren `data` schon als JSON-Text vorliegt: der Blob wird unverändert
+   durchgereicht statt geparst und neu serialisiert (bei 8 MB spürbar Serverzeit). */
+function respondRaw(statusCode, json) {
+  return new Response(json, {
+    status: statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-discovery-secret',
+    },
+  });
+}
+
 async function readBlobDoc(store, blobType) {
   try {
     const data = await store.get(BLOB_NAMES[blobType], { type: 'json' });
@@ -196,8 +210,16 @@ export default async function handler(req) {
       return respond(400, { ok: false, error: `Unknown blob_type: ${blobType}` });
     }
     log('info', 'storage: read', { blobType });
-    const doc = await readBlobDoc(store, blobType);
-    return respond(200, { ok: true, data: doc });
+    /* Mit `etag` (vom letzten Lesen) fragt der Client nur nach, ob sich der Blob
+       geändert hat: unverändert → kurze Antwort ohne Daten, sonst der volle Blob. */
+    const etag = typeof body.etag === 'string' && body.etag ? body.etag : undefined;
+    let r = null;
+    try { r = await store.getWithMetadata(BLOB_NAMES[blobType], { type: 'text', etag }); } catch { r = null; }
+    if (r && etag && r.data == null) {
+      return respond(200, { ok: true, unchanged: true, etag: r.etag ?? etag });
+    }
+    const text = r?.data || JSON.stringify(emptyBlob(blobType));
+    return respondRaw(200, `{"ok":true,"etag":${JSON.stringify(r?.etag ?? null)},"data":${text}}`);
   }
 
   // --- op: write ---

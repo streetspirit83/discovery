@@ -50,6 +50,13 @@ export class StorageClient {
     return result.data;
   }
 
+  /** Lesen mit Änderungsprüfung: mit `etag` kommt bei unverändertem Blob nur
+   *  { unchanged: true } zurück (keine Daten). Ältere Backends ignorieren `etag`. */
+  async readBlobIfChanged(blobType, etag = null) {
+    const r = await this.#post({ op: 'read', blob_type: blobType, ...(etag ? { etag } : {}) });
+    return { data: r.data ?? null, etag: r.etag ?? null, unchanged: !!r.unchanged };
+  }
+
   async writeBlob(blobType, blob) {
     return this.#post({ op: 'write', blob_type: blobType, blob });
   }

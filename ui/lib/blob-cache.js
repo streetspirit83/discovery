@@ -43,11 +43,11 @@ export async function cacheGet(base, type) {
   });
 }
 
-export async function cachePut(base, type, blob) {
+export async function cachePut(base, type, blob, etag = null) {
   const d = await db();
   if (!d || !blob) return;
   try {
-    d.transaction(STORE, 'readwrite').objectStore(STORE).put({ at: Date.now(), blob }, key(base, type));
+    d.transaction(STORE, 'readwrite').objectStore(STORE).put({ at: Date.now(), blob, etag }, key(base, type));
   } catch { /* Speicher voll o. ä. – egal, nächster Start lädt vom Server */ }
 }
 

@@ -19,7 +19,7 @@ import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
-import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107c';
+import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
@@ -27,7 +27,7 @@ import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/rang
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
 import { renderControlModal } from './components/control-modal.js?v=20261107b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
-import { loadStorageClient } from './lib/storage-client.js?v=20261107c';
+import { loadStorageClient } from './lib/storage-client.js?v=20261107f';
 import { enrichBulk } from './lib/claude-api.js';
 import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-enrichment.js?v=20261103b';
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
@@ -909,15 +909,19 @@ function closeRunSheet() {
 const blobSeen = new Set();
 const backendBase = () => localStorage.getItem('discovery_backend_url') ?? '';
 
-async function fetchBlob(blobType) {
-  // Kam während des Lesens ein Schreibvorgang dazwischen, einmal nachlesen.
+/* Liest frisch vom Server. Mit `etag` (aus dem Cache) nur, wenn sich der Blob
+   geändert hat – dann kommt `null` zurück und es gibt nichts zu tun. Kam während
+   des Lesens ein Schreibvorgang dazwischen, wird nach dessen Ende nachgelesen. */
+async function fetchBlob(blobType, etag = null) {
   const seq = storageClient.writeSeq;
-  let blob = await storageClient.readBlob(blobType);
+  let r = await storageClient.readBlobIfChanged(blobType, etag);
   if (storageClient.writeSeq !== seq || storageClient.pending) {
     await storageClient.writesSettled?.();
-    blob = await storageClient.readBlob(blobType);
+    r = await storageClient.readBlobIfChanged(blobType, null);
   }
-  idle(() => cachePut(backendBase(), blobType, blob));
+  if (r.unchanged) return null;
+  const blob = r.data;
+  idle(() => cachePut(backendBase(), blobType, blob, r.etag));
   return blob;
 }
 const idle = (f) => (window.requestIdleCallback ?? ((g) => setTimeout(g, 300)))(f);
@@ -934,7 +938,7 @@ async function loadBlob(blobType) {
     const cached = await cacheGet(backendBase(), blobType);
     performance.mark(`blob:${blobType}:cache-${cached ? 'hit' : 'miss'}`);
     if (cached?.blob?.candidates) {
-      revalidateBlob(blobType, cached.blob);
+      revalidateBlob(blobType, cached.blob, cached.etag);
       return cached.blob;
     }
   }
@@ -951,13 +955,13 @@ async function loadBlob(blobType) {
 /* Frischen Stand nachladen und die Sicht damit neu aufbauen, wenn der Bucket
    (oder „Watch + Archiv“ für watch/archive) gerade angezeigt wird. */
 let revalidating = 0, revalidated = false;
-async function revalidateBlob(blobType, shown) {
+async function revalidateBlob(blobType, shown, etag = null) {
   revalidating++;
   try {
-    const fresh = await fetchBlob(blobType);
-    performance.mark(`blob:${blobType}:revalidated`);
-    // Unverändert (gleicher Zeitstempel) oder inzwischen anders geladen → nichts tun.
-    if (allBlobs[blobType] === shown && fresh?.updated_at !== shown?.updated_at) {
+    const fresh = await fetchBlob(blobType, etag);
+    performance.mark(`blob:${blobType}:${fresh ? 'revalidated' : 'unchanged'}`);
+    // Unverändert (Server oder Zeitstempel) oder inzwischen anders geladen → nichts tun.
+    if (fresh && allBlobs[blobType] === shown && fresh.updated_at !== shown?.updated_at) {
       allBlobs[blobType] = fresh;
       revalidated = true;
     }

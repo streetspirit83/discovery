@@ -1,6 +1,6 @@
 import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20260701b';
 import { MARKETS } from '../lib/tv-fields.js?v=20260701b';
-import { loadStorageClient } from '../lib/storage-client.js?v=20261107c';
+import { loadStorageClient } from '../lib/storage-client.js?v=20261107f';
 import { normalizeExchange } from '../lib/exchange-map.js?v=20260701b';
 import { renderRotation } from './rotation.js?v=20260707d';
 
