@@ -67,6 +67,21 @@ changed too, so bump its version wherever it is imported — all the way up to t
 serves stale modules (data won't load, view switches break, etc.). Use a dated
 tag like `20260627j`; keep it consistent across a single change set.
 
+## Startzeit (seit Nov. 2026, gemessen mit `diag-startup-bench.yml`)
+- **Blob-Cache:** Beim ersten Laden eines Buckets je Sitzung zeichnet die App den letzten Stand aus IndexedDB
+  (`lib/blob-cache.js`) und fragt den Server im Hintergrund mit dem ETag (`readBlobIfChanged`, Op `read` mit `etag`):
+  unverändert → keine Daten. Sonst frischer Stand, eine Neuzeichnung nach allen Buckets (`revalidateBlob`). Spätere
+  Ladevorgänge (nach Aktionen) gehen immer direkt an den Server. Schreibt die App während eines Lesens, wird nach
+  `writesSettled()` nachgelesen. Der Server reicht den Blob beim Lesen als Text durch (`respondRaw`).
+- **Liste:** Intl-Formatter nur einmal bauen (nie `toLocaleString` mit Optionen je Zelle – kostete Sekunden);
+  Zustandswechsel in `candidateList.batch()` bündeln; nachgeladene Zusatzdaten über `renderRowsSoon()`. `renderRows`
+  zeichnet 40 Zeilen sofort und den Rest in Häppchen (alles auf einmal, wenn weiter unten gescrollt).
+- **Zusatzdaten** (Merkliste, LS-Historie, Analysten, market) starten in `init()` parallel zum Blob (`shared()` teilt laufende Abrufe).
+- **Lazy:** Lightweight Charts über `lib/lwc-loader.js` (Detail-Sheet, Watch Ranges; Vorladen im Leerlauf).
+  Eruda nur mit `?debug`.
+- Messen: `diag-startup-bench.yml` (Handy, CPU 4× gedrosselt, kalt/warm, optional CPU-Profil) und `diag-blob-sizes.yml`.
+  Marken `app:init`, `blob:*`, `app:first-render` stehen im Performance-Panel.
+
 ## Key Design Decisions
 - All storage goes through Netlify Blobs (4 blobs: inbox, archive, export, watch)
 - Dedup by symbol+exchange: inbox merges sources, archive/export skips
