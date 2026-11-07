@@ -13,7 +13,7 @@ jobs:
         with: { node-version: 20 }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node ../diag/startup-bench.mjs
+      - run: cp ../diag/startup-bench.mjs ./startup-bench.mjs && node startup-bench.mjs
         env:
           DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
           DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
