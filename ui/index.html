@@ -94,13 +94,9 @@
 <div class="bucket-sheet" id="bucket-sheet" role="dialog" aria-modal="true" aria-label="Bucket wählen"></div>
 <div class="bucket-sheet" id="run-sheet" role="dialog" aria-modal="true" aria-label="Adapter ausführen"></div>
 
-<script src="//cdn.jsdelivr.net/npm/eruda"></script>
-<script>eruda.init();
-  // Debug-Knopf aus der unteren Menüleiste heraushalten – dort liegt rechts „Briefing“.
-  try { eruda.position({ x: window.innerWidth - 56, y: Math.round(window.innerHeight * 0.45) }); } catch (e) {}</script>
-<!-- TradingView Lightweight Charts (vendored, Apache-2.0) — interactive
-     price/volume chart in the detail sheet; the SVG band is the fallback. -->
-<script src="vendor/lightweight-charts-4.2.0.standalone.js"></script>
-<script type="module" src="app.js?v=20261107a"></script>
+<!-- Debug-Konsole (Eruda) nur auf Wunsch: Seite mit ?debug öffnen. -->
+<script>if (/[?&]debug\b/.test(location.search)) { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/eruda'; s.onload = () => { eruda.init(); try { eruda.position({ x: innerWidth - 56, y: Math.round(innerHeight * 0.45) }); } catch (e) {} }; document.head.appendChild(s); }</script>
+<!-- TradingView Lightweight Charts (vendor/) lädt lazy über lib/lwc-loader.js. -->
+<script type="module" src="app.js?v=20261107b"></script>
 </body>
 </html>

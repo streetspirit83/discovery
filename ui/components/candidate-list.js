@@ -210,9 +210,16 @@ function fmtPct(v) {
   if (v == null) return '—';
   return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
 }
+/* Intl-Formatter einmal bauen: toLocaleString/-DateString legen bei jedem Aufruf
+   einen neuen an – bei ~470 Zeilen × vielen Zellen kostete das Sekunden je Zeichnung. */
+const NUM_FMT = new Map();
+const numFmt = (dec) => { let f = NUM_FMT.get(dec); if (!f) NUM_FMT.set(dec, (f = new Intl.NumberFormat('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec }))); return f; };
+const NUM_PLAIN = new Intl.NumberFormat('de-DE');
+const DATE_DMY = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+const DATE_DM_SHORT = new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'short' });
 function fmtNum(v, dec = 2) {
   if (v == null) return '—';
-  return Number(v).toLocaleString('de-DE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return numFmt(dec).format(Number(v));
 }
 /* Große Beträge kompakt (T/B/M). Wird auch für EBITDA benutzt, das — anders als
    die Marktkapitalisierung — negativ sein kann: deshalb über den Betrag skalieren
@@ -225,11 +232,11 @@ function fmtMCap(mc) {
   if (v >= 1e12) return `${sign}${(v / 1e12).toFixed(1)}T`;
   if (v >= 1e9)  return `${sign}${(v / 1e9).toFixed(1)}B`;
   if (v >= 1e6)  return `${sign}${(v / 1e6).toFixed(0)}M`;
-  return `${sign}${v.toLocaleString('de-DE')}`;
+  return `${sign}${NUM_PLAIN.format(v)}`;
 }
 function fmtDate(ts) {
   if (!ts) return '—';
-  return new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return DATE_DMY.format(new Date(ts * 1000));
 }
 function posNegClass(v) {
   if (v == null) return '';
@@ -1336,7 +1343,27 @@ export class CandidateList {
     });
   }
 
+  /* Nachgeladene Zusatzdaten (Merkliste, LS-Historie, Analysten …) treffen kurz
+     nacheinander ein: gesammelt einmal neu zeichnen statt je Quelle. */
+  renderRowsSoon(ms = 120) {
+    clearTimeout(this._rrSoon);
+    this._rrSoon = setTimeout(() => { this._rrSoon = 0; this.renderRows(); }, ms);
+  }
+
+  /* Mehrere Zustandswechsel (Daten, Bucket, Sektor …) in EINER Zeichnung: innerhalb
+     von batch() merkt sich renderRows() nur, dass gezeichnet werden muss. */
+  batch(fn) {
+    this._hold = (this._hold ?? 0) + 1;
+    try { return fn(); }
+    finally {
+      if (--this._hold === 0 && this._dirty) { this._dirty = false; this.renderRows(); }
+    }
+  }
+
   renderRows() {
+    if (this._hold) { this._dirty = true; return; }
+    if (this._rrSoon) { clearTimeout(this._rrSoon); this._rrSoon = 0; }
+    const token = (this._renderToken = (this._renderToken ?? 0) + 1);
     // Show the Einstand/P/L columns only in Standard view with the ★ filter on.
     // Beim Umschalten ändert sich das Spalten-Layout (12 ↔ 15 sichtbare
     // Spalten) — der Header muss neu, sonst behält eine eingefrorene
@@ -1360,7 +1387,7 @@ export class CandidateList {
     }
     this.emptyState.style.display = 'none';
 
-    for (const c of rows) {
+    const buildRow = (c) => {
       const tv    = c.tv_data;
       const links = c.links ?? {};
       const isSelected = this.selected.has(c.id);
@@ -1368,7 +1395,7 @@ export class CandidateList {
       const symHtml = `<div class="sym-cell">
         <div class="sym-cell__top">
           <span class="sym-strong">${c.symbol}</span>
-          ${c.daily_pick ? `<span class="pick-badge" title="Tagessieger ${new Date(`${c.daily_pick.day}T12:00:00`).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} · Platz ${c.daily_pick.rank ?? '–'}" aria-label="Tagessieger">${icons.trophy}</span>` : ''}
+          ${c.daily_pick ? `<span class="pick-badge" title="Tagessieger ${DATE_DM_SHORT.format(new Date(`${c.daily_pick.day}T12:00:00`))} · Platz ${c.daily_pick.rank ?? '–'}" aria-label="Tagessieger">${icons.trophy}</span>` : ''}
           ${chipLink(tvChartUrl(c) ?? links.tradingview, TV_LOGO, 'TradingView-Chart', 'link-chip--tv')}
           ${alertBell(c)}
           ${c.enrichment ? `<span class="ai-badge" title="AI Enrichment">${icons.sparkles}</span>` : ''}
@@ -1537,12 +1564,40 @@ export class CandidateList {
         });
       });
 
-      this.tbody.appendChild(tr);
-    }
+      return tr;
+    };
 
-    this.syncSelectAll();
-    this.renderBulkBar();
-    this.onAfterRender?.();
+    /* Erst die sichtbaren Zeilen, den Rest in Häppchen danach: die Liste steht sofort,
+       ohne den Main-Thread für alle ~470 Zeilen am Stück zu blockieren. Steht die
+       Seite schon weiter unten (Neuzeichnung nach Aktion), alles auf einmal – sonst
+       spränge die Scrollposition. Eine neuere Zeichnung bricht ältere Häppchen ab. */
+    const finish = () => {
+      this.syncSelectAll(rows);
+      this.renderBulkBar();
+      this.onAfterRender?.();
+    };
+    const appendRange = (from, to) => {
+      const frag = document.createDocumentFragment();
+      for (let i = from; i < to; i++) frag.appendChild(buildRow(rows[i]));
+      this.tbody.appendChild(frag);
+    };
+    const FIRST = 40, CHUNK = 80;
+    if (rows.length <= FIRST + CHUNK || window.scrollY > 200) {
+      appendRange(0, rows.length);
+      finish();
+      return;
+    }
+    appendRange(0, FIRST);
+    let i = FIRST;
+    const step = () => {
+      if (token !== this._renderToken) return;
+      const to = Math.min(rows.length, i + CHUNK);
+      appendRange(i, to);
+      i = to;
+      if (i < rows.length) setTimeout(step, 0);
+      else finish();
+    };
+    setTimeout(step, 0);
   }
 
   renderBulkBar() {
@@ -1594,10 +1649,9 @@ export class CandidateList {
     });
   }
 
-  syncSelectAll() {
+  syncSelectAll(rows = this.getSorted(this.getFiltered())) {
     const sa = document.getElementById('select-all');
     if (!sa) return;
-    const rows = this.getSorted(this.getFiltered());
     const sel  = rows.filter((c) => this.selected.has(c.id)).length;
     sa.checked       = rows.length > 0 && sel === rows.length;
     sa.indeterminate = sel > 0 && sel < rows.length;
@@ -2057,7 +2111,7 @@ function renderBias(c) {
  * passt. Der letzte TD-Bar kann Tage alt sein; hat der Trend seither gedreht,
  * stünde in der Spalte sonst das Alter eines Trends, den es nicht mehr gibt.
  */
-const isoDate = (s) => (s ? new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—');
+const isoDate = (s) => (s ? DATE_DMY.format(new Date(s)) : '—');
 
 function trendDuration(c) {
   const tv = c.tv_data;

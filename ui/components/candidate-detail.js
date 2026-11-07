@@ -1,4 +1,5 @@
 import { enrichCandidate } from '../lib/claude-api.js';
+import { loadCharts } from '../lib/lwc-loader.js?v=20261107b';
 import {
   scoreRingSVG, priceBandHorizontalSVG, priceLevelsTable,
   perfBarsHTML, rangeBandsHTML, bollingerGaugeHTML,
@@ -2671,6 +2672,8 @@ export class CandidateDetail {
     }
     this.candidate = candidate;
     this.render();
+    // Chart-Bibliothek lädt lazy (lib/lwc-loader.js): fehlt sie noch, nach dem Laden neu zeichnen.
+    if (!window.LightweightCharts) loadCharts().then((lw) => { if (lw && this.candidate?.id === candidate.id) this.render(); });
     /* Beim Öffnen still nachladen, was fehlt oder veraltet ist (LS · Kerzen ·
        TR · Yahoo-Kursziele). Nur beim Titelwechsel, nicht bei jedem `show()`
        desselben Titels — sonst löste jedes erneute Öffnen dieselbe Runde aus. */

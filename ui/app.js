@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261107a';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261107b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261106c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261107b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -18,12 +18,13 @@ import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
+import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261107a';
+import { renderControlModal } from './components/control-modal.js?v=20261107b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261103h';
 import { enrichBulk } from './lib/claude-api.js';
@@ -376,11 +377,20 @@ function updateAlertBadge() {
 let lsHistoryMap = null;
 
 let analystEventMap = null;
+/* Laufende Abrufe teilen: init() startet die Zusatzdaten parallel zum Bucket-Blob,
+   switchBlob() fragt sie erneut an – ohne diese Sperre gingen sie doppelt raus. */
+const inflight = new Map();
+function shared(key, fn, force = false) {
+  if (force) inflight.delete(key);
+  if (!inflight.has(key)) inflight.set(key, Promise.resolve().then(fn).finally(() => setTimeout(() => inflight.delete(key), 0)));
+  return inflight.get(key);
+}
+
 async function loadLsHistory(force = false) {
   if (useMock || !storageClient) return;
   if (force || !lsHistoryMap) {
     try {
-      const doc = await storageClient.readLsHistory();
+      const doc = await shared('ls_history', () => storageClient.readLsHistory(), force);
       lsHistoryMap = doc?.history ?? {};
     } catch (err) {
       console.warn('[ls-history] load failed:', err.message);
@@ -390,7 +400,7 @@ async function loadLsHistory(force = false) {
   const blob = allBlobs[currentBlobType];
   if (!blob?.candidates || !candidateList) return;
   for (const c of blob.candidates) c.ls_history = lsHistoryMap[c.id]?.snapshots ?? null;
-  candidateList.renderRows();
+  candidateList.renderRowsSoon();
 }
 
 // ── Analysten-Spalte: Blob `analyst`, gefüllt vom Monitor-Lauf ───────────────
@@ -420,7 +430,7 @@ async function loadEurBasis(cands, blobType) {
       await storageClient.updateCandidate(blobType, c.id, { eur_basis: r }).catch((e) => console.warn('[eur-basis] speichern:', e.message));
     }));
   }
-  candidateList.renderRows();
+  candidateList.renderRowsSoon();
   if (candidateDetail.candidate && due.includes(candidateDetail.candidate)) candidateDetail.render();
 }
 
@@ -437,20 +447,20 @@ function attachDailyPicks(candidates) {
 async function loadDailyPicks(force = false) {
   if (useMock || !storageClient) return;
   if (force || !dailyPickMap) {
-    try { dailyPickMap = latestPickKeys((await storageClient.readBlob('market'))?.briefings ?? []); }
+    try { dailyPickMap = latestPickKeys((await shared('market', () => storageClient.readBlob('market'), force))?.briefings ?? []); }
     catch (err) { console.warn('[daily-picks] load failed:', err.message); return; }
   }
   const blob = allBlobs[currentBlobType];
   if (!blob?.candidates || !candidateList) return;
   attachDailyPicks(blob.candidates);
-  candidateList.renderRows();
+  candidateList.renderRowsSoon();
 }
 
 async function loadAnalystEvents(force = false) {
   if (useMock || !storageClient) return;
   if (force || !analystEventMap) {
     try {
-      analystEventMap = (await storageClient.readBlob('analyst'))?.events ?? {};
+      analystEventMap = (await shared('analyst', () => storageClient.readBlob('analyst'), force))?.events ?? {};
     } catch (err) {
       console.warn('[analyst] load failed:', err.message);
       return;
@@ -459,7 +469,7 @@ async function loadAnalystEvents(force = false) {
   const blob = allBlobs[currentBlobType];
   if (!blob?.candidates || !candidateList) return;
   attachAnalystEvents(blob.candidates);
-  candidateList.renderRows();
+  candidateList.renderRowsSoon();
 }
 
 // ── Merkliste portfolio import (Einstand column) ────────────────────────────────
@@ -473,7 +483,7 @@ async function loadMerklisteEntries(force = false) {
   if (!backendUrl || !secret) return;
   if (force || !merklisteMaps) {
     try {
-      merklisteMaps = await fetchMerklisteEntries({ backendUrl, secret });
+      merklisteMaps = await shared('merkliste', () => fetchMerklisteEntries({ backendUrl, secret }), force);
     } catch (err) {
       console.warn('[merkliste] entry import failed:', err.message);
       return;
@@ -482,7 +492,7 @@ async function loadMerklisteEntries(force = false) {
   const blob = allBlobs[currentBlobType];
   if (!merklisteMaps || !blob?.candidates || !candidateList) return;
   applyMerklisteEntries(blob.candidates, merklisteMaps);
-  candidateList.renderRows(); // mutate-in-place re-render; keeps selection intact
+  candidateList.renderRowsSoon(); // mutate-in-place re-render; keeps selection intact
 }
 
 // ── Mode badge ─────────────────────────────────────────────────────────────────
@@ -1022,13 +1032,17 @@ async function switchBlob(blobType) {
   else loadAnalystEvents();
   if (dailyPickMap) attachDailyPicks(allBlobs[blobType].candidates);
   else loadDailyPicks();
-  candidateList.setData(allBlobs[blobType].candidates);
-  candidateList.setBucket(blobType);                 // Watch-Label-Spalte (Meta)
+  // Daten, Bucket und Sektor-Leiste setzen – gezeichnet wird einmal am Ende.
+  candidateList.batch(() => {
+    candidateList.setData(allBlobs[blobType].candidates);
+    candidateList.setBucket(blobType);               // Watch-Label-Spalte (Meta)
+    renderBotnav();
+    renderFilterbar();
+    updateWatchSubnav();                             // Watch-Filter-Icon nur im Watch-Bucket
+    renderSegbar();                                  // Sektor-Buttons nur in Watch + Archiv
+    if (blobType !== 'inbox' && blobType !== 'archive') candidateList.setDupMap(null);
+  });
   loadEurBasis(allBlobs[blobType].candidates, blobType);
-  renderBotnav();
-  renderFilterbar();
-  updateWatchSubnav();                               // Watch-Filter-Icon nur im Watch-Bucket
-  renderSegbar();                                    // Sektor-Buttons nur in Watch + Archiv
   refreshDupMarkers();                               // fire & forget
   if (blobType === 'inbox') autoTrCheckNewInbox();   // fire & forget
 }
@@ -2437,14 +2451,22 @@ async function init() {
   if (uiState.currency !== 'USD') candidateList.setDisplayCurrency(uiState.currency);
   refreshFxRate();
 
+  // Zusatzdaten parallel zum Bucket-Blob anstossen: sind sie vor dem Blob da, hängt
+  // switchBlob sie vor der ersten Zeichnung an – eine Zeichnung statt fünf.
+  loadMerklisteEntries(true);
+  loadLsHistory();
+  loadAnalystEvents();
+  loadDailyPicks();
+
   // Load initial data (also calls renderBotnav + renderFilterbar)
   await switchBlob(currentBlobType);
+  // Chart-Bibliothek im Leerlauf vorladen (Detail-Sheet, Watch Ranges).
+  (window.requestIdleCallback ?? ((f) => setTimeout(f, 1500)))(() => loadCharts());
 
   updateMockBadge();
 
-  // On load: pull merkliste "Einstand"/shares only. LS quotes are fetched
-  // on demand (LS-Kurs button) — no automatic LS fetch on load.
-  loadMerklisteEntries(true);
+  // Merkliste ("Einstand"/Stückzahl) lädt oben parallel zum Blob. LS-Kurse
+  // gibt es nur auf Abruf (LS-Kurs-Knopf), nicht automatisch beim Laden.
 
   // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
   // sheet on load, and on later hash changes (second push while app is open).
@@ -2498,7 +2520,7 @@ async function init() {
     const backendUrl = localStorage.getItem('discovery_backend_url');
     const secret     = localStorage.getItem('discovery_secret');
     const afterWrite = () => { if (currentBlobType === 'watch' || currentBlobType === 'all') { candidateList.renderRows(); updateAlertBadge(); } };
-    openRangesModal({
+    loadCharts().then(() => openRangesModal({
       getCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
       getFx: resolveFxRate,
       persist: canWrite
@@ -2550,7 +2572,7 @@ async function init() {
         candidateDetail.show(cand);
         openDetailSheet();
       },
-    });
+    }));
   });
 
   document.getElementById('btn-screener').addEventListener('pointerup', () => {
