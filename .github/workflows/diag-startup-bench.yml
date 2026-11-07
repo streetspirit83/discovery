@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       buckets: { description: 'Buckets, kommagetrennt', default: 'all,watch' }
+      profile: { description: 'CPU-Profil beim Kaltstart (1 = ja)', default: '' }
 jobs:
   bench:
     runs-on: ubuntu-latest
@@ -18,3 +19,4 @@ jobs:
           DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
           DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
           BUCKETS: ${{ inputs.buckets }}
+          PROFILE: ${{ inputs.profile }}

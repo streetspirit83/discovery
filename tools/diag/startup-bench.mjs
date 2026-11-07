@@ -29,12 +29,37 @@ async function run(ctx, bucket, label) {
     const mo = new MutationObserver((m) => { for (const x of m) if (x.target.tagName === 'TBODY' && x.addedNodes.length) { window.__renders++; break; } });
     document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true }));
   });
+  const prof = process.env.PROFILE && label === 'kalt';
+  if (prof) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
   const t0 = Date.now();
   await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForSelector('tbody tr', { timeout: 60000 }).catch(() => {});
   const rows = Date.now() - t0;
   await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
   const settled = Date.now() - t0;
+  if (prof) {
+    const { profile } = await cdp.send('Profiler.stop');
+    const self = new Map(), byId = new Map(profile.nodes.map((n) => [n.id, n]));
+    const dt = profile.timeDeltas; const cnt = new Map();
+    profile.samples.forEach((id, i) => cnt.set(id, (cnt.get(id) ?? 0) + (dt[i] ?? 0)));
+    for (const [id, us] of cnt) {
+      const f = byId.get(id).callFrame;
+      const k = `${f.functionName || '(anon)'} ${f.url.split('/').pop().split('?')[0]}:${f.lineNumber + 1}`;
+      self.set(k, (self.get(k) ?? 0) + us);
+    }
+    const tot = [...self.values()].reduce((a, v) => a + v, 0);
+    console.log('  Profil (Eigenzeit, Top 25):');
+    for (const [k, us] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`   ${(us / 1000).toFixed(0).padStart(6)} ms ${((us / tot) * 100).toFixed(1).padStart(5)} %  ${k}`);
+    // Inklusivzeit je Funktion (über den Aufrufbaum)
+    const parent = new Map(); for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+    const incl = new Map();
+    for (const [id, us] of cnt) {
+      const seen = new Set(); let cur = id;
+      while (cur != null) { const f = byId.get(cur).callFrame; const k = `${f.functionName || '(anon)'} ${f.url.split('/').pop().split('?')[0]}:${f.lineNumber + 1}`; if (!seen.has(k)) { seen.add(k); incl.set(k, (incl.get(k) ?? 0) + us); } cur = parent.get(cur); }
+    }
+    console.log('  Profil (inklusiv, Top 30):');
+    for (const [k, us] of [...incl].filter(([k]) => !k.startsWith('(root)') && !k.startsWith('(program)')).sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`   ${(us / 1000).toFixed(0).padStart(6)} ms  ${k}`);
+  }
   const m = await page.evaluate(() => ({
     fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? null,
     n: document.querySelectorAll('tbody tr').length, lt: window.__lt, ltMs: window.__ltMs, renders: window.__renders,
