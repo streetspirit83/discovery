@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261107g';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -2795,6 +2795,15 @@ async function init() {
       bucket: currentBlobType,
       loadRankings,
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
+      // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.
+      onSelectInList: (ids) => {
+        if (!ids.length) return;
+        candidateList.setSelection(ids);
+        candidateList.setShowSelectedOnly(true);
+        renderSelectedPill();
+        window.scrollTo(0, 0);
+        toast(`${ids.length} Titel ausgewählt`, 'success');
+      },
       onOpenDetail: (candidate, ctrl) => {
         ctrl?.hide();                        // keep the dashboard mounted, just hidden
         returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes

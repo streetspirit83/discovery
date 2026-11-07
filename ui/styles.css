@@ -1791,6 +1791,17 @@ span.detail-star { cursor:default; }
 .dash-sub--pos { color:var(--pos); }
 .dash-sub--neg { color:var(--neg); }
 
+/* Gruppen-Auswahl im Monitor: Checkbox „alle N“ je Gruppe, Leiste unten */
+.grp-sel { display:flex; justify-content:flex-end; align-items:center; gap:6px; padding:2px 8px 4px;
+  font-size:var(--fs-1); font-weight:var(--fw-med); color:var(--muted); text-transform:none; letter-spacing:0; cursor:pointer; }
+.grp-sel input[type="checkbox"] { width:16px; height:16px; }
+.has-grp-sel { display:flex; align-items:center; gap:var(--s-2); }
+.has-grp-sel .grp-sel { margin-left:auto; padding:0; }
+.dash-selbar { flex:0 0 auto; display:flex; align-items:center; gap:var(--s-2); padding:10px 14px;
+  border-top:1px solid var(--border); background:var(--surface-2, var(--surface)); font-size:var(--fs-2); }
+.dash-selbar[hidden] { display:none; }
+.dash-selbar > span { margin-right:auto; }
+
 /* ════════════════════════════════════════════════════════════════
    DETAIL MODAL — SCORE RING + PRICE VISUALIZATIONS
    ════════════════════════════════════════════════════════════════ */

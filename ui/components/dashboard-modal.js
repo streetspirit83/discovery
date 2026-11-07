@@ -64,7 +64,7 @@ const hint = (txt) => `<p class="dash-hint">${esc(txt)}</p>`;
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { perfWindow: '1W', expanded: new Set() };
@@ -78,7 +78,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     const btn = (items.length > COLLAPSED)
       ? `<button class="dash-more" data-expand="${key}">${open ? 'weniger' : `+${rest} mehr`}</button>`
       : '';
-    return shown.map(rowFn).join('') + btn;
+    return `<div class="dash-group" data-group="${esc(key)}">${shown.map(rowFn).join('')}</div>${btn}`;
   }
 
   // Dynamics card body: risers / fallers by day-over-day delta, with a current-
@@ -115,7 +115,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     const macd = macdFlips(candidates);
     const group = (label, cls, items, valFn) => `<div class="dash-sig">
       <span class="dash-sig__label dash-sig__label--${cls}">${esc(label)}</span>
-      <div class="dash-sig__items">${items.length
+      <div class="dash-sig__items" data-group="sig.${cls}">${items.length
         ? items.slice(0, 8).map((r) => chip(r, valFn(r), cls)).join('')
         : '<span class="dash-none">keine</span>'}</div>
     </div>`;
@@ -256,10 +256,75 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <button class="tab-btn" data-dash-tab="picks" role="tab" aria-selected="false">Tagessieger</button>
       </div>
       <div class="modal-body dash-body">${bodyHtml()}</div>
+      <div class="dash-selbar" hidden></div>
     </div>`;
   document.body.appendChild(overlay);
 
   const bodyEl = overlay.querySelector('.dash-body');
+  const selBar = overlay.querySelector('.dash-selbar');
+
+  /* Gruppen-Auswahl: jede Gruppe (Abschnitt, Signal-Chips, Ranking-Liste) bekommt eine
+     Checkbox „alle N“. Sie erfasst nur die SICHTBAREN Zeilen – eingeklappte hinter
+     „+N mehr“ nie; klappt man eine markierte Gruppe auf, wächst die Auswahl mit.
+     Gezählt werden nur Titel, die im aktiven Bucket liegen (sonst kann die Liste sie
+     nicht zeigen). „In Liste zeigen“ übergibt die Vereinigung an die App. */
+  const sel = new Map();                         // Gruppen-Schlüssel → sichtbare IDs
+  const inBucket = new Set(candidates.map((c) => c.id));
+  const rowIds = (g) => [...new Set([...g.querySelectorAll('[data-id],[data-rk-live],[data-rk-id]')]
+    .map((el) => el.dataset.id ?? el.dataset.rkLive ?? el.dataset.rkId)
+    .filter((id) => id && inBucket.has(id)))];
+  const union = () => new Set([...sel.values()].flat());
+  function renderSelBar() {
+    const n = union().size;
+    selBar.hidden = n === 0;
+    selBar.innerHTML = n ? `<span><b>${n}</b> markiert</span>
+      <button type="button" class="btn btn-sm btn-secondary" data-sel-clear>Aufheben</button>
+      <button type="button" class="btn btn-sm btn-primary" data-sel-show>In Liste zeigen</button>` : '';
+  }
+  function decorate() {
+    const groups = [...bodyEl.querySelectorAll('[data-group], .rk-list')];
+    let i = 0;
+    for (const g of groups) {
+      const key = g.dataset.group ?? `${rk.tab}:${i++}`;
+      g.dataset.grpKey = key;
+      const ids = rowIds(g);
+      if (!ids.length) { sel.delete(key); continue; }
+      if (sel.has(key)) sel.set(key, ids);
+      const label = document.createElement('label');
+      label.className = 'grp-sel';
+      label.innerHTML = `<input type="checkbox" data-grp="${esc(key)}"${sel.has(key) ? ' checked' : ''}> alle ${ids.length}`;
+      // In eine vorhandene Zwischenzeile (Bullish, Weit darüber …) setzen, sonst eigene Zeile.
+      const prev = g.previousElementSibling;
+      if (prev?.matches('.dash-sub, .dash-sig__label')) { prev.classList.add('has-grp-sel'); prev.appendChild(label); }
+      else g.before(label);
+    }
+    renderSelBar();
+  }
+  bodyEl.addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-grp]');
+    if (!cb) return;
+    const g = [...bodyEl.querySelectorAll('[data-grp-key]')].find((x) => x.dataset.grpKey === cb.dataset.grp);
+    if (cb.checked && g) sel.set(cb.dataset.grp, rowIds(g)); else sel.delete(cb.dataset.grp);
+    renderSelBar();
+  });
+  selBar.addEventListener('click', (e) => {
+    if (e.target.closest('[data-sel-clear]')) {
+      sel.clear();
+      bodyEl.querySelectorAll('[data-grp]').forEach((cb) => { cb.checked = false; });
+      renderSelBar();
+    } else if (e.target.closest('[data-sel-show]')) {
+      const ids = [...union()];
+      ctrl.close();
+      onSelectInList?.(ids);
+    }
+  });
+  // Jede Neuzeichnung des Inhalts bekommt die Checkboxen neu.
+  new MutationObserver(() => {
+    if (bodyEl.querySelector('.grp-sel')) return;
+    decorate();
+  }).observe(bodyEl, { childList: true });
+  decorate();
+
   const rerender = () => { bodyEl.innerHTML = bodyHtml(); };
 
   /* Reiter Rankings – eine Seite ohne Unterreiter:
@@ -318,6 +383,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', (e) => {
+    if (e.target.closest('.grp-sel')) return;
     const live = e.target.closest('[data-rk-live]');
     if (live) {
       const cand = candidates.find((c) => c.id === live.dataset.rkLive);
@@ -342,6 +408,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
 
   overlay.addEventListener('pointerup', (e) => {
     if (e.target === overlay) { ctrl.close(); return; }
+    if (e.target.closest('.grp-sel, .dash-selbar')) return;
 
     const win = e.target.closest('[data-win]');
     if (win) { state.perfWindow = win.dataset.win; rerender(); return; }

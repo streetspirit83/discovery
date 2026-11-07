@@ -229,6 +229,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   f, at}; `f` = EUR je Notierungs-Einheit (impliziert, Median über gemeinsame
   Tage — gleicht GBX/Pence automatisch aus). Range-Levels × `f`, Chart/5T aus
   `eur_basis.c`, Kurs aus LS.
+- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle drei Reiter): jede Gruppe (`data-group` aus `section()`,
+  Signal-Chips, jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
+  MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen, nie die hinter „+N mehr“; klappt eine markierte
+  Gruppe auf, wächst die Auswahl mit. Nur Titel des aktiven Buckets zählen. Leiste unten „N markiert · In Liste
+  zeigen“ → `onSelectInList` in `app.js`: `setSelection` + „nur Auswahl“ → Bulk-Leiste.
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 
