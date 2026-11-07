@@ -61,6 +61,8 @@ async function run(ctx, bucket, label) {
     console.log('  Profil (inklusiv, Top 30):');
     for (const [k, us] of [...incl].filter(([k]) => !k.startsWith('(root)') && !k.startsWith('(program)')).sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`   ${(us / 1000).toFixed(0).padStart(6)} ms  ${k}`);
   }
+  const marks = await page.evaluate(() => performance.getEntriesByType('mark').map((m) => `${m.name} ${(m.startTime / 1000).toFixed(2)}`).join(' · '));
+  console.log(`   Marken: ${marks}`);
   const m = await page.evaluate(() => ({
     fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? null,
     n: document.querySelectorAll('tbody tr').length, lt: window.__lt, ltMs: window.__ltMs, renders: window.__renders,

@@ -930,14 +930,18 @@ async function loadBlob(blobType) {
   const first = !blobSeen.has(blobType);
   blobSeen.add(blobType);
   if (first) {
+    performance.mark(`blob:${blobType}:cache-start`);
     const cached = await cacheGet(backendBase(), blobType);
+    performance.mark(`blob:${blobType}:cache-${cached ? 'hit' : 'miss'}`);
     if (cached?.blob?.candidates) {
       revalidateBlob(blobType, cached.blob);
       return cached.blob;
     }
   }
   try {
-    return await fetchBlob(blobType);
+    const b = await fetchBlob(blobType);
+    performance.mark(`blob:${blobType}:fetched`);
+    return b;
   } catch (err) {
     toast(`Fehler beim Laden: ${err.message}`, 'error');
     return { schema_version: 'discovery-1.0', blob_type: blobType, updated_at: new Date().toISOString(), candidates: [] };
@@ -2444,6 +2448,7 @@ async function handleExport() {
 }
 
 async function init() {
+  performance.mark('app:init');
   // Init storage client
   if (!useMock) {
     storageClient = routeAll(loadStorageClient());
@@ -2520,6 +2525,7 @@ async function init() {
 
   // Load initial data (also calls renderBotnav + renderFilterbar)
   await switchBlob(currentBlobType);
+  performance.mark('app:first-render');
   // Chart-Bibliothek im Leerlauf vorladen (Detail-Sheet, Watch Ranges).
   (window.requestIdleCallback ?? ((f) => setTimeout(f, 1500)))(() => loadCharts());
 
