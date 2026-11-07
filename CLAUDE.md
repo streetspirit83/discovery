@@ -472,7 +472,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   Prognose-Check → Methode anpassen → Ranking).
   Jede überspringt einen Eintrag, der im Artefakt schon steht.
   Nur für die App, ohne Artefakt: „Discovery Scout“ Sa 10:41 Uhr, „Discovery Rankings“ So 11:23 Uhr, „Discovery Rotation Archiv/Watchlist“ So 11:47 Uhr; alle drei lesen „Discovery Rankings.json“ und speichern über `market-briefing.yml`.
-  **Tagessieger (`kind: picks`, nur App, seit Nov. 2026):** geplante Aufgabe „Discovery Tagessieger“ Mo–Fr 7:53 Uhr. Liest
+  **Tagessieger (`kind: picks`, nur App, seit Nov. 2026):** geplante Aufgabe „Discovery Tagessieger“ Mo–Fr 7:39 Uhr. Liest
   `daily_picks` aus „Discovery Rankings.json“ (technische Vorauswahl, **nur Watchlist**, 15 Titel, höchstens 4 je Sektor:
   `dailyPickPool` in `lib/rankings-filter.js`, Gate SMA50 drüber, RSI 40–78, Bias > −20, ≥ 1 Mrd. USD; Score aus
   `PICK_WEIGHTS`), recherchiert News/Termine und wählt **5 Tagessieger**. Eintrag: `day, trading_day, title, lead,
