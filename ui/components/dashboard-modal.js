@@ -18,7 +18,7 @@ import {
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
-import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110b';
+import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110c';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261107a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 
@@ -64,7 +64,7 @@ const hint = (txt) => `<p class="dash-hint">${esc(txt)}</p>`;
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onMoveHit } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onMoveHit, onMoveHits } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { perfWindow: '1W', expanded: new Set() };
@@ -410,6 +410,20 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
     /* Rotation: Knopf „Zur Watchlist“ / „Ins Archiv“ verschiebt genau diesen Titel. */
+    const all = e.target.closest('[data-rk-move-all]');
+    if (all) {
+      if (all.disabled || !onMoveHits) return;
+      const to = all.dataset.to;
+      const hits = all.dataset.rkMoveAll.split(',').map((id) => rk.data?.byId?.get(id)).filter(Boolean);
+      if (!hits.length) return;
+      if (!confirm(`${hits.length} Titel ${to === 'watch' ? 'in die Watchlist' : 'ins Archiv'} verschieben?`)) return;
+      all.disabled = true;
+      const ok = await onMoveHits(hits, to).catch(() => false);
+      if (ok) hits.forEach((h) => { h.bucket = to; });
+      all.disabled = false;
+      renderRotation();
+      return;
+    }
     const mv = e.target.closest('[data-rk-move]');
     if (mv) {
       if (mv.disabled || !onMoveHit) return;

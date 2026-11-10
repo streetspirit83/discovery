@@ -3090,3 +3090,5 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .rk-movebar { display:flex; justify-content:flex-end; align-items:center; gap:4px; margin:0; }
 .rk-movebar .btn { display:inline-flex; align-items:center; gap:6px; }
 .rk-movebar svg { width:14px; height:14px; }
+.dash-card__head .rk-move-all { margin-left:auto; display:inline-flex; align-items:center; gap:6px; }
+.dash-card__head .rk-move-all svg { width:14px; height:14px; }

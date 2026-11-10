@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261110b';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261110c';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -1332,6 +1332,25 @@ async function moveRotationHit(hit, to) {
   allBlobs[from] = null; allBlobs[to] = null; allBlobs.all = null;
   if ([from, to, 'all'].includes(currentBlobType)) switchBlob(currentBlobType);
   toast(`${hit.symbol} → ${to === 'watch' ? 'Watchlist' : 'Archiv'}`, 'success');
+  return true;
+}
+
+/** Wie moveRotationHit, aber alle Vorschläge einer Richtung in einem Rutsch (je Ausgangs-Bucket ein moveCandidates). */
+async function moveRotationHits(hits, to) {
+  const todo = (hits ?? []).filter((h) => h?.bucket && h.bucket !== to);
+  if (!todo.length) return false;
+  if (useMock) { toast('Im Demo-Modus nicht möglich', 'info'); return false; }
+  const byFrom = new Map();
+  for (const h of todo) { if (!byFrom.has(h.bucket)) byFrom.set(h.bucket, []); byFrom.get(h.bucket).push(h.id); }
+  try {
+    for (const [from, ids] of byFrom) await storageClient.moveCandidates(ids, from, to);
+  } catch (err) {
+    toast(`Verschieben fehlgeschlagen: ${err.message}`, 'error');
+    return false;
+  }
+  for (const b of [...byFrom.keys(), to, 'all']) allBlobs[b] = null;
+  if ([...byFrom.keys(), to, 'all'].includes(currentBlobType)) switchBlob(currentBlobType);
+  toast(`${todo.length} Titel → ${to === 'watch' ? 'Watchlist' : 'Archiv'}`, 'success');
   return true;
 }
 
@@ -2817,6 +2836,7 @@ async function init() {
       loadRankings,
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
       onMoveHit: (hit, to) => moveRotationHit(hit, to),
+      onMoveHits: (hits, to) => moveRotationHits(hits, to),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.
       onSelectInList: (ids) => {
         if (!ids.length) return;

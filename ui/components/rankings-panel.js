@@ -77,8 +77,14 @@ function moveBtnHtml(it, find, from, to) {
 
 function rotationHtml(doc, find) {
   if (!doc) return '<p class="dash-muted">Noch keine Vorschläge gespeichert. Sie entstehen einmal pro Woche.</p>';
+  /* Kopf-Knopf „Alle N“: nur Titel, die noch im Ausgangs-Bucket liegen. */
+  const allBtn = (items, from, to) => {
+    const ids = (items ?? []).map((it) => find(it.symbol, it.exchange)).filter((h) => h && h.bucket === from).map((h) => h.id);
+    return ids.length ? `<button type="button" class="btn btn-sm ${to === 'watch' ? 'btn-success' : 'btn-secondary'} rk-move-all"
+      data-rk-move-all="${esc(ids.join(','))}" data-to="${to}">${to === 'watch' ? icons.eye : icons.archive}<span>Alle ${ids.length}</span></button>` : '';
+  };
   const part = (title, items, from, to) => `<section class="dash-card">
-    <header class="dash-card__head"><h3>${esc(title)}</h3></header>
+    <header class="dash-card__head"><h3>${esc(title)}</h3>${allBtn(items, from, to)}</header>
     <div class="dash-card__body">${items?.length
       ? `<div class="rk-list">${items.map((it) => `<div class="rk-rot">${rowHtml(it, find, false)}${moveBtnHtml(it, find, from, to)}</div>`).join('')}</div>`
       : '<p class="dash-muted">Diese Woche kein Vorschlag.</p>'}</div>
