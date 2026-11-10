@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261110a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261110b';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -1312,6 +1312,27 @@ async function briefingCandidates() {
     for (const c of blob?.candidates ?? []) out.push({ id: c.id, symbol: c.symbol, exchange: normalizeExchange(c.exchange) || c.exchange, bucket });
   }
   return out;
+}
+
+/**
+ * Monitor-Reiter „Rotation“: einen Vorschlag auf Tippen verschieben
+ * (Archiv → Watchlist oder Watchlist → Archiv). `hit` stammt aus
+ * `briefingCandidates` und trägt den echten Bucket. Liefert true bei Erfolg.
+ */
+async function moveRotationHit(hit, to) {
+  if (!hit || !hit.bucket || hit.bucket === to) return false;
+  if (useMock) { toast('Im Demo-Modus nicht möglich', 'info'); return false; }
+  try {
+    await storageClient.moveCandidate(hit.id, hit.bucket, to);
+  } catch (err) {
+    toast(`Verschieben fehlgeschlagen: ${err.message}`, 'error');
+    return false;
+  }
+  const from = hit.bucket;
+  allBlobs[from] = null; allBlobs[to] = null; allBlobs.all = null;
+  if ([from, to, 'all'].includes(currentBlobType)) switchBlob(currentBlobType);
+  toast(`${hit.symbol} → ${to === 'watch' ? 'Watchlist' : 'Archiv'}`, 'success');
+  return true;
 }
 
 /**
@@ -2795,6 +2816,7 @@ async function init() {
       bucket: currentBlobType,
       loadRankings,
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
+      onMoveHit: (hit, to) => moveRotationHit(hit, to),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.
       onSelectInList: (ids) => {
         if (!ids.length) return;

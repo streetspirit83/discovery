@@ -3084,3 +3084,9 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .mb-scout__add { display:inline-flex; align-items:center; gap:var(--s-1); }
 .mb-scout__where { font-size:var(--fs-1); color:var(--muted); }
 
+
+/* Monitor-Reiter Rotation: Verschieben-Knopf unter jeder Vorschlagszeile */
+.rk-rot { display:flex; flex-direction:column; gap:4px; }
+.rk-movebar { display:flex; justify-content:flex-end; align-items:center; gap:4px; margin:0; }
+.rk-movebar .btn { display:inline-flex; align-items:center; gap:6px; }
+.rk-movebar svg { width:14px; height:14px; }

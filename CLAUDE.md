@@ -478,7 +478,9 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
   Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag aus dem
   neuesten Eintrag des market-Blobs. Die Rotation steht seit Nov. 2026 im eigenen Monitor-Reiter „Rotation“
-  (`rotationTabHtml`): Archiv → Watchlist und Watchlist → Archiv, nur Vorschläge, verschoben wird von Hand. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  (`rotationTabHtml`): Archiv → Watchlist und Watchlist → Archiv. Unter jedem Vorschlag ein Knopf „Zur Watchlist“ bzw.
+  „Ins Archiv“ (`data-rk-move` → `onMoveHit` → `moveRotationHit` in `app.js`, ein `moveCandidate`); liegt der Titel schon
+  woanders, steht dort der aktuelle Bucket. Verschoben wird nur auf Tippen, nie automatisch. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
   {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
   `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
   beide Arten aus.

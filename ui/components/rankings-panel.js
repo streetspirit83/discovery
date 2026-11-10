@@ -60,18 +60,33 @@ function listHtml(list, key, find, hasPrev) {
     <div class="rk-list">${items.map((it) => rowHtml(it, find, hasPrev)).join('')}</div>`;
 }
 
+/* Knopf unter einer Rotations-Zeile: verschiebt den Titel auf Tippen
+   (dashboard-modal wertet `data-rk-move` aus). Liegt der Titel nicht mehr im
+   Ausgangs-Bucket, steht dort, wo er jetzt liegt. */
+const BUCKET_NAME = { watch: 'Watchlist', archive: 'Archiv', inbox: 'Inbox', export: 'Export' };
+function moveBtnHtml(it, find, from, to) {
+  const hit = find(it.symbol, it.exchange);
+  if (!hit) return '<p class="rk-tags rk-movebar">Nicht im Workspace</p>';
+  if (hit.bucket !== from) {
+    return `<p class="rk-tags rk-movebar">${icons.check} liegt in ${esc(BUCKET_NAME[hit.bucket] ?? hit.bucket)}</p>`;
+  }
+  const label = to === 'watch' ? 'Zur Watchlist' : 'Ins Archiv';
+  return `<div class="rk-movebar"><button type="button" class="btn btn-sm ${to === 'watch' ? 'btn-success' : 'btn-secondary'}"
+    data-rk-move="${esc(hit.id)}" data-to="${to}">${to === 'watch' ? icons.eye : icons.archive}<span>${label}</span></button></div>`;
+}
+
 function rotationHtml(doc, find) {
   if (!doc) return '<p class="dash-muted">Noch keine Vorschläge gespeichert. Sie entstehen einmal pro Woche.</p>';
-  const part = (title, items) => `<section class="dash-card">
+  const part = (title, items, from, to) => `<section class="dash-card">
     <header class="dash-card__head"><h3>${esc(title)}</h3></header>
     <div class="dash-card__body">${items?.length
-      ? `<div class="rk-list">${items.map((it) => rowHtml(it, find, false)).join('')}</div>`
+      ? `<div class="rk-list">${items.map((it) => `<div class="rk-rot">${rowHtml(it, find, false)}${moveBtnHtml(it, find, from, to)}</div>`).join('')}</div>`
       : '<p class="dash-muted">Diese Woche kein Vorschlag.</p>'}</div>
   </section>`;
-  return `<p class="rk-stand">Stand ${esc(dayLabel(doc.day))} · Vorschläge, verschoben wird von Hand</p>
+  return `<p class="rk-stand">Stand ${esc(dayLabel(doc.day))} · Vorschläge, verschoben wird erst auf Tippen</p>
     ${doc.lead ? `<p class="rk-lead">${esc(doc.lead)}</p>` : ''}
-    ${part('Archiv → Watchlist', doc.promote)}
-    ${part('Watchlist → Archiv', doc.demote)}`;
+    ${part('Archiv → Watchlist', doc.promote, 'archive', 'watch')}
+    ${part('Watchlist → Archiv', doc.demote, 'watch', 'archive')}`;
 }
 
 /* ── Reiter „Rotation“ (KI-Vorschläge vom Sonntag) ───────────────────────── */

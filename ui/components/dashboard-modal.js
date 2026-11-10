@@ -18,7 +18,7 @@ import {
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
-import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110a';
+import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110b';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261107a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 
@@ -64,7 +64,7 @@ const hint = (txt) => `<p class="dash-hint">${esc(txt)}</p>`;
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onMoveHit } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { perfWindow: '1W', expanded: new Set() };
@@ -407,8 +407,21 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     else rerender();
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
-  bodyEl.addEventListener('click', (e) => {
+  bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
+    /* Rotation: Knopf „Zur Watchlist“ / „Ins Archiv“ verschiebt genau diesen Titel. */
+    const mv = e.target.closest('[data-rk-move]');
+    if (mv) {
+      if (mv.disabled || !onMoveHit) return;
+      const hit = rk.data?.byId?.get(mv.dataset.rkMove);
+      if (!hit) return;
+      mv.disabled = true;
+      const ok = await onMoveHit(hit, mv.dataset.to).catch(() => false);
+      if (ok) hit.bucket = mv.dataset.to;   // byId und find teilen dasselbe Objekt
+      mv.disabled = false;
+      renderRotation();
+      return;
+    }
     const live = e.target.closest('[data-rk-live]');
     if (live) {
       const cand = candidates.find((c) => c.id === live.dataset.rkLive);
