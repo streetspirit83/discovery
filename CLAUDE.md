@@ -229,7 +229,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   f, at}; `f` = EUR je Notierungs-Einheit (impliziert, Median über gemeinsame
   Tage — gleicht GBX/Pence automatisch aus). Range-Levels × `f`, Chart/5T aus
   `eur_basis.c`, Kurs aus LS.
-- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle drei Reiter): jede Gruppe (`data-group` aus `section()`,
+- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group` aus `section()`,
   Signal-Chips, jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
   MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen, nie die hinter „+N mehr“; klappt eine markierte
   Gruppe auf, wächst die Auswahl mit. Nur Titel des aktiven Buckets zählen. Leiste unten „N markiert · In Liste
@@ -476,8 +476,9 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`) ist seit
   Nov. 2026 **eine Seite ohne Unterreiter**: oben die fünf Listen **technisch live** aus den Kandidaten des aktiven
   Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
-  Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag samt
-  Rotation aus den neuesten Einträgen des market-Blobs. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag aus dem
+  neuesten Eintrag des market-Blobs. Die Rotation steht seit Nov. 2026 im eigenen Monitor-Reiter „Rotation“
+  (`rotationTabHtml`): Archiv → Watchlist und Watchlist → Archiv, nur Vorschläge, verschoben wird von Hand. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
   {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
   `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
   beide Arten aus.

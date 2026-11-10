@@ -2,8 +2,9 @@
  * Reiter „Rankings“ im Monitor. Seit Nov. 2026 eine durchgehende Seite ohne
  * Unterreiter: oben die fünf technischen Listen, live aus den geladenen Daten
  * gerechnet (`liveRankingsHtml`, ohne KI, Logik in lib/rankings-filter.js),
- * darunter einklappbar das KI-Wochenranking vom Sonntag samt Rotation
- * (`weeklyRankingsHtml`, Einträge `ranking`/`rotation` aus dem market-Blob).
+ * darunter einklappbar das KI-Wochenranking vom Sonntag (`weeklyRankingsHtml`,
+ * Eintrag `ranking` aus dem market-Blob). Die Rotation hat seit Nov. 2026 einen
+ * eigenen Monitor-Reiter (`rotationTabHtml`, Eintrag `rotation`).
  *
  * Reine Darstellung: bekommt die neuesten Einträge `ranking` und `rotation` aus
  * dem market-Blob und liefert HTML. Tippen auf ein Symbol wertet dashboard-modal
@@ -67,10 +68,16 @@ function rotationHtml(doc, find) {
       ? `<div class="rk-list">${items.map((it) => rowHtml(it, find, false)).join('')}</div>`
       : '<p class="dash-muted">Diese Woche kein Vorschlag.</p>'}</div>
   </section>`;
-  return `<p class="rk-stand">Stand ${esc(dayLabel(doc.day))}</p>
+  return `<p class="rk-stand">Stand ${esc(dayLabel(doc.day))} · Vorschläge, verschoben wird von Hand</p>
     ${doc.lead ? `<p class="rk-lead">${esc(doc.lead)}</p>` : ''}
     ${part('Archiv → Watchlist', doc.promote)}
     ${part('Watchlist → Archiv', doc.demote)}`;
+}
+
+/* ── Reiter „Rotation“ (KI-Vorschläge vom Sonntag) ───────────────────────── */
+
+export function rotationTabHtml({ rotation, find } = {}) {
+  return rotationHtml(rotation, find ?? (() => null));
 }
 
 /* ── Technisches Ranking (live, ohne KI) ─────────────────────────────────── */
@@ -121,14 +128,13 @@ export function liveRankingsHtml(live, scope) {
 
 /* ── KI-Wochenranking (Sonntag), alle Listen untereinander ────────────────── */
 
-export function weeklyRankingsHtml({ ranking, rotation, find } = {}) {
-  if (!ranking && !rotation) return '<p class="dash-muted">Noch kein KI-Wochenranking gespeichert. Es entsteht sonntags.</p>';
+export function weeklyRankingsHtml({ ranking, find } = {}) {
+  if (!ranking) return '<p class="dash-muted">Noch kein KI-Wochenranking gespeichert. Es entsteht sonntags.</p>';
   const lists = ranking ? RANK_SEGS.filter((sg) => sg.key !== 'rotation').map((sg) => `<section class="dash-card">
     <header class="dash-card__head"><h3>${esc(sg.label)}</h3></header>
     <div class="dash-card__body">${listHtml(ranking.lists?.[sg.key], sg.key, find, !!ranking.has_prev)}</div>
   </section>`).join('') : '';
   return `${ranking ? `<p class="rk-stand">Stand ${esc(dayLabel(ranking.day))} · nur Watchlist</p>
     ${ranking.lead ? `<p class="rk-lead">${esc(ranking.lead)}</p>` : ''}` : ''}
-    ${lists}
-    ${rotation ? `<h4 class="rk-question">Rotation</h4>${rotationHtml(rotation, find)}` : ''}`;
+    ${lists}`;
 }

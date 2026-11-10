@@ -18,7 +18,7 @@ import {
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
-import { liveRankingsHtml, weeklyRankingsHtml } from './rankings-panel.js?v=20261106c';
+import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110a';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261107a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 
@@ -254,6 +254,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <button class="tab-btn active" data-dash-tab="overview" role="tab" aria-selected="true">Übersicht</button>
         <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
         <button class="tab-btn" data-dash-tab="picks" role="tab" aria-selected="false">Tagessieger</button>
+        <button class="tab-btn" data-dash-tab="rotation" role="tab" aria-selected="false">Rotation</button>
       </div>
       <div class="modal-body dash-body">${bodyHtml()}</div>
       <div class="dash-selbar" hidden></div>
@@ -330,7 +331,8 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   /* Reiter Rankings – eine Seite ohne Unterreiter:
      1. technische Listen live aus den Kandidaten des aktiven Buckets (ohne KI;
         bei „Watch + Archiv" nur die Watchlist, Perzentile über beide),
-     2. darunter einklappbar das KI-Wochenranking vom Sonntag aus dem market-Blob. */
+     2. darunter einklappbar das KI-Wochenranking vom Sonntag aus dem market-Blob.
+     Die Rotation (Archiv ↔ Watchlist) hat einen eigenen Reiter, siehe unten. */
   const rk = { tab: 'overview', data: null, err: null, loading: false, weeklyOpen: false, live: null };
   const scope = bucket === 'all' ? 'Watchlist' : (BUCKET_LABELS[bucket] ?? bucket);
   const weeklyBody = () => (rk.err ? `<p class="dash-muted">KI-Wochenranking konnte nicht geladen werden: ${esc(rk.err)}</p>`
@@ -354,6 +356,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     rk.loading = false;
     renderRankings();
     renderPicks();
+    renderRotation();
   }
   /* Reiter Tagessieger: Einträge `picks` aus dem market-Blob (derselbe Abruf wie die Rankings). */
   const renderPicks = () => {
@@ -370,6 +373,25 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     rk.loading = false;
     renderRankings();
     renderPicks();
+    renderRotation();
+  }
+  /* Reiter Rotation: Eintrag `rotation` aus dem market-Blob (Sonntag, KI-geprüft).
+     Nur Vorschläge – verschoben wird weiter von Hand über die Liste. */
+  const renderRotation = () => {
+    if (rk.tab !== 'rotation') return;
+    bodyEl.innerHTML = rk.err ? `<p class="dash-muted">Rotation konnte nicht geladen werden: ${esc(rk.err)}</p>`
+      : rk.data ? rotationTabHtml(rk.data)
+      : '<p class="dash-muted"><span class="ls-loading"></span> Lade Rotation …</p>';
+  };
+  async function showRotation() {
+    renderRotation();
+    if (rk.data || rk.loading || !loadRankings) return;
+    rk.loading = true;
+    try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
+    rk.loading = false;
+    renderRankings();
+    renderPicks();
+    renderRotation();
   }
   overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
     rk.tab = b.dataset.dashTab;
@@ -379,7 +401,10 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       t.setAttribute('aria-selected', String(on));
     });
     bodyEl.scrollTop = 0;
-    if (rk.tab === 'rankings') showRankings(); else if (rk.tab === 'picks') showPicks(); else rerender();
+    if (rk.tab === 'rankings') showRankings();
+    else if (rk.tab === 'picks') showPicks();
+    else if (rk.tab === 'rotation') showRotation();
+    else rerender();
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', (e) => {
