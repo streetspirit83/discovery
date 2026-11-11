@@ -99,9 +99,9 @@
 
 <!-- Debug-Konsole (Eruda) nur auf Wunsch: Seite mit ?debug öffnen. -->
 <script>if (/[?&]debug\b/.test(location.search)) { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/eruda'; s.onload = () => { eruda.init(); try { eruda.position({ x: innerWidth - 56, y: Math.round(innerHeight * 0.45) }); } catch (e) {} }; document.head.appendChild(s); }</script>
-<!-- PWA: Service Worker (sw.js) macht die App installierbar und offline lesbar. Nicht unter file://. -->
+<!-- PWA: Service Worker (sw.js) macht die App installierbar und offline lesbar. Nicht unter file:// und nicht in der Android-App (android-app/, Capacitor). -->
 <script>
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  if ('serviceWorker' in navigator && !window.Capacitor && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   // Statusleiste der installierten App folgt dem Theme-Schalter (Farbe der Topbar, --surface-2).
   (() => { const m = document.querySelector('meta[name="theme-color"]'), r = document.documentElement; const f = () => { m.content = r.getAttribute('data-theme') === 'dark' ? '#0f172a' : '#f1f5f9'; }; new MutationObserver(f).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); f(); })();
 </script>

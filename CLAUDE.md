@@ -76,6 +76,13 @@ fliegen raus. Backend-Aufrufe gehen unberührt ans Netz, Offline-Daten kommen au
 Cache-Busting-Regel gilt unverändert. Ändert sich die Cache-Logik, `CACHE` in `sw.js` hochzählen. ntfy bleibt der
 Push-Kanal: Der Knopf „🔍 Discovery“ (`#c=<id>`) öffnet die installierte App.
 
+**Android-App (APK, `android-app/`):** Capacitor-Hülle, die `ui/` in die App einpackt (läuft unter
+`https://localhost`, also mit eigenen Einstellungen und eigenem Cache, getrennt von der Web-App). Das Android-Projekt
+wird nicht eingecheckt: `android-app.yml` (von Hand oder bei Änderungen in `android-app/`) kopiert `ui/` nach `www/`,
+erzeugt das Projekt, baut eine Debug-APK und legt sie ins Vorab-Release `android-latest` (`discovery.apk`). Fester
+Signaturschlüssel über das Secret `ANDROID_KEYSTORE_B64`, sonst aus dem Actions-Cache. In der APK läuft kein Service
+Worker (`window.Capacitor`). Eine neue UI-Fassung kommt erst mit einem neuen APK-Build in die App.
+
 ## Startzeit (seit Nov. 2026, gemessen mit `diag-startup-bench.yml`)
 - **Blob-Cache:** Beim ersten Laden eines Buckets je Sitzung zeichnet die App den letzten Stand aus IndexedDB
   (`lib/blob-cache.js`) und fragt den Server im Hintergrund mit dem ETag (`readBlobIfChanged`, Op `read` mit `etag`):
