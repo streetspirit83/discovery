@@ -272,6 +272,9 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   zum selben Raster, aber aus den vollen ~500 Bars gerechnet (`smaTail`). Ohne
   diesen Vorlauf liesse sich aus 180 Bars nie eine SMA200 zeichnen; der 1J-Chart
   im Perf-Tab zeichnet sie als Kurven, nicht als waagerechte Momentwerte.
+  Der Periodensatz folgt dem Zoom (`SMA_ZOOM_PERIODS` in `candidate-detail.js`): ALL 20/50/100/200,
+  6M 10/20/50/100, 3M 5/10/20/50, 1M 3/5/10/20 — kürzere Perioden rechnet der Chart aus den gespeicherten Bars,
+  die vier Farben bleiben (schnell → langsam), die Legende zieht mit.
 - Scoring/signals: `tv-sentiment.js` (gerichtetes Bias −100…+100 + Trendalter +
   `biasRingSVG` — die Ring-Grafik liegt dort, damit Tabelle und Detail-Sheet
   garantiert dieselbe zeigen; die anderen Scores sind ungerichtete

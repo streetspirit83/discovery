@@ -502,6 +502,25 @@ function volStatsHTML(tv) {
   </div>`;
 }
 
+/* SMA-Perioden je Zoom-Stufe des Tageskerzen-Charts. Die klassischen 20/50/100/200
+   passen zum ganzen Fenster; im 1M-Ausschnitt (22 Handelstage) liegen sie weit weg
+   vom Kurs und sagen wenig. Deshalb skaliert der Satz mit dem Ausschnitt — immer
+   vier Kurven, schnell → langsam, in denselben vier Farben (`--sma-20` … `--sma-200`).
+   Perioden aus SMA_PERIODS kommen mit vollem Vorlauf aus `analysis.sma`, kürzere
+   werden aus den gespeicherten Bars gerechnet (Vorlauf höchstens 10 Bars). */
+const SMA_ZOOM_PERIODS = {
+  '1M': [3, 5, 10, 20],
+  '3M': [5, 10, 20, 50],
+  '6M': [10, 20, 50, 100],
+  ALL: SMA_PERIODS,
+};
+const smaPeriodsFor = (zoom) => SMA_ZOOM_PERIODS[zoom] ?? SMA_PERIODS;
+const smaSlot = (i) => SMA_PERIODS[i];   // Farb-Slot der i-ten Kurve
+function smaLegendHtml(zoom) {
+  return smaPeriodsFor(zoom).map((n, i) =>
+    `<span class="chart-smaleg__it"><i style="background:var(--sma-${smaSlot(i)})"></i>SMA${n}</span>`).join('');
+}
+
 function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
   const tv = disp.tv;
   const parts = [];
@@ -594,8 +613,7 @@ function renderPerformanceTab(c, disp, pc, tl, horizon = '1J', ui = {}) {
     // Legende für die vier SMA-Kurven: vier Blautöne sind ohne Zuordnung nicht
     // auseinanderzuhalten, und die Kurven tragen im Chart selbst keine Labels.
     const smaLegend = (want1J && canTd)
-      ? `<div class="chart-smaleg">${SMA_PERIODS.map((n) =>
-          `<span class="chart-smaleg__it"><i style="background:var(--sma-${n})"></i>SMA${n}</span>`).join('')}</div>`
+      ? `<div class="chart-smaleg">${smaLegendHtml(ui.zoom)}</div>`
       : '';
     // Kopf + Chart + Level-Bar + Zoom-Zeile liegen zusammen in `#chart-fs` —
     // dieser Block wandert im Vollbild als Ganzes in den <body> (siehe
@@ -2400,28 +2418,39 @@ export class CandidateDetail {
       a.ohlc.forEach((b, i) => { if (b?.date && arr[i] != null) m.set(b.date, arr[i]); });
       return m.size ? m : null;
     };
-    for (const n of SMA_PERIODS) {
-      const stored = storedByDate(n);
-      const local = stored ? null : smaSeries(bars, n);
-      const data = bars.map((b, i) => {
-        const v = stored ? stored.get(b.date) : local[i];
-        // Whitespace-Punkt vor dem Vorlauf: hält die Zeitachse lückenlos.
-        return v == null ? { time: b.date } : { time: b.date, value: v * f };
+    // Der Periodensatz hängt am Zoom (SMA_ZOOM_PERIODS): beim Wechsel des Ausschnitts
+    // werden die Kurven ersetzt, die Legende darunter zieht mit.
+    let smaDrawn = [];   // [{ series } | { line }] der aktuell gezeichneten Mittel
+    const drawSmas = (zoom) => {
+      for (const d of smaDrawn) { if (d.series) chart.removeSeries(d.series); else candle.removePriceLine(d.line); }
+      smaDrawn = [];
+      smaPeriodsFor(zoom).forEach((n, idx) => {
+        const color = col(`--sma-${smaSlot(idx)}`);
+        const stored = storedByDate(n);
+        const local = stored ? null : smaSeries(bars, n);
+        const data = bars.map((b, i) => {
+          const v = stored ? stored.get(b.date) : local[i];
+          // Whitespace-Punkt vor dem Vorlauf: hält die Zeitachse lückenlos.
+          return v == null ? { time: b.date } : { time: b.date, value: v * f };
+        });
+        if (data.some((p) => p.value != null)) {
+          // `title` = Beschriftung an der Preisachse, auf Höhe des letzten Werts
+          // der Kurve. Sie sagt direkt am Kurvenende, welche Periode dort liegt —
+          // die Legende unten ordnet zusätzlich die Farben zu.
+          const series = chart.addLineSeries({
+            color, lineWidth: idx === 3 ? 3 : 2,
+            lastValueVisible: false, priceLineVisible: false,
+            crosshairMarkerVisible: false, title: `SMA${n}`,
+          });
+          series.setData(data);
+          smaDrawn.push({ series });
+        } else if (smaTv[`sma${n}`] != null) {
+          smaDrawn.push({ line: candle.createPriceLine({ price: smaTv[`sma${n}`], color,
+            lineWidth: 1, lineStyle: 2, title: `SMA${n} (TV)` }) });
+        }
       });
-      if (data.some((p) => p.value != null)) {
-        // `title` = Beschriftung an der Preisachse, auf Höhe des letzten Werts
-        // der Kurve. Sie sagt direkt am Kurvenende, welche Periode dort liegt —
-        // die Legende unten ordnet zusätzlich die Farben zu.
-        chart.addLineSeries({
-          color: col(`--sma-${n}`), lineWidth: n === 200 ? 3 : 2,
-          lastValueVisible: false, priceLineVisible: false,
-          crosshairMarkerVisible: false, title: `SMA${n}`,
-        }).setData(data);
-      } else if (smaTv[`sma${n}`] != null) {
-        candle.createPriceLine({ price: smaTv[`sma${n}`], color: col(`--sma-${n}`),
-          lineWidth: 1, lineStyle: 2, title: `SMA${n} (TV)` });
-      }
-    }
+    };
+    drawSmas(this.chartZoom);
 
     // Live LS price (EUR → display) as a distinct marker line.
     const lsF = lsDisplayFactor(disp);
@@ -2470,7 +2499,10 @@ export class CandidateDetail {
     // dem Chart-Block, nicht ab der Sheet — im Vollbild hängt er im <body>.
     const root = el.closest('.chart-fs') ?? this.el;
     const applyZoom = (z) => {
+      if (z !== this.chartZoom) drawSmas(z);
       this.chartZoom = z;
+      const leg = root.querySelector('.chart-smaleg');
+      if (leg) leg.innerHTML = smaLegendHtml(z);
       const ts = chart.timeScale();
       const days = { '1M': 22, '3M': 66, '6M': 132 }[z];
       if (!days || candles.length <= days) ts.fitContent();
