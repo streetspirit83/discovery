@@ -6,6 +6,9 @@
   <title>Discovery Workspace</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#f1f5f9">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -96,6 +99,12 @@
 
 <!-- Debug-Konsole (Eruda) nur auf Wunsch: Seite mit ?debug öffnen. -->
 <script>if (/[?&]debug\b/.test(location.search)) { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/eruda'; s.onload = () => { eruda.init(); try { eruda.position({ x: innerWidth - 56, y: Math.round(innerHeight * 0.45) }); } catch (e) {} }; document.head.appendChild(s); }</script>
+<!-- PWA: Service Worker (sw.js) macht die App installierbar und offline lesbar. Nicht unter file://. -->
+<script>
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  // Statusleiste der installierten App folgt dem Theme-Schalter (Farbe der Topbar, --surface-2).
+  (() => { const m = document.querySelector('meta[name="theme-color"]'), r = document.documentElement; const f = () => { m.content = r.getAttribute('data-theme') === 'dark' ? '#0f172a' : '#f1f5f9'; }; new MutationObserver(f).observe(r, { attributes: true, attributeFilter: ['data-theme'] }); f(); })();
+</script>
 <!-- TradingView Lightweight Charts (vendor/) lädt lazy über lib/lwc-loader.js. -->
 <script type="module" src="app.js?v=20261110c"></script>
 </body>

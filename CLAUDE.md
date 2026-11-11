@@ -67,6 +67,15 @@ changed too, so bump its version wherever it is imported — all the way up to t
 serves stale modules (data won't load, view switches break, etc.). Use a dated
 tag like `20260627j`; keep it consistent across a single change set.
 
+## PWA / Android (seit Nov. 2026)
+Die App ist installierbar (Chrome → „App installieren“): `ui/manifest.webmanifest`, Icons in `ui/icons/`
+(`icon-maskable-512.png` = vollflächig für Android), Service Worker `ui/sw.js`, registriert per Inline-Skript in
+`index.html` (nur https/localhost, nicht `file://`). `sw.js` fasst nur die App-Hülle und die Google-Schriften an:
+Seitenaufruf Netz zuerst (4 s, sonst Cache), Dateien Cache zuerst mit Auffrischen im Hintergrund; alte `?v=`-Fassungen
+fliegen raus. Backend-Aufrufe gehen unberührt ans Netz, Offline-Daten kommen aus `lib/blob-cache.js`. Die
+Cache-Busting-Regel gilt unverändert. Ändert sich die Cache-Logik, `CACHE` in `sw.js` hochzählen. ntfy bleibt der
+Push-Kanal: Der Knopf „🔍 Discovery“ (`#c=<id>`) öffnet die installierte App.
+
 ## Startzeit (seit Nov. 2026, gemessen mit `diag-startup-bench.yml`)
 - **Blob-Cache:** Beim ersten Laden eines Buckets je Sitzung zeichnet die App den letzten Stand aus IndexedDB
   (`lib/blob-cache.js`) und fragt den Server im Hintergrund mit dem ETag (`readBlobIfChanged`, Op `read` mit `etag`):
