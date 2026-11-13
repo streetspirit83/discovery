@@ -6,9 +6,10 @@
  */
 
 import { buildLinks } from './link-builder.js';
+import { normalizeExchange } from './exchange-map.js';
 
 const nowIso = () => new Date().toISOString();
-const uuid = () =>
+export const uuid = () =>
   (crypto.randomUUID
     ? crypto.randomUUID()
     : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -31,16 +32,34 @@ function getField(obj, aliases) {
 const up = (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v);
 
 /**
- * Turn a loose object (candidate / Schema A / CSV row / search result) into a
- * full Discovery candidate. Returns null if no symbol can be found.
+ * Personal "watchlist export" format: { id, stamm: { symbol, exchange, name, ... }, user, quotes, calculations }.
+ * Only symbol/exchange/name are pulled in – the rest is the source app's own
+ * portfolio bookkeeping and isn't part of the Discovery candidate schema.
  */
-export function normalizeCandidate(obj) {
-  if (!obj || typeof obj !== 'object') return null;
+function flattenWatchlistExport(obj) {
+  const stamm = obj.stamm;
+  if (!stamm || typeof stamm !== 'object' || !stamm.symbol) return obj;
+  return {
+    id: obj.id,
+    symbol: stamm.symbol,
+    exchange: stamm.exchange,
+    name: stamm.name,
+  };
+}
+
+/**
+ * Turn a loose object (candidate / Schema A / watchlist export / CSV row /
+ * search result) into a full Discovery candidate. Returns null if no symbol
+ * can be found.
+ */
+export function normalizeCandidate(rawObj) {
+  if (!rawObj || typeof rawObj !== 'object') return null;
+  const obj = flattenWatchlistExport(rawObj);
 
   const symbol = up(getField(obj, ['symbol', 'ticker', 'sym']));
   if (!symbol) return null;
 
-  const exchange = up(getField(obj, ['exchange', 'exch', 'mic', 'market'])) || 'UNKNOWN';
+  const exchange = normalizeExchange(up(getField(obj, ['exchange', 'exch', 'mic', 'market']))) || 'UNKNOWN';
   const yahoo_symbol = getField(obj, ['yahoo_symbol', 'yahoo', 'yahoo symbol']) || symbol;
   const isin = getField(obj, ['isin']) || null;
   const name = getField(obj, ['name', 'company', 'company name', 'firma', 'bezeichnung']) || symbol;
@@ -222,9 +241,11 @@ function fromArray(arr, defaultFormat) {
   const first = arr[0] || {};
   const format = first.sources || first.workspace_state
     ? 'discovery-candidates'
-    : first.sector || first.trend_reason || first.core_business
-      ? 'schema-a'
-      : defaultFormat;
+    : first.stamm && typeof first.stamm === 'object'
+      ? 'watchlist-export'
+      : first.sector || first.trend_reason || first.core_business
+        ? 'schema-a'
+        : defaultFormat;
   return {
     candidates,
     format,

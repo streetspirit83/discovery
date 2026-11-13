@@ -1,0 +1,22 @@
+name: Diagnose – Startzeit der App
+on:
+  workflow_dispatch:
+    inputs:
+      buckets: { description: 'Buckets, kommagetrennt', default: 'all,watch' }
+      profile: { description: 'CPU-Profil beim Kaltstart (1 = ja)', default: '' }
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: tools/dossier } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: cp ../diag/startup-bench.mjs ./startup-bench.mjs && node startup-bench.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          BUCKETS: ${{ inputs.buckets }}
+          PROFILE: ${{ inputs.profile }}
