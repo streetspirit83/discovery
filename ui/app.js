@@ -97,6 +97,8 @@ const uiState = (() => {
   const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
   s.fCap = toArr(s.fCap); s.fSector = toArr(s.fSector); s.fMega = toArr(s.fMega); s.fScore = toArr(s.fScore);
   s.fTr = toArr(s.fTr); s.fLsTrend = toArr(s.fLsTrend);
+  // Start immer mit der ★-Liste (Portfolio); abschalten gilt nur für die laufende Sitzung.
+  s.fBroker = 'star';
   return s;
 })();
 function saveUiState() {
@@ -275,6 +277,43 @@ async function runLsQuoteForSelection(idsArg) {
     await storageClient.bulkUpdateCandidates(currentBlobType, updates);
   } catch (err) {
     toast(`Speichern fehlgeschlagen (UI bleibt aktuell): ${err.message}`, 'error');
+  }
+}
+
+/* Start: LS-Livekurse der ★-Liste still nachladen (kein Toast, kein ISIN-Nachschlag).
+   Wartet, bis der Hintergrund-Abgleich des Blob-Caches durch ist – sonst ersetzt
+   der frische Stand die Objekte mitten im Abruf. Ein Fehlversuch behält den alten
+   Kurs; gespeichert werden nur Treffer. */
+async function refreshStarLsOnLoad() {
+  if (useMock || !storageClient || !candidateList) return;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return;
+  for (let i = 0; i < 40 && revalidating > 0; i++) await new Promise((r) => setTimeout(r, 250));
+  await new Promise((r) => setTimeout(r, 400)); // Neuzeichnung nach dem Abgleich abwarten
+  if (candidateList.filters.broker !== 'star') return;
+  const bucket = currentBlobType;
+  const rows = candidateList.getFiltered();
+  if (!rows.length) return;
+  const prev = new Map(rows.map((c) => [c.id, c.ls_quote]));
+  let updates;
+  try {
+    updates = await candidateList.runLsQuote(rows.map((c) => c.id), { backendUrl, secret });
+  } catch (err) {
+    console.warn('[LS] Start-Aktualisierung fehlgeschlagen:', err.message);
+    updates = [];
+  }
+  const ok = updates.filter((u) => u.updates.ls_quote?.price != null);
+  const okIds = new Set(ok.map((u) => u.candidate_id));
+  let restored = false;
+  for (const c of rows) {
+    if (okIds.has(c.id)) continue;
+    const old = prev.get(c.id);
+    if (old?.price != null) { c.ls_quote = old; restored = true; }
+  }
+  if (restored) candidateList.renderRowsSoon();
+  if (ok.length && currentBlobType === bucket) {
+    storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
   }
 }
 
@@ -2587,7 +2626,8 @@ async function init() {
   updateMockBadge();
 
   // Merkliste ("Einstand"/Stückzahl) lädt oben parallel zum Blob. LS-Kurse
-  // gibt es nur auf Abruf (LS-Kurs-Knopf), nicht automatisch beim Laden.
+  // holt der Start nur für die ★-Liste selbst, sonst auf Abruf (LS-Kurs-Knopf).
+  refreshStarLsOnLoad();
 
   // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
   // sheet on load, and on later hash changes (second push while app is open).

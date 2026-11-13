@@ -93,6 +93,9 @@ Worker (`window.Capacitor`). Eine neue UI-Fassung kommt erst mit einem neuen APK
   Zustandswechsel in `candidateList.batch()` bündeln; nachgeladene Zusatzdaten über `renderRowsSoon()`. `renderRows`
   zeichnet 40 Zeilen sofort und den Rest in Häppchen (alles auf einmal, wenn weiter unten gescrollt).
 - **Zusatzdaten** (Merkliste, LS-Historie, Analysten, market) starten in `init()` parallel zum Blob (`shared()` teilt laufende Abrufe).
+- **Startansicht:** Die App startet immer mit aktivem ★-Filter (Portfolio), im zuletzt genutzten Bucket; abschalten
+  gilt nur bis zum nächsten Laden. Für diese Liste holt `refreshStarLsOnLoad` (`app.js`) nach dem Cache-Abgleich still
+  die LS-Livekurse (Wellen von 6, nur Treffer werden gespeichert, ein Fehlversuch behält den alten Kurs).
 - **Lazy:** Lightweight Charts über `lib/lwc-loader.js` (Detail-Sheet, Watch Ranges; Vorladen im Leerlauf).
   Eruda nur mit `?debug`.
 - Messen: `diag-startup-bench.yml` (Handy, CPU 4× gedrosselt, kalt/warm, optional CPU-Profil) und `diag-blob-sizes.yml`.
