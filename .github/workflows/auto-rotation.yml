@@ -31,3 +31,4 @@ jobs:
           DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
           DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
           FORCE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && 'dry' || '' }}
+          DIAG: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && '1' || '' }}

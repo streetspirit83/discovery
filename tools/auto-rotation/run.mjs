@@ -181,6 +181,17 @@ async function main() {
   log(`\nNeu in der Watchlist (${report.enter.length}):`); report.enter.forEach((r) => log(line(r)));
   log(`\nIns Archiv (${report.leave.length}):`); report.leave.forEach((r) => log(line(r)));
   log(`\nQualitätsplätze (${res.quality.length}):`); res.quality.forEach((r) => log(`  ${String(r.qrank).padStart(3)} ${r.symbol.padEnd(7)} ${String(r.name).slice(0, 24).padEnd(24)} ${r.bucket.padEnd(7)} ${String(r.qscore).padStart(5)}  Health ${r.health} · ROIC ${r.roic} · Bias ${r.bias}`));
+  if (process.env.DIAG) {
+    const ki = new Map();
+    const rk = (market0?.briefings ?? []).filter((b) => b.kind === 'ranking').sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+    for (const [list, v] of Object.entries(rk?.lists ?? {})) for (const it of v.items ?? []) { const cur = ki.get(it.symbol); if (!cur || it.rank < cur.rank) ki.set(it.symbol, { rank: it.rank, list }); }
+    const d = (r) => `  ${String(r.rank ?? '').padStart(3)} ${String(r.symbol).padEnd(6)} ${String(r.score ?? '–').padStart(5)} Bias ${String(r.bias ?? '–').padStart(4)} Sc ${String(r.overall ?? '–').padStart(3)} Tr ${String(r.trend ?? '–').padStart(3)} H ${String(r.health ?? '–').padStart(3)} | 1M ${String(r.perf_1m ?? '–').padStart(6)} 3M ${String(r.perf_3m ?? '–').padStart(6)} | unterHoch ${String(r.off_high ?? '–').padStart(5)}% neuesHoch ${r.fresh_high ? 'ja' : r.fresh_high === false ? 'nein' : '–'} Aufwärts ${r.uptrend ? 'ja' : r.uptrend === false ? 'nein' : '–'}${ki.has(r.symbol) ? ` | KI ${ki.get(r.symbol).list} #${ki.get(r.symbol).rank}` : ''}`;
+    log(`\nDIAG KI-Ranking vom ${rk?.day ?? '–'} · Abgänge:`); [...res.leave].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999)).forEach((r) => log(d(r)));
+    const setup = (r) => r.uptrend && r.fresh_high && r.off_high != null && r.off_high <= 10;
+    const free = rows.filter((r) => !r.protect.length && r.score != null);
+    log(`\nDIAG Setup (Aufwärtstrend, 6M-Hoch im letzten Monat, höchstens 10 % darunter): ${free.filter(setup).length} freie Titel · davon in der Auswahl ${res.watch.filter(setup).length} · unter den Abgängen ${res.leave.filter(setup).length}`);
+    log('DIAG Setup-Titel ausserhalb der Auswahl, beste 25 nach Score:'); free.filter((r) => setup(r) && !chosenIds.has(r.id)).sort((a, b) => b.score - a.score).slice(0, 25).forEach((r) => log(`${d(r)} [${r.bucket}]`));
+  }
   if (report.deleted.length || friday) log(`\nInbox-Rest (Freitag): ${report.deleted.length} Titel${live ? ' gelöscht' : ' würden gelöscht'}`);
   if (errors.length) process.exit(1);
 }

@@ -66,7 +66,13 @@ export function rowOf(c, rules = RULES) {
   if (analystUp != null && analystUp >= rules.bonus.analystMinPct) bonus += rules.bonus.analyst;
   const base = m ? weighted(m, rules.weights, ['bias', 'overall']) : null;
   const qbase = m ? weighted(m, rules.qualityWeights, ['health', 'roic', 'overall']) : null;
+  // Setup „Ausbruch, Trend intakt“ – nur aus Scanner-Feldern, damit es für alle Buckets gilt.
+  const hi1 = Number(tv.high_1m), hiLong = Number(tv.high_6m) || Number(tv.high_3m), s50 = Number(tv.sma50), s200 = Number(tv.sma200);
+  const offHigh = hi1 > 0 && close > 0 ? (1 - close / hi1) * 100 : null;          // % unter dem Monatshoch
+  const freshHigh = hi1 > 0 && hiLong > 0 ? hi1 >= hiLong * 0.995 : null;          // 6-Monats-Hoch im letzten Monat erreicht
+  const uptrend = close > 0 && s50 > 0 && s200 > 0 ? close > s50 && s50 > s200 : null;
   return {
+    off_high: r1(offHigh), fresh_high: freshHigh, uptrend, perf_1m: r1(m?.perf_1m), perf_3m: r1(m?.perf_3m),
     id: c.id, symbol: c.symbol, exchange: c.exchange ?? '', name: m?.name ?? c.name ?? c.symbol, bucket: c._bucket,
     sector: c.sector ?? null, protect: protectionOf(c),
     score: base == null ? null : r1(base + bonus),
