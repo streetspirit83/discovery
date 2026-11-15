@@ -551,7 +551,12 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
 - **Auswahl:** 40 Plätze „Momentum“ (Score aus Bias 35 % · Score der Standardtabelle 30 % · Health 15 % · Trend-Radar
   10 % · ROIC 10 %, absolute Skalen; Bonus je 4 Punkte für fairer Kurs ≥ Kurs und Analystenziel ≥ 10 % über Kurs) und
   10 Plätze „Qualität im Rücksetzer“ (Bias < 25, Health ≥ 70, ROIC > 0; Health · ROIC · Score). Alles in `RULES`.
-- **Puffer:** neu ab Momentum-Rang ≤ 32 bzw. Qualitätsrang ≤ 8, vorhandene Watch-Titel bleiben bis Rang 48 bzw. 15.
+- **Ausbruch-Setup** (`setup` je Titel, nur Scanner-Felder): Kurs > SMA50 > SMA200, 6-Monats-Hoch im letzten Monat
+  erreicht (`high_1m` ≥ `high_6m`), Kurs höchstens 10 % unter dem Monatshoch. Gibt im Momentum-Score 10 Punkte (bis 5 %
+  darunter) bzw. 6 Punkte, damit ein kleiner Rücksetzer nach einem Ausbruch nicht zum Abstieg führt.
+- **Puffer und Bestandsvorrang:** neu ab Momentum-Rang ≤ 32 bzw. Qualitätsrang ≤ 8, vorhandene Watch-Titel bleiben bis
+  Rang 48 bzw. 15, im intakten Ausbruch-Setup bis Rang 120. Vorhandene Titel werden vor Neuzugängen gesetzt
+  (`pickWithBuffer`); der erste Lauf tauscht deshalb weniger, die Plätze werden frei, sobald ein Setup bricht.
 - **Geschützt** (zählen nicht zu den 50, werden nie herausgenommen, aus anderen Buckets nachgezogen): Stern (Merkliste),
   Auge (`watch_flag`), aktiver Alarm (`alerts`, `range_alarm`, `range_override`). Im Archiv prüft `check-alerts` nicht.
 - **Daten:** TV frisch für alle Titel, LS-Kurs für alle in Reichweite der Auswahl (direkt, ohne Proxy). LS dient nur als
@@ -560,7 +565,8 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
 - **Modus** im market-Blob (`auto_rotation.mode`, Schalter im Reiter, `setRotationMode` in `app.js`): `dry` (Standard)
   schreibt nur den Bericht; `live` schreibt die TV-Daten in die Buckets, verschiebt (`move_candidates`) und löscht
   freitags den Inbox-Rest, der älter als 5 Tage ist (ohne Tombstone: ein neues Signal bringt den Titel zurück).
-  Der Workflow von Hand läuft als Probelauf, solange `dry` angehakt ist.
+  Der Workflow von Hand läuft als Probelauf, solange `dry` angehakt ist, und schreibt dann eine Diagnose ins Log
+  (`DIAG`: Abgänge mit Kennzahlen und Rang im KI-Wochenranking, Setup-Titel ausserhalb der Auswahl).
 - **Bericht:** `auto_rotation.reports` im market-Blob (30 Läufe, neueste zuerst, `selection` nur im neuesten), ohne KI.
   Anzeige: Monitor-Reiter „Rotation“ (`rotationTabHtml` in `rankings-panel.js`). Gleiche Concurrency-Gruppe wie der
   Monitor-Bericht, weil beide den market-Blob schreiben.
