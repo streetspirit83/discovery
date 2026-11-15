@@ -3,8 +3,8 @@
  * Unterreiter: oben die fünf technischen Listen, live aus den geladenen Daten
  * gerechnet (`liveRankingsHtml`, ohne KI, Logik in lib/rankings-filter.js),
  * darunter einklappbar das KI-Wochenranking vom Sonntag (`weeklyRankingsHtml`,
- * Eintrag `ranking` aus dem market-Blob). Die Rotation hat seit Nov. 2026 einen
- * eigenen Monitor-Reiter (`rotationTabHtml`, Eintrag `rotation`).
+ * Eintrag `ranking` aus dem market-Blob). Der Monitor-Reiter „Rotation“ zeigt den
+ * Tagesbericht der Auto-Rotation (`rotationTabHtml`, `auto_rotation` im market-Blob).
  *
  * Reine Darstellung: bekommt die neuesten Einträge `ranking` und `rotation` aus
  * dem market-Blob und liefert HTML. Tippen auf ein Symbol wertet dashboard-modal
@@ -60,45 +60,94 @@ function listHtml(list, key, find, hasPrev) {
     <div class="rk-list">${items.map((it) => rowHtml(it, find, hasPrev)).join('')}</div>`;
 }
 
-/* Knopf unter einer Rotations-Zeile: verschiebt den Titel auf Tippen
-   (dashboard-modal wertet `data-rk-move` aus). Liegt der Titel nicht mehr im
-   Ausgangs-Bucket, steht dort, wo er jetzt liegt. */
+/* ── Reiter „Rotation“: Tagesbericht der Auto-Rotation ─────────────────────
+   Kein KI-Text. Der Bericht entsteht im täglichen Lauf (tools/auto-rotation/run.mjs)
+   und liegt im market-Blob unter `auto_rotation.reports` (neueste zuerst). Im
+   Probelauf zeigt er, was verschoben würde; scharf, was verschoben wurde. */
 const BUCKET_NAME = { watch: 'Watchlist', archive: 'Archiv', inbox: 'Inbox', export: 'Export' };
-function moveBtnHtml(it, find, from, to) {
+const fmt1 = (v) => (v == null ? '–' : String(Math.round(v * 10) / 10).replace('.', ','));
+const runLabel = (r) => {
+  const d = r?.at ? new Date(r.at) : null;
+  return d ? `${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}, ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr` : dayLabel(r?.day);
+};
+
+function autoRowHtml(it, find, badge) {
   const hit = find(it.symbol, it.exchange);
-  if (!hit) return '<p class="rk-tags rk-movebar">Nicht im Workspace</p>';
-  if (hit.bucket !== from) {
-    return `<p class="rk-tags rk-movebar">${icons.check} liegt in ${esc(BUCKET_NAME[hit.bucket] ?? hit.bucket)}</p>`;
-  }
-  const label = to === 'watch' ? 'Zur Watchlist' : 'Ins Archiv';
-  return `<div class="rk-movebar"><button type="button" class="btn btn-sm ${to === 'watch' ? 'btn-success' : 'btn-secondary'}"
-    data-rk-move="${esc(hit.id)}" data-to="${to}">${to === 'watch' ? icons.eye : icons.archive}<span>${label}</span></button></div>`;
+  const head = `
+    <span class="rk-rank">${esc(badge ?? '')}</span>
+    <span class="rk-id">
+      <span class="rk-sym">${esc(it.symbol)}</span>
+      <span class="rk-name">${esc(it.name ?? '')}</span>
+    </span>
+    <span class="rk-val"><span class="rk-score" title="Auswahl-Score 0–100">${esc(fmtScore(it.score))}</span></span>`;
+  const origin = it.from && it.from !== 'watch' ? ` · aus ${BUCKET_NAME[it.from] ?? it.from}` : '';
+  const note = it.why ? `<p class="rk-note">${esc(it.why)}${esc(origin)}</p>` : '';
+  return hit
+    ? `<button type="button" class="rk-row" data-rk-id="${esc(hit.id)}"><span class="rk-head">${head}</span>${note}</button>`
+    : `<div class="rk-row rk-row--off"><span class="rk-head">${head}</span>${note}</div>`;
 }
 
-function rotationHtml(doc, find) {
-  if (!doc) return '<p class="dash-muted">Noch keine Vorschläge gespeichert. Sie entstehen einmal pro Woche.</p>';
-  /* Kopf-Knopf „Alle N“: nur Titel, die noch im Ausgangs-Bucket liegen. */
-  const allBtn = (items, from, to) => {
-    const ids = (items ?? []).map((it) => find(it.symbol, it.exchange)).filter((h) => h && h.bucket === from).map((h) => h.id);
-    return ids.length ? `<button type="button" class="btn btn-sm ${to === 'watch' ? 'btn-success' : 'btn-secondary'} rk-move-all"
-      data-rk-move-all="${esc(ids.join(','))}" data-to="${to}">${to === 'watch' ? icons.eye : icons.archive}<span>Alle ${ids.length}</span></button>` : '';
-  };
-  const part = (title, items, from, to) => `<section class="dash-card">
-    <header class="dash-card__head"><h3>${esc(title)}</h3>${allBtn(items, from, to)}</header>
-    <div class="dash-card__body">${items?.length
-      ? `<div class="rk-list">${items.map((it) => `<div class="rk-rot">${rowHtml(it, find, false)}${moveBtnHtml(it, find, from, to)}</div>`).join('')}</div>`
-      : '<p class="dash-muted">Diese Woche kein Vorschlag.</p>'}</div>
+const autoCard = (title, body, extra = '') => `<section class="dash-card">
+    <header class="dash-card__head"><h3>${esc(title)}</h3>${extra}</header>
+    <div class="dash-card__body">${body}</div>
   </section>`;
-  return `<p class="rk-stand">Stand ${esc(dayLabel(doc.day))} · Vorschläge, verschoben wird erst auf Tippen</p>
-    ${doc.lead ? `<p class="rk-lead">${esc(doc.lead)}</p>` : ''}
-    ${part('Archiv → Watchlist', doc.promote, 'archive', 'watch')}
-    ${part('Watchlist → Archiv', doc.demote, 'watch', 'archive')}`;
-}
+const autoList = (items, find, badge) => `<div class="rk-list">${items.map((it) => autoRowHtml(it, find, badge(it))).join('')}</div>`;
+const symLine = (items) => `<p class="rk-tags">${items.map((it) => esc(it.symbol)).join(' · ')}</p>`;
 
-/* ── Reiter „Rotation“ (KI-Vorschläge vom Sonntag) ───────────────────────── */
+export function rotationTabHtml({ auto, find, day = null } = {}) {
+  find ??= () => null;
+  const reports = auto?.reports ?? [];
+  const mode = auto?.mode === 'live' ? 'live' : 'dry';
+  const seg = (m, label) => `<button type="button" class="seg-btn${mode === m ? ' seg-btn--active' : ''}" data-rot-mode="${m}" aria-pressed="${mode === m}">${label}</button>`;
+  const modeBar = `<div class="rk-mode" role="group" aria-label="Modus der Auto-Rotation">
+      ${seg('dry', 'Probelauf')}${seg('live', 'Scharf')}
+      <span class="rk-stand">${mode === 'live' ? 'Der nächste Lauf verschiebt.' : 'Der nächste Lauf verschiebt nichts.'} Läuft werktags gegen 22:40 Uhr.</span>
+    </div>`;
+  if (!reports.length) return `${modeBar}<p class="dash-muted">Noch kein Lauf gespeichert.</p>`;
 
-export function rotationTabHtml({ rotation, find } = {}) {
-  return rotationHtml(rotation, find ?? (() => null));
+  const r = reports.find((x) => x.day === day) ?? reports[0];
+  const dry = r.mode !== 'live';
+  const days = reports.length > 1 ? `<div class="rk-days" role="group" aria-label="Lauf wählen">${reports.slice(0, 10).map((x) =>
+    `<button type="button" class="chip-btn${x.day === r.day ? ' is-active' : ''}" data-rot-day="${esc(x.day)}">${esc(new Date(`${x.day}T12:00:00`).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' }))}</button>`).join('')}</div>` : '';
+
+  const u = r.universe ?? {}, pr = r.protected ?? {}, d = r.data ?? {};
+  const mCap = r.rules?.momentum?.cap ?? 40, qCap = r.rules?.quality?.cap ?? 10;
+  const sel = r.selection ?? [];
+  const nQ = sel.length ? sel.filter((x) => x.slot === 'quality').length : qCap;
+  const nM = sel.length ? sel.length - nQ : mCap;
+  const status = dry ? 'Probelauf: Es wurde nichts verschoben.'
+    : r.errors?.length ? 'Scharf, mit Fehlern (siehe unten).'
+    : `Scharf: ${r.moved?.in ?? 0} in die Watchlist, ${r.moved?.out ?? 0} ins Archiv${r.moved?.pulled ? `, ${r.moved.pulled} geschützte nachgezogen` : ''}${r.moved?.deleted ? `, ${r.moved.deleted} aus der Inbox gelöscht` : ''}.`;
+  const facts = `
+    <p class="rk-tags"><b>Watchlist danach:</b> ${esc(r.watch_after)} Titel (${nM} Momentum · ${nQ} Qualität · ${esc(pr.count ?? 0)} geschützt${r.kept_no_data?.length ? ` · ${r.kept_no_data.length} ohne Daten` : ''})</p>
+    <p class="rk-tags"><b>Geschützt:</b> ${esc(pr.star ?? 0)} Stern · ${esc(pr.eye ?? 0)} Auge · ${esc(pr.alarm ?? 0)} mit Alarm</p>
+    <p class="rk-tags"><b>Geprüft:</b> ${esc(u.stocks ?? '–')} Aktien aus Watchlist ${esc(u.watch ?? '–')}, Inbox ${esc(u.inbox ?? '–')}, Archiv ${esc(u.archive ?? '–')}</p>
+    <p class="rk-tags"><b>Daten:</b> TradingView ${esc(d.tv ?? '–')}/${esc(d.tv_total ?? '–')} · LS ${esc(d.ls_checked ?? '–')} geprüft, ${esc(d.ls_missing?.length ?? 0)} ohne Kurs</p>
+    <p class="rk-tags"><b>Schwelle:</b> Momentum ab ${esc(fmt1(r.threshold?.momentum))} · Qualität ab ${esc(fmt1(r.threshold?.quality))}</p>`;
+
+  const none = '<p class="dash-muted">Keine Änderung.</p>';
+  const enter = r.enter ?? [], leave = r.leave ?? [], pulled = r.pulled ?? [];
+  const rankOf = (it) => (it.slot === 'quality' ? `Q${it.qrank ?? ''}` : it.rank ?? '');
+  const parts = [
+    autoCard(`${dry ? 'Käme neu in die Watchlist' : 'Neu in der Watchlist'} (${enter.length})`, enter.length ? autoList(enter, find, rankOf) : none),
+    autoCard(`${dry ? 'Ginge ins Archiv' : 'Ins Archiv verschoben'} (${leave.length})`, leave.length ? autoList(leave, find, (it) => it.rank ?? '–') : none),
+  ];
+  if (pulled.length) parts.push(autoCard(`Geschützte Titel ${dry ? 'kämen' : 'kamen'} in die Watchlist (${pulled.length})`, autoList(pulled, find, () => '')));
+  if (r.purge_day || r.deleted?.length) parts.push(autoCard(`Inbox-Rest ${dry ? 'würde gelöscht' : 'gelöscht'} (${r.deleted?.length ?? 0})`, r.deleted?.length ? symLine(r.deleted) : none));
+  if (r.kept_no_data?.length) parts.push(autoCard(`Ohne Daten liegen geblieben (${r.kept_no_data.length})`, symLine(r.kept_no_data)));
+  if (r.errors?.length) parts.push(autoCard('Fehler im Lauf', r.errors.map((e) => `<p class="rk-tags"><b class="neg">${esc(e)}</b></p>`).join('')));
+  if (sel.length) {
+    const rows = (slot) => autoList(sel.filter((x) => x.slot === slot).map((x) => ({ ...x, why: x.new ? 'neu' : '' })), find, (it) => (slot === 'quality' ? `Q${it.rank}` : it.rank));
+    parts.push(`<details class="dash-card rk-weekly">
+      <summary class="dash-card__head"><h3>Auswahl nach diesem Lauf (${sel.length})</h3></summary>
+      <div class="dash-card__body"><p class="rk-question">Momentum (${nM})</p>${rows('momentum')}<p class="rk-question">Qualität im Rücksetzer (${nQ})</p>${rows('quality')}</div>
+    </details>`);
+  }
+  return `${modeBar}${days}
+    <p class="rk-stand">Lauf vom ${esc(runLabel(r))}</p>
+    <p class="rk-lead">${esc(status)}</p>
+    ${autoCard('Überblick', facts)}
+    ${parts.join('\n')}`;
 }
 
 /* ── Technisches Ranking (live, ohne KI) ─────────────────────────────────── */

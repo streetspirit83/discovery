@@ -3086,9 +3086,7 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 
 
 /* Monitor-Reiter Rotation: Verschieben-Knopf unter jeder Vorschlagszeile */
-.rk-rot { display:flex; flex-direction:column; gap:4px; }
-.rk-movebar { display:flex; justify-content:flex-end; align-items:center; gap:4px; margin:0; }
-.rk-movebar .btn { display:inline-flex; align-items:center; gap:6px; }
-.rk-movebar svg { width:14px; height:14px; }
-.dash-card__head .rk-move-all { margin-left:auto; display:inline-flex; align-items:center; gap:6px; }
-.dash-card__head .rk-move-all svg { width:14px; height:14px; }
+/* Reiter „Rotation“ (Tagesbericht der Auto-Rotation): Modus-Schalter und Lauf-Auswahl */
+.rk-mode { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-1) var(--s-2); }
+.rk-days { display:flex; flex-wrap:wrap; gap:var(--s-1); }
+.rk-days .chip-btn.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }

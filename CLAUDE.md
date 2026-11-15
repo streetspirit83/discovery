@@ -499,11 +499,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   Nov. 2026 **eine Seite ohne Unterreiter**: oben die fünf Listen **technisch live** aus den Kandidaten des aktiven
   Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
   Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag aus dem
-  neuesten Eintrag des market-Blobs. Die Rotation steht seit Nov. 2026 im eigenen Monitor-Reiter „Rotation“
-  (`rotationTabHtml`): Archiv → Watchlist und Watchlist → Archiv. Unter jedem Vorschlag ein Knopf „Zur Watchlist“ bzw.
-  „Ins Archiv“ (`data-rk-move` → `onMoveHit` → `moveRotationHit` in `app.js`, ein `moveCandidate`); liegt der Titel schon
-  woanders, steht dort der aktuelle Bucket. Im Kartenkopf „Alle N“ (`data-rk-move-all` → `onMoveHits` → `moveRotationHits`, mit Rückfrage) für alle Vorschläge
-  einer Richtung, die noch im Ausgangs-Bucket liegen. Verschoben wird nur auf Tippen, nie automatisch. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  neuesten Eintrag des market-Blobs. Der Monitor-Reiter „Rotation“ zeigt seit Nov. 2026 den Tagesbericht der Auto-Rotation (siehe „Auto-Rotation“); die KI-Vorschläge `kind: rotation` vom Sonntag zeigt die App nicht mehr an. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
   {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
   `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
   beide Arten aus.
@@ -548,6 +544,26 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
 - **Rankings-Filter (`ui/lib/rankings-filter.js`, reine Logik; `tools/monitor-report/rankings.mjs` reicht sie nur weiter):** Das Bias (`computeBias`, −100…+100) ist Kennzahl `bias`: Gewicht in allen fünf Listen, Filter Momentum und Ausbruch nur mit Bias > 0, Rücksetzer ohne Bias ≤ −60. Der Monitor-Lauf schreibt zusätzlich „Discovery Rankings.json“ in denselben Drive-Ordner. **Strikte Trennung:** `rankings.*` (momentum, solid, growth, pullback, breakout) enthalten nur den Watch-Bucket, `rotation.promote` nur das Archiv, `rotation.demote` nur die Watchlist ohne Augen- und Depot-Titel (Depot live aus der Merkliste, `fetchMerklisteEntries`; ist sie nicht lesbar, bleibt `demote` leer). Je Liste Ausschlussfilter, dann Score aus Perzentilen über Watch + Archiv, höchstens `CONFIG.candidates` Titel und `CONFIG.sectorCap` je Sektor. Finanzwerte (`sector == 'Finance'`) haben eigene Filter, weil FCF und Reverse-DCF dort wenig aussagen. Börsenwert grob nach USD umgerechnet (`USD_PER`), nur für Mindestgrössen. Die Auswahl steht mit dem Filter fest (12 je Liste und Richtung, je Firma ein Listing); die Wochen-KI bewertet sie nur. `known_symbols` listet alles aus Watch, Archiv und Inbox für den Scout.
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
+
+## Auto-Rotation (`auto-rotation.yml`, werktags 21:37 UTC, vor dem Monitor-Bericht)
+`tools/auto-rotation/run.mjs` (I/O) + `select.mjs` (reine Logik) wählen die Watchlist täglich neu aus Watchlist, Inbox
+und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
+- **Auswahl:** 40 Plätze „Momentum“ (Score aus Bias 35 % · Score der Standardtabelle 30 % · Health 15 % · Trend-Radar
+  10 % · ROIC 10 %, absolute Skalen; Bonus je 4 Punkte für fairer Kurs ≥ Kurs und Analystenziel ≥ 10 % über Kurs) und
+  10 Plätze „Qualität im Rücksetzer“ (Bias < 25, Health ≥ 70, ROIC > 0; Health · ROIC · Score). Alles in `RULES`.
+- **Puffer:** neu ab Momentum-Rang ≤ 32 bzw. Qualitätsrang ≤ 8, vorhandene Watch-Titel bleiben bis Rang 48 bzw. 15.
+- **Geschützt** (zählen nicht zu den 50, werden nie herausgenommen, aus anderen Buckets nachgezogen): Stern (Merkliste),
+  Auge (`watch_flag`), aktiver Alarm (`alerts`, `range_alarm`, `range_override`). Im Archiv prüft `check-alerts` nicht.
+- **Daten:** TV frisch für alle Titel, LS-Kurs für alle in Reichweite der Auswahl (direkt, ohne Proxy). LS dient nur als
+  Bedingung, `ls_quote` schreibt der Lauf nicht. Watch-Titel ohne Daten bleiben liegen.
+- **Abbruch ohne Änderung:** Merkliste nicht lesbar, < 70 % TV-Daten oder Scores, LS für > 30 % nicht abrufbar.
+- **Modus** im market-Blob (`auto_rotation.mode`, Schalter im Reiter, `setRotationMode` in `app.js`): `dry` (Standard)
+  schreibt nur den Bericht; `live` schreibt die TV-Daten in die Buckets, verschiebt (`move_candidates`) und löscht
+  freitags den Inbox-Rest, der älter als 5 Tage ist (ohne Tombstone: ein neues Signal bringt den Titel zurück).
+  Der Workflow von Hand läuft als Probelauf, solange `dry` angehakt ist.
+- **Bericht:** `auto_rotation.reports` im market-Blob (30 Läufe, neueste zuerst, `selection` nur im neuesten), ohne KI.
+  Anzeige: Monitor-Reiter „Rotation“ (`rotationTabHtml` in `rankings-panel.js`). Gleiche Concurrency-Gruppe wie der
+  Monitor-Bericht, weil beide den market-Blob schreiben.
 
 ## Alerts (`check-alerts`, alle 20 min, 7–21 UTC)
 Die App ist die einzige Quelle für Levels und Alarme (`range_override`, `range_alarm`, `wr_sup_/wr_res_<id>`).

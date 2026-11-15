@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261110c';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261115a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -1354,42 +1354,21 @@ async function briefingCandidates() {
 }
 
 /**
- * Monitor-Reiter „Rotation“: einen Vorschlag auf Tippen verschieben
- * (Archiv → Watchlist oder Watchlist → Archiv). `hit` stammt aus
- * `briefingCandidates` und trägt den echten Bucket. Liefert true bei Erfolg.
+ * Monitor-Reiter „Rotation“: Modus der Auto-Rotation umschalten (`dry` = Probelauf,
+ * `live` = der tägliche Lauf verschiebt). Steht im market-Blob unter `auto_rotation.mode`
+ * und gilt ab dem nächsten Lauf (tools/auto-rotation/run.mjs). Liefert true bei Erfolg.
  */
-async function moveRotationHit(hit, to) {
-  if (!hit || !hit.bucket || hit.bucket === to) return false;
+async function setRotationMode(mode) {
+  if (mode !== 'live' && mode !== 'dry') return false;
   if (useMock) { toast('Im Demo-Modus nicht möglich', 'info'); return false; }
   try {
-    await storageClient.moveCandidate(hit.id, hit.bucket, to);
+    const cur = (await storageClient.readBlob('market')) ?? {};
+    await storageClient.writeBlob('market', { ...cur, auto_rotation: { ...(cur.auto_rotation ?? {}), mode, mode_at: new Date().toISOString() } });
   } catch (err) {
-    toast(`Verschieben fehlgeschlagen: ${err.message}`, 'error');
+    toast(`Umschalten fehlgeschlagen: ${err.message}`, 'error');
     return false;
   }
-  const from = hit.bucket;
-  allBlobs[from] = null; allBlobs[to] = null; allBlobs.all = null;
-  if ([from, to, 'all'].includes(currentBlobType)) switchBlob(currentBlobType);
-  toast(`${hit.symbol} → ${to === 'watch' ? 'Watchlist' : 'Archiv'}`, 'success');
-  return true;
-}
-
-/** Wie moveRotationHit, aber alle Vorschläge einer Richtung in einem Rutsch (je Ausgangs-Bucket ein moveCandidates). */
-async function moveRotationHits(hits, to) {
-  const todo = (hits ?? []).filter((h) => h?.bucket && h.bucket !== to);
-  if (!todo.length) return false;
-  if (useMock) { toast('Im Demo-Modus nicht möglich', 'info'); return false; }
-  const byFrom = new Map();
-  for (const h of todo) { if (!byFrom.has(h.bucket)) byFrom.set(h.bucket, []); byFrom.get(h.bucket).push(h.id); }
-  try {
-    for (const [from, ids] of byFrom) await storageClient.moveCandidates(ids, from, to);
-  } catch (err) {
-    toast(`Verschieben fehlgeschlagen: ${err.message}`, 'error');
-    return false;
-  }
-  for (const b of [...byFrom.keys(), to, 'all']) allBlobs[b] = null;
-  if ([...byFrom.keys(), to, 'all'].includes(currentBlobType)) switchBlob(currentBlobType);
-  toast(`${todo.length} Titel → ${to === 'watch' ? 'Watchlist' : 'Archiv'}`, 'success');
+  toast(mode === 'live' ? 'Auto-Rotation scharf, gilt ab dem nächsten Lauf' : 'Auto-Rotation im Probelauf', 'success');
   return true;
 }
 
@@ -1428,7 +1407,7 @@ function openMarketBriefing(kind = null) {
   });
 }
 
-/* Neueste Rankings und Rotation aus dem market-Blob, dazu die Symbol-Auflösung. */
+/* Neueste Rankings und die Berichte der Auto-Rotation aus dem market-Blob, dazu die Symbol-Auflösung. */
 async function loadRankings() {
   const [market, cands] = await Promise.all([storageClient.readBlob('market'), briefingCandidates()]);
   const latest = (kind) => (market?.briefings ?? []).filter((b) => b.kind === kind).sort((a, b) => (a.day < b.day ? 1 : -1))[0] ?? null;
@@ -1437,7 +1416,7 @@ async function loadRankings() {
     const list = cands.filter((c) => String(c.symbol ?? '').toUpperCase() === String(symbol ?? '').toUpperCase());
     return list.find((c) => String(c.exchange ?? '').toUpperCase() === String(exchange ?? '').toUpperCase()) ?? list[0] ?? null;
   };
-  return { ranking: latest('ranking'), rotation: latest('rotation'), find, byId,
+  return { ranking: latest('ranking'), auto: market?.auto_rotation ?? null, find, byId,
     briefings: market?.briefings ?? [], method: market?.picks_method ?? null };
 }
 
@@ -2875,8 +2854,7 @@ async function init() {
       bucket: currentBlobType,
       loadRankings,
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
-      onMoveHit: (hit, to) => moveRotationHit(hit, to),
-      onMoveHits: (hits, to) => moveRotationHits(hits, to),
+      onSetRotationMode: (mode) => setRotationMode(mode),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.
       onSelectInList: (ids) => {
         if (!ids.length) return;

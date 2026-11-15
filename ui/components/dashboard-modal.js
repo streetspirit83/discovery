@@ -18,7 +18,7 @@ import {
 } from '../lib/dashboard-metrics.js?v=20261103h';
 import { trendRadar } from '../lib/trend-radar.js?v=20261103h';
 import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
-import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261110c';
+import { liveRankingsHtml, weeklyRankingsHtml, rotationTabHtml } from './rankings-panel.js?v=20261115a';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261107a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 
@@ -64,7 +64,7 @@ const hint = (txt) => `<p class="dash-hint">${esc(txt)}</p>`;
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onMoveHit, onMoveHits } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { perfWindow: '1W', expanded: new Set() };
@@ -375,12 +375,12 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     renderPicks();
     renderRotation();
   }
-  /* Reiter Rotation: Eintrag `rotation` aus dem market-Blob (Sonntag, KI-geprüft).
-     Nur Vorschläge – verschoben wird weiter von Hand über die Liste. */
+  /* Reiter Rotation: Tagesbericht der Auto-Rotation (`auto_rotation` im market-Blob,
+     derselbe Abruf wie die Rankings). Der Schalter Probelauf/Scharf gilt ab dem nächsten Lauf. */
   const renderRotation = () => {
     if (rk.tab !== 'rotation') return;
     bodyEl.innerHTML = rk.err ? `<p class="dash-muted">Rotation konnte nicht geladen werden: ${esc(rk.err)}</p>`
-      : rk.data ? rotationTabHtml(rk.data)
+      : rk.data ? rotationTabHtml({ auto: rk.data.auto, find: rk.data.find, day: rk.rotDay })
       : '<p class="dash-muted"><span class="ls-loading"></span> Lade Rotation …</p>';
   };
   async function showRotation() {
@@ -409,30 +409,22 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
-    /* Rotation: Knopf „Zur Watchlist“ / „Ins Archiv“ verschiebt genau diesen Titel. */
-    const all = e.target.closest('[data-rk-move-all]');
-    if (all) {
-      if (all.disabled || !onMoveHits) return;
-      const to = all.dataset.to;
-      const hits = all.dataset.rkMoveAll.split(',').map((id) => rk.data?.byId?.get(id)).filter(Boolean);
-      if (!hits.length) return;
-      if (!confirm(`${hits.length} Titel ${to === 'watch' ? 'in die Watchlist' : 'ins Archiv'} verschieben?`)) return;
-      all.disabled = true;
-      const ok = await onMoveHits(hits, to).catch(() => false);
-      if (ok) hits.forEach((h) => { h.bucket = to; });
-      all.disabled = false;
-      renderRotation();
-      return;
-    }
-    const mv = e.target.closest('[data-rk-move]');
-    if (mv) {
-      if (mv.disabled || !onMoveHit) return;
-      const hit = rk.data?.byId?.get(mv.dataset.rkMove);
-      if (!hit) return;
-      mv.disabled = true;
-      const ok = await onMoveHit(hit, mv.dataset.to).catch(() => false);
-      if (ok) hit.bucket = mv.dataset.to;   // byId und find teilen dasselbe Objekt
-      mv.disabled = false;
+    /* Rotation: Lauf wählen und Modus umschalten. */
+    const rotDay = e.target.closest('[data-rot-day]');
+    if (rotDay) { rk.rotDay = rotDay.dataset.rotDay; renderRotation(); return; }
+    const rotMode = e.target.closest('[data-rot-mode]');
+    if (rotMode) {
+      const mode = rotMode.dataset.rotMode;
+      const auto = rk.data?.auto;
+      if (rotMode.disabled || !onSetRotationMode || (auto?.mode === 'live' ? 'live' : 'dry') === mode) return;
+      if (mode === 'live') {
+        const last = auto?.reports?.[0];
+        const n = last ? `Der letzte Lauf hätte ${last.enter?.length ?? 0} Titel in die Watchlist und ${last.leave?.length ?? 0} ins Archiv verschoben. ` : '';
+        if (!confirm(`${n}Scharf schalten? Ab dem nächsten Lauf wird automatisch verschoben, freitags wird der Inbox-Rest gelöscht.`)) return;
+      }
+      rotMode.disabled = true;
+      const ok = await onSetRotationMode(mode).catch(() => false);
+      if (ok && rk.data) rk.data.auto = { ...(rk.data.auto ?? {}), mode };
       renderRotation();
       return;
     }
