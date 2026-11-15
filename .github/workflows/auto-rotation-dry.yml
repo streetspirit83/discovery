@@ -1,0 +1,14 @@
+name: Auto-Rotation – Testlauf (schreibt nichts)
+on: workflow_dispatch
+jobs:
+  dry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/auto-rotation/dry-run.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
