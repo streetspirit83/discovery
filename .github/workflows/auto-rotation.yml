@@ -16,6 +16,10 @@ on:
         type: choice
         options: ['', 'live', 'dry']
         default: ''
+      patch_report:
+        description: 'Wartung: Bericht wiederherstellen (JSON), kein Lauf'
+        type: string
+        default: ''
       symbols:
         description: 'Diagnose: Symbole mit allen Werten ins Log (kommagetrennt)'
         type: string
@@ -43,3 +47,4 @@ jobs:
           DIAG: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && '1' || '' }}
           DIAG_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || '' }}
           SET_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.set_mode || '' }}
+          PATCH_REPORT: ${{ github.event_name == 'workflow_dispatch' && inputs.patch_report || '' }}

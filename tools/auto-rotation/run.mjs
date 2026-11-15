@@ -56,6 +56,19 @@ async function main() {
     log(`✓ Modus jetzt: ${back?.auto_rotation?.mode} (vorher ${cur.auto_rotation?.mode ?? 'dry'}) · ${back?.auto_rotation?.reports?.length ?? 0} Berichte · ${back?.briefings?.length ?? 0} Briefings erhalten`);
     return;
   }
+  // Einmalige Wiederherstellung eines scharfen Berichts aus dem Lauf-Log (PATCH_REPORT = JSON {day,enter,leave,moved}).
+  if (process.env.PATCH_REPORT) {
+    const p = JSON.parse(process.env.PATCH_REPORT);
+    const [w, a, i, cur] = await Promise.all(['watch', 'archive', 'inbox', 'market'].map((b) => storage({ op: 'read', blob_type: b })));
+    const bySym = new Map();
+    for (const [b, blob] of [['watch', w], ['archive', a], ['inbox', i]]) for (const c of blob?.candidates ?? []) if (!bySym.has(c.symbol)) bySym.set(c.symbol, { ...c, _bucket: b });
+    const fill = (it) => { const c = bySym.get(it.symbol); const r = c ? rowOf(c) : {}; return { ...it, exchange: c?.exchange ?? '', name: r.name ?? c?.name ?? it.symbol, bias: r.bias ?? null, overall: r.overall ?? null, health: r.health ?? null, roic: r.roic ?? null, fair_upside: r.fair_upside ?? null, analyst_upside: r.analyst_upside ?? null }; };
+    const reports = (cur.auto_rotation?.reports ?? []).map((r) => (r.day !== p.day ? r : { ...r, mode: 'live', applied: true, moved: p.moved, enter: p.enter.map(fill), leave: p.leave.map(fill), selection: (r.selection ?? []).map((x) => ({ ...x, new: p.enter.some((e) => e.symbol === x.symbol) })), restored: true }));
+    await storage({ op: 'write', blob_type: 'market', blob: { ...cur, updated_at: new Date().toISOString(), auto_rotation: { ...(cur.auto_rotation ?? {}), reports } } });
+    const r0 = reports.find((r) => r.day === p.day);
+    log(`✓ Bericht ${p.day} wiederhergestellt: Modus ${r0?.mode} · rein ${r0?.enter?.length} · raus ${r0?.leave?.length} · Auswahl ${r0?.selection?.length} · Modus gesamt ${cur.auto_rotation?.mode}`);
+    return;
+  }
   const startedAt = new Date();
   const [watch, archive, inbox, lsHist, market0] = await Promise.all([
     storage({ op: 'read', blob_type: 'watch' }), storage({ op: 'read', blob_type: 'archive' }),
@@ -183,42 +196,50 @@ async function main() {
     moved: live ? moved : null, errors,
   };
   const cur = (await storage({ op: 'read', blob_type: 'market' })) ?? {};
+  const sameDayLive = (cur.auto_rotation?.reports ?? []).find((r) => r.day === report.day && r.mode === 'live');
+  if (!live && sameDayLive) {
+    log(`Probelauf: Bericht nicht gespeichert, der scharfe Bericht vom ${report.day} bleibt stehen.`);
+    return printSummary();
+  }
   const old = (cur.auto_rotation?.reports ?? []).filter((r) => r.day !== report.day).map(({ selection, ...r }) => r);   // Auswahl nur im neuesten Bericht
   const reports = [report, ...old].sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, KEEP_REPORTS);
   await storage({ op: 'write', blob_type: 'market', blob: { ...cur, updated_at: new Date().toISOString(), auto_rotation: { ...(cur.auto_rotation ?? {}), mode: cur.auto_rotation?.mode === 'live' ? 'live' : 'dry', reports } } });
+  function printSummary() {
+  const line = (r) => `  ${String(r.rank ?? r.qrank ?? '').padStart(3)} ${String(r.symbol).padEnd(7)} ${String(r.name).slice(0, 24).padEnd(24)} ${String(r.from).padEnd(7)} ${String(r.score ?? '–').padStart(5)}  ${r.why}`;
+    log(`\nNeu in der Watchlist (${report.enter.length}):`); report.enter.forEach((r) => log(line(r)));
+    log(`\nIns Archiv (${report.leave.length}):`); report.leave.forEach((r) => log(line(r)));
+    log(`\nQualitätsplätze (${res.quality.length}):`); res.quality.forEach((r) => log(`  ${String(r.qrank).padStart(3)} ${r.symbol.padEnd(7)} ${String(r.name).slice(0, 24).padEnd(24)} ${r.bucket.padEnd(7)} ${String(r.qscore).padStart(5)}  Health ${r.health} · ROIC ${r.roic} · Bias ${r.bias}`));
+    if (process.env.DIAG) {
+      const ki = new Map();
+      const rk = (market0?.briefings ?? []).filter((b) => b.kind === 'ranking').sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+      for (const [list, v] of Object.entries(rk?.lists ?? {})) for (const it of v.items ?? []) { const cur = ki.get(it.symbol); if (!cur || it.rank < cur.rank) ki.set(it.symbol, { rank: it.rank, list }); }
+      const d = (r) => `  ${String(r.rank ?? '').padStart(3)} ${String(r.symbol).padEnd(6)} ${String(r.score ?? '–').padStart(5)} Bias ${String(r.bias ?? '–').padStart(4)} Sc ${String(r.overall ?? '–').padStart(3)} Tr ${String(r.trend ?? '–').padStart(3)} H ${String(r.health ?? '–').padStart(3)} | 1M ${String(r.perf_1m ?? '–').padStart(6)} 3M ${String(r.perf_3m ?? '–').padStart(6)} | unterHoch ${String(r.off_high ?? '–').padStart(5)}% ${String(r.off_atr ?? '–').padStart(4)}ATR neuesHoch ${r.fresh_high ? 'ja' : r.fresh_high === false ? 'nein' : '–'} Aufwärts ${r.uptrend ? 'ja' : r.uptrend === false ? 'nein' : '–'}${ki.has(r.symbol) ? ` | KI ${ki.get(r.symbol).list} #${ki.get(r.symbol).rank}` : ''}`;
+      log(`\nDIAG KI-Ranking vom ${rk?.day ?? '–'} · Abgänge:`); [...res.leave].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999)).forEach((r) => log(d(r)));
+      const setup = (r) => r.setup;
+      const free = rows.filter((r) => !r.protect.length && r.score != null);
+      log(`\nDIAG Setup (6M-Hoch im letzten Monat, SMA20>50>200, über SMA20, ≤ 3 ATR unter Hoch): ${free.filter(setup).length} freie Titel · davon in der Auswahl ${res.watch.filter(setup).length} · unter den Abgängen ${res.leave.filter(setup).length}`);
+      log('DIAG Setup-Titel ausserhalb der Auswahl, beste 25 nach Score:'); free.filter((r) => setup(r) && !chosenIds.has(r.id)).sort((a, b) => b.score - a.score).slice(0, 25).forEach((r) => log(`${d(r)} [${r.bucket}]`));
+    }
+    if (process.env.DIAG_SYMBOLS) {
+      const want = new Set(process.env.DIAG_SYMBOLS.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
+      const keys = ['close', 'change', 'perf_w', 'perf_1m', 'perf_3m', 'perf_6m', 'high_1m', 'low_1m', 'high_3m', 'high_6m', 'price_52_week_high', 'price_52_week_low', 'sma20', 'sma50', 'sma100', 'sma200', 'ema20', 'rsi', 'adx', 'atr', 'avg_vol_10d', 'average_volume_30d_calc', 'market_cap'];
+      for (const c of cands.filter((x) => want.has(String(x.symbol).toUpperCase()))) {
+        const r = rows.find((x) => x.id === c.id);
+        const m = metricsOf(c);
+        log(`\nDIAG ${c.symbol} (${c.exchange}) – Bucket ${c._bucket} · Rang ${r?.rank ?? '–'} · Q-Rang ${r?.qrank ?? '–'} · in Auswahl ${chosenIds.has(c.id)} · Schutz ${r?.protect.join('/') || '–'}`);
+        log(`  Zeile: ${JSON.stringify(r)}`);
+        log(`  Kennzahlen: ${JSON.stringify({ res: m?.res, res_dist: m?.res_dist, sup: m?.sup, sup_dist: m?.sup_dist, high_dist: m?.high_dist, range_1m: m?.range_1m, off_low_1m: m?.off_low_1m, vol_ratio: m?.vol_ratio, trend_strength: m?.trend_strength })}`);
+        log(`  TV: ${JSON.stringify(Object.fromEntries(keys.map((k) => [k, c.tv_data?.[k] ?? null])))}`);
+        const sa = c.swing_analysis;
+        if (sa?.ohlc?.length) log(`  Kerzen (letzte 30, ${sa.currency ?? '?'}, Stand ${sa.fetched_at ?? '?'}): ${sa.ohlc.slice(-30).map((b) => `${b.date?.slice(5)} ${Math.round(b.c * 100) / 100}`).join(' · ')}`);
+        if (sa?.resistance?.length || sa?.support?.length) log(`  Zonen: Res ${JSON.stringify((sa.resistance ?? []).slice(0, 3))} · Sup ${JSON.stringify((sa.support ?? []).slice(0, 3))}`);
+      }
+    }
+    if (report.deleted.length || friday) log(`\nInbox-Rest (Freitag): ${report.deleted.length} Titel${live ? ' gelöscht' : ' würden gelöscht'}`);
+  }
   log(`✓ Bericht ${report.day} gespeichert (${JSON.stringify(report).length} Zeichen, ${reports.length} Berichte)`);
 
-  const line = (r) => `  ${String(r.rank ?? r.qrank ?? '').padStart(3)} ${String(r.symbol).padEnd(7)} ${String(r.name).slice(0, 24).padEnd(24)} ${String(r.from).padEnd(7)} ${String(r.score ?? '–').padStart(5)}  ${r.why}`;
-  log(`\nNeu in der Watchlist (${report.enter.length}):`); report.enter.forEach((r) => log(line(r)));
-  log(`\nIns Archiv (${report.leave.length}):`); report.leave.forEach((r) => log(line(r)));
-  log(`\nQualitätsplätze (${res.quality.length}):`); res.quality.forEach((r) => log(`  ${String(r.qrank).padStart(3)} ${r.symbol.padEnd(7)} ${String(r.name).slice(0, 24).padEnd(24)} ${r.bucket.padEnd(7)} ${String(r.qscore).padStart(5)}  Health ${r.health} · ROIC ${r.roic} · Bias ${r.bias}`));
-  if (process.env.DIAG) {
-    const ki = new Map();
-    const rk = (market0?.briefings ?? []).filter((b) => b.kind === 'ranking').sort((a, b) => (a.day < b.day ? 1 : -1))[0];
-    for (const [list, v] of Object.entries(rk?.lists ?? {})) for (const it of v.items ?? []) { const cur = ki.get(it.symbol); if (!cur || it.rank < cur.rank) ki.set(it.symbol, { rank: it.rank, list }); }
-    const d = (r) => `  ${String(r.rank ?? '').padStart(3)} ${String(r.symbol).padEnd(6)} ${String(r.score ?? '–').padStart(5)} Bias ${String(r.bias ?? '–').padStart(4)} Sc ${String(r.overall ?? '–').padStart(3)} Tr ${String(r.trend ?? '–').padStart(3)} H ${String(r.health ?? '–').padStart(3)} | 1M ${String(r.perf_1m ?? '–').padStart(6)} 3M ${String(r.perf_3m ?? '–').padStart(6)} | unterHoch ${String(r.off_high ?? '–').padStart(5)}% ${String(r.off_atr ?? '–').padStart(4)}ATR neuesHoch ${r.fresh_high ? 'ja' : r.fresh_high === false ? 'nein' : '–'} Aufwärts ${r.uptrend ? 'ja' : r.uptrend === false ? 'nein' : '–'}${ki.has(r.symbol) ? ` | KI ${ki.get(r.symbol).list} #${ki.get(r.symbol).rank}` : ''}`;
-    log(`\nDIAG KI-Ranking vom ${rk?.day ?? '–'} · Abgänge:`); [...res.leave].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999)).forEach((r) => log(d(r)));
-    const setup = (r) => r.setup;
-    const free = rows.filter((r) => !r.protect.length && r.score != null);
-    log(`\nDIAG Setup (6M-Hoch im letzten Monat, SMA20>50>200, über SMA20, ≤ 3 ATR unter Hoch): ${free.filter(setup).length} freie Titel · davon in der Auswahl ${res.watch.filter(setup).length} · unter den Abgängen ${res.leave.filter(setup).length}`);
-    log('DIAG Setup-Titel ausserhalb der Auswahl, beste 25 nach Score:'); free.filter((r) => setup(r) && !chosenIds.has(r.id)).sort((a, b) => b.score - a.score).slice(0, 25).forEach((r) => log(`${d(r)} [${r.bucket}]`));
-  }
-  if (process.env.DIAG_SYMBOLS) {
-    const want = new Set(process.env.DIAG_SYMBOLS.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
-    const keys = ['close', 'change', 'perf_w', 'perf_1m', 'perf_3m', 'perf_6m', 'high_1m', 'low_1m', 'high_3m', 'high_6m', 'price_52_week_high', 'price_52_week_low', 'sma20', 'sma50', 'sma100', 'sma200', 'ema20', 'rsi', 'adx', 'atr', 'avg_vol_10d', 'average_volume_30d_calc', 'market_cap'];
-    for (const c of cands.filter((x) => want.has(String(x.symbol).toUpperCase()))) {
-      const r = rows.find((x) => x.id === c.id);
-      const m = metricsOf(c);
-      log(`\nDIAG ${c.symbol} (${c.exchange}) – Bucket ${c._bucket} · Rang ${r?.rank ?? '–'} · Q-Rang ${r?.qrank ?? '–'} · in Auswahl ${chosenIds.has(c.id)} · Schutz ${r?.protect.join('/') || '–'}`);
-      log(`  Zeile: ${JSON.stringify(r)}`);
-      log(`  Kennzahlen: ${JSON.stringify({ res: m?.res, res_dist: m?.res_dist, sup: m?.sup, sup_dist: m?.sup_dist, high_dist: m?.high_dist, range_1m: m?.range_1m, off_low_1m: m?.off_low_1m, vol_ratio: m?.vol_ratio, trend_strength: m?.trend_strength })}`);
-      log(`  TV: ${JSON.stringify(Object.fromEntries(keys.map((k) => [k, c.tv_data?.[k] ?? null])))}`);
-      const sa = c.swing_analysis;
-      if (sa?.ohlc?.length) log(`  Kerzen (letzte 30, ${sa.currency ?? '?'}, Stand ${sa.fetched_at ?? '?'}): ${sa.ohlc.slice(-30).map((b) => `${b.date?.slice(5)} ${Math.round(b.c * 100) / 100}`).join(' · ')}`);
-      if (sa?.resistance?.length || sa?.support?.length) log(`  Zonen: Res ${JSON.stringify((sa.resistance ?? []).slice(0, 3))} · Sup ${JSON.stringify((sa.support ?? []).slice(0, 3))}`);
-    }
-  }
-  if (report.deleted.length || friday) log(`\nInbox-Rest (Freitag): ${report.deleted.length} Titel${live ? ' gelöscht' : ' würden gelöscht'}`);
+  printSummary();
   if (errors.length) process.exit(1);
 }
 
