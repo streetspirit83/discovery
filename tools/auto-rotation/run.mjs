@@ -22,6 +22,7 @@ import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { fetchLsPrice } from '../../netlify-backend/netlify/functions/lib/ls-quote.js';
 import { RULES, rowOf, select, whyEnter, whyLeave } from './select.mjs';
+import { metricsOf } from '../../ui/lib/rankings-filter.js';
 
 const KEEP_REPORTS = 30;
 const INBOX_MIN_DAYS = 5;        // jüngere Inbox-Titel überleben das Löschen am Freitag
@@ -192,6 +193,21 @@ async function main() {
     const free = rows.filter((r) => !r.protect.length && r.score != null);
     log(`\nDIAG Setup (Aufwärtstrend, 6M-Hoch im letzten Monat, höchstens 10 % darunter): ${free.filter(setup).length} freie Titel · davon in der Auswahl ${res.watch.filter(setup).length} · unter den Abgängen ${res.leave.filter(setup).length}`);
     log('DIAG Setup-Titel ausserhalb der Auswahl, beste 25 nach Score:'); free.filter((r) => setup(r) && !chosenIds.has(r.id)).sort((a, b) => b.score - a.score).slice(0, 25).forEach((r) => log(`${d(r)} [${r.bucket}]`));
+  }
+  if (process.env.DIAG_SYMBOLS) {
+    const want = new Set(process.env.DIAG_SYMBOLS.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean));
+    const keys = ['close', 'change', 'perf_w', 'perf_1m', 'perf_3m', 'perf_6m', 'high_1m', 'low_1m', 'high_3m', 'high_6m', 'price_52_week_high', 'price_52_week_low', 'sma20', 'sma50', 'sma100', 'sma200', 'ema20', 'rsi', 'adx', 'atr', 'avg_vol_10d', 'average_volume_30d_calc', 'market_cap'];
+    for (const c of cands.filter((x) => want.has(String(x.symbol).toUpperCase()))) {
+      const r = rows.find((x) => x.id === c.id);
+      const m = metricsOf(c);
+      log(`\nDIAG ${c.symbol} (${c.exchange}) – Bucket ${c._bucket} · Rang ${r?.rank ?? '–'} · Q-Rang ${r?.qrank ?? '–'} · in Auswahl ${chosenIds.has(c.id)} · Schutz ${r?.protect.join('/') || '–'}`);
+      log(`  Zeile: ${JSON.stringify(r)}`);
+      log(`  Kennzahlen: ${JSON.stringify({ res: m?.res, res_dist: m?.res_dist, sup: m?.sup, sup_dist: m?.sup_dist, high_dist: m?.high_dist, range_1m: m?.range_1m, off_low_1m: m?.off_low_1m, vol_ratio: m?.vol_ratio, trend_strength: m?.trend_strength })}`);
+      log(`  TV: ${JSON.stringify(Object.fromEntries(keys.map((k) => [k, c.tv_data?.[k] ?? null])))}`);
+      const sa = c.swing_analysis;
+      if (sa?.ohlc?.length) log(`  Kerzen (letzte 30, ${sa.currency ?? '?'}, Stand ${sa.fetched_at ?? '?'}): ${sa.ohlc.slice(-30).map((b) => `${b.date?.slice(5)} ${Math.round(b.c * 100) / 100}`).join(' · ')}`);
+      if (sa?.resistance?.length || sa?.support?.length) log(`  Zonen: Res ${JSON.stringify((sa.resistance ?? []).slice(0, 3))} · Sup ${JSON.stringify((sa.support ?? []).slice(0, 3))}`);
+    }
   }
   if (report.deleted.length || friday) log(`\nInbox-Rest (Freitag): ${report.deleted.length} Titel${live ? ' gelöscht' : ' würden gelöscht'}`);
   if (errors.length) process.exit(1);
