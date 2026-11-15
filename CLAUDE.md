@@ -569,7 +569,9 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
   freitags den Inbox-Rest, der älter als 5 Tage ist (ohne Tombstone: ein neues Signal bringt den Titel zurück).
   Der Workflow von Hand läuft als Probelauf, solange `dry` angehakt ist, und schreibt dann eine Diagnose ins Log
   (`DIAG`: Abgänge mit Kennzahlen und Rang im KI-Wochenranking, Setup-Titel ausserhalb der Auswahl).
-- **Bericht:** `auto_rotation.reports` im market-Blob (30 Läufe, neueste zuerst, `selection` nur im neuesten), ohne KI.
+- **Bericht:** `auto_rotation.reports` im market-Blob (30 Läufe, je Tag einer, neueste zuerst, `selection` nur im neuesten),
+  ohne KI. Ein Probelauf überschreibt nie den scharfen Bericht desselben Tages. Workflow-Eingaben für Wartung: `set_mode`
+  (nur umschalten) und `patch_report` (Bericht aus einem Lauf-Log wiederherstellen).
   Anzeige: Monitor-Reiter „Rotation“ (`rotationTabHtml` in `rankings-panel.js`). Gleiche Concurrency-Gruppe wie der
   Monitor-Bericht, weil beide den market-Blob schreiben.
 
