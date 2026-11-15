@@ -17,15 +17,16 @@
  * Health Score und positivem ROIC, geordnet nach Health · ROIC · Score (+ dieselben Boni).
  *
  * Puffer gegen tägliches Hin und Her: ein neuer Titel braucht Rang ≤ `enter`, ein
- * vorhandener Watch-Titel bleibt bis Rang ≤ `stay`. Freie Plätze füllt die Rangfolge auf.
+ * vorhandener Watch-Titel bleibt bis Rang ≤ `stay` – im intakten Ausbruch-Setup bis `staySetup` –
+ * und hat Vorrang vor Neuzugängen. Freie Plätze füllt die Rangfolge auf.
  * Bleiben Qualitätsplätze leer, gehen sie an Momentum.
  */
 import { metricsOf } from '../../ui/lib/rankings-filter.js';
 import { rangeAlarmOn } from '../../ui/lib/range-alarm.js';
 
 export const RULES = {
-  version: 2,
-  momentum: { cap: 40, enter: 32, stay: 48 },
+  version: 3,
+  momentum: { cap: 40, enter: 32, stay: 48, staySetup: 120 },
   quality: { cap: 10, enter: 8, stay: 15, maxBias: 25, minHealth: 70 },
   weights: { bias: 0.35, overall: 0.30, health: 0.15, trend: 0.10, roic: 0.10 },
   qualityWeights: { health: 0.5, roic: 0.25, overall: 0.25 },
@@ -91,10 +92,14 @@ export function rowOf(c, rules = RULES) {
   };
 }
 
-/* Rangfolge mit Puffer: vorhandene bis `stay`, neue bis `enter`, dann auffüllen bis `cap`. */
-function pickWithBuffer(ranked, { cap, enter, stay }, rankKey) {
+/* Rangfolge mit Puffer und Bestandsvorrang: zuerst vorhandene Watch-Titel bis Rang `stay`
+   (im intakten Ausbruch-Setup bis `staySetup`), dann neue bis Rang `enter`, dann auffüllen bis `cap`.
+   Ein Watch-Titel im Setup verliert seinen Platz also nicht an einen Neuzugang. */
+function pickWithBuffer(ranked, { cap, enter, stay, staySetup }, rankKey) {
   ranked.forEach((r, i) => { r[rankKey] = i + 1; });
-  let chosen = ranked.filter((r) => (r.bucket === 'watch' ? r[rankKey] <= stay : r[rankKey] <= enter)).slice(0, cap);
+  const limit = (r) => (r.setup && staySetup ? staySetup : stay);
+  const chosen = ranked.filter((r) => r.bucket === 'watch' && r[rankKey] <= limit(r)).slice(0, cap);
+  for (const r of ranked) { if (chosen.length >= cap) break; if (r.bucket !== 'watch' && r[rankKey] <= enter) chosen.push(r); }
   for (const r of ranked) { if (chosen.length >= cap) break; if (!chosen.includes(r)) chosen.push(r); }
   return chosen.sort((a, b) => a[rankKey] - b[rankKey]);
 }
@@ -145,6 +150,6 @@ export function whyLeave(r, rules = RULES) {
   if (r.ls_ok === false) return 'Kein Kurs bei Lang & Schwarz abrufbar';
   if (r.rank == null) return 'Kein Auswahl-Score (Bias oder Score fehlt)';
   const weak = r.bias != null && r.bias < 0 ? `Bias ${num(r.bias)}` : `Score ${num(r.overall)}`;
-  return `Momentum-Rang ${r.rank}, bleiben würde er bis Rang ${rules.momentum.stay} · ${weak}`;
+  return `Momentum-Rang ${r.rank}, bleiben würde er bis Rang ${rules.momentum.stay} (im Ausbruch-Setup bis ${rules.momentum.staySetup}) · ${weak}`;
 }
 export const bucketName = (b) => BUCKET[b] ?? b;
