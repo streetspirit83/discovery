@@ -26,8 +26,8 @@ import { metricsOf } from '../../ui/lib/rankings-filter.js';
 import { rangeAlarmOn } from '../../ui/lib/range-alarm.js';
 
 export const RULES = {
-  version: 4,
-  momentum: { cap: 40, enter: 32, stay: 48, staySetup: 120 },
+  version: 5,
+  momentum: { cap: 40, enter: 32, enterStrong: 25, stay: 48, staySetup: 120 },
   quality: { cap: 10, enter: 8, stay: 15, maxBias: 25, minHealth: 70 },
   weights: { bias: 0.35, overall: 0.30, health: 0.15, trend: 0.10, roic: 0.10 },
   qualityWeights: { health: 0.5, roic: 0.25, overall: 0.25 },
@@ -100,16 +100,22 @@ export function rowOf(c, rules = RULES) {
   };
 }
 
-/* Rangfolge mit Puffer und Bestandsvorrang: zuerst vorhandene Watch-Titel bis Rang `stay`
-   (im intakten Ausbruch-Setup bis `staySetup`), dann neue bis Rang `enter`, dann auffüllen bis `cap`.
-   Ein Watch-Titel im Setup verliert seinen Platz also nicht an einen Neuzugang. */
-function pickWithBuffer(ranked, { cap, enter, stay, staySetup }, rankKey) {
+/* Rangfolge mit Puffer und Bestandsvorrang. Reihenfolge der Plätze:
+   1. vorhandene Watch-Titel bis Rang `stay`
+   2. sehr starke Neuzugänge bis Rang `enterStrong` – sie verdrängen Titel, die nur das Setup hält
+   3. vorhandene Watch-Titel im intakten Ausbruch-Setup bis Rang `staySetup`
+   4. Neuzugänge bis Rang `enter`, 5. auffüllen bis `cap`. */
+function pickWithBuffer(ranked, { cap, enter, enterStrong, stay, staySetup }, rankKey) {
   ranked.forEach((r, i) => { r[rankKey] = i + 1; });
-  const limit = (r) => (r.setup && staySetup ? staySetup : stay);
-  const chosen = ranked.filter((r) => r.bucket === 'watch' && r[rankKey] <= limit(r)).slice(0, cap);
-  for (const r of ranked) { if (chosen.length >= cap) break; if (r.bucket !== 'watch' && r[rankKey] <= enter) chosen.push(r); }
-  for (const r of ranked) { if (chosen.length >= cap) break; if (!chosen.includes(r)) chosen.push(r); }
-  return chosen.sort((a, b) => a[rankKey] - b[rankKey]);
+  const chosen = [];
+  const take = (ok) => { for (const r of ranked) { if (chosen.length >= cap) return; if (!chosen.includes(r) && ok(r)) chosen.push(r); } };
+  const rk = (r) => r[rankKey];
+  take((r) => r.bucket === 'watch' && rk(r) <= stay);
+  if (enterStrong) take((r) => r.bucket !== 'watch' && rk(r) <= enterStrong);
+  if (staySetup) take((r) => r.bucket === 'watch' && r.setup && rk(r) <= staySetup);
+  take((r) => r.bucket !== 'watch' && rk(r) <= enter);
+  take(() => true);
+  return chosen.sort((x, y) => rk(x) - rk(y));
 }
 
 /** rows (aus rowOf) → Auswahl und Bewegungen. Verändert die Zeilen (rank, qrank, slot). */

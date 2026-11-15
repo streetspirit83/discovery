@@ -556,8 +556,9 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
   (≤ 1,5 ATR → 10 Punkte, ≤ 3 ATR und ≤ 20 % → 6 Punkte im Momentum-Score). Ohne ATR gilt die alte Prozentregel (5/10 %).
   Vorbild: CareDx Nov. 2026 (Gap über den Widerstand, 14 % zurück = 2,5 ATR, über der SMA20).
 - **Puffer und Bestandsvorrang:** neu ab Momentum-Rang ≤ 32 bzw. Qualitätsrang ≤ 8, vorhandene Watch-Titel bleiben bis
-  Rang 48 bzw. 15, im intakten Ausbruch-Setup bis Rang 120. Vorhandene Titel werden vor Neuzugängen gesetzt
-  (`pickWithBuffer`); der erste Lauf tauscht deshalb weniger, die Plätze werden frei, sobald ein Setup bricht.
+  Rang 48 bzw. 15, im intakten Ausbruch-Setup bis Rang 120. Reihenfolge in `pickWithBuffer`: Bestand bis 48 →
+  Neuzugänge bis Rang 25 → Bestand im Setup bis 120 → Neuzugänge bis 32 → auffüllen. Ein sehr starker Neuzugang
+  verdrängt also einen Titel, den nur das Setup hält.
 - **Geschützt** (zählen nicht zu den 50, werden nie herausgenommen, aus anderen Buckets nachgezogen): Stern (Merkliste),
   Auge (`watch_flag`), aktiver Alarm (`alerts`, `range_alarm`, `range_override`). Im Archiv prüft `check-alerts` nicht.
 - **Daten:** TV frisch für alle Titel, LS-Kurs für alle in Reichweite der Auswahl (direkt, ohne Proxy). LS dient nur als
