@@ -551,9 +551,10 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
 - **Auswahl:** 40 Plätze „Momentum“ (Score aus Bias 35 % · Score der Standardtabelle 30 % · Health 15 % · Trend-Radar
   10 % · ROIC 10 %, absolute Skalen; Bonus je 4 Punkte für fairer Kurs ≥ Kurs und Analystenziel ≥ 10 % über Kurs) und
   10 Plätze „Qualität im Rücksetzer“ (Bias < 25, Health ≥ 70, ROIC > 0; Health · ROIC · Score). Alles in `RULES`.
-- **Ausbruch-Setup** (`setup` je Titel, nur Scanner-Felder): Kurs > SMA50 > SMA200, 6-Monats-Hoch im letzten Monat
-  erreicht (`high_1m` ≥ `high_6m`), Kurs höchstens 10 % unter dem Monatshoch. Gibt im Momentum-Score 10 Punkte (bis 5 %
-  darunter) bzw. 6 Punkte, damit ein kleiner Rücksetzer nach einem Ausbruch nicht zum Abstieg führt.
+- **Ausbruch-Setup** (`setup` je Titel, nur Scanner-Felder): 6-Monats-Hoch im letzten Monat (`high_1m` ≥ `high_6m`),
+  SMA20 > SMA50 > SMA200, Kurs über SMA50 und höchstens 3 % unter SMA20; der Rücksetzer vom Monatshoch zählt in ATR
+  (≤ 1,5 ATR → 10 Punkte, ≤ 3 ATR und ≤ 20 % → 6 Punkte im Momentum-Score). Ohne ATR gilt die alte Prozentregel (5/10 %).
+  Vorbild: CareDx Nov. 2026 (Gap über den Widerstand, 14 % zurück = 2,5 ATR, über der SMA20).
 - **Puffer und Bestandsvorrang:** neu ab Momentum-Rang ≤ 32 bzw. Qualitätsrang ≤ 8, vorhandene Watch-Titel bleiben bis
   Rang 48 bzw. 15, im intakten Ausbruch-Setup bis Rang 120. Vorhandene Titel werden vor Neuzugängen gesetzt
   (`pickWithBuffer`); der erste Lauf tauscht deshalb weniger, die Plätze werden frei, sobald ein Setup bricht.

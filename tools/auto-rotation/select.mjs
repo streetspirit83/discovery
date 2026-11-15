@@ -9,9 +9,10 @@
  *   Bias −100…+100 → 0…100 · Score (Standardtabelle) · Health · Trend-Radar · ROIC −10…+30 % → 0…100
  * Bias und Score müssen vorhanden sein, sonst gibt es keinen Score.
  * Bonus (kein Ausschluss): fairer Kurs ≥ Kurs, Analystenziel ≥ 10 % über Kurs.
- * Setup-Bonus: frischer Ausbruch mit intaktem Aufwärtstrend (Kurs > SMA50 > SMA200, 6-Monats-Hoch
- * im letzten Monat erreicht) – 10 Punkte bis 5 % unter dem Monatshoch, 6 Punkte bis 10 %. So fällt ein
- * Titel nach einem Ausbruch nicht wegen eines kleinen Rücksetzers aus der Auswahl.
+ * Setup-Bonus: frischer Ausbruch mit intaktem Aufwärtstrend (6-Monats-Hoch im letzten Monat, SMA20 >
+ * SMA50 > SMA200, Kurs über SMA50 und höchstens 3 % unter SMA20). Der Rücksetzer vom Hoch zählt in ATR:
+ * bis 1,5 ATR 10 Punkte, bis 3 ATR (höchstens 20 %) 6 Punkte. Beispiel CareDx im Nov. 2026: Gap über
+ * den Widerstand, danach 14 % zurück, aber nur 2,5 ATR und über der SMA20.
  *
  * Qualitätsplätze: Titel ausserhalb der Momentum-Auswahl mit schwachem Bias, hohem
  * Health Score und positivem ROIC, geordnet nach Health · ROIC · Score (+ dieselben Boni).
@@ -25,15 +26,16 @@ import { metricsOf } from '../../ui/lib/rankings-filter.js';
 import { rangeAlarmOn } from '../../ui/lib/range-alarm.js';
 
 export const RULES = {
-  version: 3,
+  version: 4,
   momentum: { cap: 40, enter: 32, stay: 48, staySetup: 120 },
   quality: { cap: 10, enter: 8, stay: 15, maxBias: 25, minHealth: 70 },
   weights: { bias: 0.35, overall: 0.30, health: 0.15, trend: 0.10, roic: 0.10 },
   qualityWeights: { health: 0.5, roic: 0.25, overall: 0.25 },
   bonus: { fair: 4, analyst: 4, analystMinPct: 10 },
-  // Ausbruch-Setup: Aufwärtstrend (Kurs > SMA50 > SMA200), 6-Monats-Hoch im letzten Monat,
-  // Kurs höchstens `maxPct` darunter. Nur im Momentum-Score.
-  setup: { near: 10, mid: 6, nearPct: 5, maxPct: 10 },
+  // Ausbruch-Setup (nur im Momentum-Score): 6-Monats-Hoch im letzten Monat, Trend gestaffelt
+  // (SMA20 > SMA50 > SMA200, Kurs > SMA50), Rücksetzer vom Hoch gemessen in ATR statt in Prozent –
+  // so zählt auch ein volatiler Titel nach einem Gap, solange er über der SMA20 hält.
+  setup: { near: 10, mid: 6, nearAtr: 1.5, maxAtr: 3, maxPct: 20, sma20Slack: 0.97 },
 };
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -74,14 +76,20 @@ export function rowOf(c, rules = RULES) {
   const base = m ? weighted(m, rules.weights, ['bias', 'overall']) : null;
   const qbase = m ? weighted(m, rules.qualityWeights, ['health', 'roic', 'overall']) : null;
   // Setup „Ausbruch, Trend intakt“ – nur aus Scanner-Feldern, damit es für alle Buckets gilt.
-  const hi1 = Number(tv.high_1m), hiLong = Number(tv.high_6m) || Number(tv.high_3m), s50 = Number(tv.sma50), s200 = Number(tv.sma200);
+  const S = rules.setup;
+  const hi1 = Number(tv.high_1m), hiLong = Number(tv.high_6m) || Number(tv.high_3m);
+  const s20 = Number(tv.sma20), s50 = Number(tv.sma50), s200 = Number(tv.sma200), atr = Number(tv.atr);
   const offHigh = hi1 > 0 && close > 0 ? (1 - close / hi1) * 100 : null;          // % unter dem Monatshoch
+  const offAtr = hi1 > 0 && close > 0 && atr > 0 ? (hi1 - close) / atr : null;     // dasselbe in ATR
   const freshHigh = hi1 > 0 && hiLong > 0 ? hi1 >= hiLong * 0.995 : null;          // 6-Monats-Hoch im letzten Monat erreicht
-  const uptrend = close > 0 && s50 > 0 && s200 > 0 ? close > s50 && s50 > s200 : null;
-  const inSetup = !!(uptrend && freshHigh && offHigh != null && offHigh <= rules.setup.maxPct);
-  const setupBonus = !inSetup ? 0 : offHigh <= rules.setup.nearPct ? rules.setup.near : rules.setup.mid;
+  const uptrend = close > 0 && s50 > 0 && s200 > 0 ? close > s50 && s50 > s200 && (!(s20 > 0) || s20 > s50) : null;
+  const holds20 = s20 > 0 ? close >= s20 * S.sma20Slack : true;                    // Rücksetzer hält die SMA20
+  const pullbackOk = offHigh != null && offHigh <= S.maxPct && (offAtr != null ? offAtr <= S.maxAtr : offHigh <= 10);
+  const inSetup = !!(uptrend && freshHigh && holds20 && pullbackOk);
+  const near = offAtr != null ? offAtr <= S.nearAtr : offHigh <= 5;
+  const setupBonus = !inSetup ? 0 : near ? S.near : S.mid;
   return {
-    setup: inSetup, off_high: r1(offHigh), fresh_high: freshHigh, uptrend, perf_1m: r1(m?.perf_1m), perf_3m: r1(m?.perf_3m),
+    setup: inSetup, off_high: r1(offHigh), off_atr: r1(offAtr), fresh_high: freshHigh, uptrend, holds20, perf_1m: r1(m?.perf_1m), perf_3m: r1(m?.perf_3m),
     id: c.id, symbol: c.symbol, exchange: c.exchange ?? '', name: m?.name ?? c.name ?? c.symbol, bucket: c._bucket,
     sector: c.sector ?? null, protect: protectionOf(c),
     score: base == null ? null : r1(base + bonus + setupBonus),
@@ -144,7 +152,7 @@ const num = (v, unit = '') => (v == null ? '–' : `${Math.round(v)}${unit}`);
 export function whyEnter(r) {
   return r.slot === 'quality'
     ? `Qualitätsplatz ${r.qrank}: Health ${num(r.health)}, ROIC ${num(r.roic, ' %')}, Bias ${num(r.bias)} (Rücksetzer)`
-    : `Momentum-Rang ${r.rank}: Bias ${num(r.bias)}, Score ${num(r.overall)}, Health ${num(r.health)}${r.setup ? ` · Ausbruch-Setup, ${String(r.off_high).replace('.', ',')} % unter Monatshoch` : ''}`;
+    : `Momentum-Rang ${r.rank}: Bias ${num(r.bias)}, Score ${num(r.overall)}, Health ${num(r.health)}${r.setup ? ` · Ausbruch-Setup, ${String(r.off_high).replace('.', ',')} % (${String(r.off_atr ?? '–').replace('.', ',')} ATR) unter Monatshoch` : ''}`;
 }
 export function whyLeave(r, rules = RULES) {
   if (r.ls_ok === false) return 'Kein Kurs bei Lang & Schwarz abrufbar';
