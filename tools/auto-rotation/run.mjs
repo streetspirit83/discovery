@@ -47,6 +47,15 @@ const keyOf = (c) => `${String(c.symbol ?? '').toUpperCase()}:${normalizeExchang
 const fail = (msg) => { log(`✗ ${msg} – kein Lauf, nichts verändert.`); process.exit(1); };
 
 async function main() {
+  // Nur Modus umschalten (Workflow-Eingabe set_mode), sonst nichts tun.
+  if (process.env.SET_MODE === 'live' || process.env.SET_MODE === 'dry') {
+    const cur = (await storage({ op: 'read', blob_type: 'market' })) ?? {};
+    const mode = process.env.SET_MODE;
+    await storage({ op: 'write', blob_type: 'market', blob: { ...cur, updated_at: new Date().toISOString(), auto_rotation: { ...(cur.auto_rotation ?? {}), mode, mode_at: new Date().toISOString() } } });
+    const back = await storage({ op: 'read', blob_type: 'market' });
+    log(`✓ Modus jetzt: ${back?.auto_rotation?.mode} (vorher ${cur.auto_rotation?.mode ?? 'dry'}) · ${back?.auto_rotation?.reports?.length ?? 0} Berichte · ${back?.briefings?.length ?? 0} Briefings erhalten`);
+    return;
+  }
   const startedAt = new Date();
   const [watch, archive, inbox, lsHist, market0] = await Promise.all([
     storage({ op: 'read', blob_type: 'watch' }), storage({ op: 'read', blob_type: 'archive' }),
