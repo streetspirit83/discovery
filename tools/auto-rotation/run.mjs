@@ -156,12 +156,13 @@ async function main() {
   const why = (w) => res.protectedRows.filter((r) => r.protect.includes(w)).length;
   const report = {
     day: startedAt.toISOString().slice(0, 10), at: startedAt.toISOString(), mode, applied: live && !errors.length,
-    rules: { version: RULES.version, momentum: RULES.momentum, quality: RULES.quality, weights: RULES.weights, bonus: RULES.bonus },
+    rules: { version: RULES.version, momentum: RULES.momentum, quality: RULES.quality, weights: RULES.weights, bonus: RULES.bonus, setup: RULES.setup },
     universe: { ...sizes, stocks: rows.length, scored, etfs },
     data: { tv: updates.size, tv_total: all.length, ls_checked: todo.length, ls_missing: lsMissing },
     protected: { count: res.protectedRows.length, star: why('Stern'), eye: why('Auge'), alarm: why('Alarm') },
     watch_after: res.watch.length + res.protectedRows.length + res.kept_no_data.length,
     threshold: { momentum: res.momentum.at(-1)?.score ?? null, quality: res.quality.at(-1)?.qscore ?? null },
+    setups: { selected: res.watch.filter((r) => r.setup).length, leaving: res.leave.filter((r) => r.setup).length },
     enter: res.enter.map((r) => item(r, whyEnter(r))),
     leave: [...res.leave].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map((r) => item(r, whyLeave(r))),
     pulled: res.pulled.map((r) => ({ ...item(r, `Geschützt: ${r.protect.join(', ')}`) })),
@@ -187,7 +188,7 @@ async function main() {
     for (const [list, v] of Object.entries(rk?.lists ?? {})) for (const it of v.items ?? []) { const cur = ki.get(it.symbol); if (!cur || it.rank < cur.rank) ki.set(it.symbol, { rank: it.rank, list }); }
     const d = (r) => `  ${String(r.rank ?? '').padStart(3)} ${String(r.symbol).padEnd(6)} ${String(r.score ?? '–').padStart(5)} Bias ${String(r.bias ?? '–').padStart(4)} Sc ${String(r.overall ?? '–').padStart(3)} Tr ${String(r.trend ?? '–').padStart(3)} H ${String(r.health ?? '–').padStart(3)} | 1M ${String(r.perf_1m ?? '–').padStart(6)} 3M ${String(r.perf_3m ?? '–').padStart(6)} | unterHoch ${String(r.off_high ?? '–').padStart(5)}% neuesHoch ${r.fresh_high ? 'ja' : r.fresh_high === false ? 'nein' : '–'} Aufwärts ${r.uptrend ? 'ja' : r.uptrend === false ? 'nein' : '–'}${ki.has(r.symbol) ? ` | KI ${ki.get(r.symbol).list} #${ki.get(r.symbol).rank}` : ''}`;
     log(`\nDIAG KI-Ranking vom ${rk?.day ?? '–'} · Abgänge:`); [...res.leave].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999)).forEach((r) => log(d(r)));
-    const setup = (r) => r.uptrend && r.fresh_high && r.off_high != null && r.off_high <= 10;
+    const setup = (r) => r.setup;
     const free = rows.filter((r) => !r.protect.length && r.score != null);
     log(`\nDIAG Setup (Aufwärtstrend, 6M-Hoch im letzten Monat, höchstens 10 % darunter): ${free.filter(setup).length} freie Titel · davon in der Auswahl ${res.watch.filter(setup).length} · unter den Abgängen ${res.leave.filter(setup).length}`);
     log('DIAG Setup-Titel ausserhalb der Auswahl, beste 25 nach Score:'); free.filter((r) => setup(r) && !chosenIds.has(r.id)).sort((a, b) => b.score - a.score).slice(0, 25).forEach((r) => log(`${d(r)} [${r.bucket}]`));
