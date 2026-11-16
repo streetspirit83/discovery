@@ -32,8 +32,8 @@ const INDEX_FIELD = { change_1d: 'change', perf_w: 'perf_w', perf_1m: 'perf_1m',
 /* `levels` = Drill-down-Ebenen (darunter die Einzeltitel), `tag` = übergeordnetes Merkmal,
  * das die Kacheln der obersten Ebene als kleine Zusatzzeile tragen. */
 export const PERSPECTIVES = {
-  sector:  { label: 'Sektoren', levels: ['sector', 'sub'],     tag: 'mega' },
-  country: { label: 'Länder',   levels: ['country', 'sector'], tag: 'region' },
+  sector:  { label: 'Sektoren', levels: ['sector', 'sub'],     names: ['Sektor', 'Sub-Sektor'], tag: 'mega' },
+  country: { label: 'Länder',   levels: ['country', 'sector'], names: ['Land', 'Sektor'],       tag: 'region' },
 };
 
 const NO_SECTOR = 'Ohne Sektor';
@@ -154,16 +154,31 @@ function groupBy(items, level) {
  *   sonst                      → `tiles[]` = Einzeltitel (`tile.c`), `stocks: true`
  * Jede Kachel: { name, n, v (Median im Horizont), tag?, items | c }.
  */
-export function tilesFor(scoped, perspective, path, hKey) {
+export function tilesFor(scoped, perspective, path, value) {
   const { levels, tag } = PERSPECTIVES[perspective];
+  // `value`: Horizont-Schlüssel (Performance) oder Funktion Titel → Kennzahl (Färbung).
+  const val = typeof value === 'function' ? value : (c) => perfOf(c, value);
   if (path.length >= levels.length) {
-    return { stocks: true, tiles: scoped.map((c) => ({ name: c.symbol, n: 1, v: perfOf(c, hKey), c })) };
+    return { stocks: true, tiles: scoped.map((c) => ({ name: c.symbol, n: 1, v: val(c), c })) };
   }
   const tiles = groupBy(scoped, levels[path.length]).map((g) => ({
-    name: g.name, n: g.items.length, v: median(g.items.map((c) => perfOf(c, hKey))), items: g.items,
+    name: g.name, n: g.items.length, v: median(g.items.map(val)), items: g.items,
     tag: path.length ? null : dimsOf(g.items[0])[tag],
   })).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   return { tiles };
+}
+
+/**
+ * Zeilen der Signal-Matrix: die Gruppen der nächsten Ebene, auf der untersten Ebene die
+ * Einzeltitel (`c` gesetzt). `title` = Name der Ebene („Sektor“, „Land“, „Titel“ …).
+ */
+export function groupsFor(scoped, perspective, path) {
+  const { levels, names } = PERSPECTIVES[perspective];
+  if (path.length >= levels.length) {
+    return { title: 'Titel', rows: scoped.map((c) => ({ name: c.symbol, items: [c], c })).sort((a, b) => a.name.localeCompare(b.name)) };
+  }
+  return { title: names[path.length],
+    rows: groupBy(scoped, levels[path.length]).sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name)) };
 }
 
 /** Kennzahlen des Ausschnitts im Horizont. */

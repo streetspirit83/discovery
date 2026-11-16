@@ -17,8 +17,9 @@ import { loadD3 } from '../lib/d3-loader.js?v=20261116a';
 import {
   HORIZONS, PERSPECTIVES, withData, scopeOf, tilesFor, breadth, movers,
   countryCoverage, indicesFor, dimsOf,
-} from '../lib/market-scope.js?v=20261116b';
+} from '../lib/market-scope.js?v=20261116c';
 import { INDEX_GROUPS, allIndexEntries } from '../lib/tv-indices.js?v=20261023a';
+import { COLOR_MODES, metricFn } from '../lib/market-signals.js?v=20261116c';
 
 const LIST_COLLAPSED = 8;
 const INDEX_TTL_MS = 5 * 60 * 1000;
@@ -37,11 +38,22 @@ function tileStyle(v, cap) {
 
 export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}) {
   const base = withData(candidates);
-  const st = { view: 'sector', path: [], h: HORIZONS[0].key, listAll: false, idx: indexCache?.rows ?? null, idxState: 'idle' };
+  const st = { view: 'sector', path: [], h: HORIZONS[0].key, color: 'perf', listAll: false, idx: indexCache?.rows ?? null, idxState: 'idle' };
   const horizon = () => HORIZONS.find((h) => h.key === st.h) ?? HORIZONS[0];
   const levels = () => PERSPECTIVES[st.view].levels;
   const scoped = () => scopeOf(base, st.view, st.path);
   const scopeLabel = () => (st.path.length ? st.path[st.path.length - 1] : 'Alle');
+  /* Färbung der Kacheln: Performance im Horizont oder eine Kennzahl aus market-signals. */
+  const colorMode = () => COLOR_MODES.find((m) => m.key === st.color) ?? COLOR_MODES[0];
+  const colorCap = () => colorMode().cap ?? horizon().cap;
+  const colorLabel = () => (st.color === 'perf' ? horizon().label : colorMode().label);
+  const metricCache = new Map();
+  const tileValue = () => {
+    if (st.color === 'perf') return st.h;
+    if (!metricCache.has(st.color)) metricCache.set(st.color, metricFn(st.color, base));
+    return metricCache.get(st.color);
+  };
+  const fmtTile = (v) => (v == null ? '–' : st.color === 'perf' ? fmtPct(v) : colorMode().fmt(v));
 
   /* ── Indizes (Branchen/Länder) – einmal je Öffnung, 5 min gecacht ───────── */
   async function loadIndices(onDone) {
@@ -137,7 +149,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
   }
 
   function noteHtml(sc) {
-    const parts = [`Kachelgröße = Anzahl Titel · Farbe = Median ${horizon().label}`];
+    const parts = [`Kachelgröße = Anzahl Titel · Farbe = Median ${colorLabel()}${st.color === 'perf' ? '' : ` (${colorMode().title})`}`];
     const missing = candidates.length - base.length;
     if (missing > 0) parts.push(`${missing} ohne TV-Daten nicht enthalten`);
     if (st.view === 'country') {
@@ -156,6 +168,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
         ${seg('view', Object.entries(PERSPECTIVES).map(([k, p]) => [k, p.label]), st.view)}
         ${seg('h', HORIZONS.map((h) => [h.key, h.label]), st.h)}
       </div>
+      <div class="md-ctl md-ctl--color"><span class="md-ctl__label">Farbe</span>${seg('color', COLOR_MODES.map((m) => [m.key, m.label]), st.color)}</div>
       ${kpisHtml(sc)}
       ${indicesHtml()}
       ${crumbsHtml(sc.length)}
@@ -172,11 +185,12 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
     const showName = !box || (w > 44 && h > 22);
     const showVal = !box || (w > 44 && h > 42);
     const showTag = t.tag && (!box || (w > 70 && h > 64));
-    const tip = `${t.name}${t.tag ? ` (${t.tag})` : ''} · ${horizon().label} ${fmtPct(t.v)}${t.c ? '' : ` · ${t.n} Titel`}`;
+    const tip = `${t.name}${t.tag ? ` (${t.tag})` : ''} · ${colorLabel()} ${fmtTile(t.v)}${t.c ? '' : ` · ${t.n} Titel`}`;
     const target = t.c ? `data-id="${esc(t.c.id)}"` : `data-md-tile="${esc(t.name)}"`;
-    return `<button type="button" class="md-tile" ${target} style="${pos}${tileStyle(t.v, horizon().cap)}" title="${esc(tip)}" aria-label="${esc(tip)}">
+    const shade = t.v == null ? null : t.v - colorMode().mid;
+    return `<button type="button" class="md-tile" ${target} style="${pos}${tileStyle(shade, colorCap())}" title="${esc(tip)}" aria-label="${esc(tip)}">
       ${showName ? `<span class="md-tile__name">${esc(t.name)}</span>` : ''}
-      ${showVal ? `<span class="md-tile__val">${fmtPct(t.v)}${t.c ? '' : `<span class="md-tile__n">${t.n}</span>`}</span>` : ''}
+      ${showVal ? `<span class="md-tile__val">${fmtTile(t.v)}${t.c ? '' : `<span class="md-tile__n">${t.n}</span>`}</span>` : ''}
       ${showTag ? `<span class="md-tile__tag">${esc(t.tag)}</span>` : ''}
     </button>`;
   }
@@ -185,7 +199,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
   async function draw(root) {
     const el = root.querySelector('#md-tm');
     if (!el) return;
-    const { tiles } = tilesFor(scoped(), st.view, st.path, st.h);
+    const { tiles } = tilesFor(scoped(), st.view, st.path, tileValue());
     if (!tiles.length) { el.innerHTML = '<p class="dash-empty">Keine Titel im Ausschnitt.</p>'; el.classList.add('md-tm--grid'); return; }
     const d3 = await loadD3();
     if (!el.isConnected) return;               // inzwischen neu gezeichnet
@@ -208,7 +222,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
    * @returns {null | {changed:true} | {show:string[]}}  `show` = IDs für „In Tabelle öffnen“
    */
   function handleClick(e) {
-    const t = e.target.closest('[data-md-view],[data-md-h],[data-md-bc],[data-md-tile],[data-md-more],[data-md-show]');
+    const t = e.target.closest('[data-md-view],[data-md-h],[data-md-color],[data-md-bc],[data-md-tile],[data-md-more],[data-md-show]');
     if (!t) return null;
     const d = t.dataset;
     if (d.mdShow != null) return { show: scoped().map((c) => c.id) };
@@ -216,6 +230,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
     st.listAll = false;
     if (d.mdView) { if (d.mdView === st.view) return null; st.view = d.mdView; st.path = []; }
     else if (d.mdH) { if (d.mdH === st.h) return null; st.h = d.mdH; }
+    else if (d.mdColor) { if (d.mdColor === st.color) return null; st.color = d.mdColor; }
     else if (d.mdBc != null) st.path = st.path.slice(0, Number(d.mdBc));
     else if (d.mdTile != null && st.path.length < levels().length) st.path = [...st.path, d.mdTile];
     return { changed: true };

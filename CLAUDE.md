@@ -156,7 +156,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
-  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Karte „Abstand zur SMA200 · Extreme" aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Der Stift in der Toolbar
@@ -256,7 +256,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Farbe = Median im Horizont. Klick auf eine Kachel geht eine Ebene tiefer und öffnet darunter die Liste „Titel in …“;
   „In Tabelle öffnen“ neben den Brotkrumen zeigt alle Titel des Ausschnitts in der Hauptliste (`onSelectInList`), Titel-Kacheln öffnen das Detail-Sheet. Alles darunter filtert auf den Ausschnitt
   mit (`view()`): Top-Mover, die fünf Live-Rankings (eine Liste zur Zeit; `liveRankings` mit `only`/`sectorCap`)
-  und die Signal-Karten. Das KI-Wochenranking hat den eigenen Reiter „KI-Ranking“. Über der Treemap stehen die passenden Indizes aus
+  und die **Signal-Matrix** (`signal-matrix.js`, Logik `lib/market-signals.js`; ersetzt die früheren neun Signal-Karten):
+  Zeilen = Gruppen des Ausschnitts (unterste Ebene: Titel), Spalten = Signale in drei Gruppen Bullisch · Bärisch ·
+  Extreme (Score/Momentum/PCHS vs. Vortag, MACD-Dreher, SMA-Kreuzungen, Trend, Trend-Radar, RSI ≤ 30 / ≥ 70, SMA200
+  ab +30 % / −20 %: `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. Schalter
+  **Farbe** färbt die Karte statt nach Performance nach ΔScore, RSI, SMA200-Abstand oder Bias (`COLOR_MODES`). Das KI-Wochenranking hat den eigenen Reiter „KI-Ranking“. Über der Treemap stehen die passenden Indizes aus
   `lib/tv-indices.js` (`onFetchIndexRows`, 5 min Cache) als Kacheln in derselben Farblogik: ohne Auswahl die je drei
   stärksten/schwächsten, sonst die des Mega-Clusters des Sektors (`INDEX_MEGA` in `lib/market-scope.js`) bzw. des Landes. Die volle Indizes-Tabelle
   (`indices-panel.js`) steht einklappbar am Ende. **Land** = `company_profile.facts.country` (ROIC-Firmenprofil), ohne

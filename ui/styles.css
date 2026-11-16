@@ -1555,7 +1555,7 @@ td.rg-r { padding-left:var(--s-1); }
 /* ════════════════════════════════════════════════════════════════
    MONITOR / DASHBOARD MODAL
    ════════════════════════════════════════════════════════════════ */
-.dash-modal { width:min(860px,100%); }
+.dash-modal { width:min(960px,100%); }
 .dash-title { display:flex; align-items:center; gap:8px; }
 .dash-title svg { color:var(--accent); width:18px; height:18px; }
 .dash-body { padding:14px; display:flex; flex-direction:column; gap:var(--s-3); background:var(--surface); }
@@ -1842,6 +1842,37 @@ a.md-ix__chip:hover { outline:2px solid var(--accent); outline-offset:-2px; }
 .md-fold__sum svg { width:15px; height:15px; color:var(--accent); }
 .md-fold__body { display:flex; flex-direction:column; gap:var(--s-3); padding-top:var(--s-3); }
 @media (max-width:520px) { .md-cols { grid-template-columns:minmax(0, 1fr); } }
+.md-ctl--color { justify-content:flex-start; }
+.md-ctl__label { font-size:var(--fs-1); font-weight:var(--fw-bold); color:var(--muted); }
+.md-ctl .dash-seg { max-width:100%; overflow-x:auto; }
+.md-ctl .dash-seg__btn { white-space:nowrap; }
+
+/* Signal-Matrix (components/signal-matrix.js) */
+.sx-wrap { overflow-x:auto; }
+.sx { display:grid; grid-template-columns:minmax(140px, 1.6fr) repeat(var(--sx-cols), minmax(42px, 1fr)); gap:2px;
+  align-items:stretch; font-size:var(--fs-1); font-variant-numeric:tabular-nums; }
+.sx-corner, .sx-row { position:sticky; left:0; z-index:1; background:var(--surface); }
+.sx-corner--title { align-self:end; padding:var(--s-1); font-weight:var(--fw-bold); color:var(--muted); }
+.sx-group { padding:2px 0; text-align:center; font-weight:var(--fw-bold); text-transform:uppercase; letter-spacing:.04em; }
+.sx-group--bull { color:var(--pos); }
+.sx-group--bear { color:var(--neg); }
+.sx-group--extreme { color:var(--warn); }
+.sx-head { align-self:end; padding:var(--s-1) 0; text-align:center; color:var(--muted); font-weight:var(--fw-bold); white-space:nowrap; line-height:1.15; }
+.sx-row { display:flex; align-items:center; justify-content:space-between; gap:var(--s-1); min-width:0; padding:var(--s-1);
+  border:none; font:inherit; font-size:var(--fs-1); color:var(--text); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sx-row__name { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.sx-row small { flex:0 0 auto; color:var(--muted); font-size:inherit; }
+.sx-row--stock { cursor:pointer; font-weight:var(--fw-bold); }
+.sx-row--stock:hover { color:var(--accent); }
+.sx-row--total { font-weight:var(--fw-bold); }
+.sx-cell { min-width:0; min-height:30px; padding:0; border:none; border-radius:var(--r-1); background:var(--surface-2);
+  color:var(--text); font:inherit; font-size:var(--fs-1); font-weight:var(--fw-bold); cursor:pointer; }
+.sx-cell:disabled { color:var(--muted); font-weight:var(--fw-reg); cursor:default; }
+.sx-cell:not(:disabled):hover, .sx-cell.is-sel { outline:2px solid var(--accent); outline-offset:-2px; }
+.sx-detail { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-2); padding:var(--s-1) 6px; }
+.sx-detail__head { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); padding:var(--s-1) var(--s-2);
+  font-size:var(--fs-2); font-weight:var(--fw-bold); }
+.sx-detail__head .btn { flex:0 0 auto; }
 
 /* Gruppen-Auswahl im Monitor: Checkbox „alle N“ je Gruppe, Leiste unten */
 .grp-sel { display:flex; justify-content:flex-end; align-items:center; gap:6px; padding:2px 8px 4px;
