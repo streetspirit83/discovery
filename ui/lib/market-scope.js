@@ -3,8 +3,9 @@
  *
  * Zwei Perspektiven auf dieselben Kandidaten, je drei Drill-down-Ebenen, darunter
  * die Einzeltitel:
- *   Sektoren: Mega-Cluster → Sektor (TV) → Sub-Sektor (TV industry)
- *   Länder:   Region → Land → Sektor (TV)
+ *   Sektoren: Sektor (TV) → Sub-Sektor (TV industry)
+ *   Länder:   Land → Sektor (TV)
+ * Mega-Cluster bzw. Region stehen als Zusatzzeile auf den Kacheln der obersten Ebene.
  *
  * Das Land kommt aus dem ROIC-Firmenprofil (`company_profile.facts.country`,
  * Sitz der Firma). Fehlt das Profil, gilt ersatzweise der Börsenplatz
@@ -12,8 +13,8 @@
  * nicht der Firma. `countryCoverage` zählt beide Fälle für die Fußnote.
  *
  * Branchen- und Länder-Indizes (lib/tv-indices.js) werden dem Ausschnitt
- * zugeordnet: Branchen über `INDEX_MEGA` an einen Mega-Cluster, Länder über ihr
- * Label an Land und Region.
+ * zugeordnet: Branchen über `INDEX_MEGA` an den Mega-Cluster des Sektors, Länder über
+ * ihr Label an das Land (ohne eigenen Index die der Region).
  */
 
 import { megaClusterOf, megaClusterLabel } from './sector-clusters.js?v=20260807a';
@@ -28,9 +29,11 @@ export const HORIZONS = [
 /* Index-Zeilen tragen die Tagesveränderung als `change`. */
 const INDEX_FIELD = { change_1d: 'change', perf_w: 'perf_w', perf_1m: 'perf_1m', perf_3m: 'perf_3m' };
 
+/* `levels` = Drill-down-Ebenen (darunter die Einzeltitel), `tag` = übergeordnetes Merkmal,
+ * das die Kacheln der obersten Ebene als kleine Zusatzzeile tragen. */
 export const PERSPECTIVES = {
-  sector:  { label: 'Sektoren', levels: ['mega', 'sector', 'sub'],       names: ['Cluster', 'Sektor', 'Sub-Sektor'] },
-  country: { label: 'Länder',   levels: ['region', 'country', 'sector'], names: ['Region', 'Land', 'Sektor'] },
+  sector:  { label: 'Sektoren', levels: ['sector', 'sub'],     tag: 'mega' },
+  country: { label: 'Länder',   levels: ['country', 'sector'], tag: 'region' },
 };
 
 const NO_SECTOR = 'Ohne Sektor';
@@ -146,27 +149,21 @@ function groupBy(items, level) {
 }
 
 /**
- * Kacheln für den Ausschnitt.
- *   path leer   → zwei Ebenen: `groups[{name, tiles[]}]` (Cluster mit Sektoren bzw. Region mit Ländern)
- *   path 1–2    → eine Ebene: `tiles[]` der nächsten Ebene
- *   path 3      → `tiles[]` = Einzeltitel (`tile.c`)
- * Jede Kachel: { name, n, v (Median im Horizont), items | c }.
+ * Kacheln für den Ausschnitt – immer genau eine Ebene:
+ *   path kürzer als die Ebenen → `tiles[]` der nächsten Ebene (oberste Ebene mit `tag`)
+ *   sonst                      → `tiles[]` = Einzeltitel (`tile.c`), `stocks: true`
+ * Jede Kachel: { name, n, v (Median im Horizont), tag?, items | c }.
  */
 export function tilesFor(scoped, perspective, path, hKey) {
-  const levels = PERSPECTIVES[perspective].levels;
-  const tile = (g) => ({ name: g.name, n: g.items.length, v: median(g.items.map((c) => perfOf(c, hKey))), items: g.items });
-  const bySize = (a, b) => b.n - a.n || a.name.localeCompare(b.name);
+  const { levels, tag } = PERSPECTIVES[perspective];
   if (path.length >= levels.length) {
     return { stocks: true, tiles: scoped.map((c) => ({ name: c.symbol, n: 1, v: perfOf(c, hKey), c })) };
   }
-  if (!path.length) {
-    const groups = groupBy(scoped, levels[0]).map((g) => ({
-      name: g.name, n: g.items.length, v: median(g.items.map((c) => perfOf(c, hKey))),
-      tiles: groupBy(g.items, levels[1]).map(tile).sort(bySize),
-    })).sort(bySize);
-    return { groups };
-  }
-  return { tiles: groupBy(scoped, levels[path.length]).map(tile).sort(bySize) };
+  const tiles = groupBy(scoped, levels[path.length]).map((g) => ({
+    name: g.name, n: g.items.length, v: median(g.items.map((c) => perfOf(c, hKey))), items: g.items,
+    tag: path.length ? null : dimsOf(g.items[0])[tag],
+  })).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  return { tiles };
 }
 
 /** Kennzahlen des Ausschnitts im Horizont. */
@@ -204,7 +201,7 @@ export const INDEX_MEGA = {
 
 /**
  * Indizes zum Ausschnitt. Ohne Auswahl die je `edge` stärksten und schwächsten der
- * Gruppe, sonst alle des gewählten Clusters / der Region / des Landes.
+ * Gruppe, sonst die zum gewählten Sektor bzw. Land.
  * @param {{branchen?:Array, laender?:Array}} rowsByGroup  Zeilen aus fetchIndexRows, je Gruppe
  * @returns {{ items:Array<{code,label,v,url,value}>, mode:'edge'|'scope', total:number }}
  */
@@ -219,7 +216,14 @@ export function indicesFor(rowsByGroup, perspective, path, hKey, edge = 3) {
     if (rows.length <= edge * 2) return { items: rows, mode: 'edge', total: rows.length };
     return { items: [...rows.slice(0, edge), ...rows.slice(-edge)], mode: 'edge', total: rows.length };
   }
-  let items = rows.filter((r) => r.group === path[0]);
-  if (perspective === 'country' && path[1]) items = items.filter((r) => r.label === path[1]);
+  // Sektor → Indizes seines Mega-Clusters; Land → sein Index, sonst die der Region.
+  let items;
+  if (perspective === 'country') {
+    items = rows.filter((r) => r.label === path[0]);
+    if (!items.length) items = rows.filter((r) => r.group === (REGION[path[0]] ?? OTHER));
+  } else {
+    const mega = megaClusterOf(path[0]);
+    items = mega ? rows.filter((r) => r.group === megaClusterLabel(mega)) : [];
+  }
   return { items, mode: 'scope', total: rows.length };
 }

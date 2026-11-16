@@ -4,7 +4,7 @@
  * Reiter „Markt“ (seit Nov. 2026, ersetzt „Übersicht“ und „Rankings“): interaktives
  * Dashboard des *aktiven Buckets* – Treemap mit Drill-down nach Sektoren oder Ländern
  * (components/market-dashboard.js), dazu Branchen-/Länder-Indizes, Top-Mover, die fünf
- * Live-Rankings, das KI-Wochenranking und die Signal-Karten (Score-/Momentum-/PCHS-
+ * Live-Rankings und die Signal-Karten; das KI-Wochenranking hat einen eigenen Reiter (Score-/Momentum-/PCHS-
  * Dynamik vs. Vortag, RSI-Extreme, MACD-Flips, SMA-Kreuzungen, Trends). Alles unter der
  * Treemap filtert auf den gewählten Ausschnitt mit (`view()`). Die Indizes-Tabelle des
  * Markets-Modals steht einklappbar am Ende. Opened from the "Monitor" bottom-nav slot.
@@ -25,7 +25,7 @@ import { sma200Extremes } from '../lib/sma200-extremes.js?v=20261106b';
 import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './rankings-panel.js?v=20261116a';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
-import { createMarketDashboard } from './market-dashboard.js?v=20261116a';
+import { createMarketDashboard } from './market-dashboard.js?v=20261116b';
 import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
@@ -74,7 +74,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { expanded: new Set(), rkList: 'momentum', foldSignals: true };
-  const rk = { tab: 'overview', data: null, err: null, loading: false, weeklyOpen: false };
+  const rk = { tab: 'overview', data: null, err: null, loading: false };
   // Markt-Dashboard: hält Perspektive, Horizont und Drill-down-Pfad. `view()` ist der
   // gewählte Ausschnitt – Rankings und alle Signal-Karten rechnen darauf.
   const md = createMarketDashboard({ candidates, onFetchIndexRows });
@@ -275,10 +275,6 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     const where = md.st.path.length ? ` · ${esc(md.scopeLabel())}` : '';
     return `${md.topHtml()}
       ${rankingsHtml()}
-      <details class="dash-card rk-weekly"${rk.weeklyOpen ? ' open' : ''}>
-        <summary class="dash-card__head"><span class="dash-card__icon">${icons.sparkles ?? ''}</span><h3>KI-Wochenranking (Sonntag)</h3></summary>
-        <div class="dash-card__body">${rk.weeklyOpen ? weeklyBody() : ''}</div>
-      </details>
       <details class="md-fold" data-md-fold="signals"${state.foldSignals ? ' open' : ''}>
         <summary class="md-fold__sum">${icons.activity}<span>Signale und Dynamik${where}</span></summary>
         <div class="md-fold__body">${state.foldSignals ? signalsHtml() : ''}</div>
@@ -305,6 +301,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       </div>
       <div class="tab-bar dash-tabs" role="tablist">
         <button class="tab-btn active" data-dash-tab="overview" role="tab" aria-selected="true">Markt</button>
+        <button class="tab-btn" data-dash-tab="weekly" role="tab" aria-selected="false">KI-Ranking</button>
         <button class="tab-btn" data-dash-tab="picks" role="tab" aria-selected="false">Tagessieger</button>
         <button class="tab-btn" data-dash-tab="rotation" role="tab" aria-selected="false">Rotation</button>
       </div>
@@ -384,10 +381,6 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
      `rerender` den ganzen Reiter (Reiterwechsel). Die Gruppen-Checkboxen kommen jeweils neu. */
   function wireMain() {
     md.draw(bodyEl);
-    bodyEl.querySelector('.rk-weekly')?.addEventListener('toggle', (e) => {
-      rk.weeklyOpen = e.target.open;
-      if (rk.weeklyOpen) showWeekly();
-    });
     bodyEl.querySelector('[data-md-fold="signals"]')?.addEventListener('toggle', (e) => {
       if (state.foldSignals === e.target.open) return;
       state.foldSignals = e.target.open;
@@ -412,12 +405,11 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     });
     wireMain();
   }
-  // KI-Wochenranking (Sonntag) aus dem market-Blob – erst beim Aufklappen laden.
+  /* Reiter KI-Ranking: KI-Wochenranking vom Sonntag aus dem market-Blob (derselbe Abruf
+     wie Tagessieger und Rotation). */
   const renderRankings = () => {
-    const el = bodyEl.querySelector('.rk-weekly .dash-card__body');
-    if (rk.tab !== 'overview' || !el || !rk.weeklyOpen) return;
-    el.innerHTML = weeklyBody();
-    decorate();
+    if (rk.tab !== 'weekly') return;
+    bodyEl.innerHTML = weeklyBody();
   };
   async function showWeekly() {
     renderRankings();
@@ -470,7 +462,8 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       t.setAttribute('aria-selected', String(on));
     });
     bodyEl.scrollTop = 0;
-    if (rk.tab === 'picks') showPicks();
+    if (rk.tab === 'weekly') showWeekly();
+    else if (rk.tab === 'picks') showPicks();
     else if (rk.tab === 'rotation') showRotation();
     else rerender();
   }));
@@ -488,7 +481,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       return;
     }
     if (act?.changed) {
-      const drilled = e.target.closest('[data-md-tile],[data-md-top],[data-md-bc],[data-md-view]');
+      const drilled = e.target.closest('[data-md-tile],[data-md-bc],[data-md-view]');
       renderMain();
       if (drilled) bodyEl.querySelector('.md-bc')?.scrollIntoView({ block: 'nearest' });
       return;
