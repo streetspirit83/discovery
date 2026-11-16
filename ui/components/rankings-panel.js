@@ -179,6 +179,13 @@ function liveRowHtml(it, key) {
   </button>`;
 }
 
+/** Eine Live-Liste (Frage + Zeilen) – auch einzeln im Markt-Dashboard des Monitors. */
+export function liveListHtml(l) {
+  return `<p class="rk-question">${esc(l.question)}</p>
+      ${l.items.length ? `<div class="rk-list">${l.items.map((it) => liveRowHtml(it, l.key)).join('')}</div>`
+        : '<p class="dash-muted">Kein Titel besteht den Filter.</p>'}`;
+}
+
 /**
  * @param {{pool:number, lists:Array}} live  Ergebnis von liveRankings()
  * @param {string} scope                     Anzeigename des Pools („Watchlist", „Inbox" …)
@@ -188,9 +195,7 @@ export function liveRankingsHtml(live, scope) {
   const cards = live.lists.map((l) => `<section class="dash-card">
     <header class="dash-card__head"><h3>${esc(LIST_LABEL[l.key] ?? l.label)}</h3><span class="rk-stand">${l.passed} im Filter</span></header>
     <div class="dash-card__body">
-      <p class="rk-question">${esc(l.question)}</p>
-      ${l.items.length ? `<div class="rk-list">${l.items.map((it) => liveRowHtml(it, l.key)).join('')}</div>`
-        : '<p class="dash-muted">Kein Titel besteht den Filter.</p>'}
+      ${liveListHtml(l)}
     </div>
   </section>`).join('');
   return `<p class="rk-stand">Technisch · live aus den aktuellen Daten · ${esc(scope)} (${live.pool} Titel) · ohne KI</p>${cards}`;

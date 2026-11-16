@@ -248,7 +248,20 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   f, at}; `f` = EUR je Notierungs-Einheit (impliziert, Median über gemeinsame
   Tage — gleicht GBX/Pence automatisch aus). Range-Levels × `f`, Chart/5T aus
   `eur_basis.c`, Kurs aus LS.
-- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group` aus `section()`,
+- **Monitor-Reiter „Markt“** (`dashboard-modal.js` + `market-dashboard.js`, seit Nov. 2026; ersetzt „Übersicht“ und
+  „Rankings“): interaktives Dashboard des aktiven Buckets. Schalter **Sektoren** (Mega-Cluster → Sektor → Sub-Sektor →
+  Titel) / **Länder** (Region → Land → Sektor → Titel), Horizont 1T/1W/1M/3M. Treemap über d3-hierarchy
+  (`vendor/d3-hierarchy-3.1.2.min.js`, lazy über `lib/d3-loader.js`, ohne d3 ein Raster): Kachelgröße = Anzahl Titel,
+  Farbe = Median im Horizont. Klick auf eine Kachel geht eine Ebene tiefer und öffnet darunter die Liste „Titel in …“
+  („In Liste zeigen“ → `onSelectInList`), Titel-Kacheln öffnen das Detail-Sheet. Alles darunter filtert auf den Ausschnitt
+  mit (`view()`): Top-Mover, die fünf Live-Rankings (eine Liste zur Zeit; `liveRankings` mit `only`/`sectorCap`), das
+  KI-Wochenranking (lädt erst beim Aufklappen) und die Signal-Karten. Über der Treemap stehen die passenden Indizes aus
+  `lib/tv-indices.js` (`onFetchIndexRows`, 5 min Cache): ohne Auswahl die je drei stärksten/schwächsten, sonst die des
+  Clusters (`INDEX_MEGA` in `lib/market-scope.js`) bzw. der Region/des Landes. Die volle Indizes-Tabelle
+  (`indices-panel.js`) steht einklappbar am Ende. **Land** = `company_profile.facts.country` (ROIC-Firmenprofil), ohne
+  Profil ersatzweise der Börsenplatz (`countryOf`; die Fußnote nennt beide Anzahlen). Neue Schreibweisen aus dem Profil
+  in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Das Markets-Modal ist unverändert.
+- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle drei Reiter): jede Gruppe (`data-group` aus `section()`,
   Signal-Chips, jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
   MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen, nie die hinter „+N mehr“; klappt eine markierte
   Gruppe auf, wächst die Auswahl mit. Nur Titel des aktiven Buckets zählen. Leiste unten „N markiert · In Liste
@@ -495,8 +508,8 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   **Scout (`kind: scout`, nur App, Reiter im Briefing):** `week_label, title, lead, items[{symbol,exchange,
   name,category,thesis,catalyst,counter}], fazit, sources`. Der Inbox-Knopf öffnet das Prüffenster der
   Chat-Alternativen (`openImportCheck` in `app.js`, Quelle `ai-scout`); Titel im Workspace zeigen ihren Bucket.
-  **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`) ist seit
-  Nov. 2026 **eine Seite ohne Unterreiter**: oben die fünf Listen **technisch live** aus den Kandidaten des aktiven
+  **Rankings (`kind: ranking` und `rotation`, nur App):** Die Rankings stehen seit Nov. 2026 im Monitor-Reiter „Markt“
+  (`rankings-panel.js`, siehe „Monitor-Reiter Markt“; vorher eigener Reiter „Rankings“): oben die fünf Listen **technisch live** aus den Kandidaten des aktiven
   Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
   Perzentile über beide; Tippen öffnet das Detail-Sheet), darunter einklappbar das KI-Wochenranking vom Sonntag aus dem
   neuesten Eintrag des market-Blobs. Der Monitor-Reiter „Rotation“ zeigt seit Nov. 2026 den Tagesbericht der Auto-Rotation (siehe „Auto-Rotation“); die KI-Vorschläge `kind: rotation` vom Sonntag zeigt die App nicht mehr an. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:

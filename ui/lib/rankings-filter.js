@@ -279,22 +279,26 @@ export function dailyPickPool(all, pct, weights = PICK_WEIGHTS) {
  * Listen wie der Wochenlauf, gerechnet aus den gerade geladenen Kandidaten.
  * Perzentile über alle übergebenen Titel; gelistet wird bei `bucket === 'all'`
  * nur die Watchlist (wie im Wochenlauf), in jedem anderen Bucket der Bucket selbst.
+ * `only` (Set von Kandidaten) beschränkt die Listen auf einen Ausschnitt (Monitor-Dashboard),
+ * `sectorCap` hebt dort die Grenze je Sektor auf.
  *
  * @returns {{ pool:number, lists:Array<{key,label,question,passed,items:Array<{rank,c,m,score}>}>}}
  */
-export function liveRankings(cands, { bucket = 'watch', n = CONFIG.candidates } = {}) {
+export function liveRankings(cands, { bucket = 'watch', n = CONFIG.candidates, only = null, sectorCap = CONFIG.sectorCap } = {}) {
   const all = [];
   for (const c of cands ?? []) {
     const m = metricsOf({ ...c, _bucket: c._bucket ?? bucket, watch_flag: c.watch_flag });
     if (m) { m.c = c; all.push(m); }
   }
   const { scoreList, tableOf, passes } = scorer(all);
-  const pool = bucket === 'all' ? all.filter((m) => m.bucket === 'watch') : all;
+  const base = bucket === 'all' ? all.filter((m) => m.bucket === 'watch') : all;
+  // `only` (Set von Kandidaten) grenzt die Auswahl ein, die Perzentile bleiben über alle.
+  const pool = only ? base.filter((m) => only.has(m.c)) : base;
   const lists = Object.entries(LISTS).map(([key, def]) => {
     const hits = pool.filter((m) => passes(key, m))
       .map((m) => ({ m, score: scoreList(def, m, tableOf(key)) }))
       .filter((x) => x.score != null);
-    const chosen = pick(hits, n, CONFIG.sectorCap);
+    const chosen = pick(hits, n, sectorCap);
     return { key, label: def.label, question: def.question, passed: hits.length,
       items: chosen.map((x, i) => ({ rank: i + 1, c: x.m.c, m: x.m, score: x.score })) };
   });
