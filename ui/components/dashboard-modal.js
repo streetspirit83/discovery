@@ -3,9 +3,12 @@
  *
  *   Live      – Kacheln der Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`,
  *               Lang & Schwarz gegen Vortagesschluss), sortiert vom stärksten zum schwächsten,
- *               filterbar über die fünf Mega-Cluster-Icons. „Aktualisieren“ holt die LS-Kurse
- *               der gezeigten Titel neu (`onRefreshLs`); bis 80 Titel passiert das beim Öffnen
- *               von selbst, wenn der neueste Kurs älter als 2 min ist.
+ *               filterbar über die fünf Mega-Cluster-Icons. Live-Ticker (Aus · 1 · 2 · 5 min,
+ *               gemerkt in localStorage) lädt die LS-Kurse der gezeigten Titel in Runden neu
+ *               (`onRefreshLs`, je Runde höchstens 80, älteste zuerst); „Aktualisieren“ lädt alle
+ *               gezeigten sofort. Während des Ladens pulsieren die Kacheln, ein Balken zeigt den
+ *               Fortschritt, geänderte Werte blitzen kurz auf; Fehlversuche lädt die App im
+ *               Hintergrund nach und markiert, was danach noch fehlt (Grund im Tooltip).
  *   Dynamik   – Signal-Matrix (components/signal-matrix.js): Zeilen = Mega-Cluster, Spalten =
  *               Signale (Score-/Momentum-/PCHS-Dynamik vs. Vortag, MACD-Dreher, SMA-Kreuzungen,
  *               Trends, RSI- und SMA200-Extreme). Ein Klick auf eine Zeile geht tiefer
@@ -33,8 +36,10 @@ import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=202608
 
 /* Icons der Mega-Cluster wie in der Subleiste (`SECTOR_ICONS` in app.js). */
 const MEGA_ICONS = { tech: 'cpu', health: 'heartPulse', consumer: 'shoppingCart', industry: 'factory', finance: 'landmark' };
-const LIVE_AUTO_MAX = 80;            // bis zu so vielen Titeln lädt der Live-Reiter beim Öffnen selbst
-const LIVE_FRESH_MS = 2 * 60 * 1000;
+const LIVE_AUTO_MAX = 80;            // so viele Titel lädt eine Ticker-Runde höchstens (älteste zuerst)
+const LIVE_STALE_MS = 15 * 60 * 1000;   // älter = Kachel als „alter Stand“ markiert
+const LIVE_TICKS = [[0, 'Aus'], [1, '1 min'], [2, '2 min'], [5, '5 min']];
+const LIVE_TICK_KEY = 'discovery_live_ticker_min';
 const LIVE_CAP = 4;                  // ±4 % Tagesveränderung = volle Farbsättigung
 const fmtPct = (v, dec = 1) => (v == null || Number.isNaN(v) ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(Number(v)).toFixed(dec)}%`);
 
@@ -71,16 +76,23 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   const dyn = { path: [] };
   const view = () => (dyn.path.length ? scopeOf(base, 'cluster', dyn.path) : candidates);
 
-  /* Reiter Live: Einzeltitel als Kacheln nach LS-Tagesveränderung, Filter über Mega-Cluster. */
-  const lv = { seg: '', loading: false, note: '', auto: false };
+  /* Reiter Live: Einzeltitel als Kacheln nach LS-Tagesveränderung, Filter über Mega-Cluster.
+     `lv.pending` = wird gerade geladen, `lv.failed` = letzter Versuch ohne Kurs (id → Grund),
+     `lv.flash` = Wert hat sich in dieser Runde geändert (id → 'up' | 'down'). */
+  const storedTick = () => { try { const v = Number(localStorage.getItem(LIVE_TICK_KEY)); return LIVE_TICKS.some(([m]) => m === v) ? v : 2; } catch { return 2; } };
+  const lv = { seg: '', running: false, note: '', pending: new Set(), failed: new Map(), flash: new Map(),
+    done: 0, total: 0, tick: storedTick(), nextAt: 0, timer: null, last: null };
+  let closed = false;
   const lsChg = (c) => { const v = c?.ls_quote?.change_pct; return v == null || Number.isNaN(Number(v)) ? null : Number(v); };
   const liveSet = () => (lv.seg ? candidates.filter((c) => megaClusterOf(c.sector) === lv.seg) : candidates);
+  const hhmm = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   function liveTabHtml() {
     const set = liveSet();
-    const rows = set.map((c) => ({ c, v: lsChg(c) })).filter((r) => r.v != null).sort((a, b) => b.v - a.v);
+    const all = set.map((c) => ({ c, v: lsChg(c) }));
+    const rows = all.filter((r) => r.v != null).sort((a, b) => b.v - a.v);
+    const blank = all.filter((r) => r.v == null);
     const up = rows.filter((r) => r.v > 0).length, down = rows.filter((r) => r.v < 0).length;
     const med = median(rows.map((r) => r.v));
-    const stamps = rows.map((r) => r.c.ls_quote?.checked_at).filter(Boolean).sort();
     const filter = MEGA_CLUSTERS.map((m) => {
       const n = candidates.filter((c) => megaClusterOf(c.sector) === m.key).length;
       const act = lv.seg === m.key;
@@ -88,58 +100,120 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       return `<button type="button" class="subnav-alert${act ? ' is-active' : ''}" data-lv-seg="${m.key}" aria-pressed="${act}" title="${esc(tip)}" aria-label="${esc(tip)}">${icons[MEGA_ICONS[m.key]] ?? ''}</button>`;
     }).join('');
     const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+    const now = Date.now();
     const tile = (r) => {
-      const pct = Math.round(Math.min(Math.abs(r.v) / LIVE_CAP, 1) * 50 + 6);
-      const tip = `${r.c.name ?? r.c.symbol} · LS ${fmtPct(r.v, 2)}${r.c.ls_quote?.price != null ? ` · ${Number(r.c.ls_quote.price).toFixed(2)} €` : ''}`;
-      return `<button type="button" class="md-tile lv-tile" data-id="${esc(r.c.id)}" title="${esc(tip)}" aria-label="${esc(tip)}"
-        style="background:color-mix(in srgb, var(${r.v >= 0 ? '--pos' : '--neg'}) ${pct}%, var(--surface-2))">
+      const q = r.c.ls_quote;
+      const at = q?.checked_at ? new Date(q.checked_at).getTime() : null;
+      const fail = lv.failed.get(r.c.id);
+      const cls = ['md-tile', 'lv-tile'];
+      if (lv.pending.has(r.c.id)) cls.push('is-loading');
+      else if (fail) cls.push('is-failed');
+      else if (r.v != null && (!at || now - at > LIVE_STALE_MS)) cls.push('is-stale');
+      if (lv.flash.has(r.c.id)) cls.push(`lv-flash--${lv.flash.get(r.c.id)}`);
+      const state = lv.pending.has(r.c.id) ? 'lädt …' : fail ? `kein neuer Kurs (${fail})` : at ? `Stand ${stamp(q.checked_at)}` : 'noch kein Kurs';
+      const tip = `${r.c.name ?? r.c.symbol} · ${r.v != null ? `LS ${fmtPct(r.v, 2)}` : 'kein LS-Kurs'}${q?.price != null ? ` · ${Number(q.price).toFixed(2)} €` : ''} · ${state}`;
+      const bg = r.v == null ? 'var(--surface-3)'
+        : `color-mix(in srgb, var(${r.v >= 0 ? '--pos' : '--neg'}) ${Math.round(Math.min(Math.abs(r.v) / LIVE_CAP, 1) * 50 + 6)}%, var(--surface-2))`;
+      return `<button type="button" class="${cls.join(' ')}" data-id="${esc(r.c.id)}" title="${esc(tip)}" aria-label="${esc(tip)}" style="background:${bg}">
         <span class="md-tile__name">${esc(r.c.symbol)}</span>
-        <span class="md-tile__val">${fmtPct(r.v)}</span>
+        <span class="md-tile__val">${r.v != null ? fmtPct(r.v) : '–'}</span>
+        ${fail && !lv.pending.has(r.c.id) ? `<span class="lv-tile__warn" aria-hidden="true">${icons.info}</span>` : ''}
       </button>`;
     };
-    const missing = set.length - rows.length;
+    const stale = rows.filter((r) => { const at = r.c.ls_quote?.checked_at; return !at || now - new Date(at).getTime() > LIVE_STALE_MS; }).length;
     const notes = [`Lang & Schwarz gegen Vortagesschluss · Farbe ab ±${LIVE_CAP} % voll`];
-    if (stamps.length) notes.push(`Stand ${stamp(stamps[stamps.length - 1])}${stamps[0].slice(0, 16) !== stamps[stamps.length - 1].slice(0, 16) ? ` (ältester ${stamp(stamps[0])})` : ''}`);
-    if (missing > 0) notes.push(`${missing} ohne LS-Kurs`);
+    if (lv.last) notes.push(`letzte Runde ${hhmm(lv.last)}`);
+    if (lv.tick && !lv.running && lv.nextAt) notes.push(`nächste ${hhmm(lv.nextAt)}`);
+    if (lv.tick && set.length > LIVE_AUTO_MAX) notes.push(`Ticker lädt je Runde die ${LIVE_AUTO_MAX} ältesten Kurse`);
+    if (stale && !lv.running) notes.push(`${stale} mit altem Stand (gestrichelt)`);
+    if (lv.failed.size && !lv.running) notes.push(`${[...lv.failed.keys()].filter((id) => set.some((c) => c.id === id)).length} ohne neuen Kurs (ⓘ)`);
+    if (blank.length) notes.push(`${blank.length} ohne LS-Kurs`);
     if (lv.note) notes.push(lv.note);
+    const pct = lv.total ? Math.round((lv.done / lv.total) * 100) : 0;
     return `<div class="md-ctl">
         <div class="lv-filter" role="group" aria-label="Mega-Cluster">${filter}</div>
-        ${onRefreshLs ? `<button type="button" class="btn btn-sm btn-secondary" data-lv-refresh${lv.loading ? ' disabled' : ''}>${lv.loading ? '<span class="ls-loading"></span> Lädt …' : `${icons.refreshCw} Aktualisieren`}</button>` : ''}
+        ${onRefreshLs ? `<div class="lv-actions">
+          <span class="md-ctl__label">Ticker</span>
+          <div class="dash-seg">${LIVE_TICKS.map(([m, l]) => `<button type="button" class="dash-seg__btn${m === lv.tick ? ' is-active' : ''}" data-lv-tick="${m}">${l}</button>`).join('')}</div>
+          <button type="button" class="btn btn-sm btn-secondary${lv.running ? ' is-busy' : ''}" data-lv-refresh${lv.running ? ' disabled' : ''} title="LS-Kurse der gezeigten Titel jetzt laden" aria-label="LS-Kurse jetzt laden">${icons.refreshCw}${lv.running ? `<span>${lv.done}/${lv.total}</span>` : ''}</button>
+        </div>` : ''}
       </div>
+      <div class="lv-progress${lv.running ? ' is-on' : ''}" role="progressbar" aria-label="LS-Kurse laden" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div>
       <div class="md-kpis">
         <span><b>${rows.length}</b> Titel${lv.seg ? ` · ${esc(MEGA_CLUSTERS.find((m) => m.key === lv.seg)?.label ?? '')}` : ''}</span>
         <span class="pos">${icons.arrowUp}<b>${up}</b></span>
         <span class="neg">${icons.arrowDown}<b>${down}</b></span>
         <span class="md-kpis__med">Median heute <b class="${tone(med ?? 0)}">${fmtPct(med)}</b></span>
       </div>
-      ${rows.length ? `<div class="md-tm md-tm--grid lv-grid" data-group="live.tiles">${rows.map(tile).join('')}</div>`
-        : `<p class="dash-empty">${set.length ? 'Noch keine LS-Kurse geladen.' : 'Keine Titel in diesem Cluster.'}</p>`}
+      ${all.length ? `<div class="md-tm md-tm--grid lv-grid" data-group="live.tiles">${rows.map(tile).join('')}${blank.map(tile).join('')}</div>`
+        : '<p class="dash-empty">Keine Titel in diesem Cluster.</p>'}
       <p class="md-note">${esc(notes.join(' · '))}</p>`;
   }
-  const renderLive = () => { if (rk.tab === 'live') bodyEl.innerHTML = liveTabHtml(); };
-  async function refreshLive() {
-    if (!onRefreshLs || lv.loading) return;
-    const ids = liveSet().map((c) => c.id);
-    if (!ids.length) return;
-    lv.loading = true; lv.note = '';
+  function renderLive() {
+    if (rk.tab !== 'live' || closed) return;
+    const y = bodyEl.scrollTop;
+    bodyEl.innerHTML = liveTabHtml();
+    bodyEl.scrollTop = y;
+    lv.flash.clear();                            // Aufblitzen nur in der Zeichnung, die es zeigt
+  }
+  // Fortschritt kommt je Titel – höchstens alle 200 ms neu zeichnen.
+  let liveDraw = null;
+  const renderLiveSoon = () => { liveDraw ??= setTimeout(() => { liveDraw = null; renderLive(); }, 200); };
+  const scheduleNext = () => { lv.nextAt = lv.tick ? Date.now() + lv.tick * 60 * 1000 : 0; };
+
+  /** Lädt die LS-Kurse der gezeigten Titel. `auto` = Ticker-Runde (höchstens LIVE_AUTO_MAX, älteste zuerst). */
+  async function refreshLive(auto = false) {
+    if (!onRefreshLs || lv.running || closed) return;
+    const age = (c) => (c.ls_quote?.checked_at ? new Date(c.ls_quote.checked_at).getTime() : 0);
+    let targets = [...liveSet()].sort((a, b) => age(a) - age(b));
+    if (auto) targets = targets.slice(0, LIVE_AUTO_MAX);
+    if (!targets.length) return;
+    const before = new Map(targets.map((c) => [c.id, lsChg(c)]));
+    lv.running = true; lv.note = ''; lv.done = 0; lv.total = targets.length;
+    for (const c of targets) lv.pending.add(c.id);
     renderLive();
     try {
-      const res = await onRefreshLs(ids);
-      lv.note = res == null ? 'LS-Kurse brauchen das Backend (nicht im Demo-Modus)'
-        : res.fail ? `${res.fail} ohne neuen Kurs` : '';
-    } catch (err) { lv.note = `Aktualisieren fehlgeschlagen: ${err.message}`; }
-    lv.loading = false;
+      const res = await onRefreshLs(targets.map((c) => c.id), {
+        cancelled: () => closed,
+        // Je Titel: fertig (ok/Fehler mit Grund) oder zweiter Anlauf im Hintergrund (`retry`).
+        onProgress: ({ id, ok, retry, reason }) => {
+          if (retry) { lv.pending.add(id); renderLiveSoon(); return; }
+          lv.pending.delete(id);
+          if (ok) {
+            if (!lv.failed.delete(id)) lv.done++;
+            const c = candidates.find((x) => x.id === id);
+            const old = before.get(id), cur = lsChg(c);
+            if (old != null && cur != null && Math.abs(cur - old) >= 0.005) lv.flash.set(id, cur > old ? 'up' : 'down');
+          } else {
+            if (!lv.failed.has(id)) lv.done++;
+            lv.failed.set(id, reason || 'LS antwortet nicht');
+          }
+          renderLiveSoon();
+        },
+      });
+      if (res == null) lv.note = 'LS-Kurse brauchen das Backend (nicht im Demo-Modus)';
+    } catch (err) { lv.note = `Laden fehlgeschlagen: ${err.message}`; }
+    lv.pending.clear();
+    lv.running = false;
+    lv.last = Date.now();
+    scheduleNext();
     renderLive();
   }
-  /* Beim Öffnen des Reiters einmal selbst laden – nur bei überschaubarer Menge und wenn
-     der neueste Kurs nicht ohnehin frisch ist. */
+  /* Ticker: prüft jede Sekunde, ob eine Runde fällig ist – nur solange der Live-Reiter
+     sichtbar ist (Modal offen, nicht hinter einem Detail-Sheet, Browser-Tab im Vordergrund). */
+  function startTicker() {
+    if (lv.timer || !onRefreshLs) return;
+    lv.timer = setInterval(() => {
+      if (closed) { clearInterval(lv.timer); return; }
+      if (!lv.tick || lv.running || rk.tab !== 'live' || overlay.style.display === 'none' || document.visibilityState !== 'visible') return;
+      if (lv.nextAt && Date.now() >= lv.nextAt) refreshLive(true);
+    }, 1000);
+  }
   function showLive() {
     renderLive();
-    if (lv.auto || !onRefreshLs) return;
-    lv.auto = true;
-    const set = liveSet();
-    const newest = set.map((c) => c.ls_quote?.checked_at).filter(Boolean).sort().pop();
-    if (set.length && set.length <= LIVE_AUTO_MAX && (!newest || Date.now() - new Date(newest).getTime() > LIVE_FRESH_MS)) refreshLive();
+    if (!onRefreshLs) return;
+    startTicker();
+    if (!lv.last && !lv.running) refreshLive(true);   // erste Runde gleich beim Öffnen
   }
 
   function pulseBody() {
@@ -348,7 +422,15 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     /* Live: Cluster-Filter und Aktualisieren. */
     const lvSeg = e.target.closest('[data-lv-seg]');
     if (lvSeg) { lv.seg = lv.seg === lvSeg.dataset.lvSeg ? '' : lvSeg.dataset.lvSeg; lv.note = ''; renderLive(); return; }
-    if (e.target.closest('[data-lv-refresh]')) { refreshLive(); return; }
+    if (e.target.closest('[data-lv-refresh]')) { refreshLive(false); return; }
+    const lvTick = e.target.closest('[data-lv-tick]');
+    if (lvTick) {
+      lv.tick = Number(lvTick.dataset.lvTick);
+      try { localStorage.setItem(LIVE_TICK_KEY, String(lv.tick)); } catch { /* egal */ }
+      scheduleNext();
+      renderLive();
+      return;
+    }
     /* Dynamik: Zelle wählen, Zeile aufklappen, Brotkrumen, „In Tabelle öffnen“. */
     const sigCell = e.target.closest('[data-sig-col]');
     if (sigCell) {
@@ -411,7 +493,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     overlay,
     hide:  () => { overlay.style.display = 'none'; },
     show:  () => { overlay.style.display = ''; },
-    close: () => { overlay.remove(); document.removeEventListener('keydown', onKey); },
+    close: () => { closed = true; clearInterval(lv.timer); overlay.remove(); document.removeEventListener('keydown', onKey); },
   };
 
   const onKey = (e) => { if (e.key === 'Escape' && !hidden()) ctrl.close(); };

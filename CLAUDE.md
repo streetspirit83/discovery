@@ -266,9 +266,15 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   (`news-panel.js` wird nicht mehr importiert).
 - **Monitor-Modal** (`dashboard-modal.js`, vier Reiter über den aktiven Bucket): **Live** (erster Reiter) = Kacheln der
   Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`), sortiert, Filter über die fünf Mega-Cluster-Icons
-  (`MEGA_ICONS`, wie `SECTOR_ICONS` in `app.js`); „Aktualisieren“ holt die LS-Kurse der gezeigten Titel
-  (`refreshLsFor` in `app.js`), bis 80 Titel einmal von selbst beim Öffnen, wenn der neueste Kurs älter als 2 min ist;
-  Titel ohne LS-Kurs fehlen (Anzahl in der Fußnote). **Dynamik** = Signal-Matrix
+  (`MEGA_ICONS`, wie `SECTOR_ICONS` in `app.js`); **Live-Ticker** (Aus · 1 · 2 · 5 min, Standard 2, gemerkt in
+  localStorage `discovery_live_ticker_min`): lädt in Runden die LS-Kurse der gezeigten Titel (`refreshLsFor` in `app.js`,
+  je Runde höchstens 80, älteste zuerst, erste Runde beim Öffnen) – nur solange der Reiter sichtbar ist (Modal offen, nicht
+  hinter einem Detail-Sheet, Browser-Tab im Vordergrund). Der Knopf daneben lädt alle gezeigten sofort. `refreshLsFor`
+  lädt in Wellen von 6, holt fehlende ISINs einmal je Sitzung über TV, lädt Fehlversuche bis zu zweimal nach, behält bei
+  Fehlschlag den alten Kurs und speichert die Treffer einmal am Ende. Anzeige: ladende Kacheln pulsieren, Balken und
+  Zähler zeigen den Fortschritt, geänderte Werte blitzen auf, gestrichelt = Stand älter als 15 min, ⓘ = letzter Versuch
+  ohne Kurs (Grund im Tooltip); Titel ohne LS-Kurs stehen grau am Ende. **Kosten:** jede Runde ist eine Proxy-Runde je
+  Titel (Netlify-Function-Aufrufe). **Dynamik** = Signal-Matrix
   (`signal-matrix.js`, Logik `lib/market-signals.js`; ersetzt die früheren neun Signal-Karten): Zeilen = Mega-Cluster,
   ein Klick auf eine Zeile geht tiefer (Cluster → Sektor → Sub-Sektor → Titel, Perspektive `cluster` in
   `lib/market-scope.js`), Spalten = Signale in drei Gruppen Bullisch · Bärisch · Extreme (Score/Momentum/PCHS vs.

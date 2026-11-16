@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261116d';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116e';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116f';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -317,31 +317,74 @@ async function refreshStarLsOnLoad() {
   }
 }
 
-/* Monitor-Reiter „Live“: LS-Kurse der übergebenen Titel neu holen. Ein Fehlversuch behält
-   den alten Kurs, gespeichert werden nur Treffer. null = kein Backend (Demo-Modus). */
-async function refreshLsFor(ids) {
+/* Monitor-Reiter „Live“: LS-Kurse der übergebenen Titel neu holen (Reihenfolge wie übergeben,
+   Wellen von 6). Ein Fehlversuch behält den alten Kurs und wird im Hintergrund bis zu zweimal
+   nachgeladen; gespeichert werden nur Treffer, einmal am Ende. Titel ohne ISIN/LS-ID bekommen
+   die ISIN einmal je Sitzung über TV. `onProgress({id, ok, reason})` je Titel,
+   `onProgress({id, retry:true})` vor einem zweiten Anlauf. null = kein Backend (Demo-Modus). */
+const lsIsinTried = new Set();
+const LS_WAVE = 6;                              // wie NET_BATCH in candidate-list.js
+async function refreshLsFor(ids, { onProgress, cancelled } = {}) {
   if (useMock || !storageClient || !candidateList) return null;
   const backendUrl = localStorage.getItem('discovery_backend_url');
   const secret     = localStorage.getItem('discovery_secret');
   if (!backendUrl || !secret) return null;
+  const auth = { backendUrl, secret };
   const bucket = currentBlobType;
-  const idSet = new Set(ids);
-  const rows = (allBlobs[bucket]?.candidates ?? []).filter((c) => idSet.has(c.id));
-  const prev = new Map(rows.map((c) => [c.id, c.ls_quote]));
-  const updates = await candidateList.runLsQuote(rows.map((c) => c.id), { backendUrl, secret });
-  const ok = updates.filter((u) => u.updates.ls_quote?.price != null);
-  const okIds = new Set(ok.map((u) => u.candidate_id));
-  let restored = false;
-  for (const c of rows) {
-    if (okIds.has(c.id)) continue;
-    const old = prev.get(c.id);
-    if (old?.price != null) { c.ls_quote = old; restored = true; }
+  const byId = new Map((allBlobs[bucket]?.candidates ?? []).map((c) => [c.id, c]));
+  const targets = ids.map((id) => byId.get(id)).filter(Boolean);
+
+  const isISIN = (v) => /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(v ?? '').toUpperCase());
+  const missing = targets.filter((c) => c.tr_check?.ls_id == null && c.ls_quote?.instrument_id == null
+    && !isISIN(c.isin) && !lsIsinTried.has(c.id));
+  if (missing.length) {
+    missing.forEach((c) => lsIsinTried.add(c.id));
+    try {
+      const enr = await fetchTVEnrichment(missing, auth);
+      const tvUpdates = [];
+      for (const [cid, upd] of enr) {
+        const c = byId.get(cid);
+        if (c) { Object.assign(c, upd); tvUpdates.push({ candidate_id: cid, updates: upd }); }
+      }
+      if (tvUpdates.length) await storageClient.bulkUpdateCandidates(bucket, tvUpdates).catch(() => {});
+    } catch (err) { console.warn('[LS] ISIN-Nachschlag fehlgeschlagen:', err.message); }
   }
-  if (restored) candidateList.renderRowsSoon();
+
+  const ok = [];
+  const gone = [];                               // ohne ISIN: Nachladen zwecklos
+  const pass = async (list) => {
+    const failed = [];
+    for (let i = 0; i < list.length; i += LS_WAVE) {
+      if (cancelled?.()) { failed.push(...list.slice(i)); break; }
+      await Promise.all(list.slice(i, i + LS_WAVE).map(async (c) => {
+        let q;
+        try { q = await fetchLsQuote(c, auth); } catch (err) { q = { error: err.message }; }
+        if (q?.price != null) {
+          c.ls_quote = q;
+          ok.push({ candidate_id: c.id, updates: { ls_quote: q } });
+          onProgress?.({ id: c.id, ok: true });
+        } else if (q?.no_isin) {
+          gone.push(c);
+          onProgress?.({ id: c.id, ok: false, reason: 'keine ISIN' });
+        } else {
+          failed.push(c);
+          onProgress?.({ id: c.id, ok: false, reason: q?.error ?? 'kein Kurs' });
+        }
+      }));
+    }
+    return failed;
+  };
+  let failed = await pass(targets);
+  for (let attempt = 1; attempt <= 2 && failed.length && !cancelled?.(); attempt++) {
+    await new Promise((r) => setTimeout(r, 1500 * attempt));
+    failed.forEach((c) => onProgress?.({ id: c.id, retry: true }));
+    failed = await pass(failed);
+  }
+  candidateList.renderRowsSoon();
   if (ok.length && currentBlobType === bucket) {
     storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
   }
-  return { ok: ok.length, fail: rows.length - ok.length };
+  return { ok: ok.length, fail: failed.length + gone.length };
 }
 
 // ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
@@ -2899,7 +2942,7 @@ async function init() {
       candidates,
       bucket: currentBlobType,
       loadRankings,
-      onRefreshLs: (ids) => refreshLsFor(ids),
+      onRefreshLs: (ids, opts) => refreshLsFor(ids, opts),
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
       onSetRotationMode: (mode) => setRotationMode(mode),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.

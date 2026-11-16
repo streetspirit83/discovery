@@ -1852,8 +1852,27 @@ a.md-ix__chip:hover { outline:2px solid var(--accent); outline-offset:-2px; }
 .lv-filter .subnav-alert.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
 .lv-grid { grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); }
 /* .dash-body ist eine Flex-Spalte: lange Inhalte dürfen nicht gestaucht werden. */
-.dash-body > .md-tm, .dash-body > .sx-wrap, .dash-body > .sx-detail, .dash-body > .md-ctl, .dash-body > .md-kpis { flex-shrink:0; }
+.dash-body > .md-tm, .dash-body > .sx-wrap, .dash-body > .sx-detail, .dash-body > .md-ctl, .dash-body > .md-kpis, .dash-body > .md-note { flex-shrink:0; }
 .lv-grid .lv-tile { min-height:48px; }
+.lv-actions { display:inline-flex; align-items:center; gap:var(--s-2); flex-wrap:wrap; }
+.lv-actions .btn { display:inline-flex; align-items:center; gap:var(--s-1); font-variant-numeric:tabular-nums; }
+.lv-actions .btn.is-busy svg { animation:spin 1s linear infinite; }
+.lv-progress { flex-shrink:0; height:3px; border-radius:var(--r-pill); background:transparent; overflow:hidden; }
+.lv-progress.is-on { background:var(--surface-3); }
+.lv-progress > span { display:block; height:100%; background:var(--accent); transition:width .2s linear; }
+.lv-progress:not(.is-on) > span { width:0 !important; }
+.md-tm--grid .md-tile.lv-tile { position:relative; }
+.lv-tile.is-loading { animation:ls-refresh 1s ease-in-out infinite; }
+.lv-tile.is-stale { outline:1px dashed var(--muted); outline-offset:-1px; }
+.lv-tile.is-failed { outline:1px dashed var(--warn); outline-offset:-1px; }
+.lv-tile__warn { position:absolute; top:2px; right:2px; display:inline-flex; color:var(--warn); }
+.lv-tile__warn svg { width:12px; height:12px; }
+.lv-flash--up { animation:lv-flash-up 1.2s ease-out; }
+.lv-flash--down { animation:lv-flash-down 1.2s ease-out; }
+@keyframes lv-flash-up { 0% { box-shadow:0 0 0 3px var(--pos) inset; } 100% { box-shadow:0 0 0 0 transparent inset; } }
+@keyframes lv-flash-down { 0% { box-shadow:0 0 0 3px var(--neg) inset; } 100% { box-shadow:0 0 0 0 transparent inset; } }
+@media (prefers-reduced-motion:reduce) { .lv-tile.is-loading, .lv-flash--up, .lv-flash--down, .lv-actions .btn.is-busy svg { animation:none; }
+  .lv-tile.is-loading { opacity:.55; } }
 .md-ctl .btn svg { width:14px; height:14px; }
 
 /* Signal-Matrix (components/signal-matrix.js) */
