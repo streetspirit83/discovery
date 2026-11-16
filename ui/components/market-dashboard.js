@@ -1,14 +1,13 @@
 /**
- * Markt-Dashboard im Monitor (Reiter „Markt“): Kennzahlen, passende Branchen- bzw.
+ * Markt-Dashboard im Markets-Modal (Reiter „Markt“): Kennzahlen, passende Branchen- bzw.
  * Länder-Indizes, Treemap mit Drill-down, Titelliste der gewählten Kachel und Top-Mover.
  *
  * Zwei Perspektiven (Schalter): Sektoren (Sektor → Sub-Sektor → Titel) und Länder
  * (Land → Sektor → Titel), immer eine Ebene zur Zeit. Logik in lib/market-scope.js, die
  * Kachelflächen rechnet d3-hierarchy (lib/d3-loader.js, lazy; ohne d3 ein Raster).
  *
- * Die Komponente hält nur Zustand und liefert HTML; dashboard-modal.js zeichnet neu,
- * sobald `handleClick` eine Änderung meldet, und filtert Rankings und Signale mit
- * `scoped()` auf denselben Ausschnitt. Titel-Kacheln und -Zeilen tragen `data-id`
+ * Die Komponente hält nur Zustand und liefert HTML; markets-modal.js (Reiter „Markt“)
+ * zeichnet neu, sobald `handleClick` eine Änderung meldet. Titel-Kacheln und -Zeilen tragen `data-id`
  * (öffnet wie überall im Monitor das Detail-Sheet).
  */
 
@@ -17,7 +16,7 @@ import { loadD3 } from '../lib/d3-loader.js?v=20261116a';
 import {
   HORIZONS, PERSPECTIVES, withData, scopeOf, tilesFor, breadth, movers,
   countryCoverage, indicesFor, dimsOf,
-} from '../lib/market-scope.js?v=20261116c';
+} from '../lib/market-scope.js?v=20261116d';
 import { INDEX_GROUPS, allIndexEntries } from '../lib/tv-indices.js?v=20261023a';
 import { COLOR_MODES, metricFn } from '../lib/market-signals.js?v=20261116c';
 
@@ -165,7 +164,7 @@ export function createMarketDashboard({ candidates = [], onFetchIndexRows } = {}
     const mv = movers(sc, st.h, 5);
     return `
       <div class="md-ctl">
-        ${seg('view', Object.entries(PERSPECTIVES).map(([k, p]) => [k, p.label]), st.view)}
+        ${seg('view', ['sector', 'country'].map((k) => [k, PERSPECTIVES[k].label]), st.view)}
         ${seg('h', HORIZONS.map((h) => [h.key, h.label]), st.h)}
       </div>
       <div class="md-ctl md-ctl--color"><span class="md-ctl__label">Farbe</span>${seg('color', COLOR_MODES.map((m) => [m.key, m.label]), st.color)}</div>

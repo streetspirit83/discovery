@@ -34,6 +34,8 @@ const INDEX_FIELD = { change_1d: 'change', perf_w: 'perf_w', perf_1m: 'perf_1m',
 export const PERSPECTIVES = {
   sector:  { label: 'Sektoren', levels: ['sector', 'sub'],     names: ['Sektor', 'Sub-Sektor'], tag: 'mega' },
   country: { label: 'Länder',   levels: ['country', 'sector'], names: ['Land', 'Sektor'],       tag: 'region' },
+  // Nur für die Signal-Matrix im Monitor (Reiter „Dynamik“), nicht im Schalter der Treemap.
+  cluster: { label: 'Cluster',  levels: ['mega', 'sector', 'sub'], names: ['Cluster', 'Sektor', 'Sub-Sektor'], tag: null },
 };
 
 const NO_SECTOR = 'Ohne Sektor';

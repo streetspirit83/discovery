@@ -248,29 +248,34 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   f, at}; `f` = EUR je Notierungs-Einheit (impliziert, Median über gemeinsame
   Tage — gleicht GBX/Pence automatisch aus). Range-Levels × `f`, Chart/5T aus
   `eur_basis.c`, Kurs aus LS.
-- **Monitor-Reiter „Markt“** (`dashboard-modal.js` + `market-dashboard.js`, seit Nov. 2026; ersetzt „Übersicht“ und
-  „Rankings“): interaktives Dashboard des aktiven Buckets. Schalter **Sektoren** (Sektor → Sub-Sektor → Titel) /
+- **Markets-Modal, Reiter „Markt“** (`markets-modal.js` + `market-dashboard.js`, seit Nov. 2026; erster Reiter, davor kurz
+  im Monitor): interaktives Dashboard über den **aktiven Bucket**. Schalter **Sektoren** (Sektor → Sub-Sektor → Titel) /
   **Länder** (Land → Sektor → Titel), immer eine Ebene zur Zeit; Mega-Cluster bzw. Region stehen als Zusatzzeile auf
   den Kacheln der obersten Ebene. Horizont 1T/1W/1M/3M. Treemap über d3-hierarchy
   (`vendor/d3-hierarchy-3.1.2.min.js`, lazy über `lib/d3-loader.js`, ohne d3 ein Raster): Kachelgröße = Anzahl Titel,
-  Farbe = Median im Horizont. Klick auf eine Kachel geht eine Ebene tiefer und öffnet darunter die Liste „Titel in …“;
-  „In Tabelle öffnen“ neben den Brotkrumen zeigt alle Titel des Ausschnitts in der Hauptliste (`onSelectInList`), Titel-Kacheln öffnen das Detail-Sheet. Alles darunter filtert auf den Ausschnitt
-  mit (`view()`): Top-Mover, die fünf Live-Rankings (eine Liste zur Zeit; `liveRankings` mit `only`/`sectorCap`)
-  und die **Signal-Matrix** (`signal-matrix.js`, Logik `lib/market-signals.js`; ersetzt die früheren neun Signal-Karten):
-  Zeilen = Gruppen des Ausschnitts (unterste Ebene: Titel), Spalten = Signale in drei Gruppen Bullisch · Bärisch ·
-  Extreme (Score/Momentum/PCHS vs. Vortag, MACD-Dreher, SMA-Kreuzungen, Trend, Trend-Radar, RSI ≤ 30 / ≥ 70, SMA200
-  ab +30 % / −20 %: `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. Schalter
-  **Farbe** färbt die Karte statt nach Performance nach ΔScore, RSI, SMA200-Abstand oder Bias (`COLOR_MODES`). Das KI-Wochenranking hat den eigenen Reiter „KI-Ranking“. Über der Treemap stehen die passenden Indizes aus
-  `lib/tv-indices.js` (`onFetchIndexRows`, 5 min Cache) als Kacheln in derselben Farblogik: ohne Auswahl die je drei
-  stärksten/schwächsten, sonst die des Mega-Clusters des Sektors (`INDEX_MEGA` in `lib/market-scope.js`) bzw. des Landes. Die volle Indizes-Tabelle
-  (`indices-panel.js`) steht einklappbar am Ende. **Land** = `company_profile.facts.country` (ROIC-Firmenprofil), ohne
-  Profil ersatzweise der Börsenplatz (`countryOf`; die Fußnote nennt beide Anzahlen). Neue Schreibweisen aus dem Profil
-  in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Das Markets-Modal ist unverändert.
-- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group` aus `section()`,
-  Signal-Chips, jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
-  MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen, nie die hinter „+N mehr“; klappt eine markierte
-  Gruppe auf, wächst die Auswahl mit. Nur Titel des aktiven Buckets zählen. Leiste unten „N markiert · In Liste
-  zeigen“ → `onSelectInList` in `app.js`: `setSelection` + „nur Auswahl“ → Bulk-Leiste.
+  Farbe = Median im Horizont; Schalter **Farbe** färbt stattdessen nach ΔScore, RSI, SMA200-Abstand oder Bias
+  (`COLOR_MODES` in `lib/market-signals.js`). Klick auf eine Kachel geht eine Ebene tiefer und öffnet darunter die Liste
+  „Titel in …“; „In Tabelle öffnen“ neben den Brotkrumen zeigt alle Titel des Ausschnitts in der Hauptliste
+  (`showInList` in `app.js`), Titel-Kacheln öffnen das Detail-Sheet (Modal wird versteckt, `returnToMonitor`). Darunter
+  die Top-Mover. Über der Treemap stehen die passenden Indizes aus `lib/tv-indices.js` (`onFetchIndexRows`, 5 min Cache)
+  als Kacheln in derselben Farblogik: ohne Auswahl die je drei stärksten/schwächsten, sonst die des Mega-Clusters des
+  Sektors (`INDEX_MEGA` in `lib/market-scope.js`) bzw. des Landes. **Land** = `company_profile.facts.country`
+  (ROIC-Firmenprofil), ohne Profil ersatzweise der Börsenplatz (`countryOf`; die Fußnote nennt beide Anzahlen). Neue
+  Schreibweisen aus dem Profil in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Übrige Reiter: „Markets (TV)“
+  (iframe der Markets-Unterseite, lädt erst beim Öffnen), „Indices“, „Sektoren“. Der News-Reiter ist entfallen
+  (`news-panel.js` wird nicht mehr importiert).
+- **Monitor-Modal** (`dashboard-modal.js`, drei Reiter über den aktiven Bucket): **Dynamik** = Signal-Matrix
+  (`signal-matrix.js`, Logik `lib/market-signals.js`; ersetzt die früheren neun Signal-Karten): Zeilen = Mega-Cluster,
+  ein Klick auf eine Zeile geht tiefer (Cluster → Sektor → Sub-Sektor → Titel, Perspektive `cluster` in
+  `lib/market-scope.js`), Spalten = Signale in drei Gruppen Bullisch · Bärisch · Extreme (Score/Momentum/PCHS vs.
+  Vortag, MACD-Dreher, SMA-Kreuzungen, Trend, Trend-Radar, RSI ≤ 30 / ≥ 70, SMA200 ab +30 % / −20 %:
+  `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. **Rankings** = Umschalter
+  Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
+  Auto-Rotation.
+- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle drei Reiter): jede Gruppe (`data-group`,
+  jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
+  MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen. Nur Titel des aktiven Buckets zählen. Leiste unten
+  „N markiert · In Liste zeigen“ → `showInList` in `app.js`: `setSelection` + „nur Auswahl“ → Bulk-Leiste.
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 
@@ -513,11 +518,10 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   **Scout (`kind: scout`, nur App, Reiter im Briefing):** `week_label, title, lead, items[{symbol,exchange,
   name,category,thesis,catalyst,counter}], fazit, sources`. Der Inbox-Knopf öffnet das Prüffenster der
   Chat-Alternativen (`openImportCheck` in `app.js`, Quelle `ai-scout`); Titel im Workspace zeigen ihren Bucket.
-  **Rankings (`kind: ranking` und `rotation`, nur App):** Die Rankings stehen seit Nov. 2026 im Monitor-Reiter „Markt“
-  (`rankings-panel.js`, siehe „Monitor-Reiter Markt“; vorher eigener Reiter „Rankings“): die fünf Listen **technisch live** aus den Kandidaten des aktiven
+  **Rankings (`kind: ranking` und `rotation`, nur App):** Monitor-Reiter „Rankings“ (`rankings-panel.js`, Umschalter Live · KI-Ranking · Tagessieger): die fünf Listen **technisch live** aus den Kandidaten des aktiven
   Buckets (`liveRankings` in `lib/rankings-filter.js`, ohne KI, 8 je Liste; bei „Watch + Archiv" nur die Watchlist,
   Perzentile über beide; Tippen öffnet das Detail-Sheet); das KI-Wochenranking vom Sonntag (neuester Eintrag des
-  market-Blobs) steht im Reiter „KI-Ranking“. Der Monitor-Reiter „Rotation“ zeigt seit Nov. 2026 den Tagesbericht der Auto-Rotation (siehe „Auto-Rotation“); die KI-Vorschläge `kind: rotation` vom Sonntag zeigt die App nicht mehr an. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
+  market-Blobs) steht im Unterreiter „KI-Ranking“. Der Monitor-Reiter „Rotation“ zeigt seit Nov. 2026 den Tagesbericht der Auto-Rotation (siehe „Auto-Rotation“); die KI-Vorschläge `kind: rotation` vom Sonntag zeigt die App nicht mehr an. `ranking`: `title, lead, lists{momentum|solid|growth|pullback|breakout:
   {question, items[{rank,symbol,exchange,name,eye?,score,note,lists[]}]}}`; `push.mjs` ergänzt `prev_rank` und
   `has_prev`. `rotation`: `title, lead, promote[…], demote[…]` mit denselben Feldern. Das Briefing-Modal blendet
   beide Arten aus.
@@ -542,7 +546,7 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
   `perf_5d` gegen `close` nachtragen, `reviewPicks` (Tagessieger vs. übriger Pool, Spearman je Faktor), `nextMethod`
   passt die Gewichte höchstens alle 5 Handelstage um ±0,02 an (ab 30 Messungen) → market-Blob `picks_method`
   {version, weights, updated_day, history, last_changes}; `daily_picks.review`/`.method` stehen auch in Rankings.json.
-  App: Monitor-Reiter „Tagessieger“ (`components/daily-picks-panel.js`: heute · Treffer-Check · Bestenliste · Verlauf),
+  App: Monitor-Reiter „Rankings“, Unterreiter „Tagessieger“ (`components/daily-picks-panel.js`: heute · Treffer-Check · Bestenliste · Verlauf),
   Abzeichen (Lucide-Pokal, `pick-badge`) neben dem Symbol in Watch und „Watch + Archiv“ für die neuesten 5
   (`daily_pick`, nicht-aufzählbar, `loadDailyPicks` in `app.js`). Keine Kauf- oder Verkaufsempfehlung.
   **Ablauf auf „Go“:** „Discovery Monitor.json“ aus Drive lesen, Nachrichten des

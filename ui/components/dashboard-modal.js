@@ -1,13 +1,14 @@
 /**
- * Dashboard / Monitor modal.
+ * Dashboard / Monitor modal (bottom-nav slot "Monitor"), drei Reiter über den *aktiven Bucket*:
  *
- * Reiter „Markt“ (seit Nov. 2026, ersetzt „Übersicht“ und „Rankings“): interaktives
- * Dashboard des *aktiven Buckets* – Treemap mit Drill-down nach Sektoren oder Ländern
- * (components/market-dashboard.js), dazu Branchen-/Länder-Indizes, Top-Mover, die fünf
- * Live-Rankings und die Signal-Matrix (components/signal-matrix.js); das KI-Wochenranking hat einen eigenen Reiter (Score-/Momentum-/PCHS-
- * Dynamik vs. Vortag, RSI-Extreme, MACD-Flips, SMA-Kreuzungen, Trends). Alles unter der
- * Treemap filtert auf den gewählten Ausschnitt mit (`view()`). Die Indizes-Tabelle des
- * Markets-Modals steht einklappbar am Ende. Opened from the "Monitor" bottom-nav slot.
+ *   Dynamik   – Signal-Matrix (components/signal-matrix.js): Zeilen = Mega-Cluster, Spalten =
+ *               Signale (Score-/Momentum-/PCHS-Dynamik vs. Vortag, MACD-Dreher, SMA-Kreuzungen,
+ *               Trends, RSI- und SMA200-Extreme). Ein Klick auf eine Zeile geht tiefer
+ *               (Cluster → Sektor → Sub-Sektor → Titel), eine Zelle zeigt ihre Titel.
+ *   Rankings  – Umschalter Live (fünf technische Listen) · KI-Ranking (Sonntag) · Tagessieger.
+ *   Rotation  – Tagesbericht der Auto-Rotation.
+ *
+ * Das Markt-Dashboard (Treemap) liegt seit Nov. 2026 im Markets-Modal (Reiter „Markt“).
  * All metrics come from dashboard-metrics (client-side).
  *
  * renderDashboardModal returns a controller { overlay, show, hide, close } so the
@@ -20,11 +21,9 @@ import { pulse } from '../lib/dashboard-metrics.js?v=20261103h';
 import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './rankings-panel.js?v=20261116a';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
-import { createMarketDashboard } from './market-dashboard.js?v=20261116c';
-import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
-import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261116c';
+import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261116d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
-import { groupsFor } from '../lib/market-scope.js?v=20261116c';
+import { groupsFor, scopeOf, withData, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 /* ── formatters ───────────────────────────────────────────────────────────── */
@@ -49,15 +48,15 @@ function stamp(iso) {
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode, onFetchIndexRows } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
-  const state = { rkList: 'momentum', foldSignals: true, sig: null };
-  const rk = { tab: 'overview', data: null, err: null, loading: false };
-  // Markt-Dashboard: hält Perspektive, Horizont und Drill-down-Pfad. `view()` ist der
-  // gewählte Ausschnitt – Rankings und alle Signal-Karten rechnen darauf.
-  const md = createMarketDashboard({ candidates, onFetchIndexRows });
-  const view = () => (md.st.path.length ? md.scoped() : candidates);
+  const state = { rkList: 'momentum', rkSub: 'live', sig: null };
+  const rk = { tab: 'dynamics', data: null, err: null, loading: false };
+  // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
+  const base = withData(candidates);
+  const dyn = { path: [] };
+  const view = () => (dyn.path.length ? scopeOf(base, 'cluster', dyn.path) : candidates);
 
   function pulseBody() {
     const p = pulse(view());
@@ -78,73 +77,54 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       </div>`;
   }
 
-  /* Signale und Dynamik als Matrix: Zeilen = Gruppen des Ausschnitts, Spalten = Signale.
-     Die gewählte Zelle (`state.sig`) zeigt darunter ihre Titel. Je Ausschnitt gecacht. */
+  /* Signal-Matrix: Zeilen = Gruppen der nächsten Ebene, Spalten = Signale. Die gewählte
+     Zelle (`state.sig`) zeigt darunter ihre Titel. Je Pfad gecacht. */
   const sigCache = new Map();
   function sigData() {
-    const key = `${md.st.view}|${md.st.path.join('>')}`;
+    const key = dyn.path.join('>');
     if (!sigCache.has(key)) {
-      const sc = md.scoped();
-      const { title, rows } = groupsFor(sc, md.st.view, md.st.path);
-      sigCache.set(key, { columns: signalColumns(sc), rows, rowTitle: title });
+      const sc = scopeOf(base, 'cluster', dyn.path);
+      const { title, rows } = groupsFor(sc, 'cluster', dyn.path);
+      sigCache.set(key, { columns: signalColumns(sc), rows, rowTitle: title,
+        drill: dyn.path.length < PERSPECTIVES.cluster.levels.length });
     }
     return { ...sigCache.get(key), sel: state.sig };
   }
-  function signalsHtml() {
-    return `${signalMatrixHtml(sigData())}
+  function dynamicsHtml() {
+    if (!base.length) return '<p class="dash-empty">Keine Titel mit TV-Daten – erst TV-Daten laden.</p>';
+    const crumbs = ['Alle', ...dyn.path].map((name, i) => `${i ? `<span class="md-bc__sep">${icons.chevronRight}</span>` : ''}<button type="button" class="md-bc__btn${i === dyn.path.length ? ' is-current' : ''}" data-dyn-bc="${i}">${esc(name)}</button>`).join('');
+    return `<nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
+      ${signalMatrixHtml(sigData())}
       <div class="dash-pulse">${pulseBody()}</div>`;
   }
 
-  /* Rankings im Ausschnitt: Perzentile über alle Titel des Buckets, gelistet wird nur der
-     Ausschnitt (dort ohne Sektor-Grenze). Eine Liste zur Zeit, Umschalter im Kartenkopf. */
+  /* Reiter Rankings: Live-Listen (eine zur Zeit), KI-Wochenranking, Tagessieger. */
   const scope = bucket === 'all' ? 'Watchlist' : (BUCKET_LABELS[bucket] ?? bucket);
-  const liveCache = new Map();
-  function liveFor() {
-    const key = `${md.st.view}|${md.st.path.join('>')}`;
-    if (!liveCache.has(key)) {
-      const scoped = md.st.path.length;
-      liveCache.set(key, liveRankings(candidates, { bucket, n: 8, only: scoped ? new Set(md.scoped()) : null, sectorCap: scoped ? 8 : undefined }));
-    }
-    return liveCache.get(key);
-  }
-  function rankingsHtml() {
-    const live = liveFor();
+  let live = null;
+  function liveHtml() {
+    live ??= liveRankings(candidates, { bucket, n: 8 });
     const list = live.lists.find((l) => l.key === state.rkList) ?? live.lists[0];
     const segs = RANK_SEGS.filter((sg) => live.lists.some((l) => l.key === sg.key));
-    const where = md.st.path.length ? `${scope} · ${md.scopeLabel()}` : scope;
     return `<section class="dash-card">
       <header class="dash-card__head"><span class="dash-card__icon">${icons.trophy}</span><h3>Rankings</h3>
         <span class="rk-stand">${list ? `${list.passed} im Filter` : ''}</span></header>
       <div class="dash-card__body">
         <div class="md-rkseg"><div class="dash-seg">${segs.map((sg) => `<button type="button" class="dash-seg__btn${sg.key === list?.key ? ' is-active' : ''}" data-md-rk="${sg.key}">${esc(sg.label)}</button>`).join('')}</div></div>
-        ${live.pool && list ? liveListHtml(list) : '<p class="dash-muted">Keine Titel mit TV-Daten im Ausschnitt.</p>'}
-        <p class="rk-stand">Technisch · live · ${esc(where)} (${live.pool} Titel) · ohne KI</p>
+        ${live.pool && list ? liveListHtml(list) : '<p class="dash-muted">Keine Titel mit TV-Daten – erst TV-Daten laden.</p>'}
+        <p class="rk-stand">Technisch · live · ${esc(scope)} (${live.pool} Titel) · ohne KI</p>
       </div>
     </section>`;
   }
-  const weeklyBody = () => (rk.err ? `<p class="dash-muted">KI-Wochenranking konnte nicht geladen werden: ${esc(rk.err)}</p>`
-    : rk.data ? weeklyRankingsHtml(rk.data)
-    : '<p class="dash-muted"><span class="ls-loading"></span> Lade KI-Wochenranking …</p>');
-
-  /* Der Markt-Reiter besteht aus zwei Teilen: `#md-main` wird bei jeder Änderung des
-     Ausschnitts neu gezeichnet, die Indizes-Tabelle darunter bleibt stehen (sie lädt
-     beim ersten Aufklappen selbst und soll bei einem Kachel-Klick nicht neu laden). */
-  function mainHtml() {
-    if (!md.hasData()) return md.topHtml();
-    const where = md.st.path.length ? ` · ${esc(md.scopeLabel())}` : '';
-    return `${md.topHtml()}
-      ${rankingsHtml()}
-      <details class="md-fold" data-md-fold="signals"${state.foldSignals ? ' open' : ''}>
-        <summary class="md-fold__sum">${icons.activity}<span>Signale und Dynamik${where}</span></summary>
-        <div class="md-fold__body">${state.foldSignals ? signalsHtml() : ''}</div>
-      </details>`;
-  }
-  function bodyHtml() {
-    return `<div class="md-main" id="md-main">${mainHtml()}</div>
-      <details class="md-fold" data-md-fold="indices">
-        <summary class="md-fold__sum">${icons.barChart2}<span>Indizes · Branchen und Länder</span></summary>
-        <div class="md-fold__body" id="md-indices"></div>
-      </details>`;
+  const RK_SUBS = [['live', 'Live'], ['weekly', 'KI-Ranking'], ['picks', 'Tagessieger']];
+  const blobHtml = (what, fn) => (rk.err ? `<p class="dash-muted">${what} konnte nicht geladen werden: ${esc(rk.err)}</p>`
+    : rk.data ? fn(rk.data)
+    : `<p class="dash-muted"><span class="ls-loading"></span> Lade ${what} …</p>`);
+  function rankTabHtml() {
+    const body = state.rkSub === 'weekly' ? blobHtml('KI-Wochenranking', weeklyRankingsHtml)
+      : state.rkSub === 'picks' ? blobHtml('Tagessieger', dailyPicksHtml)
+      : liveHtml();
+    return `<div class="md-ctl"><div class="dash-seg">${RK_SUBS.map(([k, l]) => `<button type="button" class="dash-seg__btn${k === state.rkSub ? ' is-active' : ''}" data-rk-sub="${k}">${l}</button>`).join('')}</div></div>
+      ${body}`;
   }
 
   /* ── mount ──────────────────────────────────────────────────────────────── */
@@ -159,9 +139,8 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <button class="modal-close" id="dash-close" aria-label="Schließen">✕</button>
       </div>
       <div class="tab-bar dash-tabs" role="tablist">
-        <button class="tab-btn active" data-dash-tab="overview" role="tab" aria-selected="true">Markt</button>
-        <button class="tab-btn" data-dash-tab="weekly" role="tab" aria-selected="false">KI-Ranking</button>
-        <button class="tab-btn" data-dash-tab="picks" role="tab" aria-selected="false">Tagessieger</button>
+        <button class="tab-btn active" data-dash-tab="dynamics" role="tab" aria-selected="true">Dynamik</button>
+        <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
         <button class="tab-btn" data-dash-tab="rotation" role="tab" aria-selected="false">Rotation</button>
       </div>
       <div class="modal-body dash-body"></div>
@@ -236,64 +215,22 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   }).observe(bodyEl, { childList: true });
   decorate();
 
-  /* Markt-Reiter zeichnen. `renderMain` ersetzt nur den oberen Teil (Ausschnitt geändert),
-     `rerender` den ganzen Reiter (Reiterwechsel). Die Gruppen-Checkboxen kommen jeweils neu. */
-  function wireMain() {
-    md.draw(bodyEl);
-    bodyEl.querySelector('[data-md-fold="signals"]')?.addEventListener('toggle', (e) => {
-      if (state.foldSignals === e.target.open) return;
-      state.foldSignals = e.target.open;
-      renderMain();
-    });
-    decorate();
-  }
-  function renderMain() {
-    const main = bodyEl.querySelector('#md-main');
-    if (rk.tab !== 'overview' || !main) return;
-    main.innerHTML = mainHtml();
-    wireMain();
-  }
-  let indicesMounted = false;
-  function rerender() {
-    indicesMounted = false;
-    bodyEl.innerHTML = bodyHtml();
-    bodyEl.querySelector('[data-md-fold="indices"]')?.addEventListener('toggle', (e) => {
-      if (!e.target.open || indicesMounted) return;
-      indicesMounted = true;
-      renderIndicesPanel(bodyEl.querySelector('#md-indices'), { onFetchIndexRows });
-    });
-    wireMain();
-  }
-  /* Reiter KI-Ranking: KI-Wochenranking vom Sonntag aus dem market-Blob (derselbe Abruf
-     wie Tagessieger und Rotation). */
-  const renderRankings = () => {
-    if (rk.tab !== 'weekly') return;
-    bodyEl.innerHTML = weeklyBody();
-  };
-  async function showWeekly() {
-    renderRankings();
+  /* Jeder Reiter setzt den ganzen Inhalt neu; die Gruppen-Checkboxen kommen über den
+     MutationObserver dazu. KI-Ranking, Tagessieger und Rotation teilen einen Abruf des
+     market-Blobs (`loadData`). */
+  const renderDynamics = () => { if (rk.tab === 'dynamics') bodyEl.innerHTML = dynamicsHtml(); };
+  const renderRankings = () => { if (rk.tab === 'rankings') bodyEl.innerHTML = rankTabHtml(); };
+  async function loadData() {
     if (rk.data || rk.loading || !loadRankings) return;
     rk.loading = true;
     try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
     rk.loading = false;
     renderRankings();
-  }
-  /* Reiter Tagessieger: Einträge `picks` aus dem market-Blob (derselbe Abruf wie die Rankings). */
-  const renderPicks = () => {
-    if (rk.tab !== 'picks') return;
-    bodyEl.innerHTML = rk.err ? `<p class="dash-muted">Tagessieger konnten nicht geladen werden: ${esc(rk.err)}</p>`
-      : rk.data ? dailyPicksHtml(rk.data)
-      : '<p class="dash-muted"><span class="ls-loading"></span> Lade Tagessieger …</p>';
-  };
-  async function showPicks() {
-    renderPicks();
-    if (rk.data || rk.loading || !loadRankings) return;
-    rk.loading = true;
-    try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
-    rk.loading = false;
-    renderRankings();
-    renderPicks();
     renderRotation();
+  }
+  function showRankings() {
+    renderRankings();
+    if (state.rkSub !== 'live') loadData();
   }
   /* Reiter Rotation: Tagesbericht der Auto-Rotation (`auto_rotation` im market-Blob,
      derselbe Abruf wie die Rankings). Der Schalter Probelauf/Scharf gilt ab dem nächsten Lauf. */
@@ -303,15 +240,9 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       : rk.data ? rotationTabHtml({ auto: rk.data.auto, find: rk.data.find, day: rk.rotDay })
       : '<p class="dash-muted"><span class="ls-loading"></span> Lade Rotation …</p>';
   };
-  async function showRotation() {
+  function showRotation() {
     renderRotation();
-    if (rk.data || rk.loading || !loadRankings) return;
-    rk.loading = true;
-    try { rk.data = await loadRankings(); } catch (err) { rk.err = err.message; }
-    rk.loading = false;
-    renderRankings();
-    renderPicks();
-    renderRotation();
+    loadData();
   }
   overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
     rk.tab = b.dataset.dashTab;
@@ -321,20 +252,19 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       t.setAttribute('aria-selected', String(on));
     });
     bodyEl.scrollTop = 0;
-    if (rk.tab === 'weekly') showWeekly();
-    else if (rk.tab === 'picks') showPicks();
+    if (rk.tab === 'rankings') showRankings();
     else if (rk.tab === 'rotation') showRotation();
-    else rerender();
+    else renderDynamics();
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
-    /* Markt-Dashboard: Perspektive, Horizont, Kachel, Brotkrumen, „In Liste zeigen“. */
+    /* Dynamik: Zelle wählen, Zeile aufklappen, Brotkrumen, „In Tabelle öffnen“. */
     const sigCell = e.target.closest('[data-sig-col]');
     if (sigCell) {
       const { sigRow: row, sigCol: col } = sigCell.dataset;
       state.sig = state.sig && state.sig.row === row && state.sig.col === col ? null : { row, col };
-      renderMain();
+      renderDynamics();
       return;
     }
     if (e.target.closest('[data-sig-show]')) {
@@ -344,22 +274,19 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       onSelectInList?.(ids);
       return;
     }
+    const drill = e.target.closest('[data-sig-drill]');
+    const crumb = e.target.closest('[data-dyn-bc]');
+    if (drill || crumb) {
+      dyn.path = drill ? [...dyn.path, drill.dataset.sigDrill] : dyn.path.slice(0, Number(crumb.dataset.dynBc));
+      state.sig = null;                          // Zeilen der Matrix ändern sich
+      renderDynamics();
+      return;
+    }
+    /* Rankings: Unterreiter und Liste. */
+    const rkSub = e.target.closest('[data-rk-sub]');
+    if (rkSub) { state.rkSub = rkSub.dataset.rkSub; showRankings(); return; }
     const rkBtn = e.target.closest('[data-md-rk]');
-    if (rkBtn) { state.rkList = rkBtn.dataset.mdRk; renderMain(); return; }
-    const act = rk.tab === 'overview' ? md.handleClick(e) : null;
-    if (act?.show) {
-      if (!act.show.length) return;
-      ctrl.close();
-      onSelectInList?.(act.show);
-      return;
-    }
-    if (act?.changed) {
-      const drilled = e.target.closest('[data-md-tile],[data-md-bc],[data-md-view]');
-      if (drilled) state.sig = null;             // Zeilen der Matrix ändern sich
-      renderMain();
-      if (drilled) bodyEl.querySelector('.md-bc')?.scrollIntoView({ block: 'nearest' });
-      return;
-    }
+    if (rkBtn) { state.rkList = rkBtn.dataset.mdRk; renderRankings(); return; }
     /* Rotation: Lauf wählen und Modus umschalten. */
     const rotDay = e.target.closest('[data-rot-day]');
     if (rotDay) { rk.rotDay = rotDay.dataset.rotDay; renderRotation(); return; }
@@ -412,8 +339,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
   });
 
-  rerender();
-  md.loadIndices(() => renderMain());
+  renderDynamics();
 
   return ctrl;
 }

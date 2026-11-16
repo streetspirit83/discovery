@@ -1862,8 +1862,8 @@ a.md-ix__chip:hover { outline:2px solid var(--accent); outline-offset:-2px; }
   border:none; font:inherit; font-size:var(--fs-1); color:var(--text); text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sx-row__name { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .sx-row small { flex:0 0 auto; color:var(--muted); font-size:inherit; }
-.sx-row--stock { cursor:pointer; font-weight:var(--fw-bold); }
-.sx-row--stock:hover { color:var(--accent); }
+.sx-row--stock, .sx-row--drill { cursor:pointer; font-weight:var(--fw-bold); }
+.sx-row--stock:hover, .sx-row--drill:hover { color:var(--accent); }
 .sx-row--total { font-weight:var(--fw-bold); }
 .sx-cell { min-width:0; min-height:30px; padding:0; border:none; border-radius:var(--r-1); background:var(--surface-2);
   color:var(--text); font:inherit; font-size:var(--fs-1); font-weight:var(--fw-bold); cursor:pointer; }
@@ -2451,6 +2451,10 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .mk-tabpanes { flex:1; display:flex; flex-direction:column; min-height:0; }
 .mk-tabpanes > .tab-panel { display:none; }
 .mk-tabpanes > .tab-panel.active { display:flex; flex-direction:column; flex:1; min-height:0; }
+.mk-tabpanes > [data-mkpane="market"].active { display:block; overflow-y:auto; }
+.markets-modal .mk-tabs .tab-btn { white-space:nowrap; }
+@media (max-width:520px) { .markets-modal .mk-tabs { gap:0; }
+  .markets-modal .mk-tabs .tab-btn { flex:1 1 auto; padding:var(--s-2) var(--s-1); font-size:var(--fs-2); } }
 
 .news-panel { display:flex; flex-direction:column; flex:1; min-height:0; }
 .news-subtabs { margin-bottom:var(--s-3); }

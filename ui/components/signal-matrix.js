@@ -1,6 +1,6 @@
 /**
- * Signal-Matrix im Monitor-Reiter „Markt“: Zeilen = Gruppen des Ausschnitts (Sektoren,
- * Sub-Sektoren, Länder … bzw. die Einzeltitel auf der untersten Ebene), Spalten = Signale
+ * Signal-Matrix im Monitor-Reiter „Dynamik“: Zeilen = Gruppen des Ausschnitts (Mega-Cluster,
+ * Sektoren, Sub-Sektoren bzw. die Einzeltitel auf der untersten Ebene), Spalten = Signale
  * aus lib/market-signals.js. Jede Zelle zeigt die Anzahl der Titel; die gewählte Zelle
  * klappt darunter ihre Titelliste auf (Zeilen mit `data-id` → Detail-Sheet,
  * `data-sig-show` → „In Tabelle öffnen“).
@@ -26,8 +26,9 @@ function cellStyle(n, group) {
  * @param {Array}    p.rows      [{ name, items:[Kandidat], c? }] – `c` gesetzt = Einzeltitel
  * @param {string}   p.rowTitle  Kopf der ersten Spalte („Sektor“, „Land“, „Titel“ …)
  * @param {{row:string, col:string}|null} p.sel  gewählte Zelle (`row` = Index oder 'all')
+ * @param {boolean}  p.drill     Gruppenzeilen sind Knöpfe (`data-sig-drill` = Name) für die nächste Ebene
  */
-export function signalMatrixHtml({ columns, rows, rowTitle, sel }) {
+export function signalMatrixHtml({ columns, rows, rowTitle, sel, drill = false }) {
   if (!rows.length) return '<p class="dash-empty">Keine Titel im Ausschnitt.</p>';
   const sets = rows.map((r) => new Set(r.items));
   const hitsOf = (col, ri) => (ri === 'all' ? col.rows : col.rows.filter((x) => sets[ri].has(x.c)));
@@ -45,7 +46,9 @@ export function signalMatrixHtml({ columns, rows, rowTitle, sel }) {
   const body = rows.map((r, i) => {
     const label = r.c
       ? `<button type="button" class="sx-row sx-row--stock" data-id="${esc(r.c.id)}" title="${esc(r.c.name ?? r.name)}">${esc(r.name)}</button>`
-      : `<span class="sx-row" title="${esc(`${r.name} · ${r.items.length} Titel`)}"><span class="sx-row__name">${esc(r.name)}</span><small>${r.items.length}</small></span>`;
+      : drill
+        ? `<button type="button" class="sx-row sx-row--drill" data-sig-drill="${esc(r.name)}" title="${esc(`${r.name} · ${r.items.length} Titel – aufklappen`)}"><span class="sx-row__name">${esc(r.name)}</span><small>${r.items.length}</small></button>`
+        : `<span class="sx-row" title="${esc(`${r.name} · ${r.items.length} Titel`)}"><span class="sx-row__name">${esc(r.name)}</span><small>${r.items.length}</small></span>`;
     return label + columns.map((c) => cell(c, i, r.name)).join('');
   }).join('');
   const total = rows.length > 1

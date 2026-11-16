@@ -15,8 +15,8 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
-import { renderMarketsModal } from './components/markets-modal.js?v=20261103f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116c';
+import { renderMarketsModal } from './components/markets-modal.js?v=20261116d';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116d';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -2810,7 +2810,17 @@ async function init() {
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
 
-  // Markets slot → open the Markets modal (indices + embedded Markets sub-page).
+  // Titel aus Monitor/Markets in der Liste zeigen: auswählen, „nur Auswahl“ an → Bulk-Leiste.
+  const showInList = (ids) => {
+    if (!ids.length) return;
+    candidateList.setSelection(ids);
+    candidateList.setShowSelectedOnly(true);
+    renderSelectedPill();
+    window.scrollTo(0, 0);
+    toast(`${ids.length} Titel ausgewählt`, 'success');
+  };
+
+  // Markets slot → open the Markets modal (Markt-Dashboard, TV sub-page, indices).
   document.getElementById('nav-markets').addEventListener('pointerup', () => {
     renderMarketsModal({
       onFetchIndicators: async () => {
@@ -2826,8 +2836,17 @@ async function init() {
         if (useMock || !backendUrl || !secret) return null;
         return fetchIndexRows({ backendUrl, secret, entries });
       },
-      // News-Tab: Sektor-/Portfolio-Chips folgen dem Watch-Bucket.
-      getWatchCandidates: async () => (await ensureBlob('watch'))?.candidates ?? [],
+      // Reiter „Markt“: Dashboard über den aktiven Bucket; „In Tabelle öffnen“ wählt die
+      // Titel in der Liste aus, Titel öffnen das Detail-Sheet und kehren ins Modal zurück.
+      candidates: allBlobs[currentBlobType]?.candidates ?? [],
+      bucketLabel: ({ inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' })[currentBlobType] ?? currentBlobType,
+      onSelectInList: (ids) => showInList(ids),
+      onOpenDetail: (candidate, ctrl) => {
+        ctrl?.hide();
+        returnToMonitor = () => ctrl?.show();
+        candidateDetail.show(candidate);
+        openDetailSheet();
+      },
       // Sektoren-Heatmap: alle Kandidaten aus allen 4 Buckets (inbox + watch +
       // export + archive), dedupliziert nach Symbol+Börse. Archiv ist meist der
       // größte Topf (verworfene, aber TV-angereicherte Werte) → breitere Basis.
@@ -2853,24 +2872,10 @@ async function init() {
       candidates,
       bucket: currentBlobType,
       loadRankings,
-      // Markt-Dashboard: Branchen-/Länder-Indizes (dieselbe Quelle wie Markets → Indices).
-      onFetchIndexRows: async (entries) => {
-        const backendUrl = localStorage.getItem('discovery_backend_url');
-        const secret     = localStorage.getItem('discovery_secret');
-        if (useMock || !backendUrl || !secret) return null;
-        return fetchIndexRows({ backendUrl, secret, entries });
-      },
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
       onSetRotationMode: (mode) => setRotationMode(mode),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.
-      onSelectInList: (ids) => {
-        if (!ids.length) return;
-        candidateList.setSelection(ids);
-        candidateList.setShowSelectedOnly(true);
-        renderSelectedPill();
-        window.scrollTo(0, 0);
-        toast(`${ids.length} Titel ausgewählt`, 'success');
-      },
+      onSelectInList: (ids) => showInList(ids),
       onOpenDetail: (candidate, ctrl) => {
         ctrl?.hide();                        // keep the dashboard mounted, just hidden
         returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes

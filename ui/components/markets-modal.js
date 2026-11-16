@@ -2,16 +2,20 @@
  * Markets modal.
  *
  * Shows the live market indices (DAX / NASDAQ / NIKKEI / VIX) — moved out of the
- * Intra-Day modal — and the tabs below: "Märkte" (embedded Markets sub-page in
- * an iframe), "Indices" (indices-panel.js: Branchen / Länder),
- * "News" (news-panel.js: Märkte / Portfolio / Quellen) and "Sektoren".
+ * Intra-Day modal — and the tabs below: "Markt" (market-dashboard.js: Treemap mit
+ * Drill-down nach Sektoren oder Ländern über den aktiven Bucket, Index-Kacheln,
+ * Top-Mover), "Markets (TV)" (embedded Markets sub-page in an iframe, lädt erst beim
+ * Öffnen des Reiters), "Indices" (indices-panel.js: Branchen / Länder) and "Sektoren".
  * Opened from the "Markets" slot in the bottom navigation.
+ *
+ * Returns a controller { overlay, show, hide, close }: the app hides the modal while a
+ * detail sheet opened from the Markt tab is showing and restores it afterwards.
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
-import { renderNewsPanel } from './news-panel.js?v=20261103f';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260807a';
 import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
+import { createMarketDashboard } from './market-dashboard.js?v=20261116d';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 
@@ -50,8 +54,9 @@ function indicatorChip(i) {
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
 }
 
-export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, getWatchCandidates, getHeatCandidates } = {}) {
-  if (document.getElementById('markets-modal-overlay')) return;
+export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, getHeatCandidates,
+  candidates = [], bucketLabel = '', onOpenDetail, onSelectInList } = {}) {
+  if (document.getElementById('markets-modal-overlay')) return null;
   let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
 
   const overlay = document.createElement('div');
@@ -69,26 +74,53 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
       <div class="modal-body">
         <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>
         <div class="tab-bar mk-tabs" role="tablist">
-          <button class="tab-btn active" data-mktab="markets" role="tab" aria-selected="true">Märkte</button>
+          <button class="tab-btn active" data-mktab="market" role="tab" aria-selected="true">Markt</button>
+          <button class="tab-btn" data-mktab="markets" role="tab" aria-selected="false">Markets (TV)</button>
           <button class="tab-btn" data-mktab="indices" role="tab" aria-selected="false">Indices</button>
-          <button class="tab-btn" data-mktab="news" role="tab" aria-selected="false">News</button>
           <button class="tab-btn" data-mktab="sectors" role="tab" aria-selected="false">Sektoren</button>
         </div>
         <div class="mk-tabpanes">
-          <div class="tab-panel active" data-mkpane="markets" role="tabpanel">
-            <iframe class="markets-frame" src="${MARKETS_URL}" title="Markets" loading="lazy"></iframe>
-          </div>
+          <div class="tab-panel active" data-mkpane="market" role="tabpanel"><div class="md-main" id="mk-market"></div></div>
+          <div class="tab-panel" data-mkpane="markets" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="indices" role="tabpanel"></div>
-          <div class="tab-panel" data-mkpane="news" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="sectors" role="tabpanel"></div>
         </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
 
-  // Tab switch; indices, news panel + sector heatmap render lazily on first activation.
+  /* Reiter „Markt“: Dashboard über die Kandidaten des aktiven Buckets. Jede Änderung
+     (Perspektive, Horizont, Farbe, Kachel, Brotkrumen) zeichnet den Reiter neu. */
+  const md = createMarketDashboard({ candidates, onFetchIndexRows });
+  const marketEl = overlay.querySelector('#mk-market');
+  const renderMarket = () => {
+    marketEl.innerHTML = (bucketLabel && md.hasData() ? `<p class="md-note">Basis: ${bucketLabel} · ${candidates.length} Titel</p>` : '') + md.topHtml();
+    md.draw(marketEl);
+  };
+  // click statt pointerup: ein Wisch beim Scrollen soll nichts auslösen.
+  marketEl.addEventListener('click', (e) => {
+    const act = md.handleClick(e);
+    if (act?.show) {
+      if (!act.show.length) return;
+      ctrl.close();
+      onSelectInList?.(act.show);
+      return;
+    }
+    if (act?.changed) {
+      renderMarket();
+      if (e.target.closest('[data-md-tile],[data-md-bc],[data-md-view]')) marketEl.querySelector('.md-bc')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    const hit = e.target.closest('[data-id]');
+    if (hit) {
+      const cand = candidates.find((c) => c.id === hit.dataset.id);
+      if (cand) onOpenDetail?.(cand, ctrl);
+    }
+  });
+
+  // Tab switch; TV sub-page, indices + sector heatmap render lazily on first activation.
+  let frameMounted = false;
   let indicesMounted = false;
-  let newsMounted = false;
   let sectorsMounted = false;
   overlay.querySelectorAll('[data-mktab]').forEach((btn) => {
     btn.addEventListener('pointerup', () => {
@@ -102,9 +134,9 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
         indicesMounted = true;
         renderIndicesPanel(overlay.querySelector('[data-mkpane="indices"]'), { onFetchIndexRows });
       }
-      if (btn.dataset.mktab === 'news' && !newsMounted) {
-        newsMounted = true;
-        renderNewsPanel(overlay.querySelector('[data-mkpane="news"]'), { getWatchCandidates });
+      if (btn.dataset.mktab === 'markets' && !frameMounted) {
+        frameMounted = true;
+        overlay.querySelector('[data-mkpane="markets"]').innerHTML = `<iframe class="markets-frame" src="${MARKETS_URL}" title="Markets (TV)"></iframe>`;
       }
       if (btn.dataset.mktab === 'sectors' && !sectorsMounted) {
         sectorsMounted = true;
@@ -117,7 +149,14 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
     overlay.remove();
     document.removeEventListener('keydown', onKey);
   };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const hidden = () => overlay.style.display === 'none';
+  const ctrl = {
+    overlay,
+    hide: () => { overlay.style.display = 'none'; },
+    show: () => { overlay.style.display = ''; },
+    close,
+  };
+  const onKey = (e) => { if (e.key === 'Escape' && !hidden()) close(); };
   overlay.querySelector('#mk-close').addEventListener('pointerup', close);
   overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', onKey);
@@ -134,4 +173,9 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
       }
     } catch { /* keep placeholders */ }
   })();
+
+  renderMarket();
+  md.loadIndices(() => renderMarket());
+
+  return ctrl;
 }
