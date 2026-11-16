@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261116d';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116d';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116e';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -315,6 +315,33 @@ async function refreshStarLsOnLoad() {
   if (ok.length && currentBlobType === bucket) {
     storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
   }
+}
+
+/* Monitor-Reiter „Live“: LS-Kurse der übergebenen Titel neu holen. Ein Fehlversuch behält
+   den alten Kurs, gespeichert werden nur Treffer. null = kein Backend (Demo-Modus). */
+async function refreshLsFor(ids) {
+  if (useMock || !storageClient || !candidateList) return null;
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret     = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return null;
+  const bucket = currentBlobType;
+  const idSet = new Set(ids);
+  const rows = (allBlobs[bucket]?.candidates ?? []).filter((c) => idSet.has(c.id));
+  const prev = new Map(rows.map((c) => [c.id, c.ls_quote]));
+  const updates = await candidateList.runLsQuote(rows.map((c) => c.id), { backendUrl, secret });
+  const ok = updates.filter((u) => u.updates.ls_quote?.price != null);
+  const okIds = new Set(ok.map((u) => u.candidate_id));
+  let restored = false;
+  for (const c of rows) {
+    if (okIds.has(c.id)) continue;
+    const old = prev.get(c.id);
+    if (old?.price != null) { c.ls_quote = old; restored = true; }
+  }
+  if (restored) candidateList.renderRowsSoon();
+  if (ok.length && currentBlobType === bucket) {
+    storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
+  }
+  return { ok: ok.length, fail: rows.length - ok.length };
 }
 
 // ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
@@ -2872,6 +2899,7 @@ async function init() {
       candidates,
       bucket: currentBlobType,
       loadRankings,
+      onRefreshLs: (ids) => refreshLsFor(ids),
       onOpenHit: (hit, ctrl) => openBriefingHit(hit, ctrl),
       onSetRotationMode: (mode) => setRotationMode(mode),
       // Gruppen-Auswahl im Monitor: Titel auswählen, „nur Auswahl“ an → Bulk-Leiste.

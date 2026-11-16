@@ -1,6 +1,11 @@
 /**
- * Dashboard / Monitor modal (bottom-nav slot "Monitor"), drei Reiter über den *aktiven Bucket*:
+ * Dashboard / Monitor modal (bottom-nav slot "Monitor"), vier Reiter über den *aktiven Bucket*:
  *
+ *   Live      – Kacheln der Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`,
+ *               Lang & Schwarz gegen Vortagesschluss), sortiert vom stärksten zum schwächsten,
+ *               filterbar über die fünf Mega-Cluster-Icons. „Aktualisieren“ holt die LS-Kurse
+ *               der gezeigten Titel neu (`onRefreshLs`); bis 80 Titel passiert das beim Öffnen
+ *               von selbst, wenn der neueste Kurs älter als 2 min ist.
  *   Dynamik   – Signal-Matrix (components/signal-matrix.js): Zeilen = Mega-Cluster, Spalten =
  *               Signale (Score-/Momentum-/PCHS-Dynamik vs. Vortag, MACD-Dreher, SMA-Kreuzungen,
  *               Trends, RSI- und SMA200-Extreme). Ein Klick auf eine Zeile geht tiefer
@@ -23,7 +28,15 @@ import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261116d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
-import { groupsFor, scopeOf, withData, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
+import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
+import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
+
+/* Icons der Mega-Cluster wie in der Subleiste (`SECTOR_ICONS` in app.js). */
+const MEGA_ICONS = { tech: 'cpu', health: 'heartPulse', consumer: 'shoppingCart', industry: 'factory', finance: 'landmark' };
+const LIVE_AUTO_MAX = 80;            // bis zu so vielen Titeln lädt der Live-Reiter beim Öffnen selbst
+const LIVE_FRESH_MS = 2 * 60 * 1000;
+const LIVE_CAP = 4;                  // ±4 % Tagesveränderung = volle Farbsättigung
+const fmtPct = (v, dec = 1) => (v == null || Number.isNaN(v) ? '–' : `${v >= 0 ? '+' : '−'}${Math.abs(Number(v)).toFixed(dec)}%`);
 
 const BUCKET_LABELS = { inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' };
 /* ── formatters ───────────────────────────────────────────────────────────── */
@@ -48,15 +61,86 @@ function stamp(iso) {
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode } = {}) {
+export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode, onRefreshLs } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { rkList: 'momentum', rkSub: 'live', sig: null };
-  const rk = { tab: 'dynamics', data: null, err: null, loading: false };
+  const rk = { tab: 'live', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
   const dyn = { path: [] };
   const view = () => (dyn.path.length ? scopeOf(base, 'cluster', dyn.path) : candidates);
+
+  /* Reiter Live: Einzeltitel als Kacheln nach LS-Tagesveränderung, Filter über Mega-Cluster. */
+  const lv = { seg: '', loading: false, note: '', auto: false };
+  const lsChg = (c) => { const v = c?.ls_quote?.change_pct; return v == null || Number.isNaN(Number(v)) ? null : Number(v); };
+  const liveSet = () => (lv.seg ? candidates.filter((c) => megaClusterOf(c.sector) === lv.seg) : candidates);
+  function liveTabHtml() {
+    const set = liveSet();
+    const rows = set.map((c) => ({ c, v: lsChg(c) })).filter((r) => r.v != null).sort((a, b) => b.v - a.v);
+    const up = rows.filter((r) => r.v > 0).length, down = rows.filter((r) => r.v < 0).length;
+    const med = median(rows.map((r) => r.v));
+    const stamps = rows.map((r) => r.c.ls_quote?.checked_at).filter(Boolean).sort();
+    const filter = MEGA_CLUSTERS.map((m) => {
+      const n = candidates.filter((c) => megaClusterOf(c.sector) === m.key).length;
+      const act = lv.seg === m.key;
+      const tip = act ? `${m.label} (${n}) · nochmal tippen: alle` : `Nur ${m.label} (${n})`;
+      return `<button type="button" class="subnav-alert${act ? ' is-active' : ''}" data-lv-seg="${m.key}" aria-pressed="${act}" title="${esc(tip)}" aria-label="${esc(tip)}">${icons[MEGA_ICONS[m.key]] ?? ''}</button>`;
+    }).join('');
+    const tone = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+    const tile = (r) => {
+      const pct = Math.round(Math.min(Math.abs(r.v) / LIVE_CAP, 1) * 50 + 6);
+      const tip = `${r.c.name ?? r.c.symbol} · LS ${fmtPct(r.v, 2)}${r.c.ls_quote?.price != null ? ` · ${Number(r.c.ls_quote.price).toFixed(2)} €` : ''}`;
+      return `<button type="button" class="md-tile lv-tile" data-id="${esc(r.c.id)}" title="${esc(tip)}" aria-label="${esc(tip)}"
+        style="background:color-mix(in srgb, var(${r.v >= 0 ? '--pos' : '--neg'}) ${pct}%, var(--surface-2))">
+        <span class="md-tile__name">${esc(r.c.symbol)}</span>
+        <span class="md-tile__val">${fmtPct(r.v)}</span>
+      </button>`;
+    };
+    const missing = set.length - rows.length;
+    const notes = [`Lang & Schwarz gegen Vortagesschluss · Farbe ab ±${LIVE_CAP} % voll`];
+    if (stamps.length) notes.push(`Stand ${stamp(stamps[stamps.length - 1])}${stamps[0].slice(0, 16) !== stamps[stamps.length - 1].slice(0, 16) ? ` (ältester ${stamp(stamps[0])})` : ''}`);
+    if (missing > 0) notes.push(`${missing} ohne LS-Kurs`);
+    if (lv.note) notes.push(lv.note);
+    return `<div class="md-ctl">
+        <div class="lv-filter" role="group" aria-label="Mega-Cluster">${filter}</div>
+        ${onRefreshLs ? `<button type="button" class="btn btn-sm btn-secondary" data-lv-refresh${lv.loading ? ' disabled' : ''}>${lv.loading ? '<span class="ls-loading"></span> Lädt …' : `${icons.refreshCw} Aktualisieren`}</button>` : ''}
+      </div>
+      <div class="md-kpis">
+        <span><b>${rows.length}</b> Titel${lv.seg ? ` · ${esc(MEGA_CLUSTERS.find((m) => m.key === lv.seg)?.label ?? '')}` : ''}</span>
+        <span class="pos">${icons.arrowUp}<b>${up}</b></span>
+        <span class="neg">${icons.arrowDown}<b>${down}</b></span>
+        <span class="md-kpis__med">Median heute <b class="${tone(med ?? 0)}">${fmtPct(med)}</b></span>
+      </div>
+      ${rows.length ? `<div class="md-tm md-tm--grid lv-grid" data-group="live.tiles">${rows.map(tile).join('')}</div>`
+        : `<p class="dash-empty">${set.length ? 'Noch keine LS-Kurse geladen.' : 'Keine Titel in diesem Cluster.'}</p>`}
+      <p class="md-note">${esc(notes.join(' · '))}</p>`;
+  }
+  const renderLive = () => { if (rk.tab === 'live') bodyEl.innerHTML = liveTabHtml(); };
+  async function refreshLive() {
+    if (!onRefreshLs || lv.loading) return;
+    const ids = liveSet().map((c) => c.id);
+    if (!ids.length) return;
+    lv.loading = true; lv.note = '';
+    renderLive();
+    try {
+      const res = await onRefreshLs(ids);
+      lv.note = res == null ? 'LS-Kurse brauchen das Backend (nicht im Demo-Modus)'
+        : res.fail ? `${res.fail} ohne neuen Kurs` : '';
+    } catch (err) { lv.note = `Aktualisieren fehlgeschlagen: ${err.message}`; }
+    lv.loading = false;
+    renderLive();
+  }
+  /* Beim Öffnen des Reiters einmal selbst laden – nur bei überschaubarer Menge und wenn
+     der neueste Kurs nicht ohnehin frisch ist. */
+  function showLive() {
+    renderLive();
+    if (lv.auto || !onRefreshLs) return;
+    lv.auto = true;
+    const set = liveSet();
+    const newest = set.map((c) => c.ls_quote?.checked_at).filter(Boolean).sort().pop();
+    if (set.length && set.length <= LIVE_AUTO_MAX && (!newest || Date.now() - new Date(newest).getTime() > LIVE_FRESH_MS)) refreshLive();
+  }
 
   function pulseBody() {
     const p = pulse(view());
@@ -139,7 +223,8 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <button class="modal-close" id="dash-close" aria-label="Schließen">✕</button>
       </div>
       <div class="tab-bar dash-tabs" role="tablist">
-        <button class="tab-btn active" data-dash-tab="dynamics" role="tab" aria-selected="true">Dynamik</button>
+        <button class="tab-btn active" data-dash-tab="live" role="tab" aria-selected="true">Live</button>
+        <button class="tab-btn" data-dash-tab="dynamics" role="tab" aria-selected="false">Dynamik</button>
         <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
         <button class="tab-btn" data-dash-tab="rotation" role="tab" aria-selected="false">Rotation</button>
       </div>
@@ -254,11 +339,16 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     bodyEl.scrollTop = 0;
     if (rk.tab === 'rankings') showRankings();
     else if (rk.tab === 'rotation') showRotation();
-    else renderDynamics();
+    else if (rk.tab === 'dynamics') renderDynamics();
+    else showLive();
   }));
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
+    /* Live: Cluster-Filter und Aktualisieren. */
+    const lvSeg = e.target.closest('[data-lv-seg]');
+    if (lvSeg) { lv.seg = lv.seg === lvSeg.dataset.lvSeg ? '' : lvSeg.dataset.lvSeg; lv.note = ''; renderLive(); return; }
+    if (e.target.closest('[data-lv-refresh]')) { refreshLive(); return; }
     /* Dynamik: Zelle wählen, Zeile aufklappen, Brotkrumen, „In Tabelle öffnen“. */
     const sigCell = e.target.closest('[data-sig-col]');
     if (sigCell) {
@@ -339,7 +429,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
   });
 
-  renderDynamics();
+  showLive();
 
   return ctrl;
 }

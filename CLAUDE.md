@@ -264,7 +264,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Schreibweisen aus dem Profil in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Übrige Reiter: „Markets (TV)“
   (iframe der Markets-Unterseite, lädt erst beim Öffnen), „Indices“, „Sektoren“. Der News-Reiter ist entfallen
   (`news-panel.js` wird nicht mehr importiert).
-- **Monitor-Modal** (`dashboard-modal.js`, drei Reiter über den aktiven Bucket): **Dynamik** = Signal-Matrix
+- **Monitor-Modal** (`dashboard-modal.js`, vier Reiter über den aktiven Bucket): **Live** (erster Reiter) = Kacheln der
+  Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`), sortiert, Filter über die fünf Mega-Cluster-Icons
+  (`MEGA_ICONS`, wie `SECTOR_ICONS` in `app.js`); „Aktualisieren“ holt die LS-Kurse der gezeigten Titel
+  (`refreshLsFor` in `app.js`), bis 80 Titel einmal von selbst beim Öffnen, wenn der neueste Kurs älter als 2 min ist;
+  Titel ohne LS-Kurs fehlen (Anzahl in der Fußnote). **Dynamik** = Signal-Matrix
   (`signal-matrix.js`, Logik `lib/market-signals.js`; ersetzt die früheren neun Signal-Karten): Zeilen = Mega-Cluster,
   ein Klick auf eine Zeile geht tiefer (Cluster → Sektor → Sub-Sektor → Titel, Perspektive `cluster` in
   `lib/market-scope.js`), Spalten = Signale in drei Gruppen Bullisch · Bärisch · Extreme (Score/Momentum/PCHS vs.
@@ -272,7 +276,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. **Rankings** = Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
   Auto-Rotation.
-- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle drei Reiter): jede Gruppe (`data-group`,
+- **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group`,
   jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
   MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen. Nur Titel des aktiven Buckets zählen. Leiste unten
   „N markiert · In Liste zeigen“ → `showInList` in `app.js`: `setSelection` + „nur Auswahl“ → Bulk-Leiste.

@@ -1847,6 +1847,15 @@ a.md-ix__chip:hover { outline:2px solid var(--accent); outline-offset:-2px; }
 .md-ctl .dash-seg { max-width:100%; overflow-x:auto; }
 .md-ctl .dash-seg__btn { white-space:nowrap; }
 
+/* Monitor-Reiter „Live“: Kacheln der Einzeltitel, Filter über Mega-Cluster-Icons */
+.lv-filter { display:inline-flex; gap:2px; }
+.lv-filter .subnav-alert.is-active { background:var(--accent-weak); border-color:var(--accent); color:var(--accent); }
+.lv-grid { grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); }
+/* .dash-body ist eine Flex-Spalte: lange Inhalte dürfen nicht gestaucht werden. */
+.dash-body > .md-tm, .dash-body > .sx-wrap, .dash-body > .sx-detail, .dash-body > .md-ctl, .dash-body > .md-kpis { flex-shrink:0; }
+.lv-grid .lv-tile { min-height:48px; }
+.md-ctl .btn svg { width:14px; height:14px; }
+
 /* Signal-Matrix (components/signal-matrix.js) */
 .sx-wrap { overflow-x:auto; }
 .sx { display:grid; grid-template-columns:minmax(140px, 1.6fr) repeat(var(--sx-cols), minmax(42px, 1fr)); gap:2px;
