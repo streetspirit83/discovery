@@ -577,6 +577,16 @@ keine verlässliche Nachdrift, deshalb kein Analystensignal in Score und Alarmen
 - **AI Research aus der App:** ✨-Modal → Bereich „AI Research ins Dossier“ (Checkboxen, nichts vorausgewählt) → `candidate.research_request` → geplante Aufgabe „Discovery Research (App-Warteschlange)“ alle 2 h (muss in der Cloud-Umgebung **„netlify-blobs“** laufen — die Standard-Umgebung sperrt das Netlify-Backend) → `research` (`?queue=1`, `?catalog=1`, POST mit `failed`). Die Funktion akzeptiert dafür neben `x-research-token` auch `x-discovery-secret`. Details: `docs/DOSSIER.md`.
 - `indices-snapshot.yml` schreibt täglich (21:47 UTC) die Tabellen des Markets-Reiters „Indices“ als Google Sheet „Indices Snapshot“ (Blätter „Branchen“ und „Länder“) in den Drive-Ordner „Wertpapiere“ — `tools/indices-snapshot/run.mjs`, nutzt `ui/lib/tv-indices.js` (`fetchIndexRows`) über die scrape-proxy und dieselben Google-Secrets wie das Dossier. Die Datei wird in place überschrieben; Ordner per Variable `INDICES_FOLDER_ID`. Eine neue Index-Gruppe in `INDEX_GROUPS` wird automatisch als weiteres Blatt übernommen.
 
+## Bucket-Refresh (`refresh-buckets.yml`, werktags 06:47 und 11:53 UTC)
+`tools/refresh-buckets/run.mjs` holt für **alle** Titel in Watchlist und Archiv (ETFs eingeschlossen, jeder Bucket für
+sich) frische TV-Daten (`fetchTVEnrichment` über die scrape-proxy, gebündelt je Markt) und LS-Kurse (`fetchLsPrice`
+aus `netlify-backend/.../lib/ls-quote.js`, **direkt** von ls-tc.de, Wellen von 6, Fehlversuche einmal nachgeladen) und
+schreibt beides per `bulk_update_candidates` (nur die TV-Felder aus `buildUpdates` plus `ls_quote` im Format von
+`fetchLsQuote`). Ohne Kurs bleibt der alte `ls_quote`. Die LS-Instrument-ID kommt aus `tr_check.ls_id` oder
+`ls_quote.instrument_id`, sonst über die ISIN. Abbruch nur ohne jede TV-Antwort. Von Hand: Eingaben `dry` (nur holen
+und zählen) und `buckets`. Gleiche Concurrency-Gruppe `monitor-report` wie Auto-Rotation und Monitor-Bericht.
+Netlify-Kosten je Lauf: die TV-Proxy-Aufrufe je Markt plus ein `bulk_update` je 40 Titel; LS läuft ohne Proxy.
+
 ## Auto-Rotation (`auto-rotation.yml`, werktags 21:37 UTC, vor dem Monitor-Bericht)
 `tools/auto-rotation/run.mjs` (I/O) + `select.mjs` (reine Logik) wählen die Watchlist täglich neu aus Watchlist, Inbox
 und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).

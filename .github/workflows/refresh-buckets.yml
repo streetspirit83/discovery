@@ -1,0 +1,40 @@
+name: Bucket-Refresh – TV und LS für Watchlist und Archiv
+
+on:
+  # Werktags zweimal: kurz nach LS-Handelsbeginn (07:30 Berlin) und mittags.
+  # GitHub rechnet in UTC: 06:47 / 11:53 UTC = 07:47 / 12:53 Berlin (Winterzeit),
+  # im Sommer eine Stunde später.
+  schedule:
+    - cron: '47 6 * * 1-5'
+    - cron: '53 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Probelauf: nur holen und zählen, nichts schreiben'
+        type: boolean
+        default: false
+      buckets:
+        description: 'Buckets (kommagetrennt)'
+        type: string
+        default: 'watch,archive'
+
+# Gleiche Gruppe wie Auto-Rotation und Monitor-Bericht: die Rotation verschiebt Titel
+# zwischen denselben Buckets, beide dürfen nicht gleichzeitig schreiben.
+concurrency:
+  group: monitor-report
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/refresh-buckets/run.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && '1' || '' }}
+          BUCKETS: ${{ github.event_name == 'workflow_dispatch' && inputs.buckets || 'watch,archive' }}
