@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261107b';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261117a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261111a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -16,7 +16,7 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261116d';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261116f';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261117a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -25,7 +25,7 @@ import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261107b';
+import { renderControlModal } from './components/control-modal.js?v=20261117a';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261107f';
 import { enrichBulk } from './lib/claude-api.js';

@@ -279,7 +279,14 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   ein Klick auf eine Zeile geht tiefer (Cluster → Sektor → Sub-Sektor → Titel, Perspektive `cluster` in
   `lib/market-scope.js`), Spalten = Signale in drei Gruppen Bullisch · Bärisch · Extreme (Score/Momentum/PCHS vs.
   Vortag, MACD-Dreher, SMA-Kreuzungen, Trend, Trend-Radar, RSI ≤ 30 / ≥ 70, SMA200 ab +30 % / −20 %:
-  `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. **Rankings** = Umschalter
+  `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. Darunter die **Setup-Matrix**
+  (`components/setup-matrix.js`, Logik `lib/setup-metrics.js`, seit Nov. 2026) über denselben Ausschnitt: Zeilen = die vier
+  Setups der Trade-Spalte „Setup“ (Blue-Sky · Breakout-Nähe · Pullback · Unter Trend; ➖ Range zählt nicht, `priceSituation`
+  liegt seitdem in `setup-metrics.js` und wird von der Tabelle importiert), Spalten = feste Schwellen V/Ø30d > 100 % ·
+  Brk↑% > 50 % · Rat1M > 0,6 · alle 3 (`THRESH`); Scatter EPS-Wachstum YoY (TTM, sonst FY) gegen %S200 (TV-Schluss gegen
+  TV-SMA200 wie `sma200DistPct`) mit Rand-Histogrammen und Brush (`bindSetupBrush`), %S200-Quintile über den Ausschnitt,
+  Spider je Setup (Median als Perzentil-Rang). Alle Filter gelten zusammen, jede Ansicht zählt mit den Filtern der
+  anderen; Treffer → „In Tabelle öffnen“. Drill-down setzt die Filter zurück. **Rankings** = Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
   Auto-Rotation.
 - **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group`,

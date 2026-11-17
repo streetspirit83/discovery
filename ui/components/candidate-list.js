@@ -19,6 +19,7 @@ import { eurBasisFactor } from '../lib/eur-basis.js?v=20261103h';
 import { candidateTriggeredCount } from '../lib/alerts.js?v=20261103h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
+import { priceSituation, volRatioPct } from '../lib/setup-metrics.js?v=20261117a';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { lsTrend } from '../lib/ls-trend.js?v=20260807a';
 import { trendScore } from '../lib/trend-radar.js?v=20261103h';
@@ -129,36 +130,7 @@ function smaDistPct(c, smaNative) {
   return refDisplay != null && sma > 0 ? (refDisplay / sma - 1) * 100 : null;
 }
 
-// ── Price setup situation (Preis view) ──────────────────────────────────────
-function priceSituation(tv) {
-  if (!tv) return null;
-  const close = tv.close_1m ?? tv.close;
-  if (close == null) return null;
-
-  let earningsSoon = false;
-  if (tv.earnings_next_date) {
-    const ts = typeof tv.earnings_next_date === 'number'
-      ? tv.earnings_next_date * 1000 : new Date(tv.earnings_next_date).getTime();
-    const days = (ts - Date.now()) / 86400000;
-    earningsSoon = days >= 0 && days <= 31;
-  }
-
-  let icon, label;
-  const nearHigh = Math.max(tv.high_1m ?? 0, tv.high_3m ?? 0) || null;
-  if (tv.price_52_week_high != null && close > tv.price_52_week_high) {
-    icon = '🚀'; label = 'Blue-Sky: Kurs über 52W-Hoch – kein struktureller Widerstand';
-  } else if (nearHigh != null && close >= nearHigh * 0.98) {
-    icon = '🎯'; label = 'Breakout-Nähe: Kurs ≤2% unter dem 1M/3M-Hoch';
-  } else if (tv.sma20 != null && tv.sma50 != null && close < tv.sma20 && close >= tv.sma50) {
-    icon = '🔄'; label = 'Pullback im Trend: Kurs unter SMA20, über SMA50';
-  } else if (tv.sma50 != null && close < tv.sma50) {
-    icon = '📉'; label = 'Unter Trend: Kurs unter SMA50';
-  } else {
-    icon = '➖'; label = 'Range: kein klares Setup';
-  }
-  if (earningsSoon) { icon += '⚠'; label += ' · Earnings im 1M-Fenster'; }
-  return { icon, label };
-}
+// Setup-Spalte (Preis-Situation): lib/setup-metrics.js, gemeinsam mit der Setup-Matrix im Monitor.
 
 // Initial suggestions for the editable entry/target fields:
 // Entry orientiert sich an der SMA20 (kurzfristige Mittellinie, Fallback Kurs),
@@ -256,19 +228,8 @@ export function capSizeFromMC(mc) {
   return 'large';
 }
 
-// Aktuelles Volumen = Volumen des letzten LS-History-Snapshots (EUR-Venue),
-// dieselbe Quelle wie die Vol-Chips im Detail-Sheet.
-function currentVolume(c) {
-  const h = c.ls_history;
-  const last = Array.isArray(h) && h.length ? h[h.length - 1] : null;
-  return last?.volume ?? null;
-}
-/** Aktuelles Volumen ÷ Ø-Volumen (10 oder 30 Tage) in % — null, wenn Daten fehlen. */
-export function volRatioPct(c, days) {
-  const v = currentVolume(c);
-  const avg = days === 30 ? c.tv_data?.average_volume_30d_calc : c.tv_data?.avg_vol_10d;
-  return v != null && avg > 0 ? (v / avg) * 100 : null;
-}
+/* Aktuelles Volumen ÷ Ø-Volumen: `volRatioPct` aus lib/setup-metrics.js (hier weiter exportiert). */
+export { volRatioPct };
 function volRatioCell(c, days) {
   const r = volRatioPct(c, days);
   if (r == null) return '—';
