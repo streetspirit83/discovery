@@ -242,6 +242,10 @@ const KIND_TONE = { upgrade: 'pos', list_add: 'pos', init_bull: 'pos', target_up
 const googleNews = (t) => `https://www.google.com/search?tbm=nws&q=${encodeURIComponent(String(t ?? '').trim())}`;
 const dayTime = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`; };
 const capFmt = (m) => (m == null ? null : m >= 1000 ? `${nf(1).format(m / 1000)} Mrd. $` : `${nf(0).format(m)} Mio. $`);
+const CUR_SIGN = { USD: '$', EUR: '€', GBP: '£', GBX: 'p', CHF: 'CHF ', SEK: 'SEK ', DKK: 'DKK ', NOK: 'NOK ' };
+const priceFmt = (v, cur) => { if (v == null || !(+v > 0)) return null; const sg = CUR_SIGN[String(cur ?? '').toUpperCase()] ?? ''; const n = nf(+v >= 1000 ? 0 : 2).format(+v); return sg === '$' || sg === '£' ? `${sg}${n}` : sg ? (sg.endsWith(' ') ? `${sg}${n}` : `${n} ${sg}`) : n; };
+/* „Kurs $48,12 · Ziel +12,3 %“ – TV-Schlusskurs neben dem Abstand des genannten Kursziels. */
+const priceLine = (x) => { const p = priceFmt(x.close, x.currency); if (!p) return null; return `Kurs ${p}${x.target_gap != null ? ` · Ziel <span class="${tone(x.target_gap)}">${esc(pct(x.target_gap))}</span>` : ''}`; };
 const scoreFmt = (v) => (v == null ? '–' : nf(0).format(v));
 
 /* Eine Analystenzeile im Stil der News im Detail-Sheet: Meta (Zeit · Haus · Art), Headline → Google-Suche, Quelle als Icon. */
@@ -261,6 +265,7 @@ function scoutDayItem(x, i, find, cutoff) {
     ? `<span class="mb-scout__where">liegt in ${esc(BUCKET_NAMES[hit.bucket] ?? hit.bucket)}</span>`
     : `<button type="button" class="btn btn-secondary btn-sm mb-scout__add" data-scout-day="${i}">${icons.plus} In Inbox</button>`;
   const facts = [
+    priceLine(x),
     `Score ${scoreFmt(x.score)}${cutoff != null ? ` <span class="pv-muted">/ ${scoreFmt(cutoff)}</span>` : ''}`,
     x.bias != null ? `Bias ${x.bias > 0 ? '+' : ''}${x.bias}` : null,
     capFmt(x.cap_usd),
@@ -290,18 +295,15 @@ function knownItem(u, find) {
       <span class="mb-tag">${esc(BUCKET_NAMES[u.bucket] ?? u.bucket)}${flags ? ` · ${esc(flags)}` : ''}</span>
     </div>
     ${headlineRow({ at: u.at, firm: u.firm, kind: u.kind, label: u.label, title: u.title, url: u.url, extra: tally })}
+    ${priceLine(u) ? `<p class="mb-scout__line"><span class="mb-nw">${priceLine(u)}</span></p>` : ''}
   </li>`;
 }
 
-function scoutModeBar(view, mode) {
+function scoutModeBar(view) {
   const seg = (attr, val, cur, label) => `<button type="button" class="seg-btn${cur === val ? ' seg-btn--active' : ''}" data-${attr}="${val}" aria-pressed="${cur === val}">${label}</button>`;
   const views = `<div class="rk-mode" role="group" aria-label="Scout-Ansicht">${seg('scout-view', 'day', view, 'Heute')}${seg('scout-view', 'week', view, 'Woche')}</div>`;
   if (view !== 'day') return views;
-  const live = mode === 'live';
-  return `${views}<div class="rk-mode" role="group" aria-label="Modus des Analysten-Scouts">
-      ${seg('scout-mode', 'dry', live ? 'live' : 'dry', 'Probelauf')}${seg('scout-mode', 'live', live ? 'live' : 'dry', 'Scharf')}
-      <span class="rk-stand">${live ? '„Stark“ und „knapp“ gehen automatisch in die Inbox.' : 'Nur Bericht, nichts geht in die Inbox.'} Läuft alle 2 Stunden.</span>
-    </div>`;
+  return `${views}<p class="rk-stand">Alle neu gefundenen Titel gehen automatisch in die Inbox, die Auto-Rotation entscheidet. Läuft alle 2 Stunden.</p>`;
 }
 
 function renderScoutDay(r, find) {
@@ -322,7 +324,7 @@ function renderScoutDay(r, find) {
       <div class="mb-dateline">Analysten-Scout · ${esc(longDay(r.day))} · Stand ${esc(dayTime(r.generated_at).split(' ')[1] ?? '')}</div>
       <h3 class="mb-title">Neu bewertet</h3>
       <p class="bf-summary">${esc(lead)}</p>
-      <p class="bf-foot pv-muted">Hochstufungen bewegen den Kurs meist am selben Tag, eine verlässliche Nachdrift zeigt der Backtest nicht. Der Scout findet Titel, ob sie bleiben, entscheidet die Rotation.${gap ? ' Zwischen zwei Abrufen können Meldungen fehlen.' : ''}${errs.length ? ` Nicht erreichbar: ${esc(errs.join(', '))}.` : ''}</p>
+      <p class="bf-foot pv-muted">Alle neuen Titel landen automatisch in der Inbox. Hochstufungen bewegen den Kurs meist am selben Tag, eine verlässliche Nachdrift zeigt der Backtest nicht. Der Scout findet Titel, ob sie bleiben, entscheidet die Rotation.${gap ? ' Zwischen zwei Abrufen können Meldungen fehlen.' : ''}${errs.length ? ` Nicht erreichbar: ${esc(errs.join(', '))}.` : ''}</p>
     </header>
     <section class="bf-section" data-toc="Neue Titel"><h3 class="bf-h">Neue Titel <span class="mb-tag">· stark und knapp</span></h3>
       ${main.length ? list(main) : '<p class="pv-muted">Keiner über oder knapp unter der Schwelle.</p>'}
@@ -621,7 +623,6 @@ const kindOf = (b) => (b?.kind === 'scout_day' ? 'scout' : b?.kind ?? 'daily');
  * @param {function} opts.loadCandidates   – async () => [{id, symbol, exchange, bucket}]
  * @param {function} opts.onOpenCandidate  – (hit, ctrl) => void
  * @param {function} [opts.loadScout]      – async () => scout-Blob { mode, reports[] }
- * @param {function} [opts.onScoutMode]    – async (mode) => boolean (true = umgeschaltet)
  * @returns {object} ctrl {hide, show, close}
  */
 export function renderMarketBriefingModal(opts = {}) {
@@ -676,18 +677,11 @@ export function renderMarketBriefingModal(opts = {}) {
 
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   let scoutView = 'day';
-  let scoutMode = 'dry';
   let scoutReports = [];
   let renderScoutTab = () => {};
   body.addEventListener('click', async (e) => {
     const sv = e.target.closest('[data-scout-view]');
     if (sv) { scoutView = sv.dataset.scoutView; renderScoutTab(); return; }
-    const sm = e.target.closest('[data-scout-mode]');
-    if (sm) {
-      if (sm.dataset.scoutMode === scoutMode) return;
-      if (await opts.onScoutMode?.(sm.dataset.scoutMode)) { scoutMode = sm.dataset.scoutMode; renderScoutTab(); }
-      return;
-    }
     const addDay = e.target.closest('[data-scout-day]');
     if (addDay) {
       const x = current[Number(pick.value) || 0]?.items?.[Number(addDay.dataset.scoutDay)];
@@ -712,7 +706,6 @@ export function renderMarketBriefingModal(opts = {}) {
         opts.loadCandidates?.().catch(() => []) ?? [],
         opts.loadScout?.().catch(() => null) ?? null,
       ]);
-      scoutMode = scout?.mode === 'live' ? 'live' : 'dry';
       scoutReports = (scout?.reports ?? []).filter((r) => r?.day).map((r) => ({ ...r, kind: 'scout_day' })).sort((a, b) => (a.day < b.day ? 1 : -1));
       briefings = Array.isArray(list)
         ? list.filter((b) => b?.day && KINDS.some((k) => k.key === kindOf(b))).sort((a, b) => (a.day < b.day ? 1 : -1))
@@ -729,7 +722,7 @@ export function renderMarketBriefingModal(opts = {}) {
     }
     const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
     let activeKey = 'daily';
-    const scoutBar = () => (activeKey === 'scout' ? scoutModeBar(scoutView, scoutMode) : '');
+    const scoutBar = () => (activeKey === 'scout' ? scoutModeBar(scoutView) : '');
     const mount = (i) => { body.innerHTML = scoutBar() + KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
     const showKind = (key) => {
       activeKey = key;

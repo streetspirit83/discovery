@@ -88,6 +88,23 @@ const money = (s) => {
   return Number.isFinite(v) && v > 0 ? v : null;
 };
 
+/** Kursziel-Text („$133“, „90 Euro“) → Zahl und Währung, sonst null. */
+export function targetValue(t) {
+  const s = String(t ?? '');
+  const v = money(s);
+  if (v == null) return null;
+  const cur = /\$|Dollar/.test(s) ? 'USD' : /€|Euro/.test(s) ? 'EUR' : /£|Pfund/.test(s) ? 'GBP' : /Franken/.test(s) ? 'CHF' : null;
+  return { value: v, currency: cur };
+}
+
+/** Abstand Kursziel zu Kurs in %, nur wenn die Währungen zusammenpassen (oder das Ziel keine nennt). */
+export function targetGap(target, close, currency) {
+  const t = targetValue(target);
+  if (!t || !(close > 0)) return null;
+  if (t.currency && currency && t.currency !== String(currency).toUpperCase()) return null;
+  return Math.round((t.value / close - 1) * 1000) / 10;
+}
+
 /** Zusatzangaben aus dem Titel, die `parseAnalystHeadline` nicht liefert: altes Rating, altes Kursziel. */
 function extras(title) {
   const t = String(title ?? '');
@@ -117,7 +134,8 @@ export function eventsFromFeed(items, feedKey) {
       at: new Date(x.published * 1000).toISOString(),
       feed: feedKey, tv: subj.tv, symbol: subj.symbol, exchange: subj.exchange,
       firm: a.firm, kind, rating: a.rating ?? null, from: ex.from, from_bear: ratingTone(ex.from) < 0,
-      target: a.target ?? null, target_pct: tPct, title: String(x.title).slice(0, 220),
+      // „sets/keeps price target at $42“ erkennt parseAnalystHeadline nicht.
+      target: a.target ?? /price target (?:at|of) (\$?[\d.,]*\d)/.exec(x.title)?.[1] ?? null, target_pct: tPct, title: String(x.title).slice(0, 220),
       url: x.storyPath ? `https://www.tradingview.com${x.storyPath}` : (x.link || null),
     });
   }

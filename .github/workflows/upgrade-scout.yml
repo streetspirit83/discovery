@@ -16,9 +16,9 @@ on:
         type: boolean
         default: true
       set_mode:
-        description: 'Nur Modus umschalten (kein Lauf): live = Inbox, dry = nur Bericht'
+        description: 'Nur Modus umschalten (kein Lauf): live = alle neuen Titel in die Inbox (Standard), off = nur Bericht'
         type: choice
-        options: ['', 'live', 'dry']
+        options: ['', 'live', 'off']
         default: ''
 
 concurrency:

@@ -644,7 +644,8 @@ sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Ro
 - **Bewertung:** frische TV-Daten für alle Signal-Titel, Score wie die Auto-Rotation (`rowOf` aus `tools/auto-rotation/select.mjs`).
   Urteil `verdictOf` gegen die Schwelle = Score des Momentum-Rangs 32 im neuesten Rotationsbericht: `stark` (≥ Schwelle) ·
   `knapp` (≤ 8 darunter) · `schwach` · `klein` (< 1 Mrd. USD) · `ohne Daten`.
-- **Blobs** (STATE, nur read/write): `scout` = `mode` (`dry` Standard · `live`), `feeds{key:{newest}}`, `reports` (14 Tage,
+- **Blobs** (STATE, nur read/write): `scout` = `mode` (seit 18.11.2026 immer scharf, nur `off` hält an), `pushed_keys`
+  (Titel → letzter Inbox-Zeitpunkt, 14 Tage), `feeds{key:{newest}}`, `reports` (14 Tage,
   je Berliner Tag einer, jeder Lauf schreibt ihn fort: `items` ≤ 40, `known`, `warnings` = frische Abstufungen auf
   Watchlist-Titeln, `pushed`) – klein, die App liest ihn. `scout_events` = gesammelte Ereignisse (30 Tage, ohne
   Bestätigungen, mit `url` zur TV-Meldung) – gross, nur die Action liest ihn. Ohne lesbaren scout-Blob kein Lauf; den Modus
@@ -653,11 +654,15 @@ sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Ro
   gewichtigsten Meldung der letzten 4 Tage, aus den Scout-Ereignissen plus dem analyst-Blob (Spalte „Ana“); Dubletten je Haus
   binnen 18 h. Reiner Coverage-Wechsel („assumes“) allein zählt nicht. Reihenfolge Watchlist · Inbox · Archiv, Auge zuerst.
 - **App:** Briefing › Scout, Umschalter **Heute** (dieser Bericht, `renderScoutDay` in `market-briefing-modal.js`) · **Woche**
-  (KI-Scout vom Samstag). Heute: Modus-Schalter Probelauf/Scharf (`setScoutMode` in `app.js`), „Neue Titel“ (stark/knapp offen,
+  (KI-Scout vom Samstag). Heute: Hinweis „alle neuen Titel gehen automatisch in die Inbox“ (kein Schalter mehr), „Neue Titel“ (stark/knapp offen,
   schwach und klein eingeklappt, Inbox-Knopf → Prüffenster mit Quelle `analyst-scout`) und „Bestand neu bewertet“. Jede Zeile wie
-  die News im Detail-Sheet: Headline → Google-News-Suche, Icon → TradingView-Meldung.
-- **Modus `live`:** `stark` und `knapp` gehen über `append_candidates` in die Inbox (Quelle `analyst-scout`, Signal
-  `analyst_upgrade`); Watchlist- und Archiv-Titel nicht (die prüft die Rotation ohnehin). Umschalten: Workflow-Eingabe `set_mode`.
+  die News im Detail-Sheet: Headline → Google-News-Suche, Icon → TradingView-Meldung; darunter der TV-Schlusskurs in der
+  Währung des Titels und der Abstand des genannten Kursziels (`target_gap`, nur bei passender Währung, `targetGap`).
+- **Inbox (Standard, seit 18.11.2026):** **alle** neu gefundenen Titel (jedes Urteil, ETFs ausgenommen) gehen ohne Prüfung über
+  `append_candidates` in die Inbox (Quelle `analyst-scout`, Signal `analyst_upgrade`), je Titel höchstens einmal in 14 Tagen
+  (`pushed_keys`, sonst hängte jeder Lauf die Quelle erneut an). Watchlist- und Archiv-Titel nicht. Die Auto-Rotation entscheidet,
+  der Inbox-Rest fliegt freitags raus. Anhalten: Workflow-Eingabe `set_mode=off`, wieder an mit `live`; `FORCE_MODE=dry` für einen
+  Probelauf von Hand.
 - Lokal testen: `NO_STORAGE=1 DISCOVERY_BACKEND_URL=<scrape-proxy-Ersatz> OUT_FILE=report.json node tools/upgrade-scout/run.mjs`.
 
 ## Alerts (`check-alerts`, alle 20 min, 7–21 UTC)

@@ -18,13 +18,14 @@
  *      OUT_FILE (Bericht zusätzlich als JSON), NO_STORAGE=1 (lokaler Test ohne Blobs).
  */
 import fs from 'node:fs';
-import { fetchTVEnrichment, fetchFxRate } from '../../ui/lib/tv-enrichment.js';
+import { fetchTVEnrichment, fetchFxRate, EXCHANGE_CURRENCY } from '../../ui/lib/tv-enrichment.js';
 import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { metricsOf } from '../../ui/lib/rankings-filter.js';
 import { RULES as ROT_RULES, rowOf } from '../auto-rotation/select.mjs';
-import { SCOUT_RULES, SCOUT_FEEDS, feedUrl, eventsFromFeed, mergeEvents, signalsOf, yahooStats, verdictOf, KIND_LABEL, knownUpdates } from '../../ui/lib/upgrade-scout.js';
+import { SCOUT_RULES, SCOUT_FEEDS, feedUrl, eventsFromFeed, mergeEvents, signalsOf, yahooStats, verdictOf, KIND_LABEL, knownUpdates, targetGap } from '../../ui/lib/upgrade-scout.js';
 import { fetchMerklisteEntries } from '../../ui/lib/merkliste-import.js';
+import { buildLinks } from '../../adapters/_shared/link-builder.js';
 
 const KEEP_REPORTS = 14;
 const MAX_KNOWN = 60;          // Zeilen „Bestand neu bewertet“
@@ -109,7 +110,7 @@ function candidateOf(s, now) {
       raw_signal: { trigger: s.trigger, firm: s.firm, rating: s.rating, from: s.from, target: s.target, points: s.points, pos_firms: s.pos_firms, score: s.row?.score ?? null, at: s.at },
       info_snippet: `${s.firm}: ${s.trigger_label}${rating}${s.target ? `, Ziel ${s.target}` : ''}${s.pos_firms > 1 ? ` · ${s.pos_firms} Häuser positiv` : ''}`,
     }],
-    links: {}, workspace_state: 'new', notes: '', enrichment: null, first_discovered_at: now, last_updated_at: now,
+    links: buildLinks({ exchange: s.exchange, symbol: s.symbol, yahooSymbol: yahoo }), workspace_state: 'new', notes: '', enrichment: null, first_discovered_at: now, last_updated_at: now,
   };
 }
 
@@ -122,13 +123,15 @@ async function main() {
     ['watch', 'archive', 'inbox', 'market', 'analyst'].map((b) => storage({ op: 'read', blob_type: b }).catch((e) => { log(`! ${b}: ${e.message}`); return null; })),
   );
   const scout = scout0 ?? {};
-  if (process.env.SET_MODE === 'live' || process.env.SET_MODE === 'dry') {
+  if (process.env.SET_MODE === 'live' || process.env.SET_MODE === 'off') {
     await storage({ op: 'write', blob_type: 'scout', blob: { ...scout, updated_at: now.toISOString(), mode: process.env.SET_MODE, mode_at: now.toISOString() } });
     log(`✓ Modus jetzt: ${process.env.SET_MODE} (vorher ${scout.mode ?? 'dry'})`);
     return;
   }
-  const mode = process.env.FORCE_MODE === 'dry' ? 'dry' : scout.mode === 'live' ? 'live' : 'dry';
-  log(`Modus: ${mode === 'live' ? 'SCHARF (Inbox)' : 'Probelauf (nur Bericht)'}`);
+  // Seit 18.11.2026 immer scharf: jeder neu gefundene Titel geht in die Inbox, die Auto-Rotation entscheidet.
+  // Nur FORCE_MODE=dry (Workflow von Hand) oder ein ausdrückliches mode:'off' im Blob halten das an.
+  const mode = process.env.FORCE_MODE === 'dry' || scout.mode === 'off' ? 'dry' : 'live';
+  log(`Modus: ${mode === 'live' ? 'scharf (alle neuen Titel in die Inbox)' : 'Probelauf (nur Bericht)'}`);
 
   // 1. Feeds
   const feeds = {};
@@ -211,6 +214,8 @@ async function main() {
       roic: row?.roic ?? null, setup: row?.setup ?? false, analyst_upside: row?.analyst_upside ?? null, fair_upside: row?.fair_upside ?? null,
       cap_usd: m?.cap_usd != null ? Math.round(m.cap_usd / 1e6) : null,   // Mio. USD
       perf_1w: m?.perf_1w ?? null, perf_1m: m?.perf_1m ?? null, chg_1d: u?.tv_data?.change ?? null,
+      close: u?.tv_data?.close ?? null, currency: c.currency ?? EXCHANGE_CURRENCY[s.exchange] ?? null,
+      target_gap: targetGap(s.target, u?.tv_data?.close, c.currency ?? EXCHANGE_CURRENCY[s.exchange]),
       above_sma200: m?.above_sma200 ?? null, row,
     });
   }
@@ -229,21 +234,27 @@ async function main() {
   }
   warnings.sort((a, b) => (b.eye - a.eye) || b.at.localeCompare(a.at));
 
-  // 5. Inbox (nur scharf)
+  // 5. Inbox: alle neu gefundenen Titel (ausser Watchlist/Archiv), je Titel höchstens einmal in PUSH_DAYS Tagen –
+  //    sonst hängte jeder Zwei-Stunden-Lauf dieselbe Quelle erneut an den Inbox-Eintrag.
   let pushed = [];
+  const PUSH_DAYS = 14;
+  const pushedKeys = Object.fromEntries(Object.entries(scout.pushed_keys ?? {}).filter(([, at]) => now - Date.parse(at) < PUSH_DAYS * 864e5));
   if (mode === 'live') {
-    const take = items.filter((i) => (i.verdict === 'stark' || i.verdict === 'knapp') && i.bucket !== 'watch' && i.bucket !== 'archive');
+    const take = items.filter((i) => i.bucket !== 'watch' && i.bucket !== 'archive' && !pushedKeys[`${i.symbol}:${i.exchange}`]);
     if (take.length) {
       const nowIso = now.toISOString();
       const res = await storage({ op: 'append_candidates', candidates: take.map((i) => candidateOf(i, nowIso)) });
-      pushed = (res?.results ?? []).map((r, ix) => ({ symbol: take[ix].symbol, action: r.action }));
+      pushed = (res?.results ?? []).map((r, ix) => ({ symbol: take[ix].symbol, exchange: take[ix].exchange, action: r.action }));
+      for (const p of pushed) if (p.action === 'added' || p.action === 'merged') pushedKeys[`${p.symbol}:${p.exchange}`] = now.toISOString();
       log(`Inbox: ${pushed.map((p) => `${p.symbol} (${p.action})`).join(', ')}`);
     }
   }
 
   // 6. Bestand neu bewertet: marktweite Ereignisse + analyst-Blob, je Titel eine Zeile.
-  const knownInfo = new Map([...known].map(([k, c]) => [k, { bucket: c._bucket, name: c.name ?? c.tv_data?.description ?? c.symbol, eye: !!c.watch_flag, star: stars.has(k) }]));
-  const updatesKnown = knownUpdates(events, analyst?.events ?? {}, knownInfo, { now }).slice(0, MAX_KNOWN);
+  const knownInfo = new Map([...known].map(([k, c]) => [k, { bucket: c._bucket, name: c.name ?? c.tv_data?.description ?? c.symbol, eye: !!c.watch_flag, star: stars.has(k),
+    close: c.tv_data?.close ?? null, currency: c.currency ?? EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? null }]));
+  const updatesKnown = knownUpdates(events, analyst?.events ?? {}, knownInfo, { now }).slice(0, MAX_KNOWN)
+    .map((u) => { const k = knownInfo.get(`${u.symbol}:${u.exchange}`); return { ...u, close: k?.close ?? null, currency: k?.currency ?? null, target_gap: targetGap(u.target, k?.close, k?.currency) }; });
   log(`Bestand neu bewertet: ${updatesKnown.length} Titel (${updatesKnown.filter((u) => u.bucket === 'watch').length} Watchlist)`);
 
   // 7. Bericht
@@ -260,9 +271,9 @@ async function main() {
   // Erst die Ereignisse, dann der Bericht: bricht der zweite Schreibvorgang ab, ist nichts Gesammeltes verloren.
   await storage({ op: 'write', blob_type: 'scout_events', blob: { schema: 'discovery-scout-events-1.0', updated_at: now.toISOString(), events } });
   // Modus frisch lesen: die App kann ihn während des Laufs umgeschaltet haben.
-  const modeNow = (await storage({ op: 'read', blob_type: 'scout' }).catch(() => null))?.mode ?? scout.mode ?? 'dry';
+  const modeNow = (await storage({ op: 'read', blob_type: 'scout' }).catch(() => null))?.mode ?? scout.mode ?? 'live';
   const { events: _old, ...scoutRest } = scout;   // Ereignisse liegen seit v2 im eigenen Blob
-  await storage({ op: 'write', blob_type: 'scout', blob: { ...scoutRest, schema: 'discovery-scout-1.1', updated_at: now.toISOString(), mode: modeNow, feeds: feedState, reports } });
+  await storage({ op: 'write', blob_type: 'scout', blob: { ...scoutRest, schema: 'discovery-scout-1.1', updated_at: now.toISOString(), mode: modeNow, feeds: feedState, pushed_keys: pushedKeys, reports } });
   if (process.env.OUT_FILE) fs.writeFileSync(process.env.OUT_FILE, JSON.stringify(report, null, 2));
 
   log(`\nBericht ${day}: ${signals.length} Signale · ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · ')} · Schwelle Rotation ${cutoff ?? '–'} (Rang ${ROT_RULES.momentum.enter})`);
