@@ -19,12 +19,15 @@
  * eigenen Score. Der Bericht zeigt dafür den Rotations-Score neben der Schwelle.
  */
 
-import { parseAnalystHeadline } from './tv-news.js';
+import { parseAnalystHeadline, ANALYST_ACTIONS, googleNewsUrl } from './tv-news.js?v=20261103b';
 import { normalizeExchange } from './exchange-map.js';
+
+export { googleNewsUrl };
 
 export const SCOUT_RULES = {
   version: 1,
-  keepDays: 45,          // so lange hält der Blob ein Ereignis
+  keepDays: 30,          // so lange hält der Blob ein Ereignis (Bestätigungen werden gar nicht erst gespeichert)
+  knownDays: 4,          // „Bestand neu bewertet“: Meldungen der letzten Tage (deckt ein Wochenende ab)
   windowDays: 14,        // Häufung und Gegenwind
   freshDays: 3,          // ein Auslöser muss so jung sein, damit der Titel heute im Bericht steht
   minCapUsd: 1e9,        // kleinere Titel reagieren stark, sind aber selten etwas für die Watchlist
@@ -99,7 +102,7 @@ export function eventsFromFeed(items, feedKey) {
   const out = [];
   for (const x of Array.isArray(items) ? items : []) {
     const a = parseAnalystHeadline(x);
-    if (!a || !Number.isFinite(x.published)) continue;
+    if (!a || a.action === 'reiterate' || !Number.isFinite(x.published)) continue;
     const subj = subjectOf(x);
     if (!subj) continue;
     const ex = extras(x.title);
@@ -115,6 +118,7 @@ export function eventsFromFeed(items, feedKey) {
       feed: feedKey, tv: subj.tv, symbol: subj.symbol, exchange: subj.exchange,
       firm: a.firm, kind, rating: a.rating ?? null, from: ex.from, from_bear: ratingTone(ex.from) < 0,
       target: a.target ?? null, target_pct: tPct, title: String(x.title).slice(0, 220),
+      url: x.storyPath ? `https://www.tradingview.com${x.storyPath}` : (x.link || null),
     });
   }
   return out;
@@ -200,7 +204,8 @@ export function signalsOf(events, { now = new Date(), yahoo = null, rules = SCOU
       trigger: trigger ? head.kind : 'target_cluster', trigger_label: trigger ? KIND_LABEL[head.kind] : KIND_LABEL.target_cluster, firm: head.firm, rating: head.rating, from: head.from,
       target: head.target, target_pct: head.target_pct, at: head.at, title: head.title,
       pos_firms: pos.length, neg_firms: neg.length, cluster,
-      events: list.slice(0, 8).map((e) => ({ at: e.at, firm: e.firm, kind: e.kind, rating: e.rating, target: e.target })),
+      url: head.url ?? null,
+      events: list.slice(0, 4).map((e) => ({ at: e.at, firm: e.firm, kind: e.kind, rating: e.rating, target: e.target })),
       yahoo: y, reasons,
     });
   }
@@ -238,4 +243,53 @@ export function verdictOf(row, capUsd, cutoff, rules = SCOUT_RULES) {
   if (row.score >= cutoff) return 'stark';
   if (row.score >= cutoff - rules.nearGap) return 'knapp';
   return 'schwach';
+}
+
+/* Aktionsnamen der App (tv-news.js) für die Scout-Arten. */
+const APP_ACTION = { init_bull: 'init', init_bear: 'init', assume: 'init' };
+const toneOf = (kind) => ANALYST_ACTIONS[APP_ACTION[kind] ?? kind]?.tone ?? null;
+const rankOf = (kind) => (kind === 'assume' ? 0 : ANALYST_ACTIONS[APP_ACTION[kind] ?? kind]?.rank ?? 0);
+
+/**
+ * „Bestand neu bewertet“: je Titel aus Watchlist, Inbox und Archiv eine Zeile mit der gewichtigsten
+ * Analystenmeldung der letzten `knownDays` Tage. Quellen: die marktweiten Scout-Ereignisse und der
+ * analyst-Blob des Monitor-Laufs (Spalte „Ana“, Format { at, firm, action, rating, target, title, url }).
+ * `known` = Map `SYMBOL:BÖRSE` → { bucket, name, eye, star }.
+ */
+export function knownUpdates(scoutEvents, analystEvents, known, { now = new Date(), rules = SCOUT_RULES } = {}) {
+  const cut = now.getTime() - rules.knownDays * 864e5;
+  const byKey = new Map();
+  const add = (key, e) => {
+    if (!known.has(key) || !(Date.parse(e.at) >= cut) || e.kind === 'reiterate') return;
+    const list = byKey.get(key) ?? [];
+    const firm = String(e.firm ?? '').toLowerCase().replace(/[^a-z0-9äöü]/g, '');
+    const dup = list.find((x) => x.firmKey === firm && Math.abs(Date.parse(x.at) - Date.parse(e.at)) < 18 * 3600e3);
+    if (dup) { if (!dup.title && e.title) Object.assign(dup, { title: e.title, url: dup.url ?? e.url }); if (rankOf(e.kind) > rankOf(dup.kind)) Object.assign(dup, { kind: e.kind, rating: e.rating ?? dup.rating, target: e.target ?? dup.target }); return; }
+    list.push({ ...e, firmKey: firm });
+    byKey.set(key, list);
+  };
+  for (const e of scoutEvents ?? []) add(`${e.symbol}:${e.exchange}`, e);
+  for (const [key, list] of Object.entries(analystEvents ?? {})) {
+    for (const e of list ?? []) add(key, { at: e.at, firm: e.firm, kind: e.action, rating: e.rating ?? null, target: e.target ?? null, title: e.title ?? null, url: e.url ?? null });
+  }
+  const BUCKET_ORDER = { watch: 0, inbox: 1, archive: 2 };
+  const out = [];
+  for (const [key, list] of byKey) {
+    const k = known.get(key);
+    list.sort((a, b) => rankOf(b.kind) - rankOf(a.kind) || b.at.localeCompare(a.at));
+    const lead = list[0];
+    if (lead.kind === 'assume' && list.length === 1) continue;   // reiner Analystenwechsel
+    const [symbol, exchange] = key.split(':');
+    const up = list.filter((e) => toneOf(e.kind) === 'pos').length;
+    const down = list.filter((e) => toneOf(e.kind) === 'neg').length;
+    out.push({
+      symbol, exchange, name: k.name ?? symbol, bucket: k.bucket, eye: !!k.eye, star: !!k.star,
+      kind: lead.kind, label: KIND_LABEL[lead.kind] ?? lead.kind, tone: toneOf(lead.kind),
+      firm: lead.firm, rating: lead.rating ?? null, target: lead.target ?? null, at: lead.at,
+      title: lead.title ?? `${lead.firm}: ${KIND_LABEL[lead.kind] ?? lead.kind}${lead.rating ? ` · ${lead.rating}` : ''}`,
+      url: lead.url ?? null, more: list.length - 1, up, down,
+      latest: list.reduce((m, e) => (e.at > m ? e.at : m), lead.at),
+    });
+  }
+  return out.sort((a, b) => (BUCKET_ORDER[a.bucket] ?? 9) - (BUCKET_ORDER[b.bucket] ?? 9) || (b.eye - a.eye) || b.latest.localeCompare(a.latest));
 }

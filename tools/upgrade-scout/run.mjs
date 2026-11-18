@@ -23,9 +23,11 @@ import { normalizeExchange } from '../../ui/lib/exchange-map.js';
 import { isEtf } from '../../ui/lib/instrument-type.js';
 import { metricsOf } from '../../ui/lib/rankings-filter.js';
 import { RULES as ROT_RULES, rowOf } from '../auto-rotation/select.mjs';
-import { SCOUT_RULES, SCOUT_FEEDS, feedUrl, eventsFromFeed, mergeEvents, signalsOf, yahooStats, verdictOf, KIND_LABEL } from '../../ui/lib/upgrade-scout.js';
+import { SCOUT_RULES, SCOUT_FEEDS, feedUrl, eventsFromFeed, mergeEvents, signalsOf, yahooStats, verdictOf, KIND_LABEL, knownUpdates } from '../../ui/lib/upgrade-scout.js';
+import { fetchMerklisteEntries } from '../../ui/lib/merkliste-import.js';
 
-const KEEP_REPORTS = 30;
+const KEEP_REPORTS = 14;
+const MAX_KNOWN = 60;          // Zeilen „Bestand neu bewertet“
 const MAX_ITEMS = 40;          // Titel je Tagesbericht
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 
@@ -71,7 +73,15 @@ async function yahooSession() {
   if (!crumb || crumb.length > 40 || /</.test(crumb)) throw new Error('kein Crumb');
   return { cookie, crumb };
 }
+/* Über die Netlify-Funktion yahoo-analyst (Option history): aus der GitHub Action direkt gibt Yahoo keinen Crumb heraus. */
+async function yahooHistoryBackend(sym) {
+  const res = await fetch(`${auth.backendUrl}/api/yahoo-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-discovery-secret': auth.secret }, body: JSON.stringify({ symbol: sym, history: true }) });
+  const j = await res.json().catch(() => null);
+  if (!res.ok || !j?.ok || !Array.isArray(j.history)) return null;
+  return j.history.map((x) => ({ epochGradeDate: x.t, firm: x.firm, action: x.action, fromGrade: x.from, toGrade: x.to }));
+}
 async function yahooHistory(sess, sym) {
+  if (!sess) return yahooHistoryBackend(sym);
   const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=upgradeDowngradeHistory&crumb=${encodeURIComponent(sess.crumb)}`;
   const r = await fetch(url, { headers: { 'User-Agent': UA, cookie: sess.cookie, Origin: 'https://finance.yahoo.com', Referer: 'https://finance.yahoo.com/' } });
   if (!r.ok) return null;
@@ -107,8 +117,9 @@ async function main() {
   const now = new Date();
   // Ohne lesbaren scout-Blob kein Lauf: sonst überschriebe der Bericht die gesammelten Ereignisse.
   const scout0 = await storage({ op: 'read', blob_type: 'scout' });
-  const [watch, archive, inbox, market] = await Promise.all(
-    ['watch', 'archive', 'inbox', 'market'].map((b) => storage({ op: 'read', blob_type: b }).catch((e) => { log(`! ${b}: ${e.message}`); return null; })),
+  const evBlob = await storage({ op: 'read', blob_type: 'scout_events' });
+  const [watch, archive, inbox, market, analyst] = await Promise.all(
+    ['watch', 'archive', 'inbox', 'market', 'analyst'].map((b) => storage({ op: 'read', blob_type: b }).catch((e) => { log(`! ${b}: ${e.message}`); return null; })),
   );
   const scout = scout0 ?? {};
   if (process.env.SET_MODE === 'live' || process.env.SET_MODE === 'dry') {
@@ -139,7 +150,7 @@ async function main() {
     }
   }
   if (!fresh.length && Object.values(feeds).every((f) => f.error)) { log('✗ Kein Feed erreichbar – nichts geändert.'); process.exit(1); }
-  const { events, added } = mergeEvents(scout.events, fresh, now);
+  const { events, added } = mergeEvents(evBlob?.events ?? scout.events, fresh, now);
   log(`Ereignisse: ${added} neu, ${events.length} im Bestand (${SCOUT_RULES.keepDays} Tage)`);
 
   // 2. App-Bestand
@@ -147,6 +158,12 @@ async function main() {
   for (const [b, blob] of [['watch', watch], ['inbox', inbox], ['archive', archive]]) {
     for (const c of blob?.candidates ?? []) if (!known.has(keyOf(c))) known.set(keyOf(c), { ...c, _bucket: b });
   }
+  // Stern (Depot) aus der Merkliste – nur Anzeige, ein Fehlschlag kostet nichts.
+  const stars = new Set();
+  try {
+    const mk = await fetchMerklisteEntries(auth);
+    for (const c of known.values()) { const e = mk?.bySym?.get(String(c.symbol).toUpperCase()); if (e && (e.entry != null || Number(e.shares) > 0)) stars.add(keyOf(c)); }
+  } catch { /* ohne Stern */ }
 
   // 3. Signale + Yahoo-Gegencheck (US)
   let signals = signalsOf(events, { now });
@@ -154,7 +171,8 @@ async function main() {
   const us = signals.filter((s) => ['NASDAQ', 'NYSE', 'AMEX'].includes(s.exchange)).slice(0, 60);
   if (us.length) {
     try {
-      const sess = await yahooSession();
+      // Lokal (ohne Backend) direkt, sonst über Netlify.
+      const sess = noStorage ? await yahooSession() : null;
       for (let i = 0; i < us.length; i += 6) {
         await Promise.allSettled(us.slice(i, i + 6).map(async (s) => {
           const h = await yahooHistory(sess, s.symbol.replace('.', '-'));
@@ -223,18 +241,28 @@ async function main() {
     }
   }
 
-  // 6. Bericht
+  // 6. Bestand neu bewertet: marktweite Ereignisse + analyst-Blob, je Titel eine Zeile.
+  const knownInfo = new Map([...known].map(([k, c]) => [k, { bucket: c._bucket, name: c.name ?? c.tv_data?.description ?? c.symbol, eye: !!c.watch_flag, star: stars.has(k) }]));
+  const updatesKnown = knownUpdates(events, analyst?.events ?? {}, knownInfo, { now }).slice(0, MAX_KNOWN);
+  log(`Bestand neu bewertet: ${updatesKnown.length} Titel (${updatesKnown.filter((u) => u.bucket === 'watch').length} Watchlist)`);
+
+  // 7. Bericht
   const day = berlinDay(now);
   const counts = items.reduce((a, i) => ({ ...a, [i.verdict]: (a[i.verdict] ?? 0) + 1 }), {});
   const slim = (i) => { const { row, key, ...rest } = i; return rest; };
   const report = {
     day, generated_at: now.toISOString(), mode, rules_version: SCOUT_RULES.version,
     cutoff, cutoff_rank: ROT_RULES.momentum.enter, feeds, counts, n_signals: signals.length,
-    items: items.slice(0, MAX_ITEMS).map(slim), warnings: warnings.slice(0, 20), pushed,
+    items: items.slice(0, MAX_ITEMS).map(slim), warnings: warnings.slice(0, 20), known: updatesKnown, pushed,
   };
   const reports = [report, ...(scout.reports ?? []).filter((r) => r.day !== day)].slice(0, KEEP_REPORTS);
   const feedState = Object.fromEntries(Object.entries(feeds).map(([k, f]) => [k, { newest: f.newest ?? scout.feeds?.[k]?.newest ?? null, at: now.toISOString() }]));
-  await storage({ op: 'write', blob_type: 'scout', blob: { ...scout, schema: 'discovery-scout-1.0', updated_at: now.toISOString(), mode: scout.mode ?? 'dry', feeds: feedState, events, reports } });
+  // Erst die Ereignisse, dann der Bericht: bricht der zweite Schreibvorgang ab, ist nichts Gesammeltes verloren.
+  await storage({ op: 'write', blob_type: 'scout_events', blob: { schema: 'discovery-scout-events-1.0', updated_at: now.toISOString(), events } });
+  // Modus frisch lesen: die App kann ihn während des Laufs umgeschaltet haben.
+  const modeNow = (await storage({ op: 'read', blob_type: 'scout' }).catch(() => null))?.mode ?? scout.mode ?? 'dry';
+  const { events: _old, ...scoutRest } = scout;   // Ereignisse liegen seit v2 im eigenen Blob
+  await storage({ op: 'write', blob_type: 'scout', blob: { ...scoutRest, schema: 'discovery-scout-1.1', updated_at: now.toISOString(), mode: modeNow, feeds: feedState, reports } });
   if (process.env.OUT_FILE) fs.writeFileSync(process.env.OUT_FILE, JSON.stringify(report, null, 2));
 
   log(`\nBericht ${day}: ${signals.length} Signale · ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · ')} · Schwelle Rotation ${cutoff ?? '–'} (Rang ${ROT_RULES.momentum.enter})`);

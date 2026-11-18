@@ -13,6 +13,10 @@
  * (`ctrl.hide/show`, wie das Monitor-Dashboard).
  *
  * Das Modal schreibt nie selbst; der Inbox-Knopf im Scout übergibt an die App.
+ *
+ * Reiter „Scout“ hat zwei Ansichten: **Heute** = Tagesbericht des Analysten-Scouts (Blob `scout`,
+ * tools/upgrade-scout, alle 2 h fortgeschrieben: neue Titel aus Analystenmeldungen gegen die
+ * Rotations-Schwelle, dazu „Bestand neu bewertet“) und **Woche** = der KI-Scout vom Samstag (market-Blob).
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
@@ -223,6 +227,111 @@ function calendarBlock(days) {
       <ul class="mb-cal">${(d.items ?? []).map((it) => `<li>${it.time ? `<span class="mb-date">${esc(it.time)}</span> ` : ''}${esc(it.text ?? it)}</li>`).join('')}</ul>
     </li>`).join('')}</ul>
   </section>`;
+}
+
+/* ── Analysten-Scout (Blob `scout`, täglich, alle 2 h fortgeschrieben) ───── */
+
+const SCOUT_VERDICT = {
+  stark: { label: 'stark', cls: 'pos', hint: 'Score über der Rotations-Schwelle' },
+  knapp: { label: 'knapp', cls: '', hint: 'bis 8 Punkte unter der Schwelle' },
+  schwach: { label: 'schwach', cls: 'neg', hint: 'deutlich unter der Schwelle' },
+  klein: { label: 'klein', cls: '', hint: 'unter 1 Mrd. USD Börsenwert' },
+  'ohne Daten': { label: 'ohne Daten', cls: '', hint: 'keine TradingView-Daten' },
+};
+const KIND_TONE = { upgrade: 'pos', list_add: 'pos', init_bull: 'pos', target_up: 'pos', target_cluster: 'pos', downgrade: 'neg', list_remove: 'neg', init_bear: 'neg', target_down: 'neg' };
+const googleNews = (t) => `https://www.google.com/search?tbm=nws&q=${encodeURIComponent(String(t ?? '').trim())}`;
+const dayTime = (iso) => { const d = new Date(iso); return Number.isNaN(+d) ? '' : `${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`; };
+const capFmt = (m) => (m == null ? null : m >= 1000 ? `${nf(1).format(m / 1000)} Mrd. $` : `${nf(0).format(m)} Mio. $`);
+const scoreFmt = (v) => (v == null ? '–' : nf(0).format(v));
+
+/* Eine Analystenzeile im Stil der News im Detail-Sheet: Meta (Zeit · Haus · Art), Headline → Google-Suche, Quelle als Icon. */
+function headlineRow({ at, firm, kind, label, title, url, extra = '' }) {
+  const t = KIND_TONE[kind];
+  const src = url ? `<a class="link-chip news-item__src" href="${esc(url)}" target="_blank" rel="noopener" title="Quelle öffnen" aria-label="Quelle öffnen">${icons.externalLink}</a>` : '';
+  return `<div class="news-item__meta news-item__meta--row">
+      <span>${esc(dayTime(at))}${firm ? ` · ${esc(firm)}` : ''} · <span class="news-item__tag${t ? ` news-item__tag--${t}` : ''}">${esc(label)}</span>${extra}</span>${src}
+    </div>
+    <div class="news-item__title"><a href="${esc(googleNews(title))}" target="_blank" rel="noopener" title="Bei Google suchen">${esc(title)}</a></div>`;
+}
+
+function scoutDayItem(x, i, find, cutoff) {
+  const hit = find(x.symbol, x.exchange);
+  const v = SCOUT_VERDICT[x.verdict] ?? SCOUT_VERDICT['ohne Daten'];
+  const action = hit
+    ? `<span class="mb-scout__where">liegt in ${esc(BUCKET_NAMES[hit.bucket] ?? hit.bucket)}</span>`
+    : `<button type="button" class="btn btn-secondary btn-sm mb-scout__add" data-scout-day="${i}">${icons.plus} In Inbox</button>`;
+  const facts = [
+    `Score ${scoreFmt(x.score)}${cutoff != null ? ` <span class="pv-muted">/ ${scoreFmt(cutoff)}</span>` : ''}`,
+    x.bias != null ? `Bias ${x.bias > 0 ? '+' : ''}${x.bias}` : null,
+    capFmt(x.cap_usd),
+    x.perf_1m != null ? `1M <span class="${tone(x.perf_1m)}">${esc(pct(x.perf_1m))}</span>` : null,
+    x.setup ? 'Ausbruch-Setup' : null,
+  ].filter(Boolean).map((f) => `<span class="mb-nw">${f}</span>`).join(' · ');
+  const rating = x.rating ? ` · ${esc(x.from ? `${x.from} → ${x.rating}` : x.rating)}` : '';
+  const more = x.pos_firms > 1 ? ` · ${x.pos_firms} Häuser positiv` : '';
+  return `<li class="mb-scout news-item">
+    <div class="mb-scout__head">
+      <span class="mb-scout__id">${symHtml(x, find)} <span class="pv-muted">${esc(x.name ?? '')}</span></span>
+      <span class="news-item__tag${v.cls ? ` news-item__tag--${v.cls}` : ''}" title="${esc(v.hint)}">${esc(v.label)}</span>
+    </div>
+    ${headlineRow({ at: x.at, firm: x.firm, kind: x.trigger, label: x.trigger_label, title: x.title, url: x.url, extra: `${rating}${more}` })}
+    <p class="mb-scout__line">${facts}</p>
+    ${(x.reasons ?? []).length ? `<p class="mb-scout__line pv-muted">${esc(x.reasons.join(' · '))}</p>` : ''}
+    <div class="mb-scout__foot">${action}</div>
+  </li>`;
+}
+
+function knownItem(u, find) {
+  const flags = [u.star ? 'Depot' : null, u.eye ? 'Auge' : null].filter(Boolean).join(' · ');
+  const tally = u.more ? ` · <span class="pv-muted">+${u.more} weitere (${u.up}↑ ${u.down}↓)</span>` : '';
+  return `<li class="mb-scout news-item">
+    <div class="mb-scout__head">
+      <span class="mb-scout__id">${symHtml(u, find)} <span class="pv-muted">${esc(u.name ?? '')}</span></span>
+      <span class="mb-tag">${esc(BUCKET_NAMES[u.bucket] ?? u.bucket)}${flags ? ` · ${esc(flags)}` : ''}</span>
+    </div>
+    ${headlineRow({ at: u.at, firm: u.firm, kind: u.kind, label: u.label, title: u.title, url: u.url, extra: tally })}
+  </li>`;
+}
+
+function scoutModeBar(view, mode) {
+  const seg = (attr, val, cur, label) => `<button type="button" class="seg-btn${cur === val ? ' seg-btn--active' : ''}" data-${attr}="${val}" aria-pressed="${cur === val}">${label}</button>`;
+  const views = `<div class="rk-mode" role="group" aria-label="Scout-Ansicht">${seg('scout-view', 'day', view, 'Heute')}${seg('scout-view', 'week', view, 'Woche')}</div>`;
+  if (view !== 'day') return views;
+  const live = mode === 'live';
+  return `${views}<div class="rk-mode" role="group" aria-label="Modus des Analysten-Scouts">
+      ${seg('scout-mode', 'dry', live ? 'live' : 'dry', 'Probelauf')}${seg('scout-mode', 'live', live ? 'live' : 'dry', 'Scharf')}
+      <span class="rk-stand">${live ? '„Stark“ und „knapp“ gehen automatisch in die Inbox.' : 'Nur Bericht, nichts geht in die Inbox.'} Läuft alle 2 Stunden.</span>
+    </div>`;
+}
+
+function renderScoutDay(r, find) {
+  const items = r.items ?? [];
+  const main = items.filter((x) => x.verdict === 'stark' || x.verdict === 'knapp');
+  const weak = items.filter((x) => x.verdict === 'schwach');
+  const rest = items.filter((x) => x.verdict !== 'stark' && x.verdict !== 'knapp' && x.verdict !== 'schwach');
+  const list = (arr) => `<ul class="mb-list">${arr.map((x) => scoutDayItem(x, items.indexOf(x), find, r.cutoff)).join('')}</ul>`;
+  const gap = Object.values(r.feeds ?? {}).some((f) => f?.gap);
+  const errs = Object.entries(r.feeds ?? {}).filter(([, f]) => f?.error).map(([k]) => (k === 'dpa' ? 'dpa-AFX' : 'TradingView'));
+  const c = r.counts ?? {};
+  const lead = items.length
+    ? `${items.length} Titel mit frischem Analystensignal: ${c.stark ?? 0} stark, ${c.knapp ?? 0} knapp, ${c.schwach ?? 0} schwach. Maßstab ist der Score der Auto-Rotation${r.cutoff != null ? `, Schwelle ${scoreFmt(r.cutoff)} (Rang ${r.cutoff_rank})` : ''}.`
+    : 'Heute noch kein Titel mit frischem Analystensignal.';
+  const known = r.known ?? [];
+  return `
+    <header class="mb-head">
+      <div class="mb-dateline">Analysten-Scout · ${esc(longDay(r.day))} · Stand ${esc(dayTime(r.generated_at).split(' ')[1] ?? '')}</div>
+      <h3 class="mb-title">Neu bewertet</h3>
+      <p class="bf-summary">${esc(lead)}</p>
+      <p class="bf-foot pv-muted">Hochstufungen bewegen den Kurs meist am selben Tag, eine verlässliche Nachdrift zeigt der Backtest nicht. Der Scout findet Titel, ob sie bleiben, entscheidet die Rotation.${gap ? ' Zwischen zwei Abrufen können Meldungen fehlen.' : ''}${errs.length ? ` Nicht erreichbar: ${esc(errs.join(', '))}.` : ''}</p>
+    </header>
+    <section class="bf-section" data-toc="Neue Titel"><h3 class="bf-h">Neue Titel <span class="mb-tag">· stark und knapp</span></h3>
+      ${main.length ? list(main) : '<p class="pv-muted">Keiner über oder knapp unter der Schwelle.</p>'}
+      ${weak.length ? `<details class="mb-more"><summary>${weak.length} schwach</summary>${list(weak)}</details>` : ''}
+      ${rest.length ? `<details class="mb-more"><summary>${rest.length} klein oder ohne Daten</summary>${list(rest)}</details>` : ''}
+    </section>
+    <section class="bf-section" data-toc="Bestand neu bewertet"><h3 class="bf-h">Bestand neu bewertet <span class="mb-tag">· ${esc(String(known.length))} Titel, letzte 4 Tage</span></h3>
+      ${known.length ? `<ul class="mb-list">${known.map((u) => knownItem(u, find)).join('')}</ul>` : '<p class="pv-muted">Keine neuen Analystenmeldungen zu Titeln der App.</p>'}
+    </section>`;
 }
 
 /* ── Scout (kind "scout", wöchentlich) ───────────────────────────────────── */
@@ -501,16 +610,18 @@ const KINDS = [
   { key: 'daily',   label: 'Tag',       render: (b, f) => renderEntry(b, f),   empty: 'Noch kein Tagesbriefing gespeichert. Es entsteht dienstags bis samstags morgens für den Vortag.' },
   { key: 'preview', label: 'Woche',     render: (b, f) => renderPreview(b, f), empty: 'Noch keine Wochenvorschau gespeichert. Sie entsteht montags morgens.' },
   { key: 'watch',   label: 'Watchlist', render: (b, f) => renderWatch(b, f),   empty: 'Noch kein Watchlist-Rückblick gespeichert. Er entsteht sonntags, mit Ausblick auf die neue Woche.' },
-  { key: 'scout',   label: 'Scout',     render: (b, f) => renderScout(b, f),   empty: 'Noch kein Scout gespeichert. Er entsteht einmal pro Woche.' },
+  { key: 'scout',   label: 'Scout',     render: (b, f) => (b.kind === 'scout_day' ? renderScoutDay(b, f) : renderScout(b, f)), empty: 'Noch kein Scout gespeichert. Er entsteht einmal pro Woche.' },
 ];
 /* Einträge ohne kind sind alte Tagesbriefings. `ranking` und `rotation` liegen im selben Blob, gehören aber in den Monitor. */
-const kindOf = (b) => b?.kind ?? 'daily';
+const kindOf = (b) => (b?.kind === 'scout_day' ? 'scout' : b?.kind ?? 'daily');
 
 /**
  * @param {object}   opts
  * @param {function} opts.loadBriefings    – async () => Briefing[] (neueste zuerst)
  * @param {function} opts.loadCandidates   – async () => [{id, symbol, exchange, bucket}]
  * @param {function} opts.onOpenCandidate  – (hit, ctrl) => void
+ * @param {function} [opts.loadScout]      – async () => scout-Blob { mode, reports[] }
+ * @param {function} [opts.onScoutMode]    – async (mode) => boolean (true = umgeschaltet)
  * @returns {object} ctrl {hide, show, close}
  */
 export function renderMarketBriefingModal(opts = {}) {
@@ -564,7 +675,25 @@ export function renderMarketBriefingModal(opts = {}) {
   };
 
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
-  body.addEventListener('click', (e) => {
+  let scoutView = 'day';
+  let scoutMode = 'dry';
+  let scoutReports = [];
+  let renderScoutTab = () => {};
+  body.addEventListener('click', async (e) => {
+    const sv = e.target.closest('[data-scout-view]');
+    if (sv) { scoutView = sv.dataset.scoutView; renderScoutTab(); return; }
+    const sm = e.target.closest('[data-scout-mode]');
+    if (sm) {
+      if (sm.dataset.scoutMode === scoutMode) return;
+      if (await opts.onScoutMode?.(sm.dataset.scoutMode)) { scoutMode = sm.dataset.scoutMode; renderScoutTab(); }
+      return;
+    }
+    const addDay = e.target.closest('[data-scout-day]');
+    if (addDay) {
+      const x = current[Number(pick.value) || 0]?.items?.[Number(addDay.dataset.scoutDay)];
+      if (x) opts.onScoutAdd?.({ symbol: x.symbol, exchange: x.exchange, adapter: 'analyst-scout', thesis: `${x.firm}: ${x.trigger_label}${x.rating ? ` auf ${x.rating}` : ''}` });
+      return;
+    }
     const add = e.target.closest('[data-scout]');
     if (add) { opts.onScoutAdd?.(current[Number(pick.value) || 0]?.items?.[Number(add.dataset.scout)]); return; }
     const go = e.target.closest('[data-goto]');
@@ -578,10 +707,13 @@ export function renderMarketBriefingModal(opts = {}) {
   (async () => {
     let briefings = [];
     try {
-      const [list, cands] = await Promise.all([
+      const [list, cands, scout] = await Promise.all([
         opts.loadBriefings?.() ?? [],
         opts.loadCandidates?.().catch(() => []) ?? [],
+        opts.loadScout?.().catch(() => null) ?? null,
       ]);
+      scoutMode = scout?.mode === 'live' ? 'live' : 'dry';
+      scoutReports = (scout?.reports ?? []).filter((r) => r?.day).map((r) => ({ ...r, kind: 'scout_day' })).sort((a, b) => (a.day < b.day ? 1 : -1));
       briefings = Array.isArray(list)
         ? list.filter((b) => b?.day && KINDS.some((k) => k.key === kindOf(b))).sort((a, b) => (a.day < b.day ? 1 : -1))
         : [];
@@ -596,19 +728,26 @@ export function renderMarketBriefingModal(opts = {}) {
       return;
     }
     const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
-    const mount = (i) => { body.innerHTML = KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
+    let activeKey = 'daily';
+    const scoutBar = () => (activeKey === 'scout' ? scoutModeBar(scoutView, scoutMode) : '');
+    const mount = (i) => { body.innerHTML = scoutBar() + KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
     const showKind = (key) => {
+      activeKey = key;
       tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
-      current = briefings.filter((b) => kindOf(b) === key);
+      current = key === 'scout' && scoutView === 'day' ? scoutReports : briefings.filter((b) => kindOf(b) === key);
       if (!current.length) {
         pick.hidden = true;
-        body.innerHTML = `<p class="pv-muted">${esc(KINDS.find((k) => k.key === key).empty)}</p>`;
+        const empty = key === 'scout' && scoutView === 'day'
+          ? 'Noch kein Bericht des Analysten-Scouts. Er läuft alle 2 Stunden.'
+          : KINDS.find((k) => k.key === key).empty;
+        body.innerHTML = `${scoutBar()}<p class="pv-muted">${esc(empty)}</p>`;
         return;
       }
       pick.hidden = false;
       pick.innerHTML = current.map((b, i) => `<option value="${i}">${esc(shortDay(b.day))}</option>`).join('');
       mount(0);
     };
+    renderScoutTab = () => showKind('scout');
     pick.addEventListener('change', () => mount(Number(pick.value)));
     tabs.forEach((t) => t.addEventListener('click', () => showKind(t.dataset.kind)));
     showKind(opts.kind && KINDS.some((k) => k.key === opts.kind) ? opts.kind : 'daily');

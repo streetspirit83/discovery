@@ -634,17 +634,28 @@ sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Ro
   `feeds.<key>.gap` im Bericht = ältester Eintrag jünger als der neueste des Vorlaufs (es kann etwas fehlen). Dow Jones bringt
   marktweit fast nur Earnings-Tabellen und ist nicht dabei. Parser: `parseAnalystHeadline` aus `tv-news.js`; „assumes coverage“ zählt
   als `assume` (Analystenwechsel, kaum Gewicht).
-- **Yahoo** `upgradeDowngradeHistory` (Cookie + Crumb direkt aus der Action, nur US, ≤ 60 Titel) ist Gegencheck für die Häufung
-  über 14/90 Tage. Es hinkt dem Feed ein bis zwei Tage hinterher; deutsche Titel kennt es nicht (404).
+- **Yahoo** `upgradeDowngradeHistory` (nur US, ≤ 60 Titel) ist Gegencheck für die Häufung über 14/90 Tage, geholt über
+  `/api/yahoo-analyst` mit `{"symbol", "history": true}` (Antwortfeld `history`, 180 Tage kompakt). Direkt aus der GitHub
+  Action gibt Yahoo keinen Crumb heraus (gemessen 0/8), von Netlify und lokal schon; `NO_STORAGE=1` fragt direkt. Es hinkt
+  dem Feed ein bis zwei Tage hinterher; deutsche Titel kennt es nicht (404).
 - **Signal** (`signalsOf`): Auslöser in den letzten 3 Tagen (Hochstufung, Empfehlungsliste, positive Erstbewertung) oder
   Kursziel-Häufung (≥ 2 Häuser positiv in 14 Tagen). Punkte je Haus (gewichtigste Meldung je Haus), Häufungs-Bonus, Gegenwind
   aus Abstufungen. Gewichte in `SCOUT_RULES`.
 - **Bewertung:** frische TV-Daten für alle Signal-Titel, Score wie die Auto-Rotation (`rowOf` aus `tools/auto-rotation/select.mjs`).
   Urteil `verdictOf` gegen die Schwelle = Score des Momentum-Rangs 32 im neuesten Rotationsbericht: `stark` (≥ Schwelle) ·
   `knapp` (≤ 8 darunter) · `schwach` · `klein` (< 1 Mrd. USD) · `ohne Daten`.
-- **Blob `scout`** (STATE, nur read/write): `mode` (`dry` Standard · `live`), `feeds{key:{newest}}`, `events` (45 Tage),
-  `reports` (30 Tage, je Berliner Tag einer, jeder Lauf schreibt ihn fort: `items` ≤ 40, `warnings` = frische Abstufungen auf
-  Watchlist-Titeln, Auge zuerst, `pushed`). Ohne lesbaren scout-Blob kein Lauf.
+- **Blobs** (STATE, nur read/write): `scout` = `mode` (`dry` Standard · `live`), `feeds{key:{newest}}`, `reports` (14 Tage,
+  je Berliner Tag einer, jeder Lauf schreibt ihn fort: `items` ≤ 40, `known`, `warnings` = frische Abstufungen auf
+  Watchlist-Titeln, `pushed`) – klein, die App liest ihn. `scout_events` = gesammelte Ereignisse (30 Tage, ohne
+  Bestätigungen, mit `url` zur TV-Meldung) – gross, nur die Action liest ihn. Ohne lesbaren scout-Blob kein Lauf; den Modus
+  liest der Lauf vor dem Schreiben frisch, damit ein Umschalten in der App nicht verloren geht.
+- **Bestand neu bewertet** (`knownUpdates`, Bericht `known` ≤ 60): je Titel aus Watchlist, Inbox und Archiv eine Zeile mit der
+  gewichtigsten Meldung der letzten 4 Tage, aus den Scout-Ereignissen plus dem analyst-Blob (Spalte „Ana“); Dubletten je Haus
+  binnen 18 h. Reiner Coverage-Wechsel („assumes“) allein zählt nicht. Reihenfolge Watchlist · Inbox · Archiv, Auge zuerst.
+- **App:** Briefing › Scout, Umschalter **Heute** (dieser Bericht, `renderScoutDay` in `market-briefing-modal.js`) · **Woche**
+  (KI-Scout vom Samstag). Heute: Modus-Schalter Probelauf/Scharf (`setScoutMode` in `app.js`), „Neue Titel“ (stark/knapp offen,
+  schwach und klein eingeklappt, Inbox-Knopf → Prüffenster mit Quelle `analyst-scout`) und „Bestand neu bewertet“. Jede Zeile wie
+  die News im Detail-Sheet: Headline → Google-News-Suche, Icon → TradingView-Meldung.
 - **Modus `live`:** `stark` und `knapp` gehen über `append_candidates` in die Inbox (Quelle `analyst-scout`, Signal
   `analyst_upgrade`); Watchlist- und Archiv-Titel nicht (die prüft die Rotation ohnehin). Umschalten: Workflow-Eingabe `set_mode`.
 - Lokal testen: `NO_STORAGE=1 DISCOVERY_BACKEND_URL=<scrape-proxy-Ersatz> OUT_FILE=report.json node tools/upgrade-scout/run.mjs`.

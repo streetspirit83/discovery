@@ -20,7 +20,7 @@ import { renderDashboardModal } from './components/dashboard-modal.js?v=20261117
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261104k';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261118a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
@@ -1442,6 +1442,21 @@ async function setRotationMode(mode) {
   return true;
 }
 
+/* Modus des Analysten-Scouts (Blob `scout`): dry = nur Bericht, live = „stark“/„knapp“ in die Inbox. */
+async function setScoutMode(mode) {
+  if (mode !== 'live' && mode !== 'dry') return false;
+  if (useMock) { toast('Im Demo-Modus nicht möglich', 'info'); return false; }
+  try {
+    const cur = (await storageClient.readBlob('scout')) ?? {};
+    await storageClient.writeBlob('scout', { ...cur, mode, mode_at: new Date().toISOString() });
+  } catch (err) {
+    toast(`Umschalten fehlgeschlagen: ${err.message}`, 'error');
+    return false;
+  }
+  toast(mode === 'live' ? 'Analysten-Scout scharf, gilt ab dem nächsten Lauf' : 'Analysten-Scout im Probelauf', 'success');
+  return true;
+}
+
 /**
  * Detail-Sheet zu einem Treffer der Symbol-Auflösung öffnen. Watch- und
  * Archiv-Titel erscheinen in „Watch + Archiv“, wenn der aktuelle Bucket sie
@@ -1473,6 +1488,8 @@ function openMarketBriefing(kind = null) {
     loadCandidates: briefingCandidates,
     onOpenCandidate: (hit, ctrl) => openBriefingHit(hit, ctrl),
     onScoutAdd: openScoutImport,
+    loadScout: () => storageClient.readBlob('scout'),
+    onScoutMode: setScoutMode,
     kind,
   });
 }
@@ -1494,7 +1511,7 @@ async function loadRankings() {
 function openScoutImport(item) {
   if (!item?.symbol) return;
   openImportCheck({
-    items: [{ symbol: String(item.symbol).toUpperCase(), exchange: normalizeExchange(item.exchange) || '', adapter: 'ai-scout', note: item.thesis ?? 'KI-Scout' }],
+    items: [{ symbol: String(item.symbol).toUpperCase(), exchange: normalizeExchange(item.exchange) || '', adapter: item.adapter ?? 'ai-scout', note: item.thesis ?? 'KI-Scout' }],
     peer: null,
   }, 'Scout-Titel');
 }

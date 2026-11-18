@@ -17,6 +17,11 @@
  *             target_mean, target_high, target_low, target_median,
  *             analysts, recommendation, currency } | null }
  *
+ * Mit `"history": true` kommt zusätzlich `history` = Yahoos `upgradeDowngradeHistory` der letzten
+ * 180 Tage, kompakt: [{ t (Epoch s), firm, action (up|down|init|main|reit), from, to, pt }], neueste
+ * zuerst. Der Analysten-Scout (tools/upgrade-scout) nutzt das als Gegencheck; aus der GitHub Action
+ * direkt gibt Yahoo keinen Crumb heraus, von Netlify aus schon.
+ *
  * `symbol` ist der **Yahoo**-Ticker inkl. Börsensuffix (`SAP.DE`) — der steht
  * bei unseren Kandidaten als `yahoo_symbol`.
  *
@@ -71,9 +76,10 @@ async function getAuth(force = false) {
   return cached;
 }
 
-async function fetchSummary(symbol, auth) {
+async function fetchSummary(symbol, auth, withHistory = false) {
+  const modules = withHistory ? 'financialData,upgradeDowngradeHistory' : 'financialData';
   const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}`
-    + `?modules=financialData&crumb=${encodeURIComponent(auth.crumb)}`;
+    + `?modules=${modules}&crumb=${encodeURIComponent(auth.crumb)}`;
   return fetch(url, {
     headers: {
       'User-Agent': UA,
@@ -83,6 +89,15 @@ async function fetchSummary(symbol, auth) {
       cookie: auth.cookie,
     },
   });
+}
+
+const HISTORY_DAYS = 180;
+function compactHistory(list) {
+  const cut = Date.now() / 1000 - HISTORY_DAYS * 86400;
+  return (Array.isArray(list) ? list : [])
+    .filter((x) => Number.isFinite(x?.epochGradeDate) && x.epochGradeDate >= cut)
+    .map((x) => ({ t: x.epochGradeDate, firm: x.firm ?? null, action: x.action ?? null, from: x.fromGrade || null, to: x.toGrade || null, pt: num(x.currentPriceTarget) }))
+    .sort((a, b) => b.t - a.t);
 }
 
 export default async function handler(req) {
@@ -104,8 +119,8 @@ export default async function handler(req) {
     return respond(401, { ok: false, error: 'Unauthorized' });
   }
 
-  let symbol;
-  try { symbol = (await req.json())?.symbol; }
+  let symbol, withHistory = false;
+  try { const b = await req.json(); symbol = b?.symbol; withHistory = b?.history === true; }
   catch { return respond(400, { ok: false, error: 'Invalid JSON body' }); }
   // Eng gefasst: Yahoo-Ticker sind Buchstaben, Ziffern, Punkt, Bindestrich und
   // bei Indizes ein führendes ^. Alles andere geht gar nicht erst raus.
@@ -115,12 +130,12 @@ export default async function handler(req) {
 
   try {
     let auth = await getAuth();
-    let res = await fetchSummary(symbol, auth);
+    let res = await fetchSummary(symbol, auth, withHistory);
     // Ein abgelaufener Crumb sieht aus wie 401 — einmal frisch holen und erneut
     // versuchen, bevor wir aufgeben.
     if (res.status === 401) {
       auth = await getAuth(true);
-      res = await fetchSummary(symbol, auth);
+      res = await fetchSummary(symbol, auth, withHistory);
     }
 
     const text = await res.text();
@@ -129,15 +144,18 @@ export default async function handler(req) {
       return respond(200, { ok: false, symbol, error: `Yahoo HTTP ${res.status}`, data: null });
     }
 
-    const fd = JSON.parse(text)?.quoteSummary?.result?.[0]?.financialData;
+    const result = JSON.parse(text)?.quoteSummary?.result?.[0];
+    const fd = result?.financialData;
+    const extra = withHistory ? { history: compactHistory(result?.upgradeDowngradeHistory?.history) } : {};
     if (!fd || fd.targetMeanPrice == null) {
-      return respond(200, { ok: true, symbol, source: 'yahoo', data: null });
+      return respond(200, { ok: true, symbol, source: 'yahoo', data: null, ...extra });
     }
 
     return respond(200, {
       ok: true,
       symbol,
       source: 'yahoo',
+      ...extra,
       data: {
         target_mean:    num(fd.targetMeanPrice),
         target_high:    num(fd.targetHighPrice),
