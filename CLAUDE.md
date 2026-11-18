@@ -624,6 +624,31 @@ und Archiv (Dubletten einmal, Watch gewinnt; ETFs bleiben unberührt).
   Anzeige: Monitor-Reiter „Rotation“ (`rotationTabHtml` in `rankings-panel.js`). Gleiche Concurrency-Gruppe wie der
   Monitor-Bericht, weil beide den market-Blob schreiben.
 
+## Analysten-Scout (`upgrade-scout.yml`, werktags alle 2 h 07:17–23:17 UTC, Sa/So 12:17)
+`tools/upgrade-scout/run.mjs` (I/O) + `ui/lib/upgrade-scout.js` (reine Logik) finden Titel über frische Analystenmeldungen,
+auch solche, die noch nicht in der App sind. Kein Kaufsignal (`docs/ANALYST_BACKTEST.md`: keine verlässliche Nachdrift),
+sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Rotation.
+- **Quellen:** marktweiter TradingView-News-Feed ohne `symbol`, gefiltert nach Anbieter: `lang=en&provider=tradingview_analyst_updates`
+  (US) und `lang=de&provider=dpa_afx` (ANALYSE-FLASH, Deutschland). Gemessen: immer nur die neuesten 200 Einträge, keine Seiten
+  (`to/before/cursor/offset/page` wirken nicht); TradingView deckt damit ≈ 7 h ab, dpa ≈ 20 h. Deshalb der Zwei-Stunden-Takt;
+  `feeds.<key>.gap` im Bericht = ältester Eintrag jünger als der neueste des Vorlaufs (es kann etwas fehlen). Dow Jones bringt
+  marktweit fast nur Earnings-Tabellen und ist nicht dabei. Parser: `parseAnalystHeadline` aus `tv-news.js`; „assumes coverage“ zählt
+  als `assume` (Analystenwechsel, kaum Gewicht).
+- **Yahoo** `upgradeDowngradeHistory` (Cookie + Crumb direkt aus der Action, nur US, ≤ 60 Titel) ist Gegencheck für die Häufung
+  über 14/90 Tage. Es hinkt dem Feed ein bis zwei Tage hinterher; deutsche Titel kennt es nicht (404).
+- **Signal** (`signalsOf`): Auslöser in den letzten 3 Tagen (Hochstufung, Empfehlungsliste, positive Erstbewertung) oder
+  Kursziel-Häufung (≥ 2 Häuser positiv in 14 Tagen). Punkte je Haus (gewichtigste Meldung je Haus), Häufungs-Bonus, Gegenwind
+  aus Abstufungen. Gewichte in `SCOUT_RULES`.
+- **Bewertung:** frische TV-Daten für alle Signal-Titel, Score wie die Auto-Rotation (`rowOf` aus `tools/auto-rotation/select.mjs`).
+  Urteil `verdictOf` gegen die Schwelle = Score des Momentum-Rangs 32 im neuesten Rotationsbericht: `stark` (≥ Schwelle) ·
+  `knapp` (≤ 8 darunter) · `schwach` · `klein` (< 1 Mrd. USD) · `ohne Daten`.
+- **Blob `scout`** (STATE, nur read/write): `mode` (`dry` Standard · `live`), `feeds{key:{newest}}`, `events` (45 Tage),
+  `reports` (30 Tage, je Berliner Tag einer, jeder Lauf schreibt ihn fort: `items` ≤ 40, `warnings` = frische Abstufungen auf
+  Watchlist-Titeln, Auge zuerst, `pushed`). Ohne lesbaren scout-Blob kein Lauf.
+- **Modus `live`:** `stark` und `knapp` gehen über `append_candidates` in die Inbox (Quelle `analyst-scout`, Signal
+  `analyst_upgrade`); Watchlist- und Archiv-Titel nicht (die prüft die Rotation ohnehin). Umschalten: Workflow-Eingabe `set_mode`.
+- Lokal testen: `NO_STORAGE=1 DISCOVERY_BACKEND_URL=<scrape-proxy-Ersatz> OUT_FILE=report.json node tools/upgrade-scout/run.mjs`.
+
 ## Alerts (`check-alerts`, alle 20 min, 7–21 UTC)
 Die App ist die einzige Quelle für Levels und Alarme (`range_override`, `range_alarm`, `wr_sup_/wr_res_<id>`).
 `check-alerts` importiert dafür `ui/lib/range-levels.js`, `range-alarm.js` und `eur-basis.js` direkt, die Rechnung
