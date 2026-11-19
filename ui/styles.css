@@ -2207,6 +2207,9 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 
 /* Interactive LS chart container (Lightweight Charts) */
 .ls-chart { height:240px; width:100%; }
+/* Alarm-Linien im Kerzen-Chart lassen sich ziehen (wireLevelDrag) */
+.ls-chart.can-drag-level, .ls-chart.can-drag-level * { cursor:ns-resize !important; }
+.ls-chart.is-dragging-level, .ls-chart.is-dragging-level * { cursor:grabbing !important; }
 
 /* Collapsed detail ladder / trend-band price-levels table */
 .pv-ladder-details summary,

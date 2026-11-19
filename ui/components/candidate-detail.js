@@ -2284,6 +2284,82 @@ export class CandidateDetail {
   // ＋-button in that bar opens the Trigger editor with the shown level.
   // `series.coordinateToPrice(y)` maps the container-relative y to a price; the
   // chart runs in display currency → divide by the EUR→display factor for EUR.
+  /* Alarm-Linien im Kerzen-Chart ziehen (Maus und Touch). Ein Druck nahe einer Linie (±10 px, Touch
+     ±18 px) greift sie, Scrollen/Zoomen des Charts und das Wischen des Sheets ruhen solange. Beim
+     Loslassen: Sup/Res → manuelles Level auf dieser Seite, Range-Alarm scharf (`moveRangeLevel`);
+     Preis-Alert → neue Schwelle, aktiv, Richtung nach Lage zum Kurs (`moveAlert`). Ein kurzes
+     Antippen ohne Bewegung (< 3 px) ändert nichts. */
+  wireLevelDrag(el, chart, series, drags, disp) {
+    if (!drags.length) return;
+    const sym = disp.cur === 'EUR' ? '€' : disp.cur === 'USD' ? '$' : disp.cur;
+    const yOf = (e) => {
+      const t = e.touches?.[0] ?? e.changedTouches?.[0] ?? e;
+      return t.clientY - el.getBoundingClientRect().top;
+    };
+    const hit = (y, tol) => {
+      let best = null, bd = tol;
+      for (const d of drags) {
+        let py; try { py = series.priceToCoordinate(d.price); } catch { continue; }
+        if (py == null) continue;
+        const dist = Math.abs(py - y);
+        if (dist <= bd) { bd = dist; best = d; }
+      }
+      return best;
+    };
+    let cur = null, y0 = 0, moved = false, newPrice = null;
+    const title0 = (d) => d.line.options().title;
+    const move = (e) => {
+      if (!cur) return;
+      e.preventDefault(); e.stopPropagation();
+      const y = yOf(e);
+      if (Math.abs(y - y0) >= 3) moved = true;
+      if (!moved) return;
+      let p; try { p = series.coordinateToPrice(y); } catch { return; }
+      if (!(p > 0)) return;
+      newPrice = p;
+      cur.line.applyOptions({ price: p, lineStyle: 2, lineWidth: 2, title: `${cur.t0.replace(/ Alarm$/, '')} → ${fmtNum(p, 2)} ${sym}` });
+    };
+    const end = (e) => {
+      if (!cur) return;
+      e?.preventDefault?.();
+      const d = cur; cur = null;
+      window.removeEventListener('mousemove', move, true);
+      window.removeEventListener('mouseup', end, true);
+      window.removeEventListener('touchmove', move, { capture: true });
+      window.removeEventListener('touchend', end, true);
+      window.removeEventListener('touchcancel', end, true);
+      chart.applyOptions({ handleScroll: true, handleScale: true });
+      el.classList.remove('is-dragging-level');
+      if (!moved || !(newPrice > 0)) { d.line.applyOptions({ price: d.price, title: d.t0 }); return; }
+      const value = +(newPrice / d.k).toFixed(4);   // Anzeige → EUR (bzw. Range-Einheit)
+      d.line.applyOptions({ title: `${d.t0.replace(/ Alarm$/, '')} Alarm` });
+      if (d.kind === 'alert') this.onAction?.('moveAlert', this.candidate, { alertId: d.alert.id, priceEur: value });
+      else this.onAction?.('moveRangeLevel', this.candidate, { side: d.kind, value });
+    };
+    const start = (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.touches && e.touches.length !== 1) return;
+      const d = hit(yOf(e), e.touches ? 18 : 10);
+      if (!d) return;
+      e.preventDefault(); e.stopPropagation();
+      cur = d; d.t0 = title0(d); y0 = yOf(e); moved = false; newPrice = null;
+      chart.applyOptions({ handleScroll: false, handleScale: false });
+      el.classList.add('is-dragging-level');
+      window.addEventListener('mousemove', move, true);
+      window.addEventListener('mouseup', end, true);
+      window.addEventListener('touchmove', move, { capture: true, passive: false });
+      window.addEventListener('touchend', end, true);
+      window.addEventListener('touchcancel', end, true);
+    };
+    el.addEventListener('mousedown', start, true);
+    el.addEventListener('touchstart', start, { capture: true, passive: false });
+    // Maus: Zeiger zeigt an, wo sich eine Linie greifen lässt.
+    el.addEventListener('mousemove', (e) => {
+      if (!cur) el.classList.toggle('can-drag-level', !!hit(yOf(e), 10));
+    });
+    el.addEventListener('mouseleave', () => el.classList.remove('can-drag-level'));
+  }
+
   wireChartLevelReadout(el, series, disp) {
     const lsF = lsDisplayFactor(disp);
     if (!el || lsF == null) return;
@@ -2372,16 +2448,24 @@ export class CandidateDetail {
     (a.support ?? []).forEach((z) => zoneLine(z, col('--pos')));
     (a.resistance ?? []).forEach((z) => zoneLine(z, col('--neg')));
 
-    // Watch-Range-Levels wie in Liste und Modal (gestrichelt, EUR → Anzeige), dazu die
-    // Alarme: scharf heisst das Level „Alarm"; ein abweichender Alarm bekommt eine eigene Linie.
+    // Watch-Range-Levels wie in Liste und Modal (EUR → Anzeige). Scharf (Alarm am Level) = gestrichelt
+    // und kräftig, nur angezeigt = gepunktet und dünn. Preis-Alerts und ein abweichender Range-Alarm
+    // bekommen eine eigene gestrichelte Linie. Alle diese Linien lassen sich ziehen (wireLevelDrag):
+    // beim Loslassen steht das Level neu und der Alarm ist dort scharf.
     const rg = chartRange(c, disp);
     const armed = armedLevels(c);
+    const alarmOn = rangeAlarmOn(c);
     const onLevel = (thr, lvl) => thr > 0 && lvl > 0 && Math.abs(thr / lvl - 1) < 0.002;
-    const rangeLine = (lvl, color, name, thr) => {
-      if (rg && lvl > 0) candle.createPriceLine({ price: lvl * rg.k, color, lineWidth: 2, lineStyle: 2, title: `${name}${onLevel(thr, lvl) ? ' Alarm' : ''}` });
+    const drags = [];   // { line, price, kind: 'sup'|'res'|'alert', alert?, k }
+    const rangeLine = (side, lvl, color, name) => {
+      if (!rg || !(lvl > 0)) return;
+      const on = alarmOn && onLevel(armed[side], lvl);
+      const price = lvl * rg.k;
+      const line = candle.createPriceLine({ price, color, lineWidth: on ? 2 : 1, lineStyle: on ? 2 : 1, title: `${name}${on ? ' Alarm' : ''}` });
+      drags.push({ line, price, kind: side, k: rg.k, color });
     };
-    rangeLine(rg?.v.sup, col('--pos'), 'Sup', armed.sup);
-    rangeLine(rg?.v.res, col('--neg'), 'Res', armed.res);
+    rangeLine('sup', rg?.v.sup, col('--pos'), 'Sup');
+    rangeLine('res', rg?.v.res, col('--neg'), 'Res');
     this.el.querySelector('#chart-range-alarm')?.addEventListener('click', () => {
       this.onAction?.('rangeAlarm', c, { on: !rangeAlarmOn(c) });
     });
@@ -2390,9 +2474,15 @@ export class CandidateDetail {
       for (const al of c.alerts ?? []) {
         if (!al || al.enabled === false || !(al.threshold > 0) || (al.type !== 'price_above' && al.type !== 'price_below')) continue;
         if (onLevel(al.threshold, rg?.v.sup) || onLevel(al.threshold, rg?.v.res)) continue;
-        candle.createPriceLine({ price: al.threshold * alertF, color: col('--accent'), lineWidth: 1, lineStyle: 1, title: 'Alert' });
+        const wr = /^wr_(sup|res)_/.exec(String(al.id ?? ''))?.[1];
+        const color = wr === 'sup' ? col('--pos') : wr === 'res' ? col('--neg') : col('--accent');
+        const price = al.threshold * alertF;
+        const line = candle.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, title: wr ? `${wr === 'sup' ? 'Sup' : 'Res'} Alarm` : 'Alert' });
+        // Ein abweichender Range-Alarm verschiebt die Range-Seite, nicht nur den Alert.
+        drags.push(wr && rg ? { line, price, kind: wr, k: rg.k, color } : { line, price, kind: 'alert', alert: al, k: alertF, color });
       }
     }
+    this.wireLevelDrag(el, chart, candle, drags, disp);
 
     /* SMA 20/50/100/200 als Kurven statt als waagerechte Linien: der TV-Wert ist
        ein Momentwert, gezeigt werden soll der Verlauf (läuft der Kurs auf die

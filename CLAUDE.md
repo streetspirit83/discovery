@@ -172,9 +172,12 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   gestrichelte Szenarien (Breakout/Status Quo/Breakdown) mit Fächer-Fläche, ATH
   und Fair Value als Linien — Rechnung in `tv-forecast.js`, Spec in
   `docs/FORECAST_SPEC.md`.
-  Der 1J-Chart zeichnet zusätzlich die **Watch-Range-Levels** gestrichelt (`chartRange`, gleiche
-  Rechnung wie Liste und Modal; scharf = Titel „Sup Alarm"/„Res Alarm") und bestehende Preis-Alerts
-  gepunktet. Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
+  Der 1J-Chart (TD- wie Yahoo-Kerzen) zeichnet zusätzlich die **Watch-Range-Levels** (`chartRange`, gleiche
+  Rechnung wie Liste und Modal): scharf = gestrichelt, kräftig, Titel „Sup Alarm"/„Res Alarm"; nur angezeigt =
+  gepunktet, dünn. Aktive Preis-Alerts und ein abweichender Range-Alarm stehen ebenfalls gestrichelt.
+  **Alle diese Linien lassen sich ziehen** (`wireLevelDrag`, Maus und Touch, Fangbereich ±10/±18 px, Chart-Pan
+  und Sheet-Wischen ruhen dabei): Sup/Res → Aktion `moveRangeLevel` (`saveRangeLevel`, manuelles Level, Range-Alarm
+  scharf), Preis-Alert → `moveAlert` (neue Schwelle, aktiv, `created_at` neu, Richtung nach Lage zum LS-Kurs). Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
   `lib/range-alarm.js`, gemeinsam mit Modal und Server). Manuelle Levels setzt das Alert-Fenster. Im Archiv gibt es keinen Alarm, dort prüft
   `check-alerts` nicht. Geänderte Levels zieht `check-alerts` bei jedem Lauf nach.
 - `alert-modal.js` – alert triage overview (opened from the Home/🔔 nav slot;

@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261117a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261111a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261119e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -2216,6 +2216,45 @@ async function handleAction(action, candidate, extras = {}) {
       Object.assign(candidate, before);
       refresh();
       toast(`Alarm nicht gespeichert: ${e.message}`, 'error', 4000);
+    }
+    return;
+  }
+
+  // Gezogene Linie im Kerzen-Chart: Sup/Res wird manuelles Level, der Range-Alarm steht dort scharf.
+  if (action === 'moveRangeLevel') {
+    const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
+    const r = await saveRangeLevel(candidate, extras.side, extras.value, null);
+    if (r?.err) { toast(r.err, 'error', 4000); candidateDetail.render(); return; }
+    if (bucket === 'archive') toast('Level gespeichert – im Archiv laufen keine Alarme.', 'info', 3000);
+    return;
+  }
+
+  // Gezogener Preis-Alert: neue Schwelle, aktiv, Richtung nach Lage zum aktuellen Kurs.
+  if (action === 'moveAlert') {
+    const list = Array.isArray(candidate.alerts) ? candidate.alerts : [];
+    const old = list.find((a) => a?.id === extras.alertId);
+    const thr = +extras.priceEur;
+    if (!old || !(thr > 0)) return;
+    const p = +candidate.ls_quote?.price;
+    const type = p > 0 ? (thr >= p ? 'price_above' : 'price_below') : old.type;
+    const moved = {
+      ...old, threshold: thr, type, enabled: true, created_at: new Date().toISOString(),
+      ...(old.basis?.kind === 'entry_pct' ? { label: 'Manuell', basis: { kind: 'manual' } } : {}),
+    };
+    const before = candidate.alerts;
+    const alerts = list.map((a) => (a === old ? moved : a));
+    const refresh = () => { candidateDetail.render(); candidateList.renderRows(); updateAlertBadge(); };
+    candidate.alerts = alerts;
+    refresh();
+    try {
+      await persistAlerts(candidate.id, alerts);
+      const fmt = thr.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const bucket = currentBlobType === 'all' ? bucketOfId(candidate.id) : currentBlobType;
+      toast(bucket === 'archive' ? `Alert auf ${fmt} € – im Archiv laufen keine Alarme.` : `Alert scharf auf ${fmt} €.`, 'success', 2000);
+    } catch (e) {
+      candidate.alerts = before;
+      refresh();
+      toast(`Alert nicht gespeichert: ${e.message}`, 'error', 4000);
     }
     return;
   }
