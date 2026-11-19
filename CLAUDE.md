@@ -264,7 +264,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Schreibweisen aus dem Profil in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Übrige Reiter: „Markets (TV)“
   (iframe der Markets-Unterseite, lädt erst beim Öffnen), „Indices“, „Sektoren“. Der News-Reiter ist entfallen
   (`news-panel.js` wird nicht mehr importiert).
-- **Monitor-Modal** (`dashboard-modal.js`, vier Reiter über den aktiven Bucket): **Live** (erster Reiter) = Kacheln der
+- **Monitor-Modal** (`dashboard-modal.js`, vier Reiter über den aktiven Bucket, Reihenfolge Dynamik · Live · Rankings ·
+  Rotation; seit 19.11.2026 öffnet **Dynamik** zuerst, der Live-Ticker startet erst mit dem Reiter Live): **Live** = Kacheln der
   Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`), sortiert, Filter über die fünf Mega-Cluster-Icons
   (`MEGA_ICONS`, wie `SECTOR_ICONS` in `app.js`); **Live-Ticker** (Aus · 1 · 2 · 5 min, Standard 2, gemerkt in
   localStorage `discovery_live_ticker_min`): lädt in Runden die LS-Kurse der gezeigten Titel (`refreshLsFor` in `app.js`,

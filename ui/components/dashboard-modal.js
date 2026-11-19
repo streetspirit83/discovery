@@ -1,5 +1,6 @@
 /**
- * Dashboard / Monitor modal (bottom-nav slot "Monitor"), vier Reiter über den *aktiven Bucket*:
+ * Dashboard / Monitor modal (bottom-nav slot "Monitor"), vier Reiter über den *aktiven Bucket*
+ * (Reihenfolge Dynamik · Live · Rankings · Rotation, Dynamik öffnet zuerst):
  *
  *   Live      – Kacheln der Einzeltitel nach LS-Tagesveränderung (`ls_quote.change_pct`,
  *               Lang & Schwarz gegen Vortagesschluss), sortiert vom stärksten zum schwächsten,
@@ -78,7 +79,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
 
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
     setup: { cell: null, q: null, brush: null } };
-  const rk = { tab: 'live', data: null, err: null, loading: false };
+  const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
   const dyn = { path: [] };
@@ -339,8 +340,8 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
         <button class="modal-close" id="dash-close" aria-label="Schließen">✕</button>
       </div>
       <div class="tab-bar dash-tabs" role="tablist">
-        <button class="tab-btn active" data-dash-tab="live" role="tab" aria-selected="true">Live</button>
-        <button class="tab-btn" data-dash-tab="dynamics" role="tab" aria-selected="false">Dynamik</button>
+        <button class="tab-btn active" data-dash-tab="dynamics" role="tab" aria-selected="true">Dynamik</button>
+        <button class="tab-btn" data-dash-tab="live" role="tab" aria-selected="false">Live</button>
         <button class="tab-btn" data-dash-tab="rankings" role="tab" aria-selected="false">Rankings</button>
         <button class="tab-btn" data-dash-tab="rotation" role="tab" aria-selected="false">Rotation</button>
       </div>
@@ -585,7 +586,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
   });
 
-  showLive();
+  renderDynamics();                // Dynamik ist der erste Reiter und erscheint beim Öffnen
 
   return ctrl;
 }
