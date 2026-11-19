@@ -1793,6 +1793,9 @@ span.detail-star { cursor:default; }
 
 /* Markt-Dashboard (Monitor-Reiter „Markt“, components/market-dashboard.js) */
 .md-main { display:flex; flex-direction:column; gap:var(--s-3); }
+.idx-news { display:flex; flex-direction:column; gap:var(--s-2); }
+.idx-news__right { display:flex; align-items:center; gap:var(--s-2); }
+.idx-news__list { display:flex; flex-direction:column; }
 .md-ctl { display:flex; justify-content:space-between; align-items:center; gap:var(--s-2); flex-wrap:wrap; }
 .md-kpis { display:flex; align-items:center; flex-wrap:wrap; gap:var(--s-1) var(--s-3); font-size:var(--fs-2);
   font-variant-numeric:tabular-nums; color:var(--muted); }

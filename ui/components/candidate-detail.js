@@ -2288,9 +2288,11 @@ export class CandidateDetail {
      ±18 px) greift sie, Scrollen/Zoomen des Charts und das Wischen des Sheets ruhen solange. Beim
      Loslassen: Sup/Res → manuelles Level auf dieser Seite, Range-Alarm scharf (`moveRangeLevel`);
      Preis-Alert → neue Schwelle, aktiv, Richtung nach Lage zum Kurs (`moveAlert`). Ein kurzes
-     Antippen ohne Bewegung (< 3 px) ändert nichts. */
+     Antippen ohne Bewegung (< 3 px) ändert nichts. Nur in der vergrösserten Ansicht (`.chart-fs.is-fs`),
+     im normalen Sheet bleiben die Linien fest, damit Scrollen und Wischen nichts verschieben. */
   wireLevelDrag(el, chart, series, drags, disp) {
     if (!drags.length) return;
+    const enlarged = () => !!el.closest('.chart-fs.is-fs');
     const sym = disp.cur === 'EUR' ? '€' : disp.cur === 'USD' ? '$' : disp.cur;
     const yOf = (e) => {
       const t = e.touches?.[0] ?? e.changedTouches?.[0] ?? e;
@@ -2339,6 +2341,7 @@ export class CandidateDetail {
     const start = (e) => {
       if (e.button != null && e.button !== 0) return;
       if (e.touches && e.touches.length !== 1) return;
+      if (!enlarged()) return;
       const d = hit(yOf(e), e.touches ? 18 : 10);
       if (!d) return;
       e.preventDefault(); e.stopPropagation();
@@ -2355,7 +2358,7 @@ export class CandidateDetail {
     el.addEventListener('touchstart', start, { capture: true, passive: false });
     // Maus: Zeiger zeigt an, wo sich eine Linie greifen lässt.
     el.addEventListener('mousemove', (e) => {
-      if (!cur) el.classList.toggle('can-drag-level', !!hit(yOf(e), 10));
+      if (!cur) el.classList.toggle('can-drag-level', enlarged() && !!hit(yOf(e), 10));
     });
     el.addEventListener('mouseleave', () => el.classList.remove('can-drag-level'));
   }

@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261117a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261119e';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261119f';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -15,7 +15,7 @@ import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
-import { renderMarketsModal } from './components/markets-modal.js?v=20261116d';
+import { renderMarketsModal } from './components/markets-modal.js?v=20261119f';
 import { renderDashboardModal } from './components/dashboard-modal.js?v=20261119d';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
@@ -33,7 +33,7 @@ import { fetchTVEnrichment, fetchFxRate, fetchMarketIndicators } from './lib/tv-
 import { fetchIndexRows } from './lib/tv-indices.js?v=20261023a';
 import { trackSignals } from './lib/signal-tracker.js?v=20261103h';
 import { fetchCompanyProfile, fetchCompanyNews, fetchLatestTranscript, compactProfile, cachedCompanyProfile } from './lib/company-profile.js?v=20261101b';
-import { fetchTvNews } from './lib/tv-news.js?v=20261103b';
+import { fetchTvNews, buildTvNews } from './lib/tv-news.js?v=20261103b';
 import { netBalance } from './lib/analyst-events.js?v=20261103c';
 import { fetchStocktwitsSentiment } from './lib/stocktwits-sentiment.js?v=20260818a';
 import { fetchFmpValuation } from './lib/fmp-valuation.js?v=20260818a';
@@ -385,6 +385,34 @@ async function refreshLsFor(ids, { onProgress, cancelled } = {}) {
     storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
   }
   return { ok: ok.length, fail: failed.length + gone.length };
+}
+
+/* TradingView-Headlines zu einem Index-Symbol (Markets › News). Gleicher Feed und gleiche Aufbereitung
+   wie der News-Tab im Detail-Sheet, 30 min Cache je Symbol und Sprache, Fehler werden nicht gecacht. */
+async function fetchIndexHeadlines(ticker, lang, { force = false } = {}) {
+  const backendUrl = localStorage.getItem('discovery_backend_url');
+  const secret = localStorage.getItem('discovery_secret');
+  if (!backendUrl || !secret) return null;
+  const key = `discovery_idxnews1_${lang}_${ticker}`;
+  if (!force) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(key));
+      if (raw && Date.now() - (raw.at ?? 0) < 30 * 60e3) return raw.news;
+    } catch { /* ignore */ }
+  }
+  const url = `https://news-headlines.tradingview.com/v2/headlines?client=web&lang=${lang}&symbol=${encodeURIComponent(ticker)}`;
+  const res = await fetch(`${backendUrl.replace(/\/$/, '')}/api/scrape-proxy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-discovery-secret': secret },
+    body: JSON.stringify({ url, method: 'GET', headers: {} }),
+  });
+  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+  const wrapper = await res.json();
+  if (!wrapper.ok) throw new Error(`Proxy: ${wrapper.error}`);
+  if (wrapper.status !== 200) throw new Error(`TV-News HTTP ${wrapper.status}`);
+  const news = { items: buildTvNews(JSON.parse(wrapper.body)), fetched_at: new Date().toISOString() };
+  try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), news })); } catch { /* Quota */ }
+  return news;
 }
 
 // ── Alert-Overview modal (Home nav slot) ────────────────────────────────────────
@@ -2946,6 +2974,9 @@ async function init() {
         if (useMock || !backendUrl || !secret) return null;
         return fetchIndexRows({ backendUrl, secret, entries });
       },
+      // Reiter „News“: TradingView-Headlines zu Nasdaq 100 / DAX / S&P 500 (components/index-news.js).
+      onFetchHeadlines: (useMock || !localStorage.getItem('discovery_backend_url') || !localStorage.getItem('discovery_secret'))
+        ? null : fetchIndexHeadlines,
       // Reiter „Markt“: Dashboard über den aktiven Bucket; „In Tabelle öffnen“ wählt die
       // Titel in der Liste aus, Titel öffnen das Detail-Sheet und kehren ins Modal zurück.
       candidates: allBlobs[currentBlobType]?.candidates ?? [],

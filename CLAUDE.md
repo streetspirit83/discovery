@@ -175,7 +175,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Der 1J-Chart (TD- wie Yahoo-Kerzen) zeichnet zusätzlich die **Watch-Range-Levels** (`chartRange`, gleiche
   Rechnung wie Liste und Modal): scharf = gestrichelt, kräftig, Titel „Sup Alarm"/„Res Alarm"; nur angezeigt =
   gepunktet, dünn. Aktive Preis-Alerts und ein abweichender Range-Alarm stehen ebenfalls gestrichelt.
-  **Alle diese Linien lassen sich ziehen** (`wireLevelDrag`, Maus und Touch, Fangbereich ±10/±18 px, Chart-Pan
+  **Alle diese Linien lassen sich ziehen, aber nur in der vergrösserten Ansicht** (`.chart-fs.is-fs`; `wireLevelDrag`, Maus und Touch, Fangbereich ±10/±18 px, Chart-Pan
   und Sheet-Wischen ruhen dabei): Sup/Res → Aktion `moveRangeLevel` (`saveRangeLevel`, manuelles Level, Range-Alarm
   scharf), Preis-Alert → `moveAlert` (neue Schwelle, aktiv, `created_at` neu, Richtung nach Lage zum LS-Kurs). Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,
   `lib/range-alarm.js`, gemeinsam mit Modal und Server). Manuelle Levels setzt das Alert-Fenster. Im Archiv gibt es keinen Alarm, dort prüft
@@ -264,7 +264,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   als Kacheln in derselben Farblogik: ohne Auswahl die je drei stärksten/schwächsten, sonst die des Mega-Clusters des
   Sektors (`INDEX_MEGA` in `lib/market-scope.js`) bzw. des Landes. **Land** = `company_profile.facts.country`
   (ROIC-Firmenprofil), ohne Profil ersatzweise der Börsenplatz (`countryOf`; die Fußnote nennt beide Anzahlen). Neue
-  Schreibweisen aus dem Profil in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Übrige Reiter: „Markets (TV)“
+  Schreibweisen aus dem Profil in `COUNTRY_ALIAS`, neue Länder in `REGION` ergänzen. Zweiter Reiter **„News“** (`components/index-news.js`, seit 19.11.2026): TradingView-Headlines zu Nasdaq 100
+  (`NASDAQ:NDX`), DAX (`XETR:DAX`) und S&P 500 (`SP:SPX`), derselbe Feed wie der News-Tab im Detail-Sheet über die
+  scrape-proxy (`fetchIndexHeadlines` in `app.js`, `buildTvNews`, 30 min Cache je Symbol und Sprache). Filter Alle (gemischt,
+  Dubletten je Titel und Tag einmal, mit Index-Labels) / ein Index, Sprache DE (dpa-AFX, Reuters dt.) / EN (Reuters,
+  Benzinga …), gemerkt in `discovery_idxnews_lang`; lädt erst beim Öffnen des Reiters. Übrige Reiter: „Markets (TV)“
   (iframe der Markets-Unterseite, lädt erst beim Öffnen), „Indices“, „Sektoren“. Der News-Reiter ist entfallen
   (`news-panel.js` wird nicht mehr importiert).
 - **Monitor-Modal** (`dashboard-modal.js`, vier Reiter über den aktiven Bucket, Reihenfolge Dynamik · Live · Rankings ·

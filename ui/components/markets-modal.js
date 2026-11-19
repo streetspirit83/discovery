@@ -16,6 +16,7 @@ import { icons } from '../lib/icons.js?v=20261103f';
 import { renderSectorHeatmap } from './sector-heatmap.js?v=20260807a';
 import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
 import { createMarketDashboard } from './market-dashboard.js?v=20261116d';
+import { mountIndexNews } from './index-news.js?v=20261119f';
 
 const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
 
@@ -54,7 +55,7 @@ function indicatorChip(i) {
     : `<div class="id-ind" title="${tip}">${inner}</div>`;
 }
 
-export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, getHeatCandidates,
+export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, onFetchHeadlines = null, getHeatCandidates,
   candidates = [], bucketLabel = '', onOpenDetail, onSelectInList } = {}) {
   if (document.getElementById('markets-modal-overlay')) return null;
   let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
@@ -75,12 +76,14 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
         <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>
         <div class="tab-bar mk-tabs" role="tablist">
           <button class="tab-btn active" data-mktab="market" role="tab" aria-selected="true">Markt</button>
+          <button class="tab-btn" data-mktab="news" role="tab" aria-selected="false">News</button>
           <button class="tab-btn" data-mktab="markets" role="tab" aria-selected="false">Markets (TV)</button>
           <button class="tab-btn" data-mktab="indices" role="tab" aria-selected="false">Indices</button>
           <button class="tab-btn" data-mktab="sectors" role="tab" aria-selected="false">Sektoren</button>
         </div>
         <div class="mk-tabpanes">
           <div class="tab-panel active" data-mkpane="market" role="tabpanel"><div class="md-main" id="mk-market"></div></div>
+          <div class="tab-panel" data-mkpane="news" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="markets" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="indices" role="tabpanel"></div>
           <div class="tab-panel" data-mkpane="sectors" role="tabpanel"></div>
@@ -122,6 +125,7 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
   let frameMounted = false;
   let indicesMounted = false;
   let sectorsMounted = false;
+  let newsMounted = false;
   overlay.querySelectorAll('[data-mktab]').forEach((btn) => {
     btn.addEventListener('pointerup', () => {
       overlay.querySelectorAll('[data-mktab]').forEach((b) => {
@@ -133,6 +137,10 @@ export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndex
       if (btn.dataset.mktab === 'indices' && !indicesMounted) {
         indicesMounted = true;
         renderIndicesPanel(overlay.querySelector('[data-mkpane="indices"]'), { onFetchIndexRows });
+      }
+      if (btn.dataset.mktab === 'news' && !newsMounted) {
+        newsMounted = true;
+        mountIndexNews(overlay.querySelector('[data-mkpane="news"]'), { onFetch: onFetchHeadlines });
       }
       if (btn.dataset.mktab === 'markets' && !frameMounted) {
         frameMounted = true;
