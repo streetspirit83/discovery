@@ -219,25 +219,41 @@ function filterLabel(model, sel) {
  */
 export function setupMatrixHtml(model, sel) {
   if (!model.metrics.length) return '';
-  const hits = setupHits(model, sel);
-  const active = hasSetupFilter(sel);
-  const list = active
-    ? (hits.length ? `<div class="dash-group" data-group="setup.hits">${hits
-      .sort((a, b) => (b.rat ?? -9) - (a.rat ?? -9)).map(hitRow).join('')}</div>` : '<p class="dash-empty">Kein Titel erfüllt alle Filter.</p>')
-    : '<p class="md-note">Signal- oder Setup-Zelle, Quintil oder Rechteck im Scatter wählen; die Filter gelten zusammen.</p>';
   return `<section class="sm" aria-label="Setups">
     <div class="sm-head"><h3 class="sm-title">Setups</h3>
       <span class="md-note">Schwellen fest: V/Ø30d &gt; ${THRESH.vol} % · Brk↑ &gt; ${THRESH.brk} % · Rat1M &gt; ${de(THRESH.rat, 1)} · Brk↑ für ${model.cover.brk}, V/Ø30d für ${model.cover.vol} von ${model.metrics.length} (LS-Historie)</span></div>
     ${matrixHtml(model, sel)}
     <div class="sm-card"><div class="sm-card__head">EPS-Wachstum vs. %S200 <small>${model.cover.plot} Titel · ziehen = Auswahl${sel.ids ? ' · Signal-Auswahl hervorgehoben' : ''}</small></div>
       ${scatterHtml(model, sel)}${quintileHtml(model, sel)}</div>
-    <div class="sx-detail sm-hits">
-      <div class="sx-detail__head"><span><b>${active ? hits.length : model.metrics.length}</b> ${active ? 'Treffer' : 'Titel'}${active ? ` · ${esc(filterLabel(model, sel))}` : ''}</span>
+  </section>`;
+}
+
+/** Zahl für den Kopf der Trefferliste (auch im eingeklappten Seitenpanel). */
+export function setupHitCount(model, sel) {
+  return hasSetupFilter(sel) ? setupHits(model, sel).length : model.metrics.length;
+}
+
+/**
+ * Gemeinsame Trefferliste des Reiters „Dynamik“ (Signal-Auswahl + Setup-Filter), mit
+ * „Zurücksetzen“ und „In Tabelle öffnen“. Auf dem Handy unter den Grafiken, auf dem
+ * Desktop im ausklappbaren Seitenpanel (dashboard-modal.js).
+ * @param {object} model  aus buildSetupModel()
+ * @param {{cell, q, brush, ids?, idsLabel?}} sel
+ * @param {string} [lead]  zusätzliche Knöpfe am Kopf (z. B. Einklappen)
+ */
+export function setupHitsHtml(model, sel, lead = '') {
+  const hits = setupHits(model, sel);
+  const active = hasSetupFilter(sel);
+  const list = active
+    ? (hits.length ? `<div class="dash-group" data-group="setup.hits">${hits
+      .sort((a, b) => (b.rat ?? -9) - (a.rat ?? -9)).map(hitRow).join('')}</div>` : '<p class="dash-empty">Kein Titel erfüllt alle Filter.</p>')
+    : '<p class="md-note">Signal- oder Setup-Zelle, Quintil oder Rechteck im Scatter wählen; die Filter gelten zusammen.</p>';
+  return `<div class="sx-detail sm-hits">
+      <div class="sx-detail__head"><span>${lead}<b>${active ? hits.length : model.metrics.length}</b> ${active ? 'Treffer' : 'Titel'}${active ? ` · ${esc(filterLabel(model, sel))}` : ''}</span>
         <span class="sm-acts">${active ? '<button type="button" class="btn btn-sm btn-secondary" data-sm-reset>Zurücksetzen</button>' : ''}
         ${active && hits.length ? '<button type="button" class="btn btn-sm btn-primary" data-sm-show>In Tabelle öffnen</button>' : ''}</span></div>
       ${list}
-    </div>
-  </section>`;
+    </div>`;
 }
 
 /**

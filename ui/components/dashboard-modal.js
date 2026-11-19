@@ -37,7 +37,7 @@ import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './
 import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
-import { buildSetupModel, setupMatrixHtml, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119a';
+import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
@@ -74,11 +74,15 @@ function stamp(iso) {
 
 /* ── render the modal body from current state ─────────────────────────────── */
 
+/* Seitenpanel der Trefferliste im Reiter „Dynamik“ (nur Desktop): offen/zu gemerkt. */
+const DYN_SIDE_KEY = 'discovery_dyn_side';
+function storedSide() { try { return localStorage.getItem(DYN_SIDE_KEY) !== '0'; } catch { return true; } }
+
 export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode, onRefreshLs } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null } };
+    setup: { cell: null, q: null, brush: null }, side: storedSide() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -292,11 +296,22 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       return `<button type="button" class="subnav-alert${act ? ' is-active' : ''}" data-dyn-seg="${esc(label)}" aria-pressed="${act}" title="${esc(tip)}" aria-label="${esc(tip)}"${n ? '' : ' disabled'}>${icons[MEGA_ICONS[m.key]] ?? ''}</button>`;
     }).join('');
     const crumbs = ['Alle', ...dyn.path].map((name, i) => `${i ? `<span class="md-bc__sep">${icons.chevronRight}</span>` : ''}<button type="button" class="md-bc__btn${i === dyn.path.length ? ' is-current' : ''}" data-dyn-bc="${i}">${esc(name)}</button>`).join('');
-    return `<div class="md-ctl dyn-filter"><div class="lv-filter" role="group" aria-label="Mega-Sektor-Filter">${segBtns}</div></div>
-      <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
-      ${signalMatrixHtml(sigView())}
-      ${setupMatrixHtml(setupModel(), setupSel())}
-      <div class="dash-pulse">${pulseBody()}</div>`;
+    const model = setupModel(), sel = setupSel();
+    const open = state.side;
+    const toggle = `<button type="button" class="dyn-side__toggle" data-dyn-side aria-expanded="${open}"
+      title="${open ? 'Liste einklappen' : 'Liste ausklappen'}" aria-label="${open ? 'Liste einklappen' : 'Liste ausklappen'}">${open ? icons.chevronRight : icons.chevronLeft}</button>`;
+    const rail = `<button type="button" class="dyn-side__rail" data-dyn-side aria-expanded="false" title="Liste ausklappen" aria-label="Liste ausklappen">
+      ${icons.chevronLeft}<b>${setupHitCount(model, sel)}</b><span>${hasSetupFilter(sel) ? 'Treffer' : 'Titel'}</span></button>`;
+    return `<div class="dyn-layout${open ? '' : ' is-collapsed'}">
+      <div class="dyn-main">
+        <div class="md-ctl dyn-filter"><div class="lv-filter" role="group" aria-label="Mega-Sektor-Filter">${segBtns}</div></div>
+        <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
+        ${signalMatrixHtml(sigView())}
+        ${setupMatrixHtml(model, sel)}
+        <div class="dash-pulse">${pulseBody()}</div>
+      </div>
+      <aside class="dyn-side" aria-label="Unternehmen">${rail}${setupHitsHtml(model, sel, toggle)}</aside>
+    </div>`;
   }
 
   /* Reiter Rankings: Live-Listen (eine zur Zeit), KI-Wochenranking, Tagessieger. */
@@ -351,6 +366,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   document.body.appendChild(overlay);
 
   const bodyEl = overlay.querySelector('.dash-body');
+  const modalEl = overlay.querySelector('.dash-modal');
   const selBar = overlay.querySelector('.dash-selbar');
 
   /* Gruppen-Auswahl: jede Gruppe (Abschnitt, Signal-Chips, Ranking-Liste) bekommt eine
@@ -422,6 +438,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
      market-Blobs (`loadData`). */
   const renderDynamics = () => {
     if (rk.tab !== 'dynamics') return;
+    modalEl.classList.add('has-dyn');           // Desktop: breiteres Modal für das Seitenpanel
     const top = bodyEl.scrollTop;                // Setup-Filter zeichnen den Reiter neu, die Stelle bleibt
     bodyEl.innerHTML = dynamicsHtml();
     bodyEl.scrollTop = top;
@@ -453,6 +470,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   }
   overlay.querySelectorAll('[data-dash-tab]').forEach((b) => b.addEventListener('click', () => {
     rk.tab = b.dataset.dashTab;
+    modalEl.classList.toggle('has-dyn', rk.tab === 'dynamics');
     overlay.querySelectorAll('[data-dash-tab]').forEach((t) => {
       const on = t === b;
       t.classList.toggle('active', on);
@@ -503,6 +521,12 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
     const smQ = e.target.closest('[data-sm-q]');
     if (smQ) { const q = Number(smQ.dataset.smQ); state.setup.q = state.setup.q === q ? null : q; renderDynamics(); return; }
+    if (e.target.closest('[data-dyn-side]')) {
+      state.side = !state.side;
+      try { localStorage.setItem(DYN_SIDE_KEY, state.side ? '1' : '0'); } catch { /* egal */ }
+      renderDynamics();
+      return;
+    }
     if (e.target.closest('[data-sm-reset]')) { state.setup = { cell: null, q: null, brush: null }; state.sig = null; renderDynamics(); return; }
     if (e.target.closest('[data-sm-show]')) {
       const ids = setupHits(setupModel(), setupSel()).map((m) => m.c.id).filter((id) => inBucket.has(id));
