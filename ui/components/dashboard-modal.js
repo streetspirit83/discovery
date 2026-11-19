@@ -14,8 +14,11 @@
  *               Trends, RSI- und SMA200-Extreme). Ein Klick auf eine Zeile geht tiefer
  *               (Cluster → Sektor → Sub-Sektor → Titel), eine Zelle zeigt ihre Titel.
  *               Darunter die Setup-Matrix (components/setup-matrix.js) über denselben Ausschnitt:
- *               Setup-Typ × Signal, Scatter EPS-Wachstum vs. %S200 mit Brush, %S200-Quintile,
- *               Spider je Setup; alle Filter zusammen, Treffer → „In Tabelle öffnen“.
+ *               Setup-Typ × Signal, Scatter EPS-Wachstum vs. %S200 mit Brush, %S200-Quintile;
+ *               alle Filter zusammen, Treffer → „In Tabelle öffnen“. Signal-Matrix und Setup-Teil
+ *               filtern sich gegenseitig (gewählte Signal-Zelle ↔ Setup-Zelle/Quintil/Brush).
+ *               Ganz oben die fünf Mega-Cluster-Icons: Filter für alle Grafiken des Reiters
+ *               (= Drill-down auf den Cluster, nochmal tippen = alle).
  *   Rankings  – Umschalter Live (fünf technische Listen) · KI-Ranking (Sonntag) · Tagessieger.
  *   Rotation  – Tagesbericht der Auto-Rotation.
  *
@@ -33,10 +36,10 @@ import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './
 import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261116d';
-import { buildSetupModel, setupMatrixHtml, setupHits, bindSetupBrush } from './setup-matrix.js?v=20261117a';
+import { buildSetupModel, setupMatrixHtml, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119a';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
-import { MEGA_CLUSTERS, megaClusterOf } from '../lib/sector-clusters.js?v=20260807a';
+import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
 
 /* Icons der Mega-Cluster wie in der Subleiste (`SECTOR_ICONS` in app.js). */
 const MEGA_ICONS = { tech: 'cpu', health: 'heartPulse', consumer: 'shoppingCart', industry: 'factory', finance: 'landmark' };
@@ -74,7 +77,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null }, spiderOff: new Set() };
+    setup: { cell: null, q: null, brush: null } };
   const rk = { tab: 'live', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -253,6 +256,23 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
     return { ...sigCache.get(key), sel: state.sig };
   }
+  /* Verknüpfung Signal-Matrix ↔ Setup-Teil: Die Signal-Matrix zählt nur Titel, die die
+     Setup-Filter (Zelle, Quintil, Brush) erfüllen; die gewählte Signal-Zelle filtert
+     umgekehrt Setup-Matrix, Scatter, Quintile und Trefferliste. */
+  const setupOnly = () => ({ ...state.setup, ids: null });
+  function sigView() {
+    const d = sigData();
+    if (!hasSetupFilter(state.setup)) return d;
+    const ok = new Set(setupHits(setupModel(), setupOnly()).map((m) => m.c.id));
+    return { ...d, columns: d.columns.map((col) => ({ ...col, rows: col.rows.filter((x) => ok.has(x.c.id)) })) };
+  }
+  function setupSel() {
+    const d = sigData();
+    const col = d.sel && d.columns.find((c) => c.key === d.sel.col);
+    if (!col) return setupOnly();
+    const where = d.sel.row === 'all' ? '' : `${d.rows[Number(d.sel.row)]?.name ?? ''} · `;
+    return { ...state.setup, ids: new Set(selectedIds(d)), idsLabel: `${where}${col.title}` };
+  }
   /* Setup-Matrix unter der Signal-Matrix: gleicher Ausschnitt, je Pfad gecacht. */
   const setupCache = new Map();
   function setupModel() {
@@ -262,10 +282,19 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   }
   function dynamicsHtml() {
     if (!base.length) return '<p class="dash-empty">Keine Titel mit TV-Daten – erst TV-Daten laden.</p>';
+    const curMega = dyn.path[0];
+    const segBtns = MEGA_CLUSTERS.map((m) => {
+      const label = megaClusterLabel(m.key);
+      const n = base.filter((c) => megaClusterOf(c.sector) === m.key).length;
+      const act = curMega === label;
+      const tip = act ? `${label} (${n}) · nochmal tippen: alle` : `Nur ${label} (${n}) – gilt für alle Grafiken`;
+      return `<button type="button" class="subnav-alert${act ? ' is-active' : ''}" data-dyn-seg="${esc(label)}" aria-pressed="${act}" title="${esc(tip)}" aria-label="${esc(tip)}"${n ? '' : ' disabled'}>${icons[MEGA_ICONS[m.key]] ?? ''}</button>`;
+    }).join('');
     const crumbs = ['Alle', ...dyn.path].map((name, i) => `${i ? `<span class="md-bc__sep">${icons.chevronRight}</span>` : ''}<button type="button" class="md-bc__btn${i === dyn.path.length ? ' is-current' : ''}" data-dyn-bc="${i}">${esc(name)}</button>`).join('');
-    return `<nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
-      ${signalMatrixHtml(sigData())}
-      ${setupMatrixHtml(setupModel(), state.setup, state.spiderOff)}
+    return `<div class="md-ctl dyn-filter"><div class="lv-filter" role="group" aria-label="Mega-Sektor-Filter">${segBtns}</div></div>
+      <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
+      ${signalMatrixHtml(sigView())}
+      ${setupMatrixHtml(setupModel(), setupSel())}
       <div class="dash-pulse">${pulseBody()}</div>`;
   }
 
@@ -463,7 +492,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       return;
     }
     if (e.target.closest('[data-sig-show]')) {
-      const ids = selectedIds(sigData()).filter((id) => inBucket.has(id));
+      const ids = selectedIds(sigView()).filter((id) => inBucket.has(id));
       if (!ids.length) return;
       ctrl.close();
       onSelectInList?.(ids);
@@ -480,11 +509,9 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
     const smQ = e.target.closest('[data-sm-q]');
     if (smQ) { const q = Number(smQ.dataset.smQ); state.setup.q = state.setup.q === q ? null : q; renderDynamics(); return; }
-    const smSp = e.target.closest('[data-sm-spider]');
-    if (smSp) { const k = smSp.dataset.smSpider; state.spiderOff.has(k) ? state.spiderOff.delete(k) : state.spiderOff.add(k); renderDynamics(); return; }
-    if (e.target.closest('[data-sm-reset]')) { state.setup = { cell: null, q: null, brush: null }; renderDynamics(); return; }
+    if (e.target.closest('[data-sm-reset]')) { state.setup = { cell: null, q: null, brush: null }; state.sig = null; renderDynamics(); return; }
     if (e.target.closest('[data-sm-show]')) {
-      const ids = setupHits(setupModel(), state.setup).map((m) => m.c.id).filter((id) => inBucket.has(id));
+      const ids = setupHits(setupModel(), setupSel()).map((m) => m.c.id).filter((id) => inBucket.has(id));
       if (!ids.length) return;
       ctrl.close();
       onSelectInList?.([...new Set(ids)]);
@@ -492,8 +519,10 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     }
     const drill = e.target.closest('[data-sig-drill]');
     const crumb = e.target.closest('[data-dyn-bc]');
-    if (drill || crumb) {
-      dyn.path = drill ? [...dyn.path, drill.dataset.sigDrill] : dyn.path.slice(0, Number(crumb.dataset.dynBc));
+    const seg = e.target.closest('[data-dyn-seg]');
+    if (drill || crumb || seg) {
+      dyn.path = seg ? (dyn.path[0] === seg.dataset.dynSeg ? [] : [seg.dataset.dynSeg])
+        : drill ? [...dyn.path, drill.dataset.sigDrill] : dyn.path.slice(0, Number(crumb.dataset.dynBc));
       state.sig = null;                          // Zeilen der Matrix ändern sich
       state.setup = { cell: null, q: null, brush: null };   // Quintile und Achsen hängen am Ausschnitt
       renderDynamics();

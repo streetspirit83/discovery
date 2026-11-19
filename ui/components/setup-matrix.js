@@ -7,18 +7,20 @@
  *   2. Scatter EPS-Wachstum (x) gegen %S200 (y) mit Rand-Histogrammen, Quintil-Bändern und
  *      Brush (Rechteck ziehen = Auswahl, kurz tippen = Auswahl weg). Punktfarbe = Setup-Typ.
  *   3. Quintil-Leiste %S200 (Grenzen über den Ausschnitt), Tippen filtert.
- *   4. Spider: Profil je Setup-Typ (Median als Perzentil-Rang im Ausschnitt), Legende schaltet.
  *
  * Alle Filter gelten zusammen (UND). Jede Ansicht zählt mit den Filtern der anderen
- * (Cross-Filter), die Trefferliste darunter mit allen. Reine Darstellung; Zustand und Klicks
- * hält dashboard-modal.js: `data-sm-cell` (Typ|all + Spalte), `data-sm-q`, `data-sm-spider`,
+ * (Cross-Filter), die Trefferliste darunter mit allen. Die gewählte Zelle der Signal-Matrix
+ * (Bullisch · Bärisch · Extreme) kommt als `sel.ids` (Set der Titel-IDs) dazu und filtert
+ * hier mit; umgekehrt zählt die Signal-Matrix mit den Filtern dieser Ansicht
+ * (`setupHits(model, { ...sel, ids: null })`, dashboard-modal.js). Reine Darstellung; Zustand
+ * und Klicks hält dashboard-modal.js: `data-sm-cell` (Typ|all + Spalte), `data-sm-q`,
  * `data-sm-reset`, `data-sm-show`; den Brush meldet `bindSetupBrush`.
  */
 
 import { icons } from '../lib/icons.js?v=20261117a';
 import {
-  setupMetrics, quintileEdges, quintileOf, spiderProfiles, quantile,
-  SETUP_TYPES, SETUP_COLS, SPIDER_AXES, THRESH,
+  setupMetrics, quintileEdges, quintileOf, quantile,
+  SETUP_TYPES, SETUP_COLS, THRESH,
 } from '../lib/setup-metrics.js?v=20261117a';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
@@ -58,7 +60,7 @@ export function buildSetupModel(cands) {
     m.x = m.eps == null ? null : clamp(m.eps, xd);
     m.y = m.s200 == null ? null : clamp(m.s200, yd);
   }
-  return { metrics, edges, xd, yd, profiles: spiderProfiles(metrics),
+  return { metrics, edges, xd, yd,
     cover: { brk: metrics.filter((m) => m.brk != null).length, vol: metrics.filter((m) => m.vol != null).length,
       plot: plotted.length } };
 }
@@ -69,12 +71,13 @@ const COL = Object.fromEntries(SETUP_COLS.map((c) => [c.key, c]));
 const passCell = (m, cell) => !cell || ((cell.type === 'all' || m.setup === cell.type) && COL[cell.col].test(m));
 const passQ = (m, q) => q == null || m.q === q;
 const passBrush = (m, b) => !b || (m.x != null && m.y != null && m.x >= b.x0 && m.x <= b.x1 && m.y >= b.y0 && m.y <= b.y1);
+const passIds = (m, ids) => !ids || ids.has(m.c.id);
 
-/** Titel, die alle aktiven Filter erfüllen. */
+/** Titel, die alle aktiven Filter erfüllen (inkl. Auswahl aus der Signal-Matrix, `sel.ids`). */
 export function setupHits(model, sel) {
-  return model.metrics.filter((m) => passCell(m, sel.cell) && passQ(m, sel.q) && passBrush(m, sel.brush));
+  return model.metrics.filter((m) => passCell(m, sel.cell) && passQ(m, sel.q) && passBrush(m, sel.brush) && passIds(m, sel.ids));
 }
-export const hasSetupFilter = (sel) => !!(sel.cell || sel.q != null || sel.brush);
+export const hasSetupFilter = (sel) => !!(sel.cell || sel.q != null || sel.brush || sel.ids);
 
 /* ── Teile ────────────────────────────────────────────────────────────────── */
 
@@ -85,7 +88,7 @@ function cellStyle(n, max, tone) {
 }
 
 function matrixHtml(model, sel) {
-  const base = model.metrics.filter((m) => passQ(m, sel.q) && passBrush(m, sel.brush));
+  const base = model.metrics.filter((m) => passQ(m, sel.q) && passBrush(m, sel.brush) && passIds(m, sel.ids));
   const rows = [...SETUP_TYPES.map((t) => ({ key: t.key, label: t.label, icon: icons[t.icon], tone: t.tone,
     items: base.filter((m) => m.setup === t.key) })),
   { key: 'all', label: 'Alle Titel', icon: '', tone: '--muted', items: base }];
@@ -150,8 +153,8 @@ function scatterHtml(model, sel) {
   hx.forEach((n, i) => n && parts.push(`<rect x="${SC.l + i * bw + 0.5}" y="${SC.t - 4 - (n / mx) * 24}" width="${bw - 1}" height="${(n / mx) * 24}" class="sm-hist"/>`));
   hy.forEach((n, i) => n && parts.push(`<rect x="${SC.r + 4}" y="${SC.b - (i + 1) * bh + 0.5}" width="${(n / my) * (SC.mr - SC.r - 6)}" height="${bh - 1}" class="sm-hist"/>`));
   // Punkte: erst die abgeblendeten, dann die Treffer obenauf.
-  const lit = (m) => passCell(m, sel.cell) && passQ(m, sel.q);
-  const anyF = sel.cell || sel.q != null;
+  const lit = (m) => passCell(m, sel.cell) && passQ(m, sel.q) && passIds(m, sel.ids);
+  const anyF = !!(sel.cell || sel.q != null || sel.ids);
   const dot = (m, on) => {
     const t = TYPE[m.setup];
     const r = t ? 3.6 : 2.4;
@@ -176,7 +179,7 @@ function quintileHtml(model, sel) {
   const tot = [0, 0, 0, 0, 0], hit = [0, 0, 0, 0, 0];
   for (const m of model.metrics) if (m.q != null) {
     tot[m.q]++;
-    if (passCell(m, sel.cell) && passBrush(m, sel.brush)) hit[m.q]++;
+    if (passCell(m, sel.cell) && passBrush(m, sel.brush) && passIds(m, sel.ids)) hit[m.q]++;
   }
   const max = Math.max(...tot, 1);
   return `<div class="sm-qrow" role="group" aria-label="%S200-Quintile">${tot.map((n, i) => `
@@ -186,31 +189,6 @@ function quintileHtml(model, sel) {
       <span class="sm-q__rng">${sg(edges[i])}…${sg(edges[i + 1])}%</span>
       <span class="sm-q__n">${hit[i]}<small>/${n}</small></span>
     </button>`).join('')}</div>`;
-}
-
-function spiderHtml(model, off) {
-  const cx = 120, cy = 104, R = 74, A = SPIDER_AXES.length;
-  const ang = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / A;
-  const pt = (i, v) => `${(cx + Math.cos(ang(i)) * R * v).toFixed(1)},${(cy + Math.sin(ang(i)) * R * v).toFixed(1)}`;
-  const parts = [];
-  for (const f of [0.25, 0.5, 0.75, 1]) parts.push(`<polygon points="${SPIDER_AXES.map((_, i) => pt(i, f)).join(' ')}" class="sm-ring${f === 0.5 ? ' is-mid' : ''}"/>`);
-  SPIDER_AXES.forEach((a, i) => parts.push(`<line x1="${cx}" y1="${cy}" x2="${pt(i, 1).split(',')[0]}" y2="${pt(i, 1).split(',')[1]}" class="sm-ring"/>`,
-    `<text x="${(cx + Math.cos(ang(i)) * (R + 14)).toFixed(1)}" y="${(cy + Math.sin(ang(i)) * (R + 14) + 4).toFixed(1)}" text-anchor="middle" class="sm-tick">${esc(a.label)}</text>`));
-  const shown = model.profiles.filter((p) => p.n >= 3 && !off.has(p.key));
-  for (const p of shown) {
-    const t = TYPE[p.key];
-    const tip = `${t.label} (${p.n}) · Median ${SPIDER_AXES.map((a, i) => `${a.label} ${a.key === 'rat' ? de(p.medians[i], 2) : pct(p.medians[i], a.key === 's200' ? 1 : 0)}`).join(' · ')}`;
-    parts.push(`<polygon points="${p.values.map((v, i) => pt(i, v ?? 0.5)).join(' ')}" class="sm-poly" style="fill:var(${t.tone});stroke:var(${t.tone})"><title>${esc(tip)}</title></polygon>`);
-  }
-  const legend = model.profiles.map((p) => {
-    const t = TYPE[p.key];
-    const dis = p.n < 3;
-    return `<button type="button" class="sm-leg${off.has(p.key) || dis ? ' is-off' : ''}" data-sm-spider="${p.key}"${dis ? ' disabled title="Weniger als 3 Titel"' : ''}>
-      <span class="sm-ico" style="color:var(${t.tone})">${icons[t.icon]}</span>${esc(t.label)} <small>${p.n}</small></button>`;
-  }).join('');
-  return `<svg class="sm-spider" viewBox="0 0 240 208" role="img" aria-label="Profil je Setup-Typ">${parts.join('')}</svg>
-    <div class="sm-legend">${legend}</div>
-    <p class="md-note">Median je Typ als Rang im Ausschnitt · gestrichelt = Durchschnittstitel</p>`;
 }
 
 function hitRow(m) {
@@ -225,6 +203,7 @@ function hitRow(m) {
 
 function filterLabel(model, sel) {
   const out = [];
+  if (sel.ids) out.push(`Signal: ${sel.idsLabel ?? 'Auswahl'}`);
   if (sel.cell) {
     const t = sel.cell.type === 'all' ? 'Alle Titel' : TYPE[sel.cell.type]?.label;
     out.push(sel.cell.col === 'n' ? t : `${t} + ${COL[sel.cell.col].title.split(' (')[0]}`);
@@ -236,26 +215,22 @@ function filterLabel(model, sel) {
 
 /**
  * @param {object} model    aus buildSetupModel()
- * @param {{cell:{type,col}|null, q:number|null, brush:{x0,x1,y0,y1}|null}} sel
- * @param {Set<string>} spiderOff  ausgeblendete Typen im Spider
+ * @param {{cell:{type,col}|null, q:number|null, brush:{x0,x1,y0,y1}|null, ids?:Set<string>|null, idsLabel?:string}} sel
  */
-export function setupMatrixHtml(model, sel, spiderOff = new Set()) {
+export function setupMatrixHtml(model, sel) {
   if (!model.metrics.length) return '';
   const hits = setupHits(model, sel);
   const active = hasSetupFilter(sel);
   const list = active
     ? (hits.length ? `<div class="dash-group" data-group="setup.hits">${hits
       .sort((a, b) => (b.rat ?? -9) - (a.rat ?? -9)).map(hitRow).join('')}</div>` : '<p class="dash-empty">Kein Titel erfüllt alle Filter.</p>')
-    : '<p class="md-note">Zelle, Quintil oder Rechteck im Scatter wählen; die Filter gelten zusammen.</p>';
+    : '<p class="md-note">Signal- oder Setup-Zelle, Quintil oder Rechteck im Scatter wählen; die Filter gelten zusammen.</p>';
   return `<section class="sm" aria-label="Setups">
     <div class="sm-head"><h3 class="sm-title">Setups</h3>
       <span class="md-note">Schwellen fest: V/Ø30d &gt; ${THRESH.vol} % · Brk↑ &gt; ${THRESH.brk} % · Rat1M &gt; ${de(THRESH.rat, 1)} · Brk↑ für ${model.cover.brk}, V/Ø30d für ${model.cover.vol} von ${model.metrics.length} (LS-Historie)</span></div>
     ${matrixHtml(model, sel)}
-    <div class="sm-grid">
-      <div class="sm-card"><div class="sm-card__head">EPS-Wachstum vs. %S200 <small>${model.cover.plot} Titel · ziehen = Auswahl</small></div>
-        ${scatterHtml(model, sel)}${quintileHtml(model, sel)}</div>
-      <div class="sm-card"><div class="sm-card__head">Profil je Setup</div>${spiderHtml(model, spiderOff)}</div>
-    </div>
+    <div class="sm-card"><div class="sm-card__head">EPS-Wachstum vs. %S200 <small>${model.cover.plot} Titel · ziehen = Auswahl${sel.ids ? ' · Signal-Auswahl hervorgehoben' : ''}</small></div>
+      ${scatterHtml(model, sel)}${quintileHtml(model, sel)}</div>
     <div class="sx-detail sm-hits">
       <div class="sx-detail__head"><span><b>${active ? hits.length : model.metrics.length}</b> ${active ? 'Treffer' : 'Titel'}${active ? ` · ${esc(filterLabel(model, sel))}` : ''}</span>
         <span class="sm-acts">${active ? '<button type="button" class="btn btn-sm btn-secondary" data-sm-reset>Zurücksetzen</button>' : ''}

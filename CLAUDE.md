@@ -284,9 +284,13 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Setups der Trade-Spalte „Setup“ (Blue-Sky · Breakout-Nähe · Pullback · Unter Trend; ➖ Range zählt nicht, `priceSituation`
   liegt seitdem in `setup-metrics.js` und wird von der Tabelle importiert), Spalten = feste Schwellen V/Ø30d > 100 % ·
   Brk↑% > 50 % · Rat1M > 0,6 · alle 3 (`THRESH`); Scatter EPS-Wachstum YoY (TTM, sonst FY) gegen %S200 (TV-Schluss gegen
-  TV-SMA200 wie `sma200DistPct`) mit Rand-Histogrammen und Brush (`bindSetupBrush`), %S200-Quintile über den Ausschnitt,
-  Spider je Setup (Median als Perzentil-Rang). Alle Filter gelten zusammen, jede Ansicht zählt mit den Filtern der
-  anderen; Treffer → „In Tabelle öffnen“. Drill-down setzt die Filter zurück. **Rankings** = Umschalter
+  TV-SMA200 wie `sma200DistPct`) mit Rand-Histogrammen und Brush (`bindSetupBrush`), %S200-Quintile über den Ausschnitt
+  (der Spider ist seit 19.11.2026 entfallen). Alle Filter gelten zusammen, jede Ansicht zählt mit den Filtern der
+  anderen; Treffer → „In Tabelle öffnen“. **Signal-Matrix und Setup-Teil sind verknüpft** (`sigView`/`setupSel` in
+  `dashboard-modal.js`): die gewählte Signal-Zelle (Bullisch · Bärisch · Extreme) filtert Setup-Matrix, Scatter,
+  Quintile und Treffer (`sel.ids`), Setup-Zelle/Quintil/Brush filtern umgekehrt die Zählungen der Signal-Matrix.
+  Ganz oben im Reiter fünf Mega-Cluster-Icons (`data-dyn-seg`) als Filter für alle Grafiken: setzt den Drill-down-Pfad
+  auf den Cluster, nochmal tippen = alle. Drill-down setzt die Filter zurück. **Rankings** = Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
   Auto-Rotation.
 - **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group`,
