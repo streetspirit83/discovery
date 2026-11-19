@@ -1,9 +1,9 @@
 /**
  * Signal-Matrix im Monitor-Reiter „Dynamik“: Zeilen = Gruppen des Ausschnitts (Mega-Cluster,
  * Sektoren, Sub-Sektoren bzw. die Einzeltitel auf der untersten Ebene), Spalten = Signale
- * aus lib/market-signals.js. Jede Zelle zeigt die Anzahl der Titel; die gewählte Zelle
- * klappt darunter ihre Titelliste auf (Zeilen mit `data-id` → Detail-Sheet,
- * `data-sig-show` → „In Tabelle öffnen“).
+ * aus lib/market-signals.js. Jede Zelle zeigt die Anzahl der Titel; die gewählte Zelle ist
+ * markiert. Ihre Titel (mit „In Tabelle öffnen“) stehen nicht hier, sondern in der
+ * gemeinsamen Trefferliste ganz unten im Reiter (setup-matrix.js).
  *
  * Reine Darstellung. Klicks wertet dashboard-modal.js aus: `data-sig-col` + `data-sig-row`
  * (Zeilenindex oder `all`).
@@ -54,27 +54,11 @@ export function signalMatrixHtml({ columns, rows, rowTitle, sel, drill = false }
   const total = rows.length > 1
     ? `<span class="sx-row sx-row--total">Alle</span>${columns.map((c) => cell(c, 'all', 'Alle')).join('')}` : '';
 
-  let detail = '<p class="md-note">Zelle antippen zeigt die Titel dazu.</p>';
-  const col = sel && columns.find((c) => c.key === sel.col);
-  if (col) {
-    const ri = sel.row === 'all' ? 'all' : Number(sel.row);
-    const hits = ri === 'all' || rows[ri] ? hitsOf(col, ri) : [];
-    const where = ri === 'all' ? 'Alle' : rows[ri]?.name ?? '';
-    detail = `<div class="sx-detail">
-      <div class="sx-detail__head"><span>${esc(where)} · ${esc(col.title)} · ${hits.length}</span>
-        ${hits.length ? '<button type="button" class="btn btn-sm btn-secondary" data-sig-show>In Tabelle öffnen</button>' : ''}</div>
-      ${hits.length ? `<div class="dash-group" data-group="sig.sel">${hits.map((x) => `<button class="dash-row dash-row--${col.group === 'bear' ? 'down' : 'up'}" data-id="${esc(x.c.id)}">
-          <span class="dash-row__sym"><span class="dash-sym">${esc(x.c.symbol)}</span><span class="dash-ex">${esc(x.c.name ?? x.c.exchange ?? '')}</span></span>
-          <span class="dash-row__val"><span class="dash-num">${esc(x.val)}</span></span>
-        </button>`).join('')}</div>` : '<p class="dash-empty">Kein Titel.</p>'}
-    </div>`;
-  }
-
   return `<div class="sx-wrap"><div class="sx" style="--sx-cols:${columns.length}" role="group" aria-label="Signal-Matrix">
       <span class="sx-corner"></span>${groupHead}
       <span class="sx-corner sx-corner--title">${esc(rowTitle)}</span>${head}
       ${body}${total}
-    </div></div>${detail}`;
+    </div></div>`;
 }
 
 /** IDs der gewählten Zelle (für „In Tabelle öffnen“). */

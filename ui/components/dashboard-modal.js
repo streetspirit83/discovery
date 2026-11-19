@@ -36,7 +36,7 @@ import { pulse } from '../lib/dashboard-metrics.js?v=20261103h';
 import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './rankings-panel.js?v=20261116a';
 import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
-import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261116d';
+import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
 import { buildSetupModel, setupMatrixHtml, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119a';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
@@ -484,19 +484,12 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       renderLive();
       return;
     }
-    /* Dynamik: Zelle wählen, Zeile aufklappen, Brotkrumen, „In Tabelle öffnen“. */
+    /* Dynamik: Zelle wählen (Titel stehen in der Trefferliste unten), Zeile aufklappen, Brotkrumen. */
     const sigCell = e.target.closest('[data-sig-col]');
     if (sigCell) {
       const { sigRow: row, sigCol: col } = sigCell.dataset;
       state.sig = state.sig && state.sig.row === row && state.sig.col === col ? null : { row, col };
       renderDynamics();
-      return;
-    }
-    if (e.target.closest('[data-sig-show]')) {
-      const ids = selectedIds(sigView()).filter((id) => inBucket.has(id));
-      if (!ids.length) return;
-      ctrl.close();
-      onSelectInList?.(ids);
       return;
     }
     /* Setup-Matrix: Zelle, Quintil, Spider-Legende, Zurücksetzen, „In Tabelle öffnen“. */

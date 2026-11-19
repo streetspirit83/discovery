@@ -280,7 +280,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   ein Klick auf eine Zeile geht tiefer (Cluster → Sektor → Sub-Sektor → Titel, Perspektive `cluster` in
   `lib/market-scope.js`), Spalten = Signale in drei Gruppen Bullisch · Bärisch · Extreme (Score/Momentum/PCHS vs.
   Vortag, MACD-Dreher, SMA-Kreuzungen, Trend, Trend-Radar, RSI ≤ 30 / ≥ 70, SMA200 ab +30 % / −20 %:
-  `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen zeigt die Titel mit „In Tabelle öffnen“. Darunter die **Setup-Matrix**
+  `S200_HIGH`/`S200_LOW`); Zelle = Anzahl, Tippen wählt sie aus; die Titel stehen (seit 19.11.2026) nur in der gemeinsamen Trefferliste ganz
+  unten im Reiter mit „In Tabelle öffnen“, nicht mehr unter der Matrix. Darunter die **Setup-Matrix**
   (`components/setup-matrix.js`, Logik `lib/setup-metrics.js`, seit Nov. 2026) über denselben Ausschnitt: Zeilen = die vier
   Setups der Trade-Spalte „Setup“ (Blue-Sky · Breakout-Nähe · Pullback · Unter Trend; ➖ Range zählt nicht, `priceSituation`
   liegt seitdem in `setup-metrics.js` und wird von der Tabelle importiert), Spalten = feste Schwellen V/Ø30d > 100 % ·
