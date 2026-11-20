@@ -1,0 +1,189 @@
+/**
+ * Markets modal.
+ *
+ * Shows the live market indices (DAX / NASDAQ / NIKKEI / VIX) — moved out of the
+ * Intra-Day modal — and the tabs below: "Markt" (market-dashboard.js: Treemap mit
+ * Drill-down nach Sektoren oder Ländern über den aktiven Bucket, Index-Kacheln,
+ * Top-Mover), "Markets (TV)" (embedded Markets sub-page in an iframe, lädt erst beim
+ * Öffnen des Reiters), "Indices" (indices-panel.js: Branchen / Länder) and "Sektoren".
+ * Opened from the "Markets" slot in the bottom navigation.
+ *
+ * Returns a controller { overlay, show, hide, close }: the app hides the modal while a
+ * detail sheet opened from the Markt tab is showing and restores it afterwards.
+ */
+
+import { icons } from '../lib/icons.js?v=20261103f';
+import { renderSectorHeatmap } from './sector-heatmap.js?v=20260807a';
+import { renderIndicesPanel } from './indices-panel.js?v=20261103f';
+import { createMarketDashboard } from './market-dashboard.js?v=20261116d';
+import { mountIndexNews } from './index-news.js?v=20261119f';
+
+const MARKETS_URL = 'https://streetspirit83.github.io/discovery/markets/?v=20260719f';
+
+const DEFAULT_INDICATORS = [
+  { label: 'DAX',    value: null, change: null, perf1m: null },
+  { label: 'NASDAQ', value: null, change: null, perf1m: null },
+  { label: 'SOX',    value: null, change: null, perf1m: null },
+  { label: 'NIKKEI', value: null, change: null, perf1m: null },
+  { label: 'VIX',    value: null, change: null, perf1m: null },
+];
+
+const PREMARKETS_URL = 'https://edition.cnn.com/markets/premarkets';
+
+const INDICATOR_LINKS = {
+  DAX:    'https://www.tradingview.com/symbols/XETR-DAX/?utm_source=androidapp&utm_medium=share',
+  NASDAQ: 'https://www.tradingview.com/symbols/TVC-NDQ/?utm_source=androidapp&utm_medium=share',
+  SOX:    'https://www.tradingview.com/symbols/NASDAQ-SOX/',
+  NIKKEI: 'https://www.tradingview.com/symbols/TVC-NI225/?utm_source=androidapp&utm_medium=share',
+  VIX:    'https://www.tradingview.com/symbols/CBOE-VIX/?utm_source=androidapp&utm_medium=share',
+};
+
+const fmtPct = (v, dec = 2) => (v == null || Number.isNaN(v) ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(dec)}%`);
+const posNeg = (v) => (v == null ? '' : v >= 0 ? 'pos' : 'neg');
+
+function indicatorChip(i) {
+  const href = INDICATOR_LINKS[i.label];
+  const tip = `${i.label}${i.value != null ? ` ${i.value.toLocaleString('de-DE')}` : ''} · heute ${fmtPct(i.change)} · 1M ${fmtPct(i.perf1m)} – auf TradingView öffnen`;
+  // Narrow stacked chip (STYLEGUIDE.md §5): label / today / 1M, each on its own
+  // short line so four equal blocks fit in ONE non-wrapping row; the 1M line is
+  // one font-step smaller (§2).
+  const inner = `<span class="id-ind__label">${i.label}</span>
+    <span class="id-ind__val ${posNeg(i.change)}">${i.change != null ? fmtPct(i.change, 1) : '–'}</span>
+    <span class="id-ind__m1 ${posNeg(i.perf1m)}">${i.perf1m != null ? fmtPct(i.perf1m, 1) : '–'}<span class="id-ind__m1tag">1M</span></span>`;
+  return href
+    ? `<a class="id-ind id-ind--link" href="${href}" target="_blank" rel="noopener" title="${tip}">${inner}</a>`
+    : `<div class="id-ind" title="${tip}">${inner}</div>`;
+}
+
+export function renderMarketsModal({ indicators, onFetchIndicators, onFetchIndexRows, onFetchHeadlines = null, getHeatCandidates,
+  candidates = [], bucketLabel = '', onOpenDetail, onSelectInList } = {}) {
+  if (document.getElementById('markets-modal-overlay')) return null;
+  let inds = indicators?.length ? indicators : DEFAULT_INDICATORS;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'markets-modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal markets-modal" role="dialog" aria-modal="true" aria-label="Märkte">
+      <div class="modal-header">
+        <h2>${icons.barChart2} Märkte</h2>
+        <div class="modal-header-actions">
+          <a class="link-chip" href="${PREMARKETS_URL}" target="_blank" rel="noopener" title="CNN Pre-Markets öffnen" aria-label="CNN Pre-Markets öffnen">${icons.trendingUp}</a>
+          <button class="icon-btn" id="mk-close" aria-label="Schließen">${icons.xMark}</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="id-indicators" id="mk-indicators">${inds.map(indicatorChip).join('')}</div>
+        <div class="tab-bar mk-tabs" role="tablist">
+          <button class="tab-btn active" data-mktab="market" role="tab" aria-selected="true">Markt</button>
+          <button class="tab-btn" data-mktab="news" role="tab" aria-selected="false">News</button>
+          <button class="tab-btn" data-mktab="markets" role="tab" aria-selected="false">Markets (TV)</button>
+          <button class="tab-btn" data-mktab="indices" role="tab" aria-selected="false">Indices</button>
+          <button class="tab-btn" data-mktab="sectors" role="tab" aria-selected="false">Sektoren</button>
+        </div>
+        <div class="mk-tabpanes">
+          <div class="tab-panel active" data-mkpane="market" role="tabpanel"><div class="md-main" id="mk-market"></div></div>
+          <div class="tab-panel" data-mkpane="news" role="tabpanel"></div>
+          <div class="tab-panel" data-mkpane="markets" role="tabpanel"></div>
+          <div class="tab-panel" data-mkpane="indices" role="tabpanel"></div>
+          <div class="tab-panel" data-mkpane="sectors" role="tabpanel"></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  /* Reiter „Markt“: Dashboard über die Kandidaten des aktiven Buckets. Jede Änderung
+     (Perspektive, Horizont, Farbe, Kachel, Brotkrumen) zeichnet den Reiter neu. */
+  const md = createMarketDashboard({ candidates, onFetchIndexRows });
+  const marketEl = overlay.querySelector('#mk-market');
+  const renderMarket = () => {
+    marketEl.innerHTML = (bucketLabel && md.hasData() ? `<p class="md-note">Basis: ${bucketLabel} · ${candidates.length} Titel</p>` : '') + md.topHtml();
+    md.draw(marketEl);
+  };
+  // click statt pointerup: ein Wisch beim Scrollen soll nichts auslösen.
+  marketEl.addEventListener('click', (e) => {
+    const act = md.handleClick(e);
+    if (act?.show) {
+      if (!act.show.length) return;
+      ctrl.close();
+      onSelectInList?.(act.show);
+      return;
+    }
+    if (act?.changed) {
+      renderMarket();
+      if (e.target.closest('[data-md-tile],[data-md-bc],[data-md-view]')) marketEl.querySelector('.md-bc')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    const hit = e.target.closest('[data-id]');
+    if (hit) {
+      const cand = candidates.find((c) => c.id === hit.dataset.id);
+      if (cand) onOpenDetail?.(cand, ctrl);
+    }
+  });
+
+  // Tab switch; TV sub-page, indices + sector heatmap render lazily on first activation.
+  let frameMounted = false;
+  let indicesMounted = false;
+  let sectorsMounted = false;
+  let newsMounted = false;
+  overlay.querySelectorAll('[data-mktab]').forEach((btn) => {
+    btn.addEventListener('pointerup', () => {
+      overlay.querySelectorAll('[data-mktab]').forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+      overlay.querySelectorAll('[data-mkpane]').forEach((p) => p.classList.toggle('active', p.dataset.mkpane === btn.dataset.mktab));
+      if (btn.dataset.mktab === 'indices' && !indicesMounted) {
+        indicesMounted = true;
+        renderIndicesPanel(overlay.querySelector('[data-mkpane="indices"]'), { onFetchIndexRows });
+      }
+      if (btn.dataset.mktab === 'news' && !newsMounted) {
+        newsMounted = true;
+        mountIndexNews(overlay.querySelector('[data-mkpane="news"]'), { onFetch: onFetchHeadlines });
+      }
+      if (btn.dataset.mktab === 'markets' && !frameMounted) {
+        frameMounted = true;
+        overlay.querySelector('[data-mkpane="markets"]').innerHTML = `<iframe class="markets-frame" src="${MARKETS_URL}" title="Markets (TV)"></iframe>`;
+      }
+      if (btn.dataset.mktab === 'sectors' && !sectorsMounted) {
+        sectorsMounted = true;
+        renderSectorHeatmap(overlay.querySelector('[data-mkpane="sectors"]'), { getCandidates: getHeatCandidates });
+      }
+    });
+  });
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const hidden = () => overlay.style.display === 'none';
+  const ctrl = {
+    overlay,
+    hide: () => { overlay.style.display = 'none'; },
+    show: () => { overlay.style.display = ''; },
+    close,
+  };
+  const onKey = (e) => { if (e.key === 'Escape' && !hidden()) close(); };
+  overlay.querySelector('#mk-close').addEventListener('pointerup', close);
+  overlay.addEventListener('pointerup', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+
+  // Fetch live indices (best-effort) and refresh the chips.
+  (async () => {
+    if (!onFetchIndicators) return;
+    try {
+      const r = await onFetchIndicators();
+      if (Array.isArray(r) && r.length) {
+        inds = r;
+        const el = overlay.querySelector('#mk-indicators');
+        if (el) el.innerHTML = inds.map(indicatorChip).join('');
+      }
+    } catch { /* keep placeholders */ }
+  })();
+
+  renderMarket();
+  md.loadIndices(() => renderMarket());
+
+  return ctrl;
+}

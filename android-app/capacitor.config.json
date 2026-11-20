@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.streetspirit83.discovery",
+  "appName": "Discovery",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b1220"
+  }
+}
