@@ -20,6 +20,7 @@ import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
 import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103b';
 import { rangeInputs, rangeView } from '../lib/range-levels.js?v=20261104a';
 import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261104b';
+import { candidateQuoteEur } from '../lib/alerts.js?v=20261103h';
 import { eurBasisFactor, barsUnitAdj } from '../lib/eur-basis.js?v=20261103h';
 import { reverseDcf, growthLadder, impliedGrowthForValue, fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
 import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIFT_DAMPING } from '../lib/tv-forecast.js?v=20260819a';
@@ -2274,6 +2275,7 @@ export class CandidateDetail {
     trend(autoTrendline(hist, 'day_low', lsF), col('--pos'));
     trend(autoTrendline(hist, 'day_high', lsF), col('--neg'));
 
+    this.wireLevelDrag(el, chart, area, this.alarmLines(c, disp, area, col), disp);
     this.wireChartLevelReadout(el, area, disp);
     chart.timeScale().fitContent();
     this._chart = chart;
@@ -2284,6 +2286,67 @@ export class CandidateDetail {
   // ＋-button in that bar opens the Trigger editor with the shown level.
   // `series.coordinateToPrice(y)` maps the container-relative y to a price; the
   // chart runs in display currency → divide by the EUR→display factor for EUR.
+  /* Alle aktiven Alarm-Levels eines Titels als Preislinien auf `series` (Anzeigewährung), gemeinsam für
+     1J-Kerzen, 10T-LS und Prog.-Chart. Gibt die ziehbaren Linien für `wireLevelDrag` zurück.
+     - Range Sup/Res (`chartRange`, wie Liste und Modal): scharf = gestrichelt/kräftig („Sup Alarm"),
+       sonst gepunktet/dünn (nur angezeigt).
+     - Preis-Alerts (`price_above/below`) und abweichende Range-Alarme (`wr_sup_/wr_res_`): gestrichelt.
+     - Dynamische Alarme: `ma20/50/200_below` auf dem aktuellen SMA-Wert, `cross_below_sup/above_res`
+       auf dem aktuellen Cluster (Werte aus `candidateQuoteEur`, dieselben, gegen die geprüft wird).
+       Ziehen macht daraus einen festen Preis-Alert (`moveAlert`).
+     RSI/MACD haben kein Preislevel und erscheinen nicht. */
+  alarmLines(c, disp, series, col) {
+    const drags = [];
+    const rg = chartRange(c, disp);
+    const armed = armedLevels(c);
+    const alarmOn = rangeAlarmOn(c);
+    const onLevel = (thr, lvl) => thr > 0 && lvl > 0 && Math.abs(thr / lvl - 1) < 0.002;
+    const rangeLine = (side, lvl, color, name) => {
+      if (!rg || !(lvl > 0)) return;
+      const on = alarmOn && onLevel(armed[side], lvl);
+      const price = lvl * rg.k;
+      const line = series.createPriceLine({ price, color, lineWidth: on ? 2 : 1, lineStyle: on ? 2 : 1, title: `${name}${on ? ' Alarm' : ''}` });
+      drags.push({ line, price, kind: side, k: rg.k, color });
+    };
+    rangeLine('sup', rg?.v.sup, col('--pos'), 'Sup');
+    rangeLine('res', rg?.v.res, col('--neg'), 'Res');
+    const alertF = lsDisplayFactor(disp);
+    if (alertF == null) return drags;
+    let q = null;
+    const quote = () => (q ??= candidateQuoteEur(c));
+    const DYN = {
+      ma20_below: ['ma20', '--sma-20', '≤ SMA20'], ma50_below: ['ma50', '--sma-50', '≤ SMA50'],
+      ma200_below: ['ma200', '--sma-200', '≤ SMA200'],
+      cross_below_sup: ['sup', '--pos', '≤ Sup-Cluster'], cross_above_res: ['res', '--neg', '≥ Res-Cluster'],
+    };
+    for (const al of c.alerts ?? []) {
+      if (!al || al.enabled === false) continue;
+      let eur, color, title;
+      if (al.type === 'price_above' || al.type === 'price_below') {
+        if (!(al.threshold > 0) || onLevel(al.threshold, rg?.v.sup) || onLevel(al.threshold, rg?.v.res)) continue;
+        const wr = /^wr_(sup|res)_/.exec(String(al.id ?? ''))?.[1];
+        eur = al.threshold;
+        color = wr === 'sup' ? col('--pos') : wr === 'res' ? col('--neg') : col('--accent');
+        title = wr ? `${wr === 'sup' ? 'Sup' : 'Res'} Alarm` : `Alert ${al.type === 'price_above' ? '≥' : '≤'}`;
+        const price = eur * alertF;
+        const line = series.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, title });
+        // Ein abweichender Range-Alarm verschiebt die Range-Seite, nicht nur den Alert.
+        drags.push(wr && rg ? { line, price, kind: wr, k: rg.k, color } : { line, price, kind: 'alert', alert: al, k: alertF, color });
+        continue;
+      }
+      const dyn = DYN[al.type];
+      if (!dyn) continue;
+      eur = quote()[dyn[0]];
+      if (!(eur > 0)) continue;
+      color = col(dyn[1]) || col('--accent');
+      title = `Alarm ${dyn[2]}`;
+      const price = eur * alertF;
+      const line = series.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, title });
+      drags.push({ line, price, kind: 'alert', alert: al, k: alertF, color });
+    }
+    return drags;
+  }
+
   /* Alarm-Linien im Kerzen-Chart ziehen (Maus und Touch). Ein Druck nahe einer Linie (±10 px, Touch
      ±18 px) greift sie, Scrollen/Zoomen des Charts und das Wischen des Sheets ruhen solange. Beim
      Loslassen: Sup/Res → manuelles Level auf dieser Seite, Range-Alarm scharf (`moveRangeLevel`);
@@ -2451,40 +2514,11 @@ export class CandidateDetail {
     (a.support ?? []).forEach((z) => zoneLine(z, col('--pos')));
     (a.resistance ?? []).forEach((z) => zoneLine(z, col('--neg')));
 
-    // Watch-Range-Levels wie in Liste und Modal (EUR → Anzeige). Scharf (Alarm am Level) = gestrichelt
-    // und kräftig, nur angezeigt = gepunktet und dünn. Preis-Alerts und ein abweichender Range-Alarm
-    // bekommen eine eigene gestrichelte Linie. Alle diese Linien lassen sich ziehen (wireLevelDrag):
-    // beim Loslassen steht das Level neu und der Alarm ist dort scharf.
-    const rg = chartRange(c, disp);
-    const armed = armedLevels(c);
-    const alarmOn = rangeAlarmOn(c);
-    const onLevel = (thr, lvl) => thr > 0 && lvl > 0 && Math.abs(thr / lvl - 1) < 0.002;
-    const drags = [];   // { line, price, kind: 'sup'|'res'|'alert', alert?, k }
-    const rangeLine = (side, lvl, color, name) => {
-      if (!rg || !(lvl > 0)) return;
-      const on = alarmOn && onLevel(armed[side], lvl);
-      const price = lvl * rg.k;
-      const line = candle.createPriceLine({ price, color, lineWidth: on ? 2 : 1, lineStyle: on ? 2 : 1, title: `${name}${on ? ' Alarm' : ''}` });
-      drags.push({ line, price, kind: side, k: rg.k, color });
-    };
-    rangeLine('sup', rg?.v.sup, col('--pos'), 'Sup');
-    rangeLine('res', rg?.v.res, col('--neg'), 'Res');
+    // Alle aktiven Alarm-Levels (Range Sup/Res, Preis-, SMA- und Cluster-Alarme), im Vollbild ziehbar.
+    const drags = this.alarmLines(c, disp, candle, col);
     this.el.querySelector('#chart-range-alarm')?.addEventListener('click', () => {
       this.onAction?.('rangeAlarm', c, { on: !rangeAlarmOn(c) });
     });
-    const alertF = lsDisplayFactor(disp);
-    if (alertF != null) {
-      for (const al of c.alerts ?? []) {
-        if (!al || al.enabled === false || !(al.threshold > 0) || (al.type !== 'price_above' && al.type !== 'price_below')) continue;
-        if (onLevel(al.threshold, rg?.v.sup) || onLevel(al.threshold, rg?.v.res)) continue;
-        const wr = /^wr_(sup|res)_/.exec(String(al.id ?? ''))?.[1];
-        const color = wr === 'sup' ? col('--pos') : wr === 'res' ? col('--neg') : col('--accent');
-        const price = al.threshold * alertF;
-        const line = candle.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, title: wr ? `${wr === 'sup' ? 'Sup' : 'Res'} Alarm` : 'Alert' });
-        // Ein abweichender Range-Alarm verschiebt die Range-Seite, nicht nur den Alert.
-        drags.push(wr && rg ? { line, price, kind: wr, k: rg.k, color } : { line, price, kind: 'alert', alert: al, k: alertF, color });
-      }
-    }
     this.wireLevelDrag(el, chart, candle, drags, disp);
 
     /* SMA 20/50/100/200 als Kurven statt als waagerechte Linien: der TV-Wert ist
@@ -2727,6 +2761,7 @@ export class CandidateDetail {
     }
 
     // Zusatzlinien: ATH als Deckel, Fair Value als Bewertungsanker.
+    this.alarmLines(c, disp, candle, col);   // aktive Alarm-Levels (hier ohne Ziehen, kein Vollbild)
     if (fi.ath != null) {
       candle.createPriceLine({ price: fi.ath, color: col('--warn'), lineWidth: 1, lineStyle: 2, title: 'ATH', axisLabelVisible: false });
     }

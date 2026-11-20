@@ -174,7 +174,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `docs/FORECAST_SPEC.md`.
   Der 1J-Chart (TD- wie Yahoo-Kerzen) zeichnet zusätzlich die **Watch-Range-Levels** (`chartRange`, gleiche
   Rechnung wie Liste und Modal): scharf = gestrichelt, kräftig, Titel „Sup Alarm"/„Res Alarm"; nur angezeigt =
-  gepunktet, dünn. Aktive Preis-Alerts und ein abweichender Range-Alarm stehen ebenfalls gestrichelt.
+  gepunktet, dünn. Alle übrigen aktiven Alarme mit Preislevel stehen ebenfalls gestrichelt (`alarmLines`, gemeinsam für 1J,
+  10T und Prog.-Chart): Preis-Alerts, abweichende Range-Alarme, `ma20/50/200_below` auf dem aktuellen SMA-Wert und
+  `cross_below_sup/above_res` auf dem aktuellen Cluster (Werte aus `candidateQuoteEur`); RSI/MACD haben kein Level.
+  Ein gezogener SMA-/Cluster-Alarm wird zum festen Preis-Alert („Manuell (vorher SMA50)“). Im Prog.-Chart nicht ziehbar.
   **Alle diese Linien lassen sich ziehen, aber nur in der vergrösserten Ansicht** (`.chart-fs.is-fs`; `wireLevelDrag`, Maus und Touch, Fangbereich ±10/±18 px, Chart-Pan
   und Sheet-Wischen ruhen dabei): Sup/Res → Aktion `moveRangeLevel` (`saveRangeLevel`, manuelles Level, Range-Alarm
   scharf), Preis-Alert → `moveAlert` (neue Schwelle, aktiv, `created_at` neu, Richtung nach Lage zum LS-Kurs). Der Knopf „Sup/Res" in der Level-Leiste schaltet den Range-Alarm (Aktion `rangeAlarm`,

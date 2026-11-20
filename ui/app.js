@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261117a';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261119f';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261120a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
@@ -2263,11 +2263,16 @@ async function handleAction(action, candidate, extras = {}) {
     const old = list.find((a) => a?.id === extras.alertId);
     const thr = +extras.priceEur;
     if (!old || !(thr > 0)) return;
+    // Dynamische Alarme (SMA, Cluster) werden beim Ziehen zum festen Preis-Alert.
+    const DYN_LABEL = { ma20_below: 'SMA20', ma50_below: 'SMA50', ma200_below: 'SMA200', cross_below_sup: 'Sup-Cluster', cross_above_res: 'Res-Cluster' };
+    const dyn = DYN_LABEL[old.type];
     const p = +candidate.ls_quote?.price;
-    const type = p > 0 ? (thr >= p ? 'price_above' : 'price_below') : old.type;
+    const fallback = old.type === 'price_above' || old.type === 'cross_above_res' ? 'price_above' : 'price_below';
+    const type = p > 0 ? (thr >= p ? 'price_above' : 'price_below') : fallback;
     const moved = {
       ...old, threshold: thr, type, enabled: true, created_at: new Date().toISOString(),
-      ...(old.basis?.kind === 'entry_pct' ? { label: 'Manuell', basis: { kind: 'manual' } } : {}),
+      ...(dyn ? { label: `Manuell (vorher ${dyn})`, basis: { kind: 'manual' } }
+        : old.basis?.kind === 'entry_pct' ? { label: 'Manuell', basis: { kind: 'manual' } } : {}),
     };
     const before = candidate.alerts;
     const alerts = list.map((a) => (a === old ? moved : a));
