@@ -2,7 +2,7 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261117a';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261120b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
 import { CandidateDetail } from './components/candidate-detail.js?v=20261120a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
@@ -20,12 +20,12 @@ import { renderDashboardModal } from './components/dashboard-modal.js?v=20261119
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261118b';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261120b';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261117a';
+import { renderControlModal } from './components/control-modal.js?v=20261120b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261107f';
 import { enrichBulk } from './lib/claude-api.js';
@@ -59,6 +59,7 @@ const luc = (d, s = 20) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 
 const L = {
+  filter:   luc('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>'),
   refresh:  luc('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
   zap:      luc('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
   upload:   luc('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
@@ -861,14 +862,27 @@ function renderSelectedPill() {
   const wrap = document.getElementById('pill-selected-wrap');
   if (!wrap || !candidateList) return;
   const count = candidateList.selected.size;
-  if (count === 0) { wrap.innerHTML = ''; return; }
+  const pinned = candidateList.pinIds?.size ?? 0;
+  // Geöffnete Trefferliste (Monitor/Markets/Scout): eigene Pille, × zeigt wieder alle.
+  const pinPill = pinned
+    ? `<button class="pill pill--active" id="pill-pinned" title="Geöffnete Trefferliste – × zeigt wieder alle Titel">
+        <span>${L.filter} ${pinned} Titel</span>
+        <span class="pill__x" role="button" aria-label="Trefferliste schliessen">×</span>
+      </button>`
+    : '';
+  if (count === 0) {
+    wrap.innerHTML = pinPill;
+    document.getElementById('pill-pinned')?.addEventListener('click', () => { candidateList.clearPinned(); renderSelectedPill(); });
+    return;
+  }
 
   const active = candidateList.showSelectedOnly;
-  wrap.innerHTML =
+  wrap.innerHTML = pinPill +
     `<button class="pill pill--select${active ? ' pill--active' : ''}" id="pill-selected" title="Nur ausgewählte anzeigen">
       <span>✔️ (${count})</span>
       <span class="pill__x" id="pill-selected-clear" role="button" aria-label="Auswahl leeren">×</span>
     </button>`;
+  document.getElementById('pill-pinned')?.addEventListener('click', () => { candidateList.clearPinned(); renderSelectedPill(); });
 
   document.getElementById('pill-selected').addEventListener('click', (e) => {
     if (e.target.closest('#pill-selected-clear')) {
@@ -1491,6 +1505,35 @@ async function openBriefingHit(hit, ctrl = null) {
   return true;
 }
 
+/* Trefferliste in der Tabelle: nur diese Titel, nichts ausgewählt — Häkchen setzt man danach selbst. */
+function showPinnedInList(ids, note = '') {
+  if (!ids?.length) return;
+  candidateList.setPinned(ids);
+  renderSelectedPill();
+  window.scrollTo(0, 0);
+  toast(`${ids.length} Titel in der Tabelle${note}`, 'success', note ? 4000 : 2000);
+}
+
+/* Scout › „In Tabelle öffnen“: Treffer liegen in verschiedenen Buckets. Watch/Archiv → „Watch + Archiv“
+   (oder der aktive der beiden, wenn alle dort liegen), sonst der Bucket mit den meisten Treffern. */
+async function showBriefingHitsInList(hits, ctrl = null) {
+  const list = (hits ?? []).filter(Boolean);
+  if (!list.length) { toast('Keiner dieser Titel liegt im Workspace', 'info', 3000); return; }
+  const by = (b) => list.filter((h) => h.bucket === b);
+  const wa = list.filter((h) => h.bucket === 'watch' || h.bucket === 'archive');
+  const counts = ['inbox', 'export'].map((b) => [b, by(b).length]).concat([['wa', wa.length]]).sort((a, b) => b[1] - a[1]);
+  let target = counts[0][0];
+  if (target === 'wa') {
+    target = wa.every((h) => h.bucket === currentBlobType) ? currentBlobType : currentBlobType === 'all' || wa.some((h) => h.bucket !== wa[0].bucket) ? 'all' : wa[0].bucket;
+  }
+  if (target !== currentBlobType) await switchBlob(target);
+  const have = new Set((allBlobs[currentBlobType]?.candidates ?? []).map((c) => c.id));
+  const ids = [...new Set(list.map((h) => h.id))].filter((id) => have.has(id));
+  const rest = list.length - ids.length;
+  ctrl?.close();
+  showPinnedInList(ids, rest > 0 ? ` · ${rest} weitere in anderen Buckets` : '');
+}
+
 function openMarketBriefing(kind = null) {
   if (useMock || !storageClient) {
     toast('Marktbriefing braucht ein Backend – Einstellungen öffnen.', 'error', 4000);
@@ -1500,6 +1543,7 @@ function openMarketBriefing(kind = null) {
     loadBriefings: async () => (await storageClient.readBlob('market'))?.briefings ?? [],
     loadCandidates: briefingCandidates,
     onOpenCandidate: (hit, ctrl) => openBriefingHit(hit, ctrl),
+    onShowInList: (hits, ctrl) => showBriefingHitsInList(hits, ctrl),
     onScoutAdd: openScoutImport,
     loadScout: () => storageClient.readBlob('scout'),
     kind,
@@ -2953,15 +2997,8 @@ async function init() {
 
   document.getElementById('nav-bucket').addEventListener('pointerup', openBucketSheet);
 
-  // Titel aus Monitor/Markets in der Liste zeigen: auswählen, „nur Auswahl“ an → Bulk-Leiste.
-  const showInList = (ids) => {
-    if (!ids.length) return;
-    candidateList.setSelection(ids);
-    candidateList.setShowSelectedOnly(true);
-    renderSelectedPill();
-    window.scrollTo(0, 0);
-    toast(`${ids.length} Titel ausgewählt`, 'success');
-  };
+  // Titel aus Monitor/Markets/Scout in der Liste zeigen: nur diese Zeilen, ohne Häkchen (setPinned).
+  const showInList = (ids) => showPinnedInList(ids);
 
   // Markets slot → open the Markets modal (Markt-Dashboard, TV sub-page, indices).
   document.getElementById('nav-markets').addEventListener('pointerup', () => {

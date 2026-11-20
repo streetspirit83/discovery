@@ -850,6 +850,7 @@ export class CandidateList {
     this.sort              = { column: 'discovered', direction: 'desc' };
     this.selected          = new Set();
     this.showSelectedOnly  = false;
+    this.pinIds            = null;   // Set: aus Monitor/Scout geöffnete Titel (Filter ohne Häkchen)
     this.viewMode          = 'standard';
     this.bucket            = 'inbox'; // aktiver Blob (Watch-Label nur im Watch-Bucket)
     this.dupMap            = null;   // "EXCH:SYMBOL" → Bucket-Name (Dup-Marker)
@@ -912,6 +913,7 @@ export class CandidateList {
 
   setFilter(key, value) {
     this.filters[key] = value;
+    this.pinIds = null;          // ein Filterwechsel verlässt die geöffnete Trefferliste
     this.selected.clear();
     this.showSelectedOnly = false;
     // When a filter is active, auto-select the visible rows so bulk actions
@@ -920,6 +922,26 @@ export class CandidateList {
     if (anyActive) for (const c of this.getFiltered()) this.selected.add(c.id);
     this.renderRows();
     this.renderBulkBar();
+  }
+
+  /** Titel aus Monitor/Markets/Scout zeigen: nur diese Zeilen, ohne sie auszuwählen. Die übrigen Filter
+   *  ruhen solange (sonst blendete z. B. der ★-Start-Filter Treffer aus), die Suche gilt weiter. Häkchen
+   *  setzt man danach selbst. Gilt bis `clearPinned` oder zum Bucket-Wechsel. */
+  setPinned(ids) {
+    this.pinIds = ids?.length ? new Set(ids) : null;
+    this.selected.clear();
+    this.showSelectedOnly = false;
+    this.renderRows();
+    this.renderBulkBar();
+    this.onSelectionChange?.();
+  }
+
+  clearPinned() {
+    if (!this.pinIds) return;
+    this.pinIds = null;
+    this.renderRows();
+    this.renderBulkBar();
+    this.onSelectionChange?.();
   }
 
   setShowSelectedOnly(value) {
@@ -1034,6 +1056,7 @@ export class CandidateList {
   setBucket(bucket) {
     if (this.bucket === bucket) return;
     this.bucket = bucket;
+    this.pinIds = null;
     this.renderThead();
     this.renderRows();
   }
@@ -1081,6 +1104,11 @@ export class CandidateList {
     // Ein-Element-Auswahl behandelt.
     const asArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
     const fSector = asArr(sector), fCap = asArr(capSize), fScore = asArr(score), fTr = asArr(tr), fTrendV = asArr(fTrend), fMega = asArr(mega);
+    if (this.pinIds) {
+      return this.candidates.filter((c) => this.pinIds.has(c.id)
+        && (!this.showSelectedOnly || this.selected.has(c.id))
+        && (!search || matchesSearch(c, search)));
+    }
     return this.candidates.filter((c) => {
       if (this.showSelectedOnly && !this.selected.has(c.id))    return false;
       if (search && !matchesSearch(c, search))                  return false; // Topbar-Suche

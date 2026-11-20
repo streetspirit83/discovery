@@ -326,12 +326,12 @@ function renderScoutDay(r, find) {
       <p class="bf-summary">${esc(lead)}</p>
       <p class="bf-foot pv-muted">Alle neuen Titel landen automatisch in der Inbox. Hochstufungen bewegen den Kurs meist am selben Tag, eine verlässliche Nachdrift zeigt der Backtest nicht. Der Scout findet Titel, ob sie bleiben, entscheidet die Rotation.${gap ? ' Zwischen zwei Abrufen können Meldungen fehlen.' : ''}${errs.length ? ` Nicht erreichbar: ${esc(errs.join(', '))}.` : ''}</p>
     </header>
-    <section class="bf-section" data-toc="Neue Titel"><h3 class="bf-h">Neue Titel <span class="mb-tag">· stark und knapp</span></h3>
+    <section class="bf-section" data-toc="Neue Titel"><h3 class="bf-h">Neue Titel <span class="mb-tag">· stark und knapp</span>${items.length ? ' <button type="button" class="btn btn-sm btn-secondary" data-scout-list="new" title="Alle neu gefundenen Titel in der Tabelle zeigen (ohne Häkchen)">In Tabelle öffnen</button>' : ''}</h3>
       ${main.length ? list(main) : '<p class="pv-muted">Keiner über oder knapp unter der Schwelle.</p>'}
       ${weak.length ? `<details class="mb-more"><summary>${weak.length} schwach</summary>${list(weak)}</details>` : ''}
       ${rest.length ? `<details class="mb-more"><summary>${rest.length} klein oder ohne Daten</summary>${list(rest)}</details>` : ''}
     </section>
-    <section class="bf-section" data-toc="Bestand neu bewertet"><h3 class="bf-h">Bestand neu bewertet <span class="mb-tag">· ${esc(String(known.length))} Titel, letzte 4 Tage</span></h3>
+    <section class="bf-section" data-toc="Bestand neu bewertet"><h3 class="bf-h">Bestand neu bewertet <span class="mb-tag">· ${esc(String(known.length))} Titel, letzte 4 Tage</span>${known.length ? ' <button type="button" class="btn btn-sm btn-secondary" data-scout-list="known" title="Diese Titel in der Tabelle zeigen (ohne Häkchen)">In Tabelle öffnen</button>' : ''}</h3>
       ${known.length ? `<ul class="mb-list">${known.map((u) => knownItem(u, find)).join('')}</ul>` : '<p class="pv-muted">Keine neuen Analystenmeldungen zu Titeln der App.</p>'}
     </section>`;
 }
@@ -622,6 +622,7 @@ const kindOf = (b) => (b?.kind === 'scout_day' ? 'scout' : b?.kind ?? 'daily');
  * @param {function} opts.loadBriefings    – async () => Briefing[] (neueste zuerst)
  * @param {function} opts.loadCandidates   – async () => [{id, symbol, exchange, bucket}]
  * @param {function} opts.onOpenCandidate  – (hit, ctrl) => void
+ * @param {function} [opts.onShowInList]  – (hits, ctrl) => void; Scout › „In Tabelle öffnen“
  * @param {function} [opts.loadScout]      – async () => scout-Blob { mode, reports[] }
  * @returns {object} ctrl {hide, show, close}
  */
@@ -682,6 +683,13 @@ export function renderMarketBriefingModal(opts = {}) {
   body.addEventListener('click', async (e) => {
     const sv = e.target.closest('[data-scout-view]');
     if (sv) { scoutView = sv.dataset.scoutView; renderScoutTab(); return; }
+    const sl = e.target.closest('[data-scout-list]');
+    if (sl) {
+      const r = current[Number(pick.value) || 0];
+      const rows = sl.dataset.scoutList === 'known' ? (r?.known ?? []) : (r?.items ?? []);
+      opts.onShowInList?.(rows.map((x) => find(x.symbol, x.exchange)).filter(Boolean), ctrl);
+      return;
+    }
     const addDay = e.target.closest('[data-scout-day]');
     if (addDay) {
       const x = current[Number(pick.value) || 0]?.items?.[Number(addDay.dataset.scoutDay)];

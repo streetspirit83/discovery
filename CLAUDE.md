@@ -310,7 +310,13 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group`,
   jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
   MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen. Nur Titel des aktiven Buckets zählen. Leiste unten
-  „N markiert · In Liste zeigen“ → `showInList` in `app.js`: `setSelection` + „nur Auswahl“ → Bulk-Leiste.
+  „N markiert · In Liste zeigen“ → `showInList` in `app.js`.
+- **„In Tabelle öffnen“ (Monitor, Markets, Scout; seit 20.11.2026):** zeigt die Titel als **Trefferliste ohne Häkchen**
+  (`candidateList.setPinned(ids)`, `showPinnedInList` in `app.js`), Häkchen setzt man danach selbst. Die übrigen Filter
+  ruhen solange (der ★-Start-Filter blendete sonst Treffer aus), die Suche gilt weiter. Pille „⧩ N Titel ×“ in der
+  Filterleiste schliesst sie; ein Filterwechsel oder Bucket-Wechsel ebenso. Scout › Heute hat den Knopf bei „Neue Titel“
+  und „Bestand neu bewertet“ (`showBriefingHitsInList`: Watch/Archiv → „Watch + Archiv“, sonst der Bucket mit den
+  meisten Treffern; Titel in anderen Buckets nennt der Toast).
 - `screener-modal.js`, `dashboard-modal.js`, `markets-modal.js`,
   `settings-modal.js`, `upload-modal.js`, `export-modal.js`.
 
