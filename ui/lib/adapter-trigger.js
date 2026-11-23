@@ -23,6 +23,7 @@ export const ADAPTERS = [
   { key: 'yahoo-trending',        label: 'Yahoo Trending',       workflow: 'adapter-yahoo-trending.yml' },
   { key: 'yahoo-growth',          label: 'Yahoo Growth Stocks',  workflow: 'adapter-yahoo-growth.yml' },
   { key: 'tradingview-screener',  label: 'TradingView Screener', workflow: 'adapter-tradingview-screener.yml' },
+  { key: 'sector-rotation',       label: 'Sektor-Rotation',      workflow: 'adapter-sector-rotation.yml' },
 ];
 
 /** True if a GitHub PAT is configured in settings. */

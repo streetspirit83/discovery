@@ -50,7 +50,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js?v=20261103f';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
-import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
+import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20261123a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260818a';
 
