@@ -19,7 +19,8 @@
  * Rotations-Schwelle, dazu „Bestand neu bewertet“) und **Woche** = der KI-Scout vom Samstag (market-Blob).
  */
 
-import { icons } from '../lib/icons.js?v=20261103f';
+import { icons } from '../lib/icons.js?v=20261123a';
+import { zoomScatterHtml, zsClick, zsVisible, bindZoomScatter } from './zoom-scatter.js?v=20261123a';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 const nf = (d) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -306,6 +307,71 @@ function scoutModeBar(view) {
   return `${views}<p class="rk-stand">Alle neu gefundenen Titel gehen automatisch in die Inbox, die Auto-Rotation entscheidet. Läuft alle 2 Stunden.</p>`;
 }
 
+/* ── Analysten-Mapping (Scout › Heute, ganz oben, seit 23.11.2026) ──────────
+   x = %S200 (TV-Schluss gegen TV-SMA200), y = +% Kursziel: das in der Meldung genannte Ziel
+   gegen den TV-Schluss (`target_gap`), sonst der Konsens (TV-PTØ bzw. `analyst_upside`).
+   Farbe = Neue Titel · Bestand mit positiver · Bestand mit negativer Meldung. Zoom und
+   Tabelle über components/zoom-scatter.js; der Zustand lebt je Modal in `scoutZs`. */
+let scoutZs = { map: { zoom: [], off: new Set() } };
+const MAP_GROUPS = [
+  { key: 'new', label: 'Neue Titel', tone: '--series-1' },
+  { key: 'up', label: 'Bestand ↑', tone: '--series-3' },
+  { key: 'down', label: 'Bestand ↓', tone: '--series-2' },
+];
+const MAP_CLAMP = { x0: -60, x1: 150, y0: -60, y1: 200 };
+function mapPoints(r, find) {
+  const pts = [];
+  const add = (x, group, src) => {
+    const hit = find(x.symbol, x.exchange);
+    const s200 = x.s200 ?? hit?.s200 ?? null;
+    const named = x.target_gap ?? null;
+    const up = named ?? (src === 'new' ? x.analyst_upside : null) ?? hit?.pt_up ?? null;
+    if (s200 == null || up == null) return;
+    const key = `${x.symbol}:${x.exchange ?? ''}`;
+    const cx = Math.max(MAP_CLAMP.x0, Math.min(MAP_CLAMP.x1, s200)), cy = Math.max(MAP_CLAMP.y0, Math.min(MAP_CLAMP.y1, up));
+    pts.push({ id: key, open: hit?.id ?? key, x: cx, y: cy, group, sym: x.symbol, row: x, hit, s200, up, named: named != null,
+      tip: `${x.symbol} · Ziel ${pct(up)} (${named != null ? 'Meldung' : 'Konsens'}) · %S200 ${pct(s200)}${x.firm ? ` · ${x.firm}` : ''}` });
+  };
+  for (const x of r.items ?? []) add(x, 'new', 'new');
+  for (const u of r.known ?? []) add(u, KIND_TONE[u.kind] === 'neg' ? 'down' : 'up', 'known');
+  return pts;
+}
+function mapDomain(pts) {
+  if (!pts.length) return { x0: -20, x1: 40, y0: -10, y1: 50 };
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const pad = (lo, hi) => { lo = Math.min(lo, 0); hi = Math.max(hi, 0); const d = Math.max(hi - lo, 10) * 0.08; return [lo - d, hi + d]; };
+  const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
+  return { x0, x1, y0, y1 };
+}
+function mapTable(rows) {
+  const g = Object.fromEntries(MAP_GROUPS.map((x) => [x.key, x]));
+  return `<ul class="mb-list zs-maplist">${rows.map((ps) => ps[0]).sort((a, b) => b.up - a.up).map((p) => `<li class="zs-maprow">
+      <span class="zs-leg__dot" style="background:var(${g[p.group].tone})" title="${esc(g[p.group].label)}"></span>
+      <span class="zs-maprow__id">${p.hit ? `<button type="button" class="mb-sym" data-id="${esc(p.hit.id)}" title="Detail öffnen">${esc(p.sym)}</button>` : `<span class="mb-sym mb-sym--plain">${esc(p.sym)}</span>`}
+        <span class="pv-muted">${esc(p.row.name ?? p.hit?.name ?? '')}</span></span>
+      <span class="zs-maprow__val"><span class="${tone(p.up)}">Ziel ${esc(pct(p.up))}</span><small>${p.named ? 'Meldung' : 'Konsens'}</small>
+        <span class="${tone(p.s200)}">S200 ${esc(pct(p.s200))}</span>${p.row.firm ? `<small>${esc(p.row.firm)}</small>` : ''}</span>
+    </li>`).join('')}</ul>`;
+}
+function analystMapHtml(r, find) {
+  const pts = mapPoints(r, find);
+  if (!pts.length) return '';
+  const full = mapDomain(pts);
+  return `<section class="bf-section" data-toc="Analysten-Mapping">${zoomScatterHtml({
+    key: 'map', points: pts, full, st: scoutZs.map, groups: MAP_GROUPS,
+    title: 'Analysten-Mapping', xLabel: '%S200 (Abstand zur SMA200)', yLabel: '+% Kursziel', xShort: '%S200', yShort: 'Ziel',
+    refs: [{ axis: 'x', v: 0 }, { axis: 'y', v: 0 }],
+    quads: [{ x: 'l', y: 't', text: 'Ziel weit · unter Trend' }, { x: 'r', y: 't', text: 'Ziel weit · im Trend' }, { x: 'r', y: 'b', text: 'Ziel erreicht', cls: 'sm-quad zs-quad--warn' }],
+    tableHtml: mapTable,
+    note: `${pts.length} von ${(r.items?.length ?? 0) + (r.known?.length ?? 0)} Titeln mit Kursziel und SMA200 · Ziel aus der Meldung gegen den TV-Schluss, sonst Konsens · Ausreisser am Rand gekappt (%S200 ${MAP_CLAMP.x0}…+${MAP_CLAMP.x1} %, Ziel ${MAP_CLAMP.y0}…+${MAP_CLAMP.y1} %)`,
+  })}</section>`;
+}
+/** Titel im aktuellen Ausschnitt des Mappings (für „In Tabelle öffnen“). */
+function mapHits(r, find) {
+  const pts = mapPoints(r, find);
+  return [...new Map(zsVisible(pts, mapDomain(pts), scoutZs.map).filter((p) => p.hit).map((p) => [p.hit.id, p.hit])).values()];
+}
+
 function renderScoutDay(r, find) {
   const items = r.items ?? [];
   const main = items.filter((x) => x.verdict === 'stark' || x.verdict === 'knapp');
@@ -319,7 +385,7 @@ function renderScoutDay(r, find) {
     ? `${items.length} Titel mit frischem Analystensignal: ${c.stark ?? 0} stark, ${c.knapp ?? 0} knapp, ${c.schwach ?? 0} schwach. Maßstab ist der Score der Auto-Rotation${r.cutoff != null ? `, Schwelle ${scoreFmt(r.cutoff)} (Rang ${r.cutoff_rank})` : ''}.`
     : 'Heute noch kein Titel mit frischem Analystensignal.';
   const known = r.known ?? [];
-  return `
+  return `${analystMapHtml(r, find)}
     <header class="mb-head">
       <div class="mb-dateline">Analysten-Scout · ${esc(longDay(r.day))} · Stand ${esc(dayTime(r.generated_at).split(' ')[1] ?? '')}</div>
       <h3 class="mb-title">Neu bewertet</h3>
@@ -680,7 +746,19 @@ export function renderMarketBriefingModal(opts = {}) {
   let scoutView = 'day';
   let scoutReports = [];
   let renderScoutTab = () => {};
+  scoutZs = { map: { zoom: [], off: new Set() } };   // Zoom/Legende des Mappings je Modal frisch
+  let remountScout = () => {};
+  bindZoomScatter(body, {
+    onZoom: (key, box) => { if (scoutZs[key]) { scoutZs[key].zoom.push(box); remountScout(); } },
+    onTap: (key, id) => { const hit = index.byId.get(id); if (hit) opts.onOpenCandidate?.(hit, ctrl); },
+  });
   body.addEventListener('click', async (e) => {
+    if (zsClick(e, scoutZs)) { remountScout(); return; }
+    if (e.target.closest('[data-zs-show]')) {
+      const r = current[Number(pick.value) || 0];
+      if (r) opts.onShowInList?.(mapHits(r, find), ctrl);
+      return;
+    }
     const sv = e.target.closest('[data-scout-view]');
     if (sv) { scoutView = sv.dataset.scoutView; renderScoutTab(); return; }
     const sl = e.target.closest('[data-scout-list]');
@@ -731,7 +809,13 @@ export function renderMarketBriefingModal(opts = {}) {
     const tabs = overlay.querySelectorAll('.mb-tabs .tab-btn');
     let activeKey = 'daily';
     const scoutBar = () => (activeKey === 'scout' ? scoutModeBar(scoutView) : '');
-    const mount = (i) => { body.innerHTML = scoutBar() + KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find); addToc(body); body.scrollTop = 0; };
+    const mount = (i, keep = false) => {
+      const top = body.scrollTop;
+      body.innerHTML = scoutBar() + KINDS.find((k) => k.key === kindOf(current[i])).render(current[i], find);
+      addToc(body);
+      body.scrollTop = keep ? top : 0;
+    };
+    remountScout = () => { if (activeKey === 'scout' && current.length) mount(Number(pick.value) || 0, true); };
     const showKind = (key) => {
       activeKey = key;
       tabs.forEach((t) => { const on = t.dataset.kind === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
@@ -749,7 +833,7 @@ export function renderMarketBriefingModal(opts = {}) {
       mount(0);
     };
     renderScoutTab = () => showKind('scout');
-    pick.addEventListener('change', () => mount(Number(pick.value)));
+    pick.addEventListener('change', () => { scoutZs.map.zoom = []; mount(Number(pick.value)); });
     tabs.forEach((t) => t.addEventListener('click', () => showKind(t.dataset.kind)));
     showKind(opts.kind && KINDS.some((k) => k.key === opts.kind) ? opts.kind : 'daily');
   })();

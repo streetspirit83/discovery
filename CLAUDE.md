@@ -304,9 +304,20 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `dashboard-modal.js`): die gewählte Signal-Zelle (Bullisch · Bärisch · Extreme) filtert Setup-Matrix, Scatter,
   Quintile und Treffer (`sel.ids`), Setup-Zelle/Quintil/Brush filtern umgekehrt die Zählungen der Signal-Matrix.
   Ganz oben im Reiter fünf Mega-Cluster-Icons (`data-dyn-seg`) als Filter für alle Grafiken: setzt den Drill-down-Pfad
-  auf den Cluster, nochmal tippen = alle. Drill-down setzt die Filter zurück. **Rankings** = Umschalter
+  auf den Cluster, nochmal tippen = alle. Drill-down setzt die Filter zurück. **Rankings** = ganz oben die
+  **Ranking-Matrix** (seit 23.11.2026: RSI × Score 0–100, ein Punkt je Titel und bestandener Liste, Farbe = Liste,
+  `rankingPoints` in `lib/rankings-filter.js`, ohne Sektor-/Anzahlgrenze), darunter Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
   Auto-Rotation.
+  **Ausschnitt (seit 23.11.2026):** Ist die Hauptliste gefiltert (`candidateList.getFiltered()` kürzer als der Bucket,
+  auch der ★-Startfilter und eine geöffnete Trefferliste), zeigen alle Reiter nur diese Titel; der Kopf trägt dann
+  „gefiltert · N von M“. Ohne Filter (oder 0 Treffer) gilt der Bucket. Die Ranking-Perzentile laufen weiter über den
+  ganzen Bucket (`universe`, `only` in `liveRankings`/`rankingPoints`).
+- **Zoom-Scatter** (`components/zoom-scatter.js`, gemeinsam für Ranking-Matrix und Analysten-Mapping): Rechteck ziehen =
+  hineinzoomen (gestapelt), Lupe-minus = eine Stufe zurück, „Gesamt“ = ganz heraus, kurz tippen = nächster Punkt
+  (Fangbereich 14 px) öffnet den Titel, Legende schaltet Farbgruppen. Darunter (Desktop ≥ 1000 px daneben) die Tabelle
+  der Titel im Ausschnitt mit „In Tabelle öffnen“; ≤ 36 Punkte im Ausschnitt tragen ihr Symbol. Zustand
+  `{zoom:[box…], off:Set}` hält der Aufrufer; Klicks über `zsClick`, Ziehen/Tippen über `bindZoomScatter`.
 - **Monitor-Gruppenauswahl** (`dashboard-modal.js`, alle vier Reiter): jede Gruppe (`data-group`,
   jede `.rk-list`) bekommt eine Checkbox „alle N“ (`decorate()`, nach jeder Neuzeichnung per
   MutationObserver). Sie erfasst nur die **sichtbaren** Zeilen. Nur Titel des aktiven Buckets zählen. Leiste unten
@@ -678,7 +689,10 @@ sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Ro
   gewichtigsten Meldung der letzten 4 Tage, aus den Scout-Ereignissen plus dem analyst-Blob (Spalte „Ana“); Dubletten je Haus
   binnen 18 h. Reiner Coverage-Wechsel („assumes“) allein zählt nicht. Reihenfolge Watchlist · Inbox · Archiv, Auge zuerst.
 - **App:** Briefing › Scout, Umschalter **Heute** (dieser Bericht, `renderScoutDay` in `market-briefing-modal.js`) · **Woche**
-  (KI-Scout vom Samstag). Heute: Hinweis „alle neuen Titel gehen automatisch in die Inbox“ (kein Schalter mehr), „Neue Titel“ (stark/knapp offen,
+  (KI-Scout vom Samstag). Ganz oben in Heute das **Analysten-Mapping** (seit 23.11.2026, Zoom-Scatter): x = %S200
+  (`s200` im Bericht, sonst aus dem Workspace-Titel), y = +% Kursziel (`target_gap` aus der Meldung, sonst Konsens:
+  `analyst_upside` bzw. TV-PTØ des Workspace-Titels); Farben Neue Titel · Bestand ↑ · Bestand ↓; Ausreisser am Rand
+  gekappt (`MAP_CLAMP`). `briefingCandidates` in `app.js` liefert dafür `s200` und `pt_up` mit. Heute: Hinweis „alle neuen Titel gehen automatisch in die Inbox“ (kein Schalter mehr), „Neue Titel“ (stark/knapp offen,
   schwach und klein eingeklappt, Inbox-Knopf → Prüffenster mit Quelle `analyst-scout`) und „Bestand neu bewertet“. Jede Zeile wie
   die News im Detail-Sheet: Headline → Google-News-Suche, Icon → TradingView-Meldung; darunter der TV-Schlusskurs in der
   Währung des Titels und der Abstand des genannten Kursziels (`target_gap`, nur bei passender Währung, `targetGap`).

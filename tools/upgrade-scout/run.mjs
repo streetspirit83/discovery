@@ -27,6 +27,9 @@ import { SCOUT_RULES, SCOUT_FEEDS, feedUrl, eventsFromFeed, mergeEvents, signals
 import { fetchMerklisteEntries } from '../../ui/lib/merkliste-import.js';
 import { buildLinks } from '../../adapters/_shared/link-builder.js';
 
+/* Abstand TV-Schluss zur TV-SMA200 in % (wie `sma200DistPct`), für das Analysten-Mapping im Scout. */
+const s200Of = (t) => (t?.close > 0 && t?.sma200 > 0 ? Math.round((t.close / t.sma200 - 1) * 1000) / 10 : null);
+
 const KEEP_REPORTS = 14;
 const MAX_KNOWN = 60;          // Zeilen „Bestand neu bewertet“
 const MAX_ITEMS = 40;          // Titel je Tagesbericht
@@ -216,7 +219,7 @@ async function main() {
       perf_1w: m?.perf_1w ?? null, perf_1m: m?.perf_1m ?? null, chg_1d: u?.tv_data?.change ?? null,
       close: u?.tv_data?.close ?? null, currency: c.currency ?? EXCHANGE_CURRENCY[s.exchange] ?? null,
       target_gap: targetGap(s.target, u?.tv_data?.close, c.currency ?? EXCHANGE_CURRENCY[s.exchange]),
-      above_sma200: m?.above_sma200 ?? null, row,
+      above_sma200: m?.above_sma200 ?? null, s200: s200Of(u?.tv_data), row,
     });
   }
   const ORDER = { stark: 0, knapp: 1, schwach: 2, klein: 3, 'ohne Daten': 4 };
@@ -252,9 +255,9 @@ async function main() {
 
   // 6. Bestand neu bewertet: marktweite Ereignisse + analyst-Blob, je Titel eine Zeile.
   const knownInfo = new Map([...known].map(([k, c]) => [k, { bucket: c._bucket, name: c.name ?? c.tv_data?.description ?? c.symbol, eye: !!c.watch_flag, star: stars.has(k),
-    close: c.tv_data?.close ?? null, currency: c.currency ?? EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? null }]));
+    close: c.tv_data?.close ?? null, s200: s200Of(c.tv_data), currency: c.currency ?? EXCHANGE_CURRENCY[normalizeExchange(c.exchange)] ?? null }]));
   const updatesKnown = knownUpdates(events, analyst?.events ?? {}, knownInfo, { now }).slice(0, MAX_KNOWN)
-    .map((u) => { const k = knownInfo.get(`${u.symbol}:${u.exchange}`); return { ...u, close: k?.close ?? null, currency: k?.currency ?? null, target_gap: targetGap(u.target, k?.close, k?.currency) }; });
+    .map((u) => { const k = knownInfo.get(`${u.symbol}:${u.exchange}`); return { ...u, close: k?.close ?? null, s200: k?.s200 ?? null, currency: k?.currency ?? null, target_gap: targetGap(u.target, k?.close, k?.currency) }; });
   log(`Bestand neu bewertet: ${updatesKnown.length} Titel (${updatesKnown.filter((u) => u.bucket === 'watch').length} Watchlist)`);
 
   // 7. Bericht

@@ -20,7 +20,13 @@
  *               filtern sich gegenseitig (gewählte Signal-Zelle ↔ Setup-Zelle/Quintil/Brush).
  *               Ganz oben die fünf Mega-Cluster-Icons: Filter für alle Grafiken des Reiters
  *               (= Drill-down auf den Cluster, nochmal tippen = alle).
- *   Rankings  – Umschalter Live (fünf technische Listen) · KI-Ranking (Sonntag) · Tagessieger.
+ *   Rankings  – ganz oben die Ranking-Matrix (RSI gegen Score 0–100 je Liste, Zoom + Tabelle,
+ *               components/zoom-scatter.js), darunter Umschalter Live (fünf technische Listen) ·
+ *               KI-Ranking (Sonntag) · Tagessieger.
+ *
+ * Ausschnitt (seit 23.11.2026): Ist die Hauptliste gefiltert, beziehen sich alle Grafiken auf die
+ * gefilterten Titel (`candidates`), sonst auf den ganzen Bucket. `universe` = ganzer Bucket, nur für
+ * die Perzentile der Rankings (Scores bleiben so mit dem ungefilterten Stand vergleichbar).
  *   Rotation  – Tagesbericht der Auto-Rotation.
  *
  * Das Markt-Dashboard (Treemap) liegt seit Nov. 2026 im Markets-Modal (Reiter „Markt“).
@@ -31,10 +37,11 @@
  * it when the sheet closes (X or swipe).
  */
 
-import { icons } from '../lib/icons.js?v=20261103f';
+import { icons } from '../lib/icons.js?v=20261123a';
 import { pulse } from '../lib/dashboard-metrics.js?v=20261103h';
 import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './rankings-panel.js?v=20261116a';
-import { liveRankings } from '../lib/rankings-filter.js?v=20261116a';
+import { liveRankings, rankingPoints } from '../lib/rankings-filter.js?v=20261123a';
+import { zoomScatterHtml, zsClick, zsVisible, bindZoomScatter } from './zoom-scatter.js?v=20261123a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
 import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
@@ -78,9 +85,11 @@ function stamp(iso) {
 const DYN_SIDE_KEY = 'discovery_dyn_side';
 function storedSide() { try { return localStorage.getItem(DYN_SIDE_KEY) !== '0'; } catch { return true; } }
 
-export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode, onRefreshLs } = {}) {
+export function renderDashboardModal({ candidates = [], universe = null, filterNote = '', bucket = 'inbox', onOpenDetail, loadRankings, onOpenHit, onSelectInList, onSetRotationMode, onRefreshLs } = {}) {
   if (document.getElementById('dashboard-modal-overlay')) return null;
 
+  const filtered = !!universe && universe.length !== candidates.length;
+  const all = universe ?? candidates;
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
     setup: { cell: null, q: null, brush: null }, side: storedSide() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
@@ -318,7 +327,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   const scope = bucket === 'all' ? 'Watchlist' : (BUCKET_LABELS[bucket] ?? bucket);
   let live = null;
   function liveHtml() {
-    live ??= liveRankings(candidates, { bucket, n: 8 });
+    live ??= liveRankings(all, { bucket, n: 8, only: filtered ? new Set(candidates) : null });
     const list = live.lists.find((l) => l.key === state.rkList) ?? live.lists[0];
     const segs = RANK_SEGS.filter((sg) => live.lists.some((l) => l.key === sg.key));
     return `<section class="dash-card">
@@ -327,9 +336,47 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
       <div class="dash-card__body">
         <div class="md-rkseg"><div class="dash-seg">${segs.map((sg) => `<button type="button" class="dash-seg__btn${sg.key === list?.key ? ' is-active' : ''}" data-md-rk="${sg.key}">${esc(sg.label)}</button>`).join('')}</div></div>
         ${live.pool && list ? liveListHtml(list) : '<p class="dash-muted">Keine Titel mit TV-Daten – erst TV-Daten laden.</p>'}
-        <p class="rk-stand">Technisch · live · ${esc(scope)} (${live.pool} Titel) · ohne KI</p>
+        <p class="rk-stand">Technisch · live · ${esc(scope)}${filtered ? ' · gefiltert' : ''} (${live.pool} Titel) · ohne KI</p>
       </div>
     </section>`;
+  }
+  /* Ranking-Matrix (ganz oben im Reiter): je Titel und bestandener Liste ein Punkt RSI × Score,
+     Farbe = Liste. Rechteck ziehen zoomt, die Tabelle darunter zeigt den Ausschnitt. */
+  const RK_TONE = { momentum: '--series-1', solid: '--series-3', growth: '--series-7', pullback: '--series-4', breakout: '--series-2' };
+  const RK_SHORT = Object.fromEntries(RANK_SEGS.map((sg) => [sg.key, sg.label]));
+  const zs = { rank: { zoom: [], off: new Set() } };
+  let rkPts = null;
+  function rankPoints() {
+    if (rkPts) return rkPts;
+    const rows = rankingPoints(all, { bucket, only: filtered ? new Set(candidates) : null });
+    rkPts = [];
+    for (const r of rows) for (const [k, sc] of Object.entries(r.scores)) {
+      if (r.rsi == null) continue;
+      rkPts.push({ id: r.c.id, x: r.rsi, y: sc, group: k, sym: r.c.symbol, c: r.c,
+        tip: `${r.c.symbol} · ${RK_SHORT[k]} ${Math.round(sc)} · RSI ${Math.round(r.rsi)}` });
+    }
+    rkPts.n = rows.length;
+    return rkPts;
+  }
+  const rankTable = (rows) => `<div class="dash-group" data-group="rank.matrix">${rows
+    .map((ps) => ({ ps: [...ps].sort((a, b) => b.y - a.y), c: ps[0].c, rsi: ps[0].x }))
+    .sort((a, b) => b.ps[0].y - a.ps[0].y)
+    .map(({ ps, c, rsi }) => `<button class="dash-row" data-id="${esc(c.id)}">
+      <span class="dash-row__sym"><span class="dash-sym">${esc(c.symbol)}</span><span class="dash-ex">${esc(c.name ?? c.exchange ?? '')}</span></span>
+      <span class="dash-row__val zs-vals"><span class="zs-chips">${ps.map((p) => `<span class="zs-chip" style="--zs-c:var(${RK_TONE[p.group]})" title="${esc(RK_SHORT[p.group])}">${esc(RK_SHORT[p.group])} <b>${Math.round(p.y)}</b></span>`).join('')}</span>
+        <span class="dash-num zs-sub">RSI ${Math.round(rsi)}</span></span></button>`).join('')}</div>`;
+  function rankMatrixHtml() {
+    const pts = rankPoints();
+    if (pts.length < 2) return '';                // ohne TV-Daten keine Matrix
+    return zoomScatterHtml({
+      key: 'rank', points: pts, full: { x0: 0, x1: 100, y0: 0, y1: 100 }, st: zs.rank,
+      groups: RANK_SEGS.filter((sg) => RK_TONE[sg.key]).map((sg) => ({ key: sg.key, label: sg.label, tone: RK_TONE[sg.key] })),
+      title: 'Ranking-Matrix', xLabel: 'RSI (14)', yLabel: 'Ranking-Score 0–100', xShort: 'RSI', yShort: 'Score',
+      refs: [{ axis: 'x', v: 30, label: '30' }, { axis: 'x', v: 70, label: '70' }],
+      quads: [{ x: 'r', y: 't', text: 'stark · heiss', cls: 'sm-quad zs-quad--warn' }, { x: 'l', y: 't', text: 'stark · überverkauft' }],
+      tableHtml: rankTable,
+      note: `${pts.n} Titel · ${scope}${filtered ? ' · gefiltert' : ''} · ein Punkt je bestandener Liste (Filter wie Live-Rankings, ohne Sektor- und Anzahlgrenze) · Score = Perzentile über ${all.length} Titel`,
+    });
   }
   const RK_SUBS = [['live', 'Live'], ['weekly', 'KI-Ranking'], ['picks', 'Tagessieger']];
   const blobHtml = (what, fn) => (rk.err ? `<p class="dash-muted">${what} konnte nicht geladen werden: ${esc(rk.err)}</p>`
@@ -339,7 +386,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     const body = state.rkSub === 'weekly' ? blobHtml('KI-Wochenranking', weeklyRankingsHtml)
       : state.rkSub === 'picks' ? blobHtml('Tagessieger', dailyPicksHtml)
       : liveHtml();
-    return `<div class="md-ctl"><div class="dash-seg">${RK_SUBS.map(([k, l]) => `<button type="button" class="dash-seg__btn${k === state.rkSub ? ' is-active' : ''}" data-rk-sub="${k}">${l}</button>`).join('')}</div></div>
+    return `${rankMatrixHtml()}<div class="md-ctl"><div class="dash-seg">${RK_SUBS.map(([k, l]) => `<button type="button" class="dash-seg__btn${k === state.rkSub ? ' is-active' : ''}" data-rk-sub="${k}">${l}</button>`).join('')}</div></div>
       ${body}`;
   }
 
@@ -351,7 +398,7 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   overlay.innerHTML = `
     <div class="modal dash-modal" role="dialog" aria-modal="true" aria-label="Monitor">
       <div class="modal-header">
-        <h2 class="dash-title">${icons.activity}<span>Monitor · ${esc(BUCKET_LABELS[bucket] ?? bucket)}</span></h2>
+        <h2 class="dash-title">${icons.activity}<span>Monitor · ${esc(BUCKET_LABELS[bucket] ?? bucket)}${filtered ? ` <small class="dash-filtered" title="${esc(filterNote || 'Die Hauptliste ist gefiltert: alle Grafiken zeigen nur diese Titel')}">${icons.sliders} gefiltert · ${candidates.length} von ${all.length}</small>` : ''}</span></h2>
         <button class="modal-close" id="dash-close" aria-label="Schließen">✕</button>
       </div>
       <div class="tab-bar dash-tabs" role="tablist">
@@ -443,7 +490,12 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     bodyEl.innerHTML = dynamicsHtml();
     bodyEl.scrollTop = top;
   };
-  const renderRankings = () => { if (rk.tab === 'rankings') bodyEl.innerHTML = rankTabHtml(); };
+  const renderRankings = () => {
+    if (rk.tab !== 'rankings') return;
+    const top = bodyEl.scrollTop;                // Zoom und Legende zeichnen neu, die Stelle bleibt
+    bodyEl.innerHTML = rankTabHtml();
+    bodyEl.scrollTop = top;
+  };
   async function loadData() {
     if (rk.data || rk.loading || !loadRankings) return;
     rk.loading = true;
@@ -482,6 +534,10 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
     else if (rk.tab === 'dynamics') renderDynamics();
     else showLive();
   }));
+  bindZoomScatter(bodyEl, {
+    onZoom: (key, box) => { if (zs[key]) { zs[key].zoom.push(box); renderRankings(); } },
+    onTap: (key, id) => { const cand = candidates.find((c) => c.id === id); if (cand) onOpenDetail?.(cand, ctrl); },
+  });
   bindSetupBrush(bodyEl, (brush) => {
     if (!brush && !state.setup.brush) return;
     state.setup.brush = brush;
@@ -490,6 +546,15 @@ export function renderDashboardModal({ candidates = [], bucket = 'inbox', onOpen
   // click statt pointerup: ein Wisch beim Scrollen soll kein Detail öffnen.
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
+    /* Ranking-Matrix: Zoom zurück, Legende, „In Tabelle öffnen“ (Titel im Ausschnitt). */
+    if (zsClick(e, zs)) { renderRankings(); return; }
+    if (e.target.closest('[data-zs-show]')) {
+      const ids = [...new Set(zsVisible(rankPoints(), { x0: 0, x1: 100, y0: 0, y1: 100 }, zs.rank).map((p) => p.id))].filter((id) => inBucket.has(id));
+      if (!ids.length) return;
+      ctrl.close();
+      onSelectInList?.(ids);
+      return;
+    }
     /* Live: Cluster-Filter und Aktualisieren. */
     const lvSeg = e.target.closest('[data-lv-seg]');
     if (lvSeg) { lv.seg = lv.seg === lvSeg.dataset.lvSeg ? '' : lvSeg.dataset.lvSeg; lv.note = ''; renderLive(); return; }

@@ -16,11 +16,12 @@ import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
 import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261119f';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261119d';
+import { sma200DistPct } from './lib/sma200-extremes.js?v=20261106b';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261123a';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261120b';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261123a';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
@@ -1460,7 +1461,14 @@ async function briefingCandidates() {
   const out = [];
   for (const bucket of ['watch', 'archive', 'export', 'inbox']) {
     const blob = await ensureBlob(bucket).catch(() => null);
-    for (const c of blob?.candidates ?? []) out.push({ id: c.id, symbol: c.symbol, exchange: normalizeExchange(c.exchange) || c.exchange, bucket });
+    for (const c of blob?.candidates ?? []) {
+      // Scout › Analysten-Mapping: %S200 und Konsens-Kursziel als Rückfall, wenn der Bericht sie nicht trägt.
+      const t = c.tv_data;
+      const s200 = sma200DistPct(t);
+      const ptUp = t?.pt_average > 0 && t?.close > 0 ? (t.pt_average / t.close - 1) * 100 : null;
+      out.push({ id: c.id, symbol: c.symbol, exchange: normalizeExchange(c.exchange) || c.exchange, bucket,
+        name: c.name ?? t?.description ?? null, s200, pt_up: ptUp });
+    }
   }
   return out;
 }
@@ -3050,9 +3058,13 @@ async function init() {
 
   // Monitor slot → dashboard for the active bucket (score movers, perf, signals).
   document.getElementById('nav-monitor').addEventListener('pointerup', () => {
-    const candidates = allBlobs[currentBlobType]?.candidates ?? [];
+    // Ausschnitt: gefilterte Hauptliste, sonst der ganze Bucket (leerer Filter → Bucket).
+    const universe = allBlobs[currentBlobType]?.candidates ?? [];
+    const shown = candidateList ? candidateList.getFiltered() : universe;
+    const candidates = shown.length && shown.length < universe.length ? shown : universe;
     renderDashboardModal({
       candidates,
+      universe,
       bucket: currentBlobType,
       loadRankings,
       onRefreshLs: (ids, opts) => refreshLsFor(ids, opts),

@@ -309,6 +309,33 @@ export function liveRankings(cands, { bucket = 'watch', n = CONFIG.candidates, o
   return { pool: pool.length, lists };
 }
 
+/**
+ * Ranking-Matrix im Monitor (RSI gegen Score, seit 23.11.2026): für jeden Titel des Pools
+ * (gleiche Regeln wie `liveRankings`: Perzentile über alle, bei `all` nur die Watchlist,
+ * `only` grenzt ein) der Score 0–100 jeder Liste, deren Filter er besteht. Ohne Sektor-
+ * und Anzahl-Grenze — die Matrix zeigt das ganze Feld, nicht nur die Top-Auswahl.
+ * @returns {Array<{c, m, rsi:number|null, scores:{[list]:number}}>}
+ */
+export function rankingPoints(cands, { bucket = 'watch', only = null } = {}) {
+  const all = [];
+  for (const c of cands ?? []) {
+    const m = metricsOf({ ...c, _bucket: c._bucket ?? bucket, watch_flag: c.watch_flag });
+    if (m) { m.c = c; all.push(m); }
+  }
+  const { scoreList, tableOf, passes } = scorer(all);
+  const base = bucket === 'all' ? all.filter((m) => m.bucket === 'watch') : all;
+  const pool = only ? base.filter((m) => only.has(m.c)) : base;
+  return pool.map((m) => {
+    const scores = {};
+    for (const [key, def] of Object.entries(LISTS)) {
+      if (!passes(key, m)) continue;
+      const s = scoreList(def, m, tableOf(key));
+      if (s != null) scores[key] = s;
+    }
+    return { c: m.c, m, rsi: m.rsi, scores };
+  });
+}
+
 export function buildRankings(cands, { tradingDay = null, stale = [], depotChecked = true, pickWeights = PICK_WEIGHTS, pickMethodVersion = 0 } = {}) {
   const staleKeys = new Set(stale.map(keyOf));
   const all = cands
