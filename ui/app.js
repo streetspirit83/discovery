@@ -7,7 +7,7 @@ import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103
 import { CandidateDetail } from './components/candidate-detail.js?v=20261120a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
-import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
+import { renderScreenerModal } from './components/screener-modal.js?v=20261123a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20261104b';
@@ -21,7 +21,7 @@ import { renderDashboardModal } from './components/dashboard-modal.js?v=20261123
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
-import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261123a';
+import { renderMarketBriefingModal } from './components/market-briefing-modal.js?v=20261123c';
 import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
@@ -51,7 +51,7 @@ import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';
 import { icons } from './lib/icons.js?v=20261103f';
 import { MEGA_CLUSTERS } from './lib/sector-clusters.js?v=20260807a';
-import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20260807a';
+import { ADAPTERS, triggerAdapter, hasGithubPat } from './lib/adapter-trigger.js?v=20261123a';
 import { fetchMerklisteEntries, applyMerklisteEntries } from './lib/merkliste-import.js?v=20260807a';
 import { fetchSwingAnalysis, isUsTicker, swingErrorText } from './lib/tv-swings.js?v=20260818a';
 

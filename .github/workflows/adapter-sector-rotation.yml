@@ -1,0 +1,22 @@
+name: Adapter – Sektor-Rotation
+
+on:
+  schedule:
+    - cron: '7 21 * * 1-5'   # werktags 21:07 UTC, nach US-Schluss und vor der Auto-Rotation (21:37)
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Run Sektor-Rotation adapter
+        run: node adapters/_run.js sector-rotation
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}

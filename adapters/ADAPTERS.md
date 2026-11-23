@@ -8,12 +8,41 @@ Each adapter is a Node.js module that exports `fetchCandidates()` and is run by 
 
 | Adapter            | Cron              | UTC Time              | Trigger              | Status     |
 |--------------------|-------------------|-----------------------|----------------------|------------|
-| `openinsider`              | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
-| `etf-holdings`             | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
-| `stocktwits`               | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
-| `yahoo-trending`           | `0 14 * * 1-5`    | Weekdays 14:00        | Schedule + manual    | ✅ Active  |
-| `tradingview-screener`     | `30 15 * * 1-5`   | Weekdays 15:30        | Schedule + manual    | ✅ Active  |
+| `openinsider`              | `17 6 * * 1,3,5`  | Mo/Mi/Fr 06:17        | Schedule + manual    | ✅ Active  |
+| `etf-holdings`             | `37 7 * * 2`      | Tuesday 07:37         | Schedule + manual    | ✅ Active  |
+| `stocktwits`               | `23 8,13,20 * * *`| Daily 3×              | Schedule + manual    | ✅ Active  |
+| `yahoo-trending`           | `43 8,13,20 * * 1-5` | Weekdays 3×        | Schedule + manual    | ✅ Active  |
+| `yahoo-growth`             | `17 9,14 * * 1-5` | Weekdays 2× (5 Yahoo-Screener) | Schedule + manual | ✅ Active |
+| `tradingview-screener`     | `47 9,15 * * 1-5` | Weekdays 2× (alle Studio-Presets mit Auto) | Schedule + manual | ✅ Active |
+| `sector-rotation`          | `7 21 * * 1-5`    | Weekdays 21:07        | Schedule + manual    | ✅ Active  |
+| `ark-holdings`             | `23 12 * * 1-5`   | Weekdays 12:23        | Schedule + manual    | ✅ Active  |
 | `boerse-frankfurt`         | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
+
+Seit Nov. 2026 kommen außerdem Titel aus dem Analysten-Scout (`upgrade-scout.yml`) und dem KI-Wochen-Scout
+(Samstag, `market-briefing.yml` mit `kind: scout` → `tools/ai-scout/lib.mjs`) automatisch in die Inbox.
+
+## Adapter: TradingView Screener (Auto-Presets, seit Nov. 2026)
+
+Keine fest eingebauten Screens mehr: der Adapter liest die Presets aus dem Config-Blob (`read_config`, dieselbe
+Quelle wie das Screener Studio), gleicht die eingebauten mit `ui/lib/screener-presets.js` ab und führt alle mit
+`isAutoPreset` aus (Vorgabe `auto`, Schalter im Studio = `auto_override`). Abfrage und Nachfilter teilt er mit dem
+Studio (`ui/lib/screen-runner.js`): Feld gegen Feld (`right: 'SMA50'`), Marktgruppe `europe` (Endpoint `global`,
+`is_primary`), Mega-Cluster (`mega` → `sector in_range`), nur Heimatbörsen (`exchange in_range`, sonst liefert
+`germany` vor allem Auslandswerte an deutschen Plätzen und `america` OTC). Titel aus mehreren Screens = ein
+Kandidat mit mehreren Quellen, höchstens 150 je Lauf (meiste Treffer zuerst). Env `PRESETS=id1,id2` für Tests.
+
+## Adapter: Sektor-Rotation (top-down)
+
+Ein Scan je Region (USA, Europa) über alle Aktien ab 300 Mio. in den Mega-Clustern. Branchen-Score je TV-Industry
+(≥ 6 Titel): 0,4 · Perzentil Median Perf.1M + 0,4 · Perzentil Median Perf.3M + 0,2 · Anteil über SMA50. In den
+8 besten Branchen je bis zu 4 Leader mit Kurs > SMA50 > SMA200, Perf.3M > 0, RSI < 80. Signal `sector_rotation`.
+
+## Adapter: ARK Holdings
+
+Tägliche CSV der sechs ARK-ETFs (`assets.ark-funds.com`, frei). Signal = Veränderung zum letzten Lauf: neue
+Position (`etf_addition`) oder ≥ 10 % mehr Stück bei ≥ 0,5 % Gewicht (`etf_weight_increase`). Der Vortagsstand
+liegt in `.ark-state/holdings.json` und wird per `actions/cache` weitergereicht; erster Lauf nur Stand. Börse über
+den TV-Scanner (nur US-Aktien).
 
 Manual trigger: GitHub Actions → workflow → **Run workflow**.
 

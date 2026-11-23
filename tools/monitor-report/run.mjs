@@ -44,6 +44,7 @@ import {
   eventsFromNews, mergeEvents, consensusOf, rollConsensus, buildAnalystBlock, tally,
 } from '../../ui/lib/analyst-events.js';
 import { buildReport, buildIndices, renderHtml, slimReport, stockRef } from './report.mjs';
+import { buildScoutPool } from '../ai-scout/lib.mjs';
 
 /* Leitindizes, Zins, Rohstoffe, Währung – Einträge im Format von INDEX_GROUPS,
    damit fetchIndexRows die Ticker-Auflösung übernimmt (mehrere Kandidaten je
@@ -321,11 +322,15 @@ async function publish(fresh, stale, indices, saveState, auth) {
     pickWeights: picks.method.weights, pickMethodVersion: picks.method.version });
   rkObj.daily_picks.review = picks.review;
   rkObj.daily_picks.method = { version: picks.method.version, updated_day: picks.method.updated_day ?? null, last_changes: picks.method.last_changes ?? [] };
-  const rankings = JSON.stringify({
-    ...rkObj,
-    // Für den Scout: alles, was schon im Workspace liegt, gilt nicht als neu.
-    known_symbols: [...new Set([...fresh, ...(inbox?.candidates ?? [])].map((c) => c.symbol))].sort(),
-  });
+  // Für den Scout: alles, was schon im Workspace liegt, gilt nicht als neu.
+  const knownSymbols = [...new Set([...fresh, ...(inbox?.candidates ?? [])].map((c) => c.symbol))].sort();
+  // Technische Vorauswahl für den KI-Wochen-Scout (Weg A). Fehler kosten nur den Pool, nicht den Bericht.
+  let scoutPool = null;
+  try {
+    scoutPool = await buildScoutPool(new Set(knownSymbols), auth);
+    console.log(`Scout-Pool: ${scoutPool.n} Titel${scoutPool.failed.length ? ` (fehlgeschlagen: ${scoutPool.failed.join(', ')})` : ''}`);
+  } catch (e) { console.warn(`Scout-Pool nicht gebaut (${e.message})`); scoutPool = { available: false, reason: e.message }; }
+  const rankings = JSON.stringify({ ...rkObj, known_symbols: knownSymbols, scout_pool: scoutPool });
   const json = JSON.stringify(slimReport(report));   // Tagesfassung – spart Tokens bei der KI-Auswertung
   const jsonName = `${NAME}.json`;
   const fullName = `${NAME} – vollständig.json`;

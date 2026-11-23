@@ -703,6 +703,28 @@ sondern ein Fundort für die Inbox; ob ein Titel bleibt, entscheidet die Auto-Ro
   Probelauf von Hand.
 - Lokal testen: `NO_STORAGE=1 DISCOVERY_BACKEND_URL=<scrape-proxy-Ersatz> OUT_FILE=report.json node tools/upgrade-scout/run.mjs`.
 
+## Neue Quellen für die Inbox (seit 23.11.2026)
+- **Screener Studio → Auto:** jedes Preset hat den Schalter „Auto: werktags 2× in die Inbox“ (`auto_override`, gilt auch
+  für eingebaute Screens; ⟳ im Preset-Menü). Der Adapter `tradingview-screener` führt alle Auto-Presets aus, Logik in
+  `ui/lib/screen-runner.js` (Studio und Adapter identisch). Neu: Feld gegen Feld (Wert = Feldname, z. B. `SMA50`;
+  der Scanner kann das nativ), Markt „Europa (alle)“ (`MARKET_GROUPS` in `tv-fields.js`, Endpoint `global` +
+  `is_primary`; im Länder-Endpoint ist `is_primary` für XETR false und taugt nicht), Mega-Cluster im Sektor-Menü
+  (`mega`), Heimatbörsen-Filter `exchange in_range` je Land. Neue Built-ins je US/EU: Minervini Stage 2, Growth +
+  Momentum, Earnings-Gap (PEAD), RS-Leader Mid-Cap, Ausbruch + Rücksetzer; Volume Spike DE ist jetzt EU. Eingebaute
+  Presets folgen immer der ausgelieferten Definition (`reconcileBuiltins`), nur `auto_override` bleibt.
+- **Adapter `sector-rotation`** (werktags 21:07 UTC): stärkste Branchen je Region → Leader. **`ark-holdings`**
+  (werktags 12:23 UTC): tägliche ARK-Käufe. **`yahoo-growth`**: fünf Yahoo-Screener. Details in `adapters/ADAPTERS.md`.
+  Leere Läufe beendet `_run.js` ohne Backend-Aufruf (das Backend lehnt leere Listen mit 400 ab).
+- **Analysten-Scout:** zusätzlich `week_ranking` (beste Signal-Titel der letzten 7 Tage nach Score), Briefing › Scout ›
+  Heute, Abschnitt „Ranking 7 Tage“.
+- **KI-Wochen-Scout (Weg A, geplante Aufgabe „Discovery Scout“ Sa 10:41):** Der Monitor-Lauf schreibt `scout_pool` in
+  „Discovery Rankings.json“ (`tools/ai-scout/lib.mjs` `buildScoutPool`: Trend-/Rally-Presets US+EU, ohne
+  `known_symbols`, bis 120 Titel mit Kennzahlen und Screen-Treffern). Die Aufgabe wählt daraus plus Websuche mindestens
+  20 Titel (`items[]` mit `cluster`, `from_pool`). `push.mjs` prüft beim Speichern (`kind: scout`) jedes Symbol über den
+  TV-Scanner (US-Titel notfalls an NASDAQ/NYSE/AMEX gesucht) und legt die bestätigten ohne Prüffenster in die Inbox
+  (Quelle `ai-scout`); Ergebnis als `entry.inbox` {added, merged, skipped, missing}, im Scout-Reiter als Hinweis.
+  `SCOUT_INBOX=0` schaltet die Übernahme ab.
+
 ## Alerts (`check-alerts`, alle 20 min, 7–21 UTC)
 Die App ist die einzige Quelle für Levels und Alarme (`range_override`, `range_alarm`, `wr_sup_/wr_res_<id>`).
 `check-alerts` importiert dafür `ui/lib/range-levels.js`, `range-alarm.js` und `eur-basis.js` direkt, die Rechnung

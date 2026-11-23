@@ -20,6 +20,8 @@ const ADAPTERS = {
   'yahoo-trending':         './yahoo-trending.js',
   'yahoo-growth':           './yahoo-growth.js',
   'tradingview-screener':   './tradingview-screener.js',
+  'sector-rotation':        './sector-rotation.js',
+  'ark-holdings':           './ark-holdings.js',
 };
 
 async function main() {
@@ -74,6 +76,11 @@ async function main() {
   let merged = 0;
   let skipped = 0;
   let errors = 0;
+
+  if (!candidates.length) {
+    log('info', 'adapter: complete', { adapter: adapterName, total: 0, added: 0, merged: 0, skipped: 0, errors: 0 });
+    return;   // das Backend lehnt leere Listen ab (400) – ein Lauf ohne Treffer ist kein Fehler
+  }
 
   let bulkResults;
   try {

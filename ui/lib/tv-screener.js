@@ -12,7 +12,7 @@
 
 import { buildLinks } from './link-builder.js';
 import { uuid } from './import-parser.js';
-import { MARKET_BY_SLUG } from './tv-fields.js';
+import { MARKET_BY_SLUG, MARKET_GROUP_BY_SLUG, MARKETS } from './tv-fields.js?v=20261123a';
 import { normalizeExchange } from './exchange-map.js';
 
 // ─── Proxy POST (same pattern as tv-enrichment.js) ──────────────────────────────
@@ -56,6 +56,8 @@ async function proxyPost(backendUrl, secret, url, requestBody) {
  * @returns {Promise<{ totalCount: number, rows: {s:string,d:any[]}[] }>}
  */
 export async function runScreen({ market, filter, columns, sort, count }, { backendUrl, secret }) {
+  // Marktgruppe (z. B. „europe“) → Endpoint `global` mit `markets`-Liste, je Firma nur das Hauptlisting.
+  const group = MARKET_GROUP_BY_SLUG.get(market);
   // Always constrain to common stock unless the caller already set a type filter.
   const hasType = (filter ?? []).some((f) => f.left === 'type');
   const effectiveFilter = hasType
@@ -63,15 +65,18 @@ export async function runScreen({ market, filter, columns, sort, count }, { back
     : [{ left: 'type', operation: 'equal', right: 'stock' }, ...(filter ?? [])];
 
   const requestBody = {
-    filter: effectiveFilter,
+    filter: group && !effectiveFilter.some((f) => f.left === 'is_primary')
+      ? [...effectiveFilter, { left: 'is_primary', operation: 'equal', right: true }]
+      : effectiveFilter,
     columns,
     sort: sort ?? { sortBy: columns[0], sortOrder: 'desc' },
     range: [0, count ?? 50],
   };
+  if (group) requestBody.markets = group.markets;
 
   const bodyStr = await proxyPost(
     backendUrl, secret,
-    `https://scanner.tradingview.com/${market}/scan`,
+    `https://scanner.tradingview.com/${group ? 'global' : market}/scan`,
     requestBody,
   );
 
@@ -101,6 +106,16 @@ function parseTicker(s) {
   return exchange ? { symbol, exchange, tvExch } : null;
 }
 
+// Yahoo-Suffix je Börse für Marktgruppen (EURONEXT ist mehrdeutig → Paris als Standard).
+const SUFFIX_BY_EXCHANGE = (() => {
+  const m = {};
+  for (const mk of MARKETS) for (const ex of mk.exchanges) if (!(ex in m)) m[ex] = mk.yahooSuffix;
+  return m;
+})();
+function suffixOf(exchange, tvExch) {
+  return SUFFIX_BY_EXCHANGE[tvExch] ?? SUFFIX_BY_EXCHANGE[exchange] ?? '';
+}
+
 /**
  * @param {{s:string,d:any[]}[]} rows
  * @param {object} meta { market, columns, presetId, presetLabel, filter, sourceUrl }
@@ -108,7 +123,7 @@ function parseTicker(s) {
  */
 export function rowsToCandidates(rows, { market, columns, presetId, presetLabel, filter, sourceUrl }) {
   const marketDef = MARKET_BY_SLUG.get(market);
-  const yahooSuffix = marketDef?.yahooSuffix ?? '';
+  const isGroup = MARKET_GROUP_BY_SLUG.has(market);
   const descIdx = columns.indexOf('description');
   const now = new Date().toISOString();
   const seen = new Set();
@@ -126,7 +141,7 @@ export function rowsToCandidates(rows, { market, columns, presetId, presetLabel,
 
     const d = row.d ?? [];
     const name = (descIdx !== -1 && d[descIdx]) ? d[descIdx] : symbol;
-    const yahooSymbol = `${symbol}${yahooSuffix}`;
+    const yahooSymbol = `${symbol}${isGroup ? suffixOf(exchange, tvExch) : (marketDef?.yahooSuffix ?? '')}`;
 
     // Snapshot the requested column values for the source record.
     const values = {};

@@ -4,11 +4,13 @@
  */
 
 import {
-  FIELDS, OPERATORS, MARKETS, SECTORS, FIELD_BY_VALUE,
-  fieldLabel, isSynthetic, syntheticDeps, computeSynthetic, matchesOp,
-} from '../lib/tv-fields.js?v=20260807a';
-import { runScreen, rowsToCandidates } from '../lib/tv-screener.js';
-import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20260807a';
+  FIELDS, OPERATORS, MARKETS, MARKET_GROUPS, SECTORS, FIELD_BY_VALUE, NATIVE_FIELD_VALUES,
+  fieldLabel, isSynthetic, computeSynthetic,
+} from '../lib/tv-fields.js?v=20261123a';
+import { runScreen, rowsToCandidates } from '../lib/tv-screener.js?v=20261123a';
+import { loadPresets, savePreset, deletePreset } from '../lib/screener-presets.js?v=20261123a';
+import { buildScreenRequest, postProcessRows, isFieldRef, isAutoPreset } from '../lib/screen-runner.js?v=20261123a';
+import { MEGA_CLUSTERS } from '../lib/sector-clusters.js?v=20260807a';
 import { uuid } from '../lib/import-parser.js';
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
     label: '',
     market: 'america',
     sector: '',
+    mega: [],
     filter: [{ field: 'relative_volume_10d_calc', op: 'greater', v1: '2.5', v2: '' }],
     sortBy: 'relative_volume_10d_calc',
     sortOrder: 'desc',
@@ -91,25 +94,34 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
           <button class="btn btn-sm btn-secondary" id="scr-saveas">Als neu…</button>
           <button class="btn btn-sm btn-secondary" id="scr-delete">Löschen</button>
         </div>
+        <label class="scr-auto" title="Läuft werktags zweimal im Adapter „TradingView Screener“ mit, Treffer gehen ohne Prüfung in die Inbox">
+          <input type="checkbox" id="scr-auto"> <span>Auto: werktags 2× in die Inbox</span>
+          <span class="scr-auto-count" id="scr-auto-count"></span>
+        </label>
 
         <div class="scr-grid">
           <label class="scr-field">
             <span>Markt</span>
             <select class="filter-select" id="scr-market">
-              ${MARKETS.map((m) => `<option value="${m.slug}">${m.label}</option>`).join('')}
+              <optgroup label="Mehrere Länder">${MARKET_GROUPS.map((m) => `<option value="${m.slug}">${m.label}</option>`).join('')}</optgroup>
+              <optgroup label="Einzelne Länder">${MARKETS.map((m) => `<option value="${m.slug}">${m.label}</option>`).join('')}</optgroup>
             </select>
           </label>
           <label class="scr-field">
-            <span>Sektor (optional)</span>
+            <span>Sektor / Cluster (optional)</span>
             <select class="filter-select" id="scr-sector">
               <option value="">Alle Sektoren</option>
-              ${SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}
+              <option value="mega:all">Alle Mega-Cluster (ohne Misc.)</option>
+              <optgroup label="Mega-Cluster">${MEGA_CLUSTERS.map((m) => `<option value="mega:${m.key}">${m.label}</option>`).join('')}</optgroup>
+              <optgroup label="Sektor">${SECTORS.map((s) => `<option value="${s}">${s}</option>`).join('')}</optgroup>
             </select>
           </label>
         </div>
 
         <div class="scr-section-title">Filter</div>
+        <datalist id="scr-fieldrefs">${NATIVE_FIELD_VALUES.map((v) => `<option value="${v}">${fieldLabel(v)}</option>`).join('')}</datalist>
         <div id="scr-filters" class="scr-filters"></div>
+        <p class="hint scr-hint">Wert = Zahl oder Feldname (z. B. <code>SMA50</code>) für Feld gegen Feld.</p>
         <button class="btn btn-sm btn-secondary" id="scr-add-filter">+ Filter</button>
 
         <div class="scr-grid scr-grid--3">
@@ -159,7 +171,12 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
     const sel = $('#scr-preset');
     sel.innerHTML =
       `<option value="">— Neuer Screen —</option>` +
-      presets.map((p) => `<option value="${p.id}"${p.id === state.presetId ? ' selected' : ''}>${p.label}${p.built_in ? ' ·' : ''}</option>`).join('');
+      presets.map((p) => `<option value="${p.id}"${p.id === state.presetId ? ' selected' : ''}>${isAutoPreset(p) ? '⟳ ' : ''}${p.label}${p.built_in ? ' ·' : ''}</option>`).join('');
+    const nAuto = presets.filter(isAutoPreset).length;
+    $('#scr-auto-count').textContent = `${nAuto} Screens auf Auto`;
+    const cur = presets.find((p) => p.id === state.presetId);
+    $('#scr-auto').checked = isAutoPreset(cur);
+    $('#scr-auto').disabled = !cur;
   }
 
   function loadPresetIntoState(preset) {
@@ -167,6 +184,7 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
     state.label    = preset.label;
     state.market   = preset.market ?? 'america';
     state.sector   = preset.sector ?? '';
+    state.mega     = Array.isArray(preset.mega) ? [...preset.mega] : [];
     state.filter   = (preset.filter ?? []).map((f) => ({
       field: f.left,
       op: f.operation,
@@ -182,7 +200,8 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
 
   function syncControls() {
     $('#scr-market').value    = state.market;
-    $('#scr-sector').value    = state.sector;
+    $('#scr-sector').value    = state.mega.length === MEGA_CLUSTERS.length ? 'mega:all'
+      : state.mega.length === 1 ? `mega:${state.mega[0]}` : state.sector;
     $('#scr-sortby').value    = state.sortBy;
     $('#scr-sortorder').value = state.sortOrder;
     $('#scr-count').value     = state.count;
@@ -205,7 +224,7 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
       div.innerHTML = `
         <select class="filter-select scr-f-field" data-i="${i}">${fieldSelectHTML(row.field)}</select>
         <select class="filter-select scr-f-op" data-i="${i}">${opSelectHTML(row.op)}</select>
-        <input type="number" step="any" class="scr-f-v1" data-i="${i}" value="${row.v1}" placeholder="${ph1}"${pctTitle}>
+        <input type="text" inputmode="decimal" list="${isPct ? '' : 'scr-fieldrefs'}" class="scr-f-v1" data-i="${i}" value="${row.v1}" placeholder="${ph1}"${pctTitle}>
         <input type="number" step="any" class="scr-f-v2" data-i="${i}" value="${row.v2}" placeholder="${ph2}" style="display:${two ? 'block' : 'none'}"${pctTitle}>
         <button class="btn-icon scr-f-del" data-i="${i}" title="Entfernen">✕</button>
       `;
@@ -236,89 +255,11 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
   }
 
   // ── Build the scanner request from state ───────────────────────────────────
-  // Native filters go to the scanner verbatim. Synthetic (percent) filters can't
-  // be expressed server-side, so we collect their dependency columns and apply the
-  // comparison client-side after the response comes back (see postProcessRows).
+  // Dieselbe Rechnung wie der Auto-Lauf des Adapters (lib/screen-runner.js): native
+  // Filter (auch Feld gegen Feld) gehen an den Scanner, synthetische %-Filter werden
+  // nach dem Abruf je Zeile gerechnet.
   function buildRequest() {
-    const filter = [];
-    const syntheticFilters = [];
-    const cols = ['description', 'close', 'sector']; // description→name, close+sector always handy
-    const addCol = (c) => { if (c && !cols.includes(c)) cols.push(c); };
-
-    for (const r of state.filter) {
-      if (!r.field || r.v1 === '' || r.v1 == null) continue;
-      const arity = opArity(r.op);
-      if (isSynthetic(r.field)) {
-        if (arity === 2 && (r.v2 === '' || r.v2 == null)) continue;
-        syntheticDeps(r.field).forEach(addCol);
-        syntheticFilters.push({ field: r.field, op: r.op, v1: r.v1, v2: r.v2 });
-        continue;
-      }
-      const right = arity === 2 ? [Number(r.v1), Number(r.v2)] : Number(r.v1);
-      if (arity === 2 && (Number.isNaN(right[0]) || Number.isNaN(right[1]))) continue;
-      if (arity === 1 && Number.isNaN(right)) continue;
-      filter.push({ left: r.field, operation: r.op, right });
-      addCol(r.field);
-    }
-    if (state.sector) filter.push({ left: 'sector', operation: 'equal', right: state.sector });
-
-    // Sorting on a synthetic field must also happen client-side; the scanner sorts
-    // by a safe native default so the over-fetched pool is still sensibly ordered.
-    let clientSort = null;
-    let tvSort;
-    if (isSynthetic(state.sortBy)) {
-      syntheticDeps(state.sortBy).forEach(addCol);
-      clientSort = { field: state.sortBy, order: state.sortOrder };
-      tvSort = { sortBy: 'volume', sortOrder: 'desc' };
-    } else {
-      addCol(state.sortBy);
-      tvSort = { sortBy: state.sortBy, sortOrder: state.sortOrder };
-    }
-
-    const displayCount = Math.max(1, Math.min(200, Number(state.count) || 50));
-    // Client-side post-filtering/sorting happens AFTER the scanner's count cap, so
-    // over-fetch to avoid coming up short, then trim back to displayCount.
-    const postProcess = syntheticFilters.length > 0 || clientSort != null;
-    const fetchCount = postProcess ? 200 : displayCount;
-
-    return {
-      market: state.market,
-      filter,
-      columns: cols,
-      sort: tvSort,
-      count: fetchCount,
-      syntheticFilters,
-      clientSort,
-      displayCount,
-    };
-  }
-
-  // Apply synthetic percent filters + synthetic sort to raw scanner rows, then trim.
-  function postProcessRows(rows, req) {
-    const idx = {};
-    req.columns.forEach((c, i) => { idx[c] = i; });
-    const getter = (d) => (col) => { const i = idx[col]; return i == null ? null : (d[i] ?? null); };
-
-    let out = rows;
-    if (req.syntheticFilters.length) {
-      out = out.filter((row) => {
-        const g = getter(row.d ?? []);
-        return req.syntheticFilters.every((f) => matchesOp(computeSynthetic(f.field, g), f.op, f.v1, f.v2));
-      });
-    }
-    if (req.clientSort) {
-      const { field, order } = req.clientSort;
-      const dir = order === 'asc' ? 1 : -1;
-      out = [...out].sort((a, b) => {
-        const va = computeSynthetic(field, getter(a.d ?? []));
-        const vb = computeSynthetic(field, getter(b.d ?? []));
-        if (va == null && vb == null) return 0;
-        if (va == null) return 1;
-        if (vb == null) return -1;
-        return (va - vb) * dir;
-      });
-    }
-    return out.slice(0, req.displayCount);
+    return buildScreenRequest(currentPresetDoc(state.presetId, state.label));
   }
 
   // ── Preview ────────────────────────────────────────────────────────────────
@@ -409,15 +350,19 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
       .filter((r) => r.field && r.v1 !== '' && r.v1 != null)
       .map((r) => {
         const arity = opArity(r.op);
-        const right = arity === 2 ? [Number(r.v1), Number(r.v2)] : Number(r.v1);
+        const v1 = String(r.v1).trim();
+        const right = arity === 2 ? [Number(r.v1), Number(r.v2)] : (isFieldRef(v1) ? v1 : Number(v1));
         return { left: r.field, operation: r.op, right };
       });
     return {
-      id, label, market: state.market, sector: state.sector || null,
+      id, label, market: state.market, sector: state.mega.length ? null : (state.sector || null),
+      mega: state.mega.length ? [...state.mega] : null,
       filter,
       sort: { sortBy: state.sortBy, sortOrder: state.sortOrder },
       count: Math.max(1, Math.min(200, Number(state.count) || 50)),
       signal_type: 'custom_screen', built_in,
+      auto: presets.find((p) => p.id === id)?.auto ?? false,
+      ...(presets.find((p) => p.id === id)?.auto_override != null ? { auto_override: presets.find((p) => p.id === id).auto_override } : {}),
     };
   }
 
@@ -470,7 +415,27 @@ export async function renderScreenerModal({ storageClient, backendUrl, secret, o
 
   // ── Control bindings ───────────────────────────────────────────────────────
   $('#scr-market').addEventListener('change', (e) => { state.market = e.target.value; });
-  $('#scr-sector').addEventListener('change', (e) => { state.sector = e.target.value; });
+  $('#scr-sector').addEventListener('change', (e) => {
+    const v = e.target.value;
+    if (v === 'mega:all') { state.mega = MEGA_CLUSTERS.map((m) => m.key); state.sector = ''; }
+    else if (v.startsWith('mega:')) { state.mega = [v.slice(5)]; state.sector = ''; }
+    else { state.mega = []; state.sector = v; }
+  });
+  // Auto-Schalter: gilt auch für eingebaute Screens (nur `auto_override` wird gespeichert,
+  // die Definition bleibt die ausgelieferte).
+  $('#scr-auto').addEventListener('change', async (e) => {
+    const cur = presets.find((p) => p.id === state.presetId);
+    if (!cur) return;
+    const doc = { ...cur, auto_override: e.target.checked };
+    try {
+      presets = await savePreset(storageClient, doc);
+      renderPresetOptions();
+      setStatus(e.target.checked ? `⟳ „${cur.label}" läuft jetzt automatisch` : `„${cur.label}" nur noch von Hand`, 'success');
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      setStatus(`Speichern fehlgeschlagen: ${err.message}`, 'warning');
+    }
+  });
   $('#scr-sortby').addEventListener('change', (e) => { state.sortBy = e.target.value; });
   $('#scr-sortorder').addEventListener('change', (e) => { state.sortOrder = e.target.value; });
   $('#scr-count').addEventListener('input', (e) => { state.count = e.target.value; });
