@@ -32,9 +32,10 @@ Liste der Quellen, die wir als Adapter erschließen wollen. **Kein Quellen-Manag
 |---|---|---|---|---|---|---|---|
 | Börse Frankfurt Trend-Listen | API | API | DE | `trend_breakout` | – | ✅ | Pionier-Adapter (inoffizieller Endpoint) |
 | Finviz Screener | HTML | HTML | US | `trend_breakout` | – (Elite für Export) | 🔜 | Sehr flexible Filter, robustes HTML |
-| Yahoo Trending Tickers | API | API | global | `trend_breakout` | – | 🗓️ | `query1.finance.yahoo.com/v1/finance/trending` |
+| Yahoo Trending Tickers | API | API | global | `trend_breakout` | – | ✅ | `query1.finance.yahoo.com/v1/finance/trending` |
 | StockTwits Trending | API | API + Cashtag | US | `social_trend` | – (Rate-Limit) | 🗓️ | Trending-Symbole, deterministisch |
-| TradingView Screener | API | API | global | `trend_breakout` | – (inoffiziell) | 💡 | Scanner-Endpoint, viele Märkte |
+| TradingView Screener | API | API | global | `custom_screen` | – (inoffiziell) | ✅ | Alle Studio-Presets mit Auto-Schalter |
+| Sektor-Rotation (TV) | API | API | US/EU | `sector_rotation` | – | ✅ | Stärkste Branchen → Leader |
 | Börse Stuttgart / Euronext / LSE Movers | API/HTML | API/HTML | EU | `trend_breakout` | – | 💡 | EU-Abdeckung erweitern |
 
 ## 3. ETF / Fonds / Institutionelle Flüsse
@@ -42,7 +43,7 @@ Liste der Quellen, die wir als Adapter erschließen wollen. **Kein Quellen-Manag
 | Quelle | Typ | Parse | Region | Signal | Auth | Status | Notiz |
 |---|---|---|---|---|---|---|---|
 | iShares ICLN Holdings | CSV | CSV | global | `etf_addition`, `etf_weight_increase` | – | ✅ | Pionier-Adapter, Weekly-Diff |
-| ARK Daily Holdings | CSV | CSV | US | `etf_addition`, `etf_weight_increase` | – | 🔜 | Tägliche CSV, sehr sauber. Diff = aktiver Kauf |
+| ARK Daily Holdings | CSV | CSV | US | `etf_addition`, `etf_weight_increase` | – | ✅ | `adapters/ark-holdings.js`, Diff per Actions-Cache |
 | iShares – weitere ETFs | CSV | CSV | global | `etf_*` | – | 🗓️ | Generischer iShares-Holdings-Parser, mehrere Fonds konfigurierbar |
 | SEC 13F Filings | RSS/Atom + XML | RSS/Atom + Dict | US | `institutional_buy` | – | 💡 | Quartalsweise, Lag, aber starkes Cluster-Signal |
 | WhaleWisdom | API/HTML | API | US | `institutional_buy` | API-Key | 💡 | 13F aufbereitet |
