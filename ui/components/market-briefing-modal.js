@@ -319,6 +319,16 @@ function renderScoutDay(r, find) {
     ? `${items.length} Titel mit frischem Analystensignal: ${c.stark ?? 0} stark, ${c.knapp ?? 0} knapp, ${c.schwach ?? 0} schwach. Maßstab ist der Score der Auto-Rotation${r.cutoff != null ? `, Schwelle ${scoreFmt(r.cutoff)} (Rang ${r.cutoff_rank})` : ''}.`
     : 'Heute noch kein Titel mit frischem Analystensignal.';
   const known = r.known ?? [];
+  const wk = r.week_ranking ?? [];
+  const wkRow = (x) => {
+    const v = SCOUT_VERDICT[x.verdict] ?? SCOUT_VERDICT['ohne Daten'];
+    return `<li class="mb-wk"><span class="mb-rank__no">${x.rank}</span>
+      <span class="mb-scout__id">${symHtml(x, find)} <span class="pv-muted">${esc(x.name ?? '')}</span></span>
+      <span class="mb-nw">Score ${scoreFmt(x.score)}</span>
+      ${x.perf_1m != null ? `<span class="mb-nw">1M <span class="${tone(x.perf_1m)}">${esc(pct(x.perf_1m))}</span></span>` : ''}
+      <span class="mb-nw pv-muted">${esc(x.firm ?? '')}${x.days > 1 ? ` · ${x.days} Tage` : ''}</span>
+      <span class="news-item__tag${v.cls ? ` news-item__tag--${v.cls}` : ''}">${esc(v.label)}</span></li>`;
+  };
   return `
     <header class="mb-head">
       <div class="mb-dateline">Analysten-Scout · ${esc(longDay(r.day))} · Stand ${esc(dayTime(r.generated_at).split(' ')[1] ?? '')}</div>
@@ -326,6 +336,8 @@ function renderScoutDay(r, find) {
       <p class="bf-summary">${esc(lead)}</p>
       <p class="bf-foot pv-muted">Alle neuen Titel landen automatisch in der Inbox. Hochstufungen bewegen den Kurs meist am selben Tag, eine verlässliche Nachdrift zeigt der Backtest nicht. Der Scout findet Titel, ob sie bleiben, entscheidet die Rotation.${gap ? ' Zwischen zwei Abrufen können Meldungen fehlen.' : ''}${errs.length ? ` Nicht erreichbar: ${esc(errs.join(', '))}.` : ''}</p>
     </header>
+    ${wk.length ? `<section class="bf-section" data-toc="Ranking 7 Tage"><h3 class="bf-h">Ranking 7 Tage <span class="mb-tag">· beste Signal-Titel nach Score der Auto-Rotation</span></h3>
+      <ol class="mb-list mb-ranklist">${wk.map(wkRow).join('')}</ol></section>` : ''}
     <section class="bf-section" data-toc="Neue Titel"><h3 class="bf-h">Neue Titel <span class="mb-tag">· stark und knapp</span>${items.length ? ' <button type="button" class="btn btn-sm btn-secondary" data-scout-list="new" title="Alle neu gefundenen Titel in der Tabelle zeigen (ohne Häkchen)">In Tabelle öffnen</button>' : ''}</h3>
       ${main.length ? list(main) : '<p class="pv-muted">Keiner über oder knapp unter der Schwelle.</p>'}
       ${weak.length ? `<details class="mb-more"><summary>${weak.length} schwach</summary>${list(weak)}</details>` : ''}

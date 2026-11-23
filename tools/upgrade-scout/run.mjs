@@ -8,9 +8,9 @@
  *   3. Für die Signal-Titel TV-Daten holen (auch für Titel, die nicht in der App sind), Score wie die
  *      Auto-Rotation (`rowOf`), dazu Yahoo-Historie als Gegencheck (nur US).
  *   4. Tagesbericht in den Blob `scout` (je Tag einer, wird bei jedem Lauf fortgeschrieben).
- *      Modus `live`: Titel mit Urteil „stark“ oder „knapp“ gehen in die Inbox (Quelle `analyst-scout`),
- *      die Auto-Rotation entscheidet danach wie bei jedem anderen Inbox-Titel.
- *      Modus `dry` (Standard): nur Bericht.
+ *      Modus `live` (Standard): alle neu gefundenen Titel gehen in die Inbox (Quelle `analyst-scout`),
+ *      die Auto-Rotation entscheidet danach wie bei jedem anderen Inbox-Titel. `dry`/`off`: nur Bericht.
+ *   5. `week_ranking` im Bericht: die besten Signal-Titel der letzten 7 Tage nach Score (Briefing › Scout › Heute).
  *
  * Kein Kaufsignal: Laut docs/ANALYST_BACKTEST.md gibt es nach Hochstufungen keine verlässliche Nachdrift.
  *
@@ -267,6 +267,7 @@ async function main() {
     items: items.slice(0, MAX_ITEMS).map(slim), warnings: warnings.slice(0, 20), known: updatesKnown, pushed,
   };
   const reports = [report, ...(scout.reports ?? []).filter((r) => r.day !== day)].slice(0, KEEP_REPORTS);
+  report.week_ranking = weekRanking(reports, now);
   const feedState = Object.fromEntries(Object.entries(feeds).map(([k, f]) => [k, { newest: f.newest ?? scout.feeds?.[k]?.newest ?? null, at: now.toISOString() }]));
   // Erst die Ereignisse, dann der Bericht: bricht der zweite Schreibvorgang ab, ist nichts Gesammeltes verloren.
   await storage({ op: 'write', blob_type: 'scout_events', blob: { schema: 'discovery-scout-events-1.0', updated_at: now.toISOString(), events } });
@@ -281,6 +282,24 @@ async function main() {
     log(`  ${i.verdict.padEnd(10)} ${`${i.exchange}:${i.symbol}`.padEnd(16)} Score ${String(i.score ?? '–').padStart(5)} · Bias ${String(i.bias ?? '–').padStart(4)} · ${i.trigger_label} ${i.firm}${i.rating ? ` → ${i.rating}` : ''}${i.from ? ` (von ${i.from})` : ''} · Punkte ${i.points}${i.bucket ? ` · [${i.bucket}]` : ''}`);
   }
   if (warnings.length) log(`Gegenwind Watchlist: ${warnings.map((w) => `${w.symbol} (${w.firm}, ${w.label})`).join(', ')}`);
+}
+
+/* Ranking über die letzten 7 Tage: je Titel der neueste Stand (Score der Auto-Rotation), dazu an wie
+ * vielen Tagen er im Scout auftauchte. Nur Titel mit Score, ETFs sind schon draussen. */
+function weekRanking(reports, now, days = 7, max = 15) {
+  const byKey = new Map();
+  for (const r of reports) {                       // neueste zuerst
+    if (now - Date.parse(`${r.day}T12:00:00Z`) > days * 864e5) continue;
+    for (const i of r.items ?? []) {
+      if (i.score == null || i.verdict === 'klein') continue;
+      const key = `${i.symbol}:${i.exchange}`;
+      const hit = byKey.get(key);
+      if (hit) { hit.days++; continue; }
+      byKey.set(key, { symbol: i.symbol, exchange: i.exchange, name: i.name, score: i.score, verdict: i.verdict, bias: i.bias,
+        firm: i.firm, trigger_label: i.trigger_label, perf_1m: i.perf_1m, bucket: i.bucket ?? null, first_day: r.day, days: 1 });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => b.score - a.score || b.days - a.days).slice(0, max).map((x, i) => ({ rank: i + 1, ...x }));
 }
 
 main().catch((e) => { log(`✗ ${e.stack ?? e.message}`); process.exit(1); });
