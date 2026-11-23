@@ -7,7 +7,7 @@ import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103
 import { CandidateDetail } from './components/candidate-detail.js?v=20261120a';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
-import { renderScreenerModal } from './components/screener-modal.js?v=20260807a';
+import { renderScreenerModal } from './components/screener-modal.js?v=20261123a';
 import { renderExportModal } from './components/export-modal.js';
 import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20261104b';

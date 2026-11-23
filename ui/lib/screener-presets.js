@@ -4,16 +4,22 @@
  * (mock/dev), so the Studio still works offline.
  *
  * Preset shape:
- *   { id, label, market, sector|null, filter:[{left,operation,right}],
- *     sort:{sortBy,sortOrder}, count, signal_type:'custom_screen', built_in }
+ *   { id, label, market, sector|null, mega:[key]|null, filter:[{left,operation,right}],
+ *     sort:{sortBy,sortOrder}, count, signal_type:'custom_screen', built_in,
+ *     auto (Vorgabe: läuft im Adapter-Lauf mit), auto_override (Schalter im Studio) }
+ *
+ * `right` darf ein Feldname sein (Feld gegen Feld, z. B. close > SMA50). Mit `auto`
+ * führt der Adapter `tradingview-screener` das Preset werktags selbst aus und legt die
+ * Treffer in die Inbox (siehe adapters/tradingview-screener.js).
  */
 
 const LS_KEY = 'discovery_screener_presets';
 
 export const DEFAULT_PRESETS = [
   {
-    id: 'builtin-volume-spike-us', label: 'Volume Spike US', market: 'america', sector: null,
+    id: 'builtin-volume-spike-us', auto: true, label: 'Volume Spike US', market: 'america', sector: null,
     filter: [
+      { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
       { left: 'close', operation: 'greater', right: 5 },
       { left: 'volume', operation: 'greater', right: 500000 },
       { left: 'relative_volume_10d_calc', operation: 'greater', right: 2.5 },
@@ -22,8 +28,11 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-volume-spike-de', label: 'Volume Spike DE', market: 'germany', sector: null,
+    id: 'builtin-volume-spike-de', auto: true, label: 'Volume Spike EU', market: 'europe', sector: null,
+    // Bis Nov. 2026 „Volume Spike DE“ über den Länder-Endpoint – der lieferte fast nur an
+    // deutschen Plätzen gehandelte Auslandswerte. Jetzt alle EU-Heimatbörsen.
     filter: [
+      { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
       { left: 'volume', operation: 'greater', right: 50000 },
       { left: 'relative_volume_10d_calc', operation: 'greater', right: 2.5 },
     ],
@@ -31,7 +40,7 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-momentum-breakout-us', label: 'Momentum Breakout US', market: 'america', sector: null,
+    id: 'builtin-momentum-breakout-us', auto: true, label: 'Momentum Breakout US', market: 'america', sector: null,
     filter: [
       { left: 'close', operation: 'greater', right: 5 },
       { left: 'volume', operation: 'greater', right: 500000 },
@@ -69,11 +78,12 @@ export const DEFAULT_PRESETS = [
 
   // ── Newer built-ins ─────────────────────────────────────────────────────────
   {
-    id: 'builtin-52w-high-breakout-us', label: '52W-Hoch Breakout US', market: 'america', sector: null,
+    id: 'builtin-52w-high-breakout-us', auto: true, label: '52W-Hoch Breakout US', market: 'america', sector: null,
     // Uses synthetic %-fields: close within 3% of the 52w high, on a volume surge.
     filter: [
       { left: 'close', operation: 'greater', right: 5 },
       { left: 'volume', operation: 'greater', right: 500000 },
+      { left: 'High.1M', operation: 'egreater', right: 'price_52_week_high' }, // neues 52W-Hoch im letzten Monat
       { left: 'pct_below_52w_high', operation: 'eless', right: 3 },
       { left: 'vol_vs_avg30d_pct', operation: 'greater', right: 150 },
     ],
@@ -92,7 +102,7 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-trend-stack-us', label: 'Trend-Stack Bull US', market: 'america', sector: null,
+    id: 'builtin-trend-stack-us', auto: true, label: 'Trend-Stack Bull US', market: 'america', sector: null,
     // Trend-alignment proxy (numeric builder can't do a literal SMA50×SMA200 cross):
     // price above its EMA20 AND SMA200, with a real trend (ADX).
     filter: [
@@ -138,7 +148,7 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-smallcap-momentum-us', label: 'Small-Cap Momentum US', market: 'america', sector: null,
+    id: 'builtin-smallcap-momentum-us', auto: true, label: 'Small-Cap Momentum US', market: 'america', sector: null,
     filter: [
       { left: 'market_cap_basic', operation: 'in_range', right: [100000000, 2000000000] },
       { left: 'Perf.3M', operation: 'greater', right: 20 },
@@ -161,8 +171,9 @@ export const DEFAULT_PRESETS = [
     signal_type: 'custom_screen', built_in: true,
   },
   {
-    id: 'builtin-momentum-breakout-eu', label: 'Momentum Breakout EU', market: 'germany', sector: null,
+    id: 'builtin-momentum-breakout-eu', auto: true, label: 'Momentum Breakout EU', market: 'europe', sector: null,
     filter: [
+      { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
       { left: 'volume', operation: 'greater', right: 20000 },
       { left: 'RSI', operation: 'greater', right: 55 },
       { left: 'Perf.1M', operation: 'greater', right: 8 },
@@ -170,6 +181,80 @@ export const DEFAULT_PRESETS = [
     sort: { sortBy: 'Perf.1M', sortOrder: 'desc' }, count: 30,
     signal_type: 'custom_screen', built_in: true,
   },
+  // ── Trend-/Rally-Screens (Nov. 2026, Feld gegen Feld nativ im Scanner) ─────
+  // Alle mit Mega-Cluster-Fokus (ohne „Miscellaneous“ = Fonds/Mäntel) und ab 300 Mio. Börsenwert.
+  ...['america', 'europe'].flatMap((market) => {
+    const tag = market === 'america' ? 'US' : 'EU';
+    const minVol = market === 'america' ? 300000 : 20000;
+    const mega = ['tech', 'health', 'consumer', 'industry', 'finance'];
+    const base = { market, sector: null, mega, signal_type: 'custom_screen', built_in: true, auto: true };
+    return [
+      {
+        ...base, id: `builtin-minervini-${tag.toLowerCase()}`, label: `Minervini Stage 2 ${tag}`,
+        // Trend-Template: Kurs > SMA50 > SMA150 > SMA200, nah am 52W-Hoch, weit über dem 52W-Tief.
+        filter: [
+          { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
+          { left: 'volume', operation: 'greater', right: minVol },
+          { left: 'close', operation: 'greater', right: 'SMA50' },
+          { left: 'SMA50', operation: 'greater', right: 'SMA150' },
+          { left: 'SMA150', operation: 'greater', right: 'SMA200' },
+          { left: 'pct_below_52w_high', operation: 'eless', right: 25 },
+          { left: 'pct_above_52w_low', operation: 'egreater', right: 30 },
+        ],
+        sort: { sortBy: 'Perf.6M', sortOrder: 'desc' }, count: 30,
+      },
+      {
+        ...base, id: `builtin-growth-momentum-${tag.toLowerCase()}`, label: `Growth + Momentum ${tag}`,
+        filter: [
+          { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
+          { left: 'total_revenue_yoy_growth_ttm', operation: 'greater', right: 25 },
+          { left: 'earnings_per_share_diluted_yoy_growth_ttm', operation: 'greater', right: 25 },
+          { left: 'Perf.3M', operation: 'greater', right: 20 },
+          { left: 'close', operation: 'greater', right: 'SMA50' },
+        ],
+        sort: { sortBy: 'Perf.3M', sortOrder: 'desc' }, count: 30,
+      },
+      {
+        ...base, id: `builtin-earnings-gap-${tag.toLowerCase()}`, label: `Earnings-Gap ${tag}`,
+        // Post-Earnings-Drift: positive Überraschung im letzten Quartal + Kurslücke mit Volumen.
+        filter: [
+          { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
+          { left: 'gap', operation: 'greater', right: 5 },
+          { left: 'relative_volume_10d_calc', operation: 'greater', right: 2 },
+          { left: 'eps_surprise_percent_fq', operation: 'greater', right: 0 },
+          { left: 'close', operation: 'greater', right: 'SMA200' },
+        ],
+        sort: { sortBy: 'gap', sortOrder: 'desc' }, count: 25,
+      },
+      {
+        ...base, id: `builtin-rs-midcap-${tag.toLowerCase()}`, label: `RS-Leader Mid-Cap ${tag}`,
+        // Unbekanntere Werte (0,3–10 Mrd.) mit relativer Stärke über 6 Monate und echtem Trend.
+        filter: [
+          { left: 'market_cap_basic', operation: 'in_range', right: [300000000, 10000000000] },
+          { left: 'volume', operation: 'greater', right: minVol },
+          { left: 'Perf.6M', operation: 'greater', right: 40 },
+          { left: 'Perf.1M', operation: 'greater', right: 0 },
+          { left: 'ADX', operation: 'greater', right: 25 },
+          { left: 'close', operation: 'greater', right: 'SMA50' },
+        ],
+        sort: { sortBy: 'Perf.6M', sortOrder: 'desc' }, count: 30,
+      },
+      {
+        ...base, id: `builtin-breakout-pullback-${tag.toLowerCase()}`, label: `Ausbruch + Rücksetzer ${tag}`,
+        // Setup wie in der Auto-Rotation: frisches Hoch, kleiner Rücksetzer, SMA20 > SMA50 > SMA200.
+        filter: [
+          { left: 'market_cap_basic', operation: 'greater', right: 300000000 },
+          { left: 'volume', operation: 'greater', right: minVol },
+          { left: 'SMA20', operation: 'greater', right: 'SMA50' },
+          { left: 'SMA50', operation: 'greater', right: 'SMA200' },
+          { left: 'close', operation: 'greater', right: 'SMA50' },
+          { left: 'pct_below_1m_high', operation: 'in_range', right: [2, 12] },
+          { left: 'pct_below_52w_high', operation: 'eless', right: 15 },
+        ],
+        sort: { sortBy: 'Perf.3M', sortOrder: 'desc' }, count: 30,
+      },
+    ];
+  }),
 ];
 
 // Built-in presets that were shipped previously but have since been retired. They
@@ -193,11 +278,22 @@ function writeLocal(presets) {
  * Reconcile a stored preset list against the shipped built-ins: prune retired
  * built-ins, then append any newly-added ones (by id). Returns [list, changed].
  */
-function reconcileBuiltins(presets) {
+export function reconcileBuiltins(presets) {
   let changed = false;
   let list = presets.filter((p) => {
     if (p.built_in && REMOVED_BUILTIN_IDS.has(p.id)) { changed = true; return false; }
     return true;
+  });
+  // Eingebaute Screens folgen immer der ausgelieferten Definition; nur der Auto-Schalter
+  // des Nutzers (`auto_override`) bleibt erhalten.
+  const shipped = new Map(DEFAULT_PRESETS.map((p) => [p.id, p]));
+  list = list.map((p) => {
+    const def = p.built_in ? shipped.get(p.id) : null;
+    if (!def) return p;
+    const next = structuredClone(def);
+    if (p.auto_override != null) next.auto_override = p.auto_override;
+    if (JSON.stringify(next) !== JSON.stringify(p)) changed = true;
+    return next;
   });
   const existingIds = new Set(list.map((p) => p.id));
   const missing = DEFAULT_PRESETS.filter((p) => !existingIds.has(p.id));

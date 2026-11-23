@@ -17,6 +17,7 @@ const NATIVE_FIELDS = [
   { value: 'change',                    label: 'Change % (today)',       group: 'Price',          type: 'number' },
   { value: 'change|1W',                 label: 'Change % (1W)',          group: 'Price',          type: 'number' },
   { value: 'change|1M',                 label: 'Change % (1M)',          group: 'Price',          type: 'number' },
+  { value: 'High.1M',                   label: '1M high',                group: 'Price',          type: 'number' },
   { value: 'price_52_week_high',        label: '52-week high',           group: 'Price',          type: 'number' },
   { value: 'price_52_week_low',         label: '52-week low',            group: 'Price',          type: 'number' },
 
@@ -38,7 +39,9 @@ const NATIVE_FIELDS = [
   { value: 'EMA20',                     label: 'EMA 20',                 group: 'Trend',          type: 'number' },
   { value: 'EMA50',                     label: 'EMA 50',                 group: 'Trend',          type: 'number' },
   { value: 'EMA200',                    label: 'EMA 200',                group: 'Trend',          type: 'number' },
+  { value: 'SMA20',                     label: 'SMA 20',                 group: 'Trend',          type: 'number' },
   { value: 'SMA50',                     label: 'SMA 50',                 group: 'Trend',          type: 'number' },
+  { value: 'SMA150',                    label: 'SMA 150',                group: 'Trend',          type: 'number' },
   { value: 'SMA200',                    label: 'SMA 200',                group: 'Trend',          type: 'number' },
   { value: 'ADX',                       label: 'ADX',                    group: 'Trend',          type: 'number' },
   { value: 'Aroon.Up',                  label: 'Aroon Up',               group: 'Trend',          type: 'number' },
@@ -67,6 +70,9 @@ const NATIVE_FIELDS = [
   // Growth / quality
   { value: 'total_revenue_yoy_growth_ttm', label: 'Revenue growth YoY %', group: 'Growth',        type: 'number' },
   { value: 'earnings_per_share_diluted_yoy_growth_ttm', label: 'EPS growth YoY %', group: 'Growth', type: 'number' },
+  { value: 'total_revenue_yoy_growth_fq', label: 'Revenue growth YoY % (Q)', group: 'Growth',     type: 'number' },
+  { value: 'earnings_per_share_diluted_yoy_growth_fq', label: 'EPS growth YoY % (Q)', group: 'Growth', type: 'number' },
+  { value: 'eps_surprise_percent_fq',   label: 'EPS surprise % (Q)',     group: 'Growth',         type: 'number' },
   { value: 'ebitda_yoy_growth_ttm',     label: 'EBITDA growth YoY %',    group: 'Growth',         type: 'number' },
   { value: 'gross_margin',              label: 'Gross margin %',         group: 'Growth',         type: 'number' },
   { value: 'operating_margin',          label: 'Operating margin %',     group: 'Growth',         type: 'number' },
@@ -108,9 +114,22 @@ export const SYNTHETIC_FIELDS = [
     synthetic: true, deps: ['close', 'SMA200'],
     compute: (g) => { const c = g('close'), s = g('SMA200'); return (c == null || s == null || s === 0) ? null : (c - s) / s * 100; },
   },
+  {
+    value: 'pct_above_sma50', label: '% vs SMA50', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'SMA50'],
+    compute: (g) => { const c = g('close'), s = g('SMA50'); return (c == null || s == null || s === 0) ? null : (c - s) / s * 100; },
+  },
+  {
+    // Abstand vom Monatshoch: kleiner Rücksetzer nach einem frischen Hoch.
+    value: 'pct_below_1m_high', label: '% below 1M high', group: 'Relative (%)', type: 'percent',
+    synthetic: true, deps: ['close', 'High.1M'],
+    compute: (g) => { const c = g('close'), h = g('High.1M'); return (c == null || h == null || h === 0) ? null : (h - c) / h * 100; },
+  },
 ];
 
 export const FIELDS = [...NATIVE_FIELDS, ...SYNTHETIC_FIELDS];
+/** Native Feldnamen – als Vergleichswert erlaubt (Feld gegen Feld). */
+export const NATIVE_FIELD_VALUES = NATIVE_FIELDS.map((f) => f.value);
 
 // ─── Operators ──────────────────────────────────────────────────────────────
 // `arity` 2 means it needs a low + high value (in_range / not_in_range).
@@ -148,17 +167,24 @@ export const MARKETS = [
   { slug: 'sweden',      label: 'Sweden',      yahooSuffix: '.ST', exchanges: ['OMXSTO'],                     country: 'Sweden' },
   { slug: 'switzerland', label: 'Switzerland', yahooSuffix: '.SW', exchanges: ['SIX'],                        country: 'Switzerland' },
   { slug: 'denmark',     label: 'Denmark',     yahooSuffix: '.CO', exchanges: ['OMXCO'],                      country: 'Denmark' },
-  { slug: 'norway',      label: 'Norway',      yahooSuffix: '.OL', exchanges: ['OMXNO'],                      country: 'Norway' },
+  { slug: 'norway',      label: 'Norway',      yahooSuffix: '.OL', exchanges: ['OSL', 'OMXNO'],               country: 'Norway' },
   { slug: 'finland',     label: 'Finland',     yahooSuffix: '.HE', exchanges: ['OMXHEX'],                     country: 'Finland' },
   { slug: 'canada',      label: 'Canada',      yahooSuffix: '.TO', exchanges: ['TSX', 'TSXV'],                country: 'Canada' },
   { slug: 'australia',   label: 'Australia',   yahooSuffix: '.AX', exchanges: ['ASX'],                        country: 'Australia' },
 ];
 
+// Marktgruppen: ein Lauf über mehrere Länder (Scanner-Endpoint `global` mit `markets`).
+// Bewusst nicht in MARKETS, weil das Markets-Dashboard MARKETS als Länderliste nutzt.
+export const MARKET_GROUPS = [
+  { slug: 'europe', label: 'Europa (alle)', markets: ['germany', 'uk', 'france', 'netherlands', 'italy', 'spain', 'sweden', 'switzerland', 'denmark', 'norway', 'finland'] },
+];
+export const MARKET_GROUP_BY_SLUG = new Map(MARKET_GROUPS.map((g) => [g.slug, g]));
+
 // TradingView exchange prefix (left of the colon in "NASDAQ:AAPL") → our code.
 export const TV_PREFIX_TO_EXCHANGE = {
   NASDAQ: 'NASDAQ', NYSE: 'NYSE', 'NYSE ARCA': 'NYSE', 'NYSE MKT': 'AMEX', AMEX: 'AMEX',
   XETR: 'XETR', LSE: 'LSE', EURONEXT: 'EURONEXT', MIL: 'MIL', BME: 'BME',
-  OMXSTO: 'OMXSTO', SIX: 'SIX', OMXCO: 'OMXCO', OMXNO: 'OMXNO', OMXHEX: 'OMXHEX',
+  OMXSTO: 'OMXSTO', SIX: 'SIX', OMXCO: 'OMXCO', OMXNO: 'OMXNO', OSL: 'OSL', OMXHEX: 'OMXHEX',
   TSX: 'TSX', TSXV: 'TSXV', ASX: 'ASX',
 };
 

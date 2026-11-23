@@ -1290,6 +1290,9 @@ td.rg-r { padding-left:var(--s-1); }
   padding-bottom:var(--s-3); border-bottom:1px solid var(--border); flex-wrap:wrap;
 }
 .scr-presetbar #scr-preset { flex:1; min-width:160px; }
+.scr-auto { display:flex; align-items:center; gap:var(--s-2); font-size:var(--fs-2); color:var(--text); margin:0 0 var(--s-3); }
+.scr-auto-count { margin-left:auto; color:var(--muted); }
+.scr-hint { font-size:var(--fs-1); color:var(--muted); margin:0 0 var(--s-2); }
 .scr-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-3); margin-bottom:var(--s-3); }
 .scr-grid--3 { grid-template-columns:1fr 1fr 1fr; margin-top:var(--s-3); }
 .scr-field { display:flex; flex-direction:column; gap:4px; font-size:var(--fs-2); color:var(--muted); }

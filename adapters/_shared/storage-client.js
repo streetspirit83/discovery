@@ -88,6 +88,12 @@ export class StorageClient {
     return this.#post({ op: 'append_candidate', candidate });
   }
 
+  /** Server-Config (Screener-Presets u. a.), Op `read_config`. */
+  async readConfig() {
+    const res = await this.#post({ op: 'read_config' });
+    return res?.data ?? null;
+  }
+
   async appendCandidates(candidates) {
     log('debug', 'storage: appendCandidates', { count: candidates.length });
     return this.#post({ op: 'append_candidates', candidates });
