@@ -19,6 +19,8 @@
  * Env: DISCOVERY_BACKEND_URL, DISCOVERY_SECRET, PAYLOAD | DELETE_DAY (+ DELETE_KIND), optional DRY_RUN=1
  */
 
+import { verifyAndAppend } from '../ai-scout/lib.mjs';
+
 const KEEP = 30;                  // je Art
 const KEEP_KIND = { picks: 260 };  // Ausnahmen
 const KINDS = ['daily', 'preview', 'watch', 'scout', 'ranking', 'rotation', 'picks'];
@@ -82,6 +84,24 @@ async function main() {
     const errs = validate(entry);
     if (errs.length) throw new Error(`Briefing ungültig: ${errs.join('; ')}`);
     entry.saved_at = new Date().toISOString();
+  }
+
+  // KI-Scout: bestätigte Titel ohne weitere Prüfung in die Inbox (seit 23.11.2026; SCOUT_INBOX=0 schaltet ab).
+  if (entry?.kind === 'scout' && process.env.SCOUT_INBOX !== '0' && process.env.DRY_RUN !== '1') {
+    const auth = { backendUrl: env('DISCOVERY_BACKEND_URL').replace(/\/$/, ''), secret: env('DISCOVERY_SECRET') };
+    const raw = async (body) => {
+      const res = await fetch(`${auth.backendUrl}/api/storage`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-discovery-secret': auth.secret }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) throw new Error(`storage ${body.op}: ${j?.error ?? res.status}`);
+      return j;
+    };
+    try {
+      entry.inbox = await verifyAndAppend(entry.items, { auth, storage: raw, day: entry.day, title: entry.title });
+      console.log(`Scout → Inbox: ${entry.inbox.added.length} neu, ${entry.inbox.merged.length} ergänzt, ${entry.inbox.skipped.length} schon in Watchlist/Archiv, ${entry.inbox.missing.length} nicht bei TradingView gefunden${entry.inbox.missing.length ? ` (${entry.inbox.missing.join(', ')})` : ''}`);
+    } catch (e) {
+      entry.inbox = { at: new Date().toISOString(), error: e.message };
+      console.warn(`Scout → Inbox fehlgeschlagen: ${e.message} (Briefing wird trotzdem gespeichert)`);
+    }
   }
 
   const doc = (await storage({ op: 'read', blob_type: 'market' })) ?? {};

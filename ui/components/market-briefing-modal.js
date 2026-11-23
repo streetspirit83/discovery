@@ -359,13 +359,24 @@ function scoutItem(x, i, find) {
   return `<li class="mb-scout">
     <div class="mb-scout__head">
       <span class="mb-scout__id">${symHtml(x, find)} <span class="pv-muted">${esc(x.name ?? '')}</span></span>
-      ${x.category ? `<span class="mb-tag">${esc(x.category)}</span>` : ''}
+      ${x.category || x.cluster ? `<span class="mb-tag">${esc([x.category, x.cluster].filter(Boolean).join(' · '))}</span>` : ''}
     </div>
     <p class="mb-scout__text">${esc(x.thesis ?? '')}</p>
     ${line('Auslöser', x.catalyst)}
     ${line('Dagegen', x.counter)}
     <div class="mb-scout__foot">${action}</div>
   </li>`;
+}
+
+/* Ergebnis der automatischen Inbox-Übernahme (push.mjs → tools/ai-scout/lib.mjs). */
+function scoutInboxNote(x) {
+  if (!x) return '';
+  if (x.error) return `<p class="bf-foot pv-muted">Automatische Übernahme in die Inbox fehlgeschlagen: ${esc(x.error)}</p>`;
+  const parts = [`${x.added?.length ?? 0} neu in der Inbox`];
+  if (x.merged?.length) parts.push(`${x.merged.length} dort ergänzt`);
+  if (x.skipped?.length) parts.push(`${x.skipped.length} schon in Watchlist/Archiv`);
+  if (x.missing?.length) parts.push(`nicht bei TradingView gefunden: ${x.missing.join(', ')}`);
+  return `<p class="bf-foot pv-muted">Automatisch übernommen: ${esc(parts.join(' · '))}.</p>`;
 }
 
 function renderScout(b, find) {
@@ -375,6 +386,7 @@ function renderScout(b, find) {
       <h3 class="mb-title">${esc(b.title)}</h3>
       <p class="bf-summary">${esc(b.lead)}</p>
       ${b.data_note ? `<p class="bf-foot pv-muted">${esc(b.data_note)}</p>` : ''}
+      ${scoutInboxNote(b.inbox)}
     </header>
     <section class="bf-section"><h3 class="bf-h">Neue Titel</h3>
       <ul class="mb-list">${(b.items ?? []).map((x, i) => scoutItem(x, i, find)).join('')}</ul>

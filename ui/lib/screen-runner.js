@@ -87,6 +87,8 @@ export function buildScreenRequest(preset) {
     filter.push({ left: 'exchange', operation: 'in_range', right: marketDef.exchanges });
   }
 
+  for (const c of preset.extra_columns ?? []) addCol(c);   // nur Anzeige/Weiterverarbeitung, kein Filter
+
   const megaSectors = (preset.mega ?? []).flatMap((k) => sectorsOfMega(k));
   if (megaSectors.length) filter.push({ left: 'sector', operation: 'in_range', right: megaSectors });
   else if (preset.sector) filter.push({ left: 'sector', operation: 'equal', right: preset.sector });
