@@ -3401,3 +3401,6 @@ span.hm-head { cursor:default; }
   .hm-name__main { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.15; font-size:var(--fs-1); }
   .hm-name__sub { display:none; }
 }
+/* Detail-Sheet: Sektor-/Sub-Sektor-Badge öffnet die Gruppe in der Tabelle */
+button.tag--group { font:inherit; font-size:var(--fs-1); cursor:pointer; }
+button.tag--group:hover, button.tag--group:focus-visible { background:var(--accent); color:var(--on-accent, #fff); }

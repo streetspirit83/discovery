@@ -4,7 +4,7 @@
 
 import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261125b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261125b';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261125c';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20261123a';
@@ -119,6 +119,7 @@ let merklisteMaps = null; // { bySym } of entry_price_manual from merkliste "mai
 // Sheet open-state tracking (avoids querying class lists in conditionals)
 let detailSheetOpen = false;
 let returnToMonitor = null; // set when a detail sheet is opened from the Monitor dashboard
+let returnClose = null;     // schliesst dieses Modal ganz (Sektor-Badge im Detail-Sheet → Tabelle)
 let bucketSheetOpen = false;
 let runSheetOpen = false;
 
@@ -923,6 +924,7 @@ function closeDetailSheet() {
   document.getElementById('detail-sheet').classList.remove('is-open');
   updateScrim();
   // If the sheet was opened from the Monitor dashboard, restore it (X or swipe).
+  returnClose = null;
   if (returnToMonitor) { const back = returnToMonitor; returnToMonitor = null; back(); }
 }
 
@@ -1507,7 +1509,7 @@ async function openBriefingHit(hit, ctrl = null) {
   if (target !== currentBlobType) await switchBlob(target);
   const cand = (allBlobs[currentBlobType]?.candidates ?? []).find((c) => c.id === hit.id);
   if (!cand) { toast('Titel nicht mehr im Workspace', 'info', 3500); return false; }
-  if (ctrl) { ctrl.hide(); returnToMonitor = () => ctrl.show(); }
+  if (ctrl) { ctrl.hide(); returnToMonitor = () => ctrl.show(); returnClose = () => ctrl.close?.(); }
   candidateDetail.show(cand);
   openDetailSheet();
   return true;
@@ -1697,6 +1699,20 @@ async function handleAction(action, candidate, extras = {}) {
 
   if (action === 'blobSwitch') {
     await switchBlob(candidate); // candidate = blobType string in this case
+    return;
+  }
+
+  // Detail-Sheet: Sektor-/Sub-Sektor-Badge → alle Titel dieser Gruppe im aktiven Bucket als Trefferliste.
+  if (action === 'showGroup') {
+    const { field, value } = extras;
+    const ids = (blob.candidates ?? []).filter((c) => value && c[field] === value).map((c) => c.id);
+    if (!ids.length) return;
+    const close = returnClose;
+    returnToMonitor = null;            // nicht ins Modal zurück, die Tabelle ist das Ziel
+    candidateDetail.hide();
+    close?.();
+    const label = ({ inbox: 'Inbox', archive: 'Archiv', export: 'Export', watch: 'Watchlist', all: 'Watch + Archiv' })[currentBlobType] ?? currentBlobType;
+    showPinnedInList(ids, ` · ${field === 'sub_sector' ? 'Sub-Sektor' : 'Sektor'} ${value} · ${label}`);
     return;
   }
 
@@ -2903,7 +2919,7 @@ async function init() {
         if (currentBlobType !== 'watch' && currentBlobType !== 'all') await switchBlob('watch');
         const cand = (allBlobs.watch?.candidates ?? []).find((x) => x.id === c.id) ?? c;
         ctrl.hide();
-        returnToMonitor = () => ctrl.show();   // beim Schliessen des Sheets zurück ins Modal
+        returnToMonitor = () => ctrl.show(); returnClose = () => ctrl.close?.();   // beim Schliessen des Sheets zurück ins Modal
         candidateDetail.show(cand);
         openDetailSheet();
       },
@@ -3034,7 +3050,7 @@ async function init() {
       onSelectInList: (ids) => showInList(ids),
       onOpenDetail: (candidate, ctrl) => {
         ctrl?.hide();
-        returnToMonitor = () => ctrl?.show();
+        returnToMonitor = () => ctrl?.show(); returnClose = () => ctrl?.close?.();
         candidateDetail.show(candidate);
         openDetailSheet();
       },
@@ -3074,7 +3090,7 @@ async function init() {
       onSelectInList: (ids) => showInList(ids),
       onOpenDetail: (candidate, ctrl) => {
         ctrl?.hide();                        // keep the dashboard mounted, just hidden
-        returnToMonitor = () => ctrl?.show(); // restored when the detail sheet closes
+        returnToMonitor = () => ctrl?.show(); returnClose = () => ctrl?.close?.(); // restored when the detail sheet closes
         candidateDetail.show(candidate);
         openDetailSheet();
       },

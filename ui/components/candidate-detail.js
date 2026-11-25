@@ -2911,8 +2911,10 @@ export class CandidateDetail {
                 ? `<span class="cluster-badge cluster-badge--${cl.key}" title="Trade-Cluster: ATRP ${fmtNum(c.tv_data?.atrp, 1)}% · MCap ${formatMarketCap(c.tv_data?.market_cap)} · ATR-Mult ${cl.atrMult} · Gewinnziel +${cl.gainPct}% · Vol-Basis ØV${cl.volBasis}">${cl.label}</span>`
                 : `<span class="tag tag--ph" title="Trade-Cluster braucht TV-Daten (ATRP/MCap)">Cluster</span>`;
             })()}
-            ${c.sector ? `<span class="tag">${c.sector}</span>` : ''}
-            ${c.sub_sector ? `<span class="tag">${c.sub_sector}</span>` : ''}
+            ${[['sector', 'Sektor'], ['sub_sector', 'Sub-Sektor']].map(([f, l]) => c[f]
+              ? `<button type="button" class="tag tag--group" data-group-field="${f}" data-group-value="${escProfile(c[f])}"
+                  title="Alle Titel im ${l} „${escProfile(c[f])}“ in der Tabelle zeigen (aktiver Bucket)">${escProfile(c[f])}</button>`
+              : '').join('')}
           </div>
         </div>
         <div class="detail-header-right">
@@ -2989,6 +2991,10 @@ export class CandidateDetail {
     `;
 
     this.el.querySelector('#detail-close').addEventListener('pointerup', () => this.hide());
+
+    // Sektor-/Sub-Sektor-Badge: gefilterte Liste des aktiven Buckets in der Tabelle (app.js `showGroup`).
+    this.el.querySelectorAll('[data-group-field]').forEach((b) => b.addEventListener('click', () =>
+      this.onAction?.('showGroup', c, { field: b.dataset.groupField, value: c[b.dataset.groupField] })));
 
     const isinEl = this.el.querySelector('#detail-isin');
     if (isinEl) {

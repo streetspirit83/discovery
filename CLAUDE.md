@@ -159,7 +159,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
-  Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Der Stift in der Toolbar
+  Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Die Badges **Sektor** und **Sub-Sektor** im Kopf (seit 25.11.2026) öffnen alle Titel dieser Gruppe im **aktiven Bucket** (Watchlist, Archiv, „Watch + Archiv“ …) als Trefferliste (Aktion `showGroup` in `app.js` → `showPinnedInList`); ein Modal, aus dem das Sheet kam, wird dabei geschlossen (`returnClose`). Der Stift in der Toolbar
   öffnet das Bearbeiten-Feld: Links, Research-Prompt, Merkliste-Symbol (ein Speichern)
   und die Signal-Herkunft. Der Perf.-Chart startet mit den Tageskerzen (US TwelveData,
   sonst Yahoo); ohne Kerzen und ohne laufenden Abruf bleibt LS, bis 1J gewählt wird.
