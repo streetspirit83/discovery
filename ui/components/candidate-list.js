@@ -260,6 +260,15 @@ function timeAgo(isoStr) {
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
 }
+const SINCE_TIME = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
+const SINCE_FULL = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+// Meta-Ansicht „Seit": Datum, darunter Uhrzeit · Alter (eine Stufe kleiner).
+function sinceCell(c) {
+  const t = c.first_discovered_at ? new Date(c.first_discovered_at) : null;
+  if (!t || isNaN(t)) return '—';
+  return `<span class="since-cell" title="${SINCE_FULL.format(t)}"><span class="since-date">${DATE_DMY.format(t)}</span>`
+    + `<span class="since-sub">${SINCE_TIME.format(t)} \u00b7 ${timeAgo(c.first_discovered_at)}</span></span>`;
+}
 function getLatestSignal(c) {
   if (!c.sources?.length) return '';
   return c.sources[c.sources.length - 1].info_snippet ?? '';
@@ -311,6 +320,7 @@ function sortValue(c, col) {
     case 'symbol':    return c.symbol.toLowerCase();
     case 'name':      return c.name ? c.name.toLowerCase() : null;
     case 'sector':    return c.sector ? c.sector.toLowerCase() : null;
+    case 'sub_sector':return c.sub_sector ? c.sub_sector.toLowerCase() : null;
     case 'discovered':return c.first_discovered_at ? new Date(c.first_discovered_at).getTime() : null;
     case 'state':     return STATE_ORDER.indexOf(c.workspace_state);
     case 'sources':   return c.sources.length;
@@ -827,9 +837,10 @@ VIEWS.score = [
 VIEWS.meta = [
   { key:'name',        label:'Name',           title:'Firmenname', num:false, fmt:nameCell },
   { key:'sector',      label:'Sektor',         title:'Sektor', num:false, fmt:c=>`<span class="sector-cell">${c.sector ?? '—'}</span>` },
+  { key:'sub_sector',  label:'Sub-Sektor',     title:'Sub-Sektor (TradingView-Industry-Klassifikation) \u00b7 sortierbar', num:false, fmt:c=>`<span class="sector-cell">${c.sub_sector ?? '—'}</span>` },
   { key:'sources',     label:'Quellen',        title:'Signal-Quellen', num:false, fmt:c=>renderSourceBadges(c.sources) },
   { key:'links',       label:'Links',          title:'Externe Links', num:false, fmt:c=>`<div class="link-cluster">${chipLink(tvChartUrl(c) ?? c.links?.tradingview,TV_LOGO,'TradingView-Chart','link-chip--tv')}${chipLink(c.links?.stocktwits,ST_LOGO,'StockTwits','link-chip--st')}${chipLink(c.links?.yahoo,YH_LOGO,'Yahoo Finance','link-chip--yahoo')}</div>` },
-  { key:'discovered',  label:'in',             title:'Erstmals entdeckt', num:false, fmt:c=>`<span class="time-chip" title="${c.first_discovered_at}">${timeAgo(c.first_discovered_at)}</span>` },
+  { key:'discovered',  label:'Seit',           title:'In der Discovery App seit (erstmals entdeckt, first_discovered_at) \u00b7 zweite Zeile: Uhrzeit und Alter \u00b7 sortierbar', num:false, fmt:sinceCell },
   { key:'signal_text', label:'Letztes Signal', title:'Letztes Signal aus den Quellen', num:false, fmt:c=>`<span class="signal-text">${getLatestSignal(c)}</span>` },
   { key:'currency',    label:'Wä',        title:'Börsenwährung', num:false, fmt:c=>`<span class="currency-tag">${nativeCurrency(c)}</span>` },
 ];

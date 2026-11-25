@@ -491,6 +491,9 @@ td.col-anchor .sym-cell__sub { max-width:100%; overflow:hidden; }
 }
 .time-chip { font-size:var(--fs-2); color:var(--muted); }
 .sector-cell { font-size:var(--fs-2); }
+.since-cell { display:inline-flex; flex-direction:column; line-height:1.15; white-space:nowrap; }
+.since-date { font-size:var(--fs-2); font-variant-numeric:tabular-nums; }
+.since-sub  { font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
 
 /* Source badges */
 .src-badge, .badge {
