@@ -283,41 +283,38 @@ async function runLsQuoteForSelection(idsArg) {
   }
 }
 
-/* Start: LS-Livekurse der ★-Liste still nachladen (kein Toast, kein ISIN-Nachschlag).
-   Wartet, bis der Hintergrund-Abgleich des Blob-Caches durch ist – sonst ersetzt
-   der frische Stand die Objekte mitten im Abruf. Ein Fehlversuch behält den alten
-   Kurs; gespeichert werden nur Treffer. */
-async function refreshStarLsOnLoad() {
-  if (useMock || !storageClient || !candidateList) return;
-  const backendUrl = localStorage.getItem('discovery_backend_url');
-  const secret     = localStorage.getItem('discovery_secret');
-  if (!backendUrl || !secret) return;
-  for (let i = 0; i < 40 && revalidating > 0; i++) await new Promise((r) => setTimeout(r, 250));
-  await new Promise((r) => setTimeout(r, 400)); // Neuzeichnung nach dem Abgleich abwarten
-  if (candidateList.filters.broker !== 'star') return;
-  const bucket = currentBlobType;
+/* Gefilterte Liste → frische LS-Kurse (seit 25.11.2026, ersetzt die reine ★-Startaktualisierung).
+   Nach jeder Zeichnung der Tabelle (`onAfterRender`) prüft die App mit 0,9 s Verzögerung: Ist die Liste
+   gefiltert (weniger Titel als der Bucket – Filter, Suche, ★/Auge, Trefferliste) und hat sich die
+   Auswahl seit dem letzten Abruf geändert, holt `refreshLsFor` still die LS-Kurse dieser Titel
+   (nur Kurse älter als 2 min, älteste zuerst, höchstens 120 je Runde). Fehlversuche behalten den alten
+   Kurs, gespeichert werden nur Treffer. Wartet, bis der Blob-Abgleich (`revalidating`) durch ist. */
+const LS_FILTER_FRESH_MS = 2 * 60e3;
+const LS_FILTER_MAX = 120;
+let lsFilterTimer = null;
+let lsFilterSig = '';
+let lsFilterBusy = false;
+function scheduleFilteredLs() {
+  if (useMock || !candidateList) return;
+  clearTimeout(lsFilterTimer);
+  lsFilterTimer = setTimeout(runFilteredLs, 900);
+}
+async function runFilteredLs() {
+  if (revalidating > 0 || lsFilterBusy) { clearTimeout(lsFilterTimer); lsFilterTimer = setTimeout(runFilteredLs, 1000); return; }
+  const total = allBlobs[currentBlobType]?.candidates?.length ?? 0;
   const rows = candidateList.getFiltered();
-  if (!rows.length) return;
-  const prev = new Map(rows.map((c) => [c.id, c.ls_quote]));
-  let updates;
-  try {
-    updates = await candidateList.runLsQuote(rows.map((c) => c.id), { backendUrl, secret });
-  } catch (err) {
-    console.warn('[LS] Start-Aktualisierung fehlgeschlagen:', err.message);
-    updates = [];
-  }
-  const ok = updates.filter((u) => u.updates.ls_quote?.price != null);
-  const okIds = new Set(ok.map((u) => u.candidate_id));
-  let restored = false;
-  for (const c of rows) {
-    if (okIds.has(c.id)) continue;
-    const old = prev.get(c.id);
-    if (old?.price != null) { c.ls_quote = old; restored = true; }
-  }
-  if (restored) candidateList.renderRowsSoon();
-  if (ok.length && currentBlobType === bucket) {
-    storageClient.bulkUpdateCandidates(bucket, ok).catch((err) => console.warn('[LS] Speichern:', err.message));
-  }
+  if (!rows.length || rows.length >= total) { lsFilterSig = ''; return; }
+  const sig = `${currentBlobType}|${rows.map((c) => c.id).sort().join(',')}`;
+  if (sig === lsFilterSig) return;
+  lsFilterSig = sig;
+  const age = (c) => { const t = Date.parse(c.ls_quote?.checked_at ?? ''); return Number.isFinite(t) ? Date.now() - t : Infinity; };
+  const ids = rows.filter((c) => age(c) > LS_FILTER_FRESH_MS)
+    .sort((a, b) => age(b) - age(a)).slice(0, LS_FILTER_MAX).map((c) => c.id);
+  if (!ids.length) return;
+  lsFilterBusy = true;
+  try { await refreshLsFor(ids); }
+  catch (err) { console.warn('[LS] Filter-Aktualisierung fehlgeschlagen:', err.message); }
+  finally { lsFilterBusy = false; }
 }
 
 /* Monitor-Reiter „Live“: LS-Kurse der übergebenen Titel neu holen (Reihenfolge wie übergeben,
@@ -2756,7 +2753,7 @@ async function init() {
     onAction: handleAction,
     onBulkAction: handleBulkAction,
     onSelectionChange: () => renderSelectedPill(),
-    onAfterRender: () => updateAlertBadge(),
+    onAfterRender: () => { updateAlertBadge(); scheduleFilteredLs(); },
   });
 
   candidateDetail = new CandidateDetail(document.getElementById('detail-sheet'), {
@@ -2815,9 +2812,9 @@ async function init() {
 
   updateMockBadge();
 
-  // Merkliste ("Einstand"/Stückzahl) lädt oben parallel zum Blob. LS-Kurse
-  // holt der Start nur für die ★-Liste selbst, sonst auf Abruf (LS-Kurs-Knopf).
-  refreshStarLsOnLoad();
+  // Merkliste ("Einstand"/Stückzahl) lädt oben parallel zum Blob. LS-Kurse holt die App für jede
+  // gefilterte Liste selbst (auch die ★-Startliste), sonst auf Abruf (LS-Kurs-Knopf).
+  scheduleFilteredLs();
 
   // Deep link from an ntfy push (`#c=<id>`): open that candidate's detail
   // sheet on load, and on later hash changes (second push while app is open).

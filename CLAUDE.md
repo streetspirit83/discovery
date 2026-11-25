@@ -94,8 +94,13 @@ Worker (`window.Capacitor`). Eine neue UI-Fassung kommt erst mit einem neuen APK
   zeichnet 40 Zeilen sofort und den Rest in Häppchen (alles auf einmal, wenn weiter unten gescrollt).
 - **Zusatzdaten** (Merkliste, LS-Historie, Analysten, market) starten in `init()` parallel zum Blob (`shared()` teilt laufende Abrufe).
 - **Startansicht:** Die App startet immer mit aktivem ★-Filter (Portfolio), im zuletzt genutzten Bucket; abschalten
-  gilt nur bis zum nächsten Laden. Für diese Liste holt `refreshStarLsOnLoad` (`app.js`) nach dem Cache-Abgleich still
-  die LS-Livekurse (Wellen von 6, nur Treffer werden gespeichert, ein Fehlversuch behält den alten Kurs).
+  gilt nur bis zum nächsten Laden.
+- **LS bei gefilterter Liste (seit 25.11.2026):** Nach jeder Tabellen-Zeichnung (`onAfterRender` → `scheduleFilteredLs`
+  in `app.js`, 0,9 s entprellt) holt die App still die LS-Kurse, sobald die Liste gefiltert ist (weniger Titel als der
+  Bucket: Filter, Suche, ★/Auge, Trefferliste) und sich die Auswahl seit dem letzten Abruf geändert hat — nur Kurse
+  älter als 2 min, älteste zuerst, höchstens 120 je Runde, über `refreshLsFor` (Wellen von 6, ISIN-Nachschlag, Treffer
+  gespeichert, Fehlversuch behält den alten Kurs). Wartet auf den Blob-Abgleich. Ersetzt das frühere
+  `refreshStarLsOnLoad`. **Kosten:** eine Proxy-Runde je Titel.
 - **Lazy:** Lightweight Charts über `lib/lwc-loader.js` (Detail-Sheet, Watch Ranges; Vorladen im Leerlauf).
   Eruda nur mit `?debug`.
 - Messen: `diag-startup-bench.yml` (Handy, CPU 4× gedrosselt, kalt/warm, optional CPU-Profil) und `diag-blob-sizes.yml`.
