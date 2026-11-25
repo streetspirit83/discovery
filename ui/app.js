@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261125a';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261125b';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261120a';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261125b';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20261123a';
@@ -13,11 +13,11 @@ import { renderAlertModal } from './components/alert-modal.js?v=20261103h';
 import { openTriggerEditor } from './components/trigger-modal.js?v=20261104b';
 import { openNachkaufModal } from './components/nachkauf-modal.js?v=20261103f';
 import { openAiPromptModal } from './components/ai-prompt-modal.js?v=20261103f';
-import { openPeerImportModal } from './components/peer-import-modal.js?v=20261104k';
+import { openPeerImportModal } from './components/peer-import-modal.js?v=20261125b';
 import { triggeredCount } from './lib/alerts.js?v=20261103h';
 import { renderMarketsModal } from './components/markets-modal.js?v=20261119f';
 import { sma200DistPct } from './lib/sma200-extremes.js?v=20261106b';
-import { renderDashboardModal } from './components/dashboard-modal.js?v=20261123a';
+import { renderDashboardModal } from './components/dashboard-modal.js?v=20261125b';
 import { latestPickKeys } from './components/daily-picks-panel.js?v=20261107a';
 import { loadCharts } from './lib/lwc-loader.js?v=20261107b';
 import { cacheGet, cachePut } from './lib/blob-cache.js?v=20261107f';
@@ -26,7 +26,7 @@ import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261125a';
+import { renderControlModal } from './components/control-modal.js?v=20261125b';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261107f';
 import { enrichBulk } from './lib/claude-api.js';
@@ -43,9 +43,9 @@ import { fetchLsQuote } from './lib/ls-intraday.js?v=20261026a';
 import { checkTradeRepublic } from './lib/tr-check.js?v=20260807a';
 import { autoFetchPlan } from './lib/detail-autofetch.js?v=20260918a';
 import { buildResearchPrompt, PROMPT_TEMPLATES } from './lib/research-prompt.js?v=20261026b';
-import { promptUrl } from './lib/quick-take-prompt.js?v=20261106c';
+import { promptUrl } from './lib/quick-take-prompt.js?v=20261125b';
 import { resolvePrimaryByIsin } from './lib/symbol-search.js?v=20260807a';
-import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261104k';
+import { parsePeerHash, candidateKey } from './lib/peer-import.js?v=20261125b';
 import { buildLinks } from './lib/link-builder.js';
 import { normalizeExchange } from './lib/exchange-map.js';
 import { MOCK_INBOX, MOCK_ARCHIVE, MOCK_EXPORT, MOCK_WATCH } from './lib/schema.js';

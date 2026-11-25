@@ -5,7 +5,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
-import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261104k';
+import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261125b';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -40,7 +40,8 @@ function rowHtml(r, i, existing) {
  * @param {string} [o.title]  Überschrift des Fensters
  */
 export function openPeerImportModal({ request, blocked = null, backend, loadExisting, onImport, title = 'Alternativen' }) {
-  const { items, peer } = request;
+  const { items, peer, sub = null } = request;
+  if (sub) title = `Branchenführer · ${sub}`;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -87,7 +88,7 @@ export function openPeerImportModal({ request, blocked = null, backend, loadExis
     try {
       const [existing, resolved] = await Promise.all([
         loadExisting(),
-        resolveTickers(peer ? [...items, peer] : items, peer, backend),
+        resolveTickers(peer ? [...items, peer] : items, peer, backend, sub),
       ]);
       const base = peer ? resolved.pop() : null;
       rows = resolved;

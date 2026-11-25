@@ -67,6 +67,28 @@ export function quickTakePrompt(c, { currency = 'USD', date = new Date().toISOSt
   ].join('\n');
 }
 
+/**
+ * KI-Lookup im Monitor (Sub-Sektor-Heatmap): branchenführende, börsennotierte Unternehmen
+ * eines Sub-Sektors, die noch nicht im Workspace liegen. Rückweg wie bei den Alternativen:
+ * Link `#add=…&sub=<Sub-Sektor>` → Prüffenster → Inbox (Quelle `ai-subsector`).
+ * @param {{sub:string, sector?:string, known?:Array<{symbol,exchange,name?}>, n?:number, date?:string}} o
+ */
+export function subsectorLeadersPrompt({ sub, sector = '', known = [], n = 6, date = new Date().toISOString().slice(0, 10) }) {
+  const list = known.slice(0, 30).map((c) => `${c.symbol}@${c.exchange}`).join(', ');
+  const slots = Array.from({ length: n }, () => 'TICKER:BÖRSE').join(',');
+  return [
+    `Recherchiere die führenden börsennotierten Unternehmen im Sub-Sektor „${sub}“${sector ? ` (Sektor ${sector})` : ''}, Stand ${date}.`,
+    'Nutze aktuelle Webquellen und nenne je Aussage Quelle und Datum. Antworte auf Deutsch.',
+    `Gesucht sind genau ${n} Titel, die in diesem Sub-Sektor führend sind (Marktanteil, Technologie, Wachstum) oder gerade starkes Momentum haben – USA und Europa, Marktkapitalisierung ab etwa 1 Mrd. USD.`,
+    list ? `Diese Titel habe ich schon, nenne sie nicht: ${list}.` : null,
+    '',
+    'Je Titel eine Zeile: Name, Ticker @ Börse, Marktkapitalisierung, ein Halbsatz, warum er führend ist, und das wichtigste Risiko.',
+    'Danach 2–3 Sätze zur Lage des Sub-Sektors: Was treibt ihn gerade, was bremst?',
+    `Schreibe am Ende genau diesen Markdown-Link und ersetze nur TICKER und BÖRSE, ohne Leerzeichen: [In Discovery prüfen](${APP_URL}#add=${slots}&sub=${encodeURIComponent(sub)})`,
+    `Erlaubte Börsen: ${EXCHANGES}.`,
+  ].filter((l) => l != null).join('\n');
+}
+
 const CHAT_URLS = {
   claude: 'https://claude.ai/new?q=',
   chatgpt: 'https://chatgpt.com/?q=',

@@ -19,7 +19,9 @@
  *               alle Filter zusammen, Treffer → „In Tabelle öffnen“. Signal-Matrix und Setup-Teil
  *               filtern sich gegenseitig (gewählte Signal-Zelle ↔ Setup-Zelle/Quintil/Brush).
  *               Ganz oben die fünf Mega-Cluster-Icons: Filter für alle Grafiken des Reiters
- *               (= Drill-down auf den Cluster, nochmal tippen = alle).
+ *               (= Drill-down auf den Cluster, nochmal tippen = alle). Ganz unten die
+ *               Sub-Sektor-Heatmap (components/subsector-heatmap.js) über denselben Ausschnitt,
+ *               mit KI-Lookup branchenführender Titel (Claude · ChatGPT · Perplexity → Inbox).
  *   Rankings  – ganz oben die Ranking-Matrix (RSI gegen Score 0–100 je Liste, Zoom + Tabelle,
  *               components/zoom-scatter.js), darunter Umschalter Live (fünf technische Listen) ·
  *               KI-Ranking (Sonntag) · Tagessieger.
@@ -46,6 +48,7 @@ import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
 import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
+import { subsectorHeatHtml, heatSelIds, defaultHeatState } from './subsector-heatmap.js?v=20261125b';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
 
@@ -91,7 +94,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   const filtered = !!universe && universe.length !== candidates.length;
   const all = universe ?? candidates;
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null }, side: storedSide() };
+    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -317,6 +320,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
         ${signalMatrixHtml(sigView())}
         ${setupMatrixHtml(model, sel)}
+        ${subsectorHeatHtml(scopeOf(base, 'cluster', dyn.path), state.heat, all)}
         <div class="dash-pulse">${pulseBody()}</div>
       </div>
       <aside class="dyn-side" aria-label="Unternehmen">${rail}${setupHitsHtml(model, sel, toggle)}</aside>
@@ -598,6 +602,37 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
       if (!ids.length) return;
       ctrl.close();
       onSelectInList?.([...new Set(ids)]);
+      return;
+    }
+    /* Sub-Sektor-Heatmap: Horizont/Sortierung, Filter, Zeile wählen, „In Tabelle öffnen“.
+       Die KI-Knöpfe sind normale Links (neuer Tab) und laufen hier nicht durch. */
+    const hm = state.heat;
+    const hmHz = e.target.closest('[data-hm-hz]');
+    if (hmHz) {
+      const k = hmHz.dataset.hmHz;
+      if (hm.sort === 'perf' && hm.hz === k) hm.asc = !hm.asc; else { hm.sort = 'perf'; hm.hz = k; hm.asc = false; }
+      renderDynamics();
+      return;
+    }
+    const hmSort = e.target.closest('[data-hm-sort]');
+    if (hmSort) {
+      const k = hmSort.dataset.hmSort;
+      if (hm.sort === k) hm.asc = !hm.asc; else { hm.sort = k; hm.asc = k === 'name'; }
+      renderDynamics();
+      return;
+    }
+    const hmDir = e.target.closest('[data-hm-dir]');
+    if (hmDir) { hm.dir = hmDir.dataset.hmDir; renderDynamics(); return; }
+    const hmMin = e.target.closest('[data-hm-min]');
+    if (hmMin) { hm.min = Number(hmMin.dataset.hmMin); renderDynamics(); return; }
+    if (e.target.closest('[data-hm-more]')) { hm.more = !hm.more; renderDynamics(); return; }
+    const hmRow = e.target.closest('[data-hm-row]');
+    if (hmRow) { hm.sel = hm.sel === hmRow.dataset.hmRow ? null : hmRow.dataset.hmRow; renderDynamics(); return; }
+    if (e.target.closest('[data-hm-show]')) {
+      const ids = heatSelIds(scopeOf(base, 'cluster', dyn.path), hm).filter((id) => inBucket.has(id));
+      if (!ids.length) return;
+      ctrl.close();
+      onSelectInList?.(ids);
       return;
     }
     const drill = e.target.closest('[data-sig-drill]');

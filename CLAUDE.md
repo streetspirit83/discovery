@@ -211,7 +211,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `?q=…` und derselben kurzen Ersteinschätzung (Fazit, Momentum, Einordnung, Wettbewerb, Größe
   plus Kennzahlen), gebaut von `lib/quick-take-prompt.js` (`chatUrl`). `q` ist nirgends offiziell
   dokumentiert. Claude füllt nur vor, Perplexity startet sofort, ChatGPT ist laut Quellen unklar.
-  Gemini kennt den Parameter im normalen Chat nicht und ist deshalb nicht dabei. Eigene Datei,
+  Gemini kennt den Parameter im normalen Chat nicht und ist deshalb nicht dabei. Die Logos liegen in `lib/ai-logos.js`. Eigene Datei,
   weil `research-prompt.js` in die Netlify-Funktion `research` gebündelt wird.
   Trigger-, LS- und Kerzen-Knopf sind aus der Toolbar entfernt (LS und Kerzen holt das Sheet beim
   Öffnen selbst, Alerts laufen über die Tabellenzeile). Der Prompt verlangt am Ende immer
@@ -304,7 +304,15 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `dashboard-modal.js`): die gewählte Signal-Zelle (Bullisch · Bärisch · Extreme) filtert Setup-Matrix, Scatter,
   Quintile und Treffer (`sel.ids`), Setup-Zelle/Quintil/Brush filtern umgekehrt die Zählungen der Signal-Matrix.
   Ganz oben im Reiter fünf Mega-Cluster-Icons (`data-dyn-seg`) als Filter für alle Grafiken: setzt den Drill-down-Pfad
-  auf den Cluster, nochmal tippen = alle. Drill-down setzt die Filter zurück. **Rankings** = ganz oben die
+  auf den Cluster, nochmal tippen = alle. Drill-down setzt die Filter zurück. Ganz unten (seit 25.11.2026) die
+  **Sub-Sektor-Heatmap** (`components/subsector-heatmap.js`, Logik `lib/subsector-heat.js`) über denselben Ausschnitt
+  (Cluster-Filter und Drill-down, ohne Setup-Filter): Zeilen = `sub_sector`, Zellen = Median 1T/1W/1M/3M (Farbkappen aus
+  `HORIZONS`), dazu n und Breite (%↑ im Horizont); Spaltenkopf = Horizont + Sortierung, Filter Richtung (alle/↑/↓) und
+  Mindestgrösse (≥ 1/2/3, Standard 2). Zeile tippen = Titel des Sub-Sektors, „In Tabelle öffnen“ und **KI-Lookup**
+  (Claude · ChatGPT · Perplexity, `subsectorLeadersPrompt` in `quick-take-prompt.js`): bis zu 6 branchenführende
+  börsennotierte Titel ohne die vorhandenen, Rückweg über `#add=…&sub=<Sub-Sektor>` → Prüffenster (Titel „Branchenführer ·
+  …“) → Inbox, Quelle `ai-subsector`. `parsePeerHash` liest `sub`, nimmt bis zu 8 Titel und überspringt nicht ersetzte
+  `TICKER`-Platzhalter. **Rankings** = ganz oben die
   **Ranking-Matrix** (seit 23.11.2026: RSI × Score 0–100, ein Punkt je Titel und bestandener Liste, Farbe = Liste,
   `rankingPoints` in `lib/rankings-filter.js`, ohne Sektor-/Anzahlgrenze), darunter Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der

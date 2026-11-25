@@ -3360,3 +3360,44 @@ button.link-chip.is-active { background:var(--accent-weak); border-color:var(--a
 .dash-filtered { display:inline-flex; align-items:center; gap:4px; margin-left:var(--s-2); padding:1px var(--s-2); border-radius:var(--r-pill);
   background:var(--accent-weak); color:var(--accent); font-size:var(--fs-1); font-weight:var(--fw-med); white-space:nowrap; }
 .dash-filtered svg { width:13px; height:13px; }
+
+/* ── Monitor › Dynamik: Sub-Sektor-Heatmap (components/subsector-heatmap.js) ── */
+.hm { --hm-cols:minmax(150px, 2.2fr) 34px repeat(4, minmax(54px, 1fr)) minmax(64px, .9fr); }
+.hm-wrap { overflow-x:auto; }
+.hm-grid { display:flex; flex-direction:column; gap:2px; min-width:520px; }
+.hm-headrow, .hm-row { display:grid; grid-template-columns:var(--hm-cols); gap:2px; align-items:stretch; }
+.hm-head { padding:var(--s-1) 2px; border:none; background:none; color:var(--muted); font:inherit; font-size:var(--fs-1);
+  font-weight:var(--fw-bold); text-align:center; white-space:nowrap; cursor:pointer; }
+.hm-head--name { text-align:left; padding-left:var(--s-1); }
+.hm-head.is-hz { color:var(--accent); }
+span.hm-head { cursor:default; }
+.hm-row { width:100%; padding:0; border:none; border-radius:var(--r-1); background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.hm-row:hover .hm-name, .hm-row.is-sel .hm-name { color:var(--accent); }
+.hm-row.is-sel { outline:2px solid var(--accent); outline-offset:-1px; }
+.hm-name { display:flex; flex-direction:column; justify-content:center; min-width:0; padding:2px var(--s-1); background:var(--surface); }
+.hm-name__main { font-size:var(--fs-2); font-weight:var(--fw-bold); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hm-name__sub { font-size:var(--fs-1); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hm-n { display:flex; align-items:center; justify-content:center; font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+.hm-cell { display:flex; align-items:center; justify-content:center; min-height:32px; border-radius:var(--r-1);
+  font-size:var(--fs-1); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.hm-cell.is-hz { font-weight:var(--fw-bold); font-size:var(--fs-2); }
+.hm-br { display:flex; align-items:center; gap:4px; padding:0 2px; }
+.hm-br__bar { flex:1 1 auto; height:6px; border-radius:3px; background:var(--surface-3); overflow:hidden; }
+.hm-br__bar span { display:block; height:100%; background:var(--pos); }
+.hm-br small { flex:0 0 auto; font-size:var(--fs-1); color:var(--muted); font-variant-numeric:tabular-nums; }
+.hm-empty { padding:var(--s-2); }
+.hm-more { align-self:flex-start; }
+.hm-ai { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-1) var(--s-2); padding:var(--s-2) var(--s-2) var(--s-1); border-top:1px solid var(--border); margin-top:var(--s-1); }
+.hm-ai__label { display:inline-flex; align-items:center; gap:6px; font-weight:var(--fw-bold); }
+.hm-ai__label svg { width:15px; height:15px; color:var(--ai); }
+.hm-ai .md-note { flex-basis:100%; margin:0; }
+@media (max-width: 600px) {
+  .hm { --hm-cols:minmax(96px, 1.5fr) 22px repeat(4, minmax(40px, 1fr)) 34px; }
+  .hm-grid { min-width:0; }
+  .hm-br__bar { display:none; }
+  .hm-br { justify-content:center; padding:0; }
+  .hm-cell { font-size:11px; }
+  .hm-cell.is-hz { font-size:var(--fs-1); }
+  .hm-name__main { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.15; font-size:var(--fs-1); }
+  .hm-name__sub { display:none; }
+}
