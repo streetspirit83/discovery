@@ -2,9 +2,9 @@
  * Discovery Workspace – Main App
  */
 
-import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261125b';
+import { CandidateList, dupKey, segmentOf } from './components/candidate-list.js?v=20261125e';
 import { filterMultiSelect } from './components/filter-multiselect.js?v=20261103f';
-import { CandidateDetail } from './components/candidate-detail.js?v=20261125c';
+import { CandidateDetail } from './components/candidate-detail.js?v=20261125e';
 import { renderSettingsModal, isConfigured, loadSettings } from './components/settings-modal.js?v=20260814m';
 import { renderUploadModal } from './components/upload-modal.js';
 import { renderScreenerModal } from './components/screener-modal.js?v=20261123a';
@@ -26,7 +26,7 @@ import { openRangesModal } from './components/ranges-modal.js?v=20261104b';
 import { fetchEurBasis, needsEurBasis, eurBasisFresh } from './lib/eur-basis.js?v=20261103h';
 import { rangeInputs, rangeView, rangeOverride, resolveLevels } from './lib/range-levels.js?v=20261104a';
 import { rangeAlarmPatch, rangeAlarmOn } from './lib/range-alarm.js?v=20261104b';
-import { renderControlModal } from './components/control-modal.js?v=20261125b';
+import { renderControlModal } from './components/control-modal.js?v=20261125e';
 import { renderCompareModal } from './components/compare-modal.js?v=20261103h';
 import { loadStorageClient } from './lib/storage-client.js?v=20261107f';
 import { enrichBulk } from './lib/claude-api.js';
@@ -299,8 +299,34 @@ function scheduleFilteredLs() {
   clearTimeout(lsFilterTimer);
   lsFilterTimer = setTimeout(runFilteredLs, 900);
 }
+let lsFilterWait = 0;
+/* Dezentes Status-Label unten links: was gerade geholt wird, danach kurz das Ergebnis. */
+function lsStatus(text, { busy = false, hideIn = 0 } = {}) {
+  let el = document.getElementById('ls-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ls-status';
+    el.className = 'ls-status';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  clearTimeout(el._hide);
+  if (!text) { el.classList.remove('is-on'); return; }
+  el.innerHTML = `<span class="ls-status__ic${busy ? ' is-spin' : ''}">${icons.refreshCw}</span><span>${text}</span>`;
+  el.classList.add('is-on');
+  if (hideIn) el._hide = setTimeout(() => el.classList.remove('is-on'), hideIn);
+}
+/* Nicht-aufzählbare Marken am Kurs-Objekt (landen nie im Blob): `_fetching` pulsiert den Wert,
+   `_flash` lässt einen frisch geholten Kurs kurz aufleuchten. */
+const lsMark = (q, key, on) => { if (q && typeof q === 'object') Object.defineProperty(q, key, { value: on, configurable: true, enumerable: false, writable: true }); };
 async function runFilteredLs() {
-  if (revalidating > 0 || lsFilterBusy) { clearTimeout(lsFilterTimer); lsFilterTimer = setTimeout(runFilteredLs, 1000); return; }
+  // Blob-Abgleich abwarten, aber höchstens ~15 s (sonst blieb der Abruf bei einem hängenden Abgleich ganz aus).
+  if ((revalidating > 0 && lsFilterWait < 15) || lsFilterBusy) {
+    if (revalidating > 0) lsFilterWait++;
+    clearTimeout(lsFilterTimer); lsFilterTimer = setTimeout(runFilteredLs, 1000); return;
+  }
+  lsFilterWait = 0;
   const total = allBlobs[currentBlobType]?.candidates?.length ?? 0;
   const rows = candidateList.getFiltered();
   if (!rows.length || rows.length >= total) { lsFilterSig = ''; return; }
@@ -308,13 +334,36 @@ async function runFilteredLs() {
   if (sig === lsFilterSig) return;
   lsFilterSig = sig;
   const age = (c) => { const t = Date.parse(c.ls_quote?.checked_at ?? ''); return Number.isFinite(t) ? Date.now() - t : Infinity; };
-  const ids = rows.filter((c) => age(c) > LS_FILTER_FRESH_MS)
-    .sort((a, b) => age(b) - age(a)).slice(0, LS_FILTER_MAX).map((c) => c.id);
-  if (!ids.length) return;
+  const targets = rows.filter((c) => age(c) > LS_FILTER_FRESH_MS)
+    .sort((a, b) => age(b) - age(a)).slice(0, LS_FILTER_MAX);
+  if (!targets.length) return;
   lsFilterBusy = true;
-  try { await refreshLsFor(ids); }
-  catch (err) { console.warn('[LS] Filter-Aktualisierung fehlgeschlagen:', err.message); }
-  finally { lsFilterBusy = false; }
+  let done = 0, okN = 0;
+  const n = targets.length;
+  targets.forEach((c) => lsMark(c.ls_quote, '_fetching', true));
+  candidateList.renderRowsSoon(0);
+  lsStatus(`LS-Kurse · 0/${n}`, { busy: true });
+  const byId = new Map(targets.map((c) => [c.id, c]));
+  try {
+    const r = await refreshLsFor(targets.map((c) => c.id), {
+      onProgress: ({ id, ok, retry }) => {
+        if (retry) return;
+        done++;
+        if (ok) { okN++; const c = byId.get(id); lsMark(c?.ls_quote, '_flash', true); setTimeout(() => lsMark(c?.ls_quote, '_flash', false), 1600); }
+        lsStatus(`LS-Kurse · ${Math.min(done, n)}/${n}`, { busy: true });
+        candidateList.renderRowsSoon(250);
+      },
+    });
+    if (r == null) { lsStatus(''); return; }
+    lsStatus(`LS aktualisiert · ${r.ok}/${n}${r.fail ? ` · ${r.fail} ohne Kurs` : ''}`, { hideIn: 2500 });
+  } catch (err) {
+    console.warn('[LS] Filter-Aktualisierung fehlgeschlagen:', err.message);
+    lsStatus('LS-Kurse: Abruf fehlgeschlagen', { hideIn: 3500 });
+  } finally {
+    targets.forEach((c) => lsMark(c.ls_quote, '_fetching', false));   // Fehlversuche behalten den alten Kurs
+    candidateList.renderRowsSoon(0);
+    lsFilterBusy = false;
+  }
 }
 
 /* Monitor-Reiter „Live“: LS-Kurse der übergebenen Titel neu holen (Reihenfolge wie übergeben,

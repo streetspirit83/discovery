@@ -100,7 +100,10 @@ Worker (`window.Capacitor`). Eine neue UI-Fassung kommt erst mit einem neuen APK
   Bucket: Filter, Suche, ★/Auge, Trefferliste) und sich die Auswahl seit dem letzten Abruf geändert hat — nur Kurse
   älter als 2 min, älteste zuerst, höchstens 120 je Runde, über `refreshLsFor` (Wellen von 6, ISIN-Nachschlag, Treffer
   gespeichert, Fehlversuch behält den alten Kurs). Wartet auf den Blob-Abgleich. Ersetzt das frühere
-  `refreshStarLsOnLoad`. **Kosten:** eine Proxy-Runde je Titel.
+  `refreshStarLsOnLoad`. Wartet höchstens ~15 s auf einen laufenden Abgleich. Anzeige: Label unten links (`#ls-status`,
+  `lsStatus`: „LS-Kurse · n/N“ mit drehendem Icon, danach kurz „LS aktualisiert · n/N“), der LS-Wert pulsiert beim
+  Laden (`_fetching`) und leuchtet nach dem Treffer kurz auf (`_flash`, `.ls-flash`); beide Marken sind nicht-aufzählbar.
+  **Kosten:** eine Proxy-Runde je Titel.
 - **Lazy:** Lightweight Charts über `lib/lwc-loader.js` (Detail-Sheet, Watch Ranges; Vorladen im Leerlauf).
   Eruda nur mit `?debug`.
 - Messen: `diag-startup-bench.yml` (Handy, CPU 4× gedrosselt, kalt/warm, optional CPU-Profil) und `diag-blob-sizes.yml`.
@@ -164,7 +167,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
-  Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Die Badges **Sektor** und **Sub-Sektor** im Kopf (seit 25.11.2026) öffnen alle Titel dieser Gruppe im **aktiven Bucket** (Watchlist, Archiv, „Watch + Archiv“ …) als Trefferliste (Aktion `showGroup` in `app.js` → `showPinnedInList`); ein Modal, aus dem das Sheet kam, wird dabei geschlossen (`returnClose`). Der Stift in der Toolbar
+  Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Preise stehen **immer zuerst in EUR** (seit 25.11.2026, `displayInfo`: USD- und EUR-Titel mit Wechselkurs → EUR, der €/$-Knopf schaltet auf USD; ohne Kurs bleibt die Heimatwährung). Die Badges **Sektor** und **Sub-Sektor** im Kopf (seit 25.11.2026) öffnen alle Titel dieser Gruppe im **aktiven Bucket** (Watchlist, Archiv, „Watch + Archiv“ …) als Trefferliste (Aktion `showGroup` in `app.js` → `showPinnedInList`); ein Modal, aus dem das Sheet kam, wird dabei geschlossen (`returnClose`). Der Stift in der Toolbar
   öffnet das Bearbeiten-Feld: Links, Research-Prompt, Merkliste-Symbol (ein Speichern)
   und die Signal-Herkunft. Der Perf.-Chart startet mit den Tageskerzen (US TwelveData,
   sonst Yahoo); ohne Kerzen und ohne laufenden Abruf bleibt LS, bis 1J gewählt wird.

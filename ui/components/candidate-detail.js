@@ -2077,7 +2077,7 @@ export class CandidateDetail {
     this.candidate = null;
     this.bucket = null;       // aktiver Blob (Watch-Label-Toggle nur im Watch-Bucket)
     this.activeTab = 'performance';
-    this.altCurrency = false; // false = native currency, true = USD↔EUR switched
+    this.altCurrency = false; // false = EUR (Standard), true = USD
     this.tradeSide = 'long';  // Trade-Ticket side (Long | Short segmented control)
     this.chartHorizon = '1J'; // Performance chart: '1J' TD-Tageskerzen | '10T' LS-Intraday
     this.horizonPicked = false; // 1J bewusst gewählt: dann auch Ladeknopf statt LS-Rückfall
@@ -2803,10 +2803,12 @@ export class CandidateDetail {
       const factor = alt ? fB * fx : fB;
       return { tv: convertTv(c.tv_data, factor), cur: alt ? 'USD' : 'EUR', factor, fx, canSwitch: fx != null, alt, barsF: factor * barsUnitAdj(c) };
     }
+    // USD/EUR-Titel: immer zuerst in EUR (wie der LS-Kurs), der Knopf schaltet auf USD.
     const canSwitch = (nat === 'USD' || nat === 'EUR') && fx != null;
-    const cur = this.altCurrency && canSwitch ? (nat === 'USD' ? 'EUR' : 'USD') : nat;
+    const alt = !!this.altCurrency && canSwitch;
+    const cur = canSwitch ? (alt ? 'USD' : 'EUR') : nat;
     const factor = cur === nat ? 1 : (nat === 'USD' ? 1 / fx : fx);
-    return { tv: convertTv(c.tv_data, factor), cur, factor, fx, canSwitch };
+    return { tv: convertTv(c.tv_data, factor), cur, factor, fx, canSwitch, alt };
   }
 
   // Step to the prev/next candidate in the current sort order (swipe / arrows).

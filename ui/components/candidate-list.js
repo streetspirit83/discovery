@@ -1818,7 +1818,7 @@ function lsPriceCell(c) {
   const sym = displayCurrency === 'USD' ? '$' : '€';
   const age = q.ts ? timeAgo(new Date(q.ts).toISOString()) : '';
   const tip = `LS-Kurs (Handelsplatz Trade Republic, EUR)${q.prev_close != null ? ` · Vortag ${fmtNum(q.prev_close, 2)}€` : ''}${age ? ` · Stand vor ${age}` : ''}`;
-  return `<span class="${q._fetching ? 'is-fetching' : ''}" title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
+  return `<span class="${q._fetching ? 'is-fetching' : q._flash ? 'ls-flash' : ''}" title="${tip}">${sym}${fmtNum(q.price * convFromEur(), 2)}</span>`;
 }
 
 /* ── Analysten-Kursziel (TV) ───────────────────────────────────────────────

@@ -3404,3 +3404,18 @@ span.hm-head { cursor:default; }
 /* Detail-Sheet: Sektor-/Sub-Sektor-Badge öffnet die Gruppe in der Tabelle */
 button.tag--group { font:inherit; font-size:var(--fs-1); cursor:pointer; }
 button.tag--group:hover, button.tag--group:focus-visible { background:var(--accent); color:var(--on-accent, #fff); }
+
+/* LS-Aktualisierung bei gefilterter Liste: dezentes Label unten links + Aufleuchten frischer Kurse */
+.ls-status { position:fixed; left:var(--s-3); bottom:calc(var(--h-botnav) + env(safe-area-inset-bottom) + var(--s-2));
+  z-index:var(--z-toast); display:inline-flex; align-items:center; gap:6px; padding:3px 9px 3px 7px;
+  border:1px solid var(--border); border-radius:var(--r-pill); background:color-mix(in srgb, var(--surface-2) 88%, transparent);
+  color:var(--muted); font-size:var(--fs-1); font-variant-numeric:tabular-nums; pointer-events:none;
+  opacity:0; transform:translateY(4px); transition:opacity .25s ease, transform .25s ease; }
+.ls-status.is-on { opacity:.92; transform:none; }
+.ls-status__ic { display:inline-flex; color:var(--accent); }
+.ls-status__ic svg { width:12px; height:12px; }
+.ls-status__ic.is-spin svg { animation:ls-spin 1s linear infinite; }
+@keyframes ls-spin { to { transform:rotate(360deg); } }
+.ls-flash { animation:ls-flash 1.4s ease-out; border-radius:3px; }
+@keyframes ls-flash { 0% { background:color-mix(in srgb, var(--accent) 35%, transparent); } 100% { background:transparent; } }
+@media (prefers-reduced-motion: reduce) { .ls-status__ic.is-spin svg, .ls-flash, .is-fetching { animation:none; } }
