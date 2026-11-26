@@ -164,7 +164,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
-  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Daneben (Standard nach „%S200“) **„SMA-T“** (`SMTS_COL`): SMA Trend Strength Score 0–100 (siehe unten), Farbe = Trendstatus, „~“ = kürzere Historie, zweite Zeile SMA200-Steigung · Separation SMA20–SMA200. Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Preise stehen **immer zuerst in EUR** (seit 25.11.2026, `displayInfo`: USD- und EUR-Titel mit Wechselkurs → EUR, der €/$-Knopf schaltet auf USD; ohne Kurs bleibt die Heimatwährung). Die Badges **Sektor** und **Sub-Sektor** im Kopf (seit 25.11.2026) öffnen alle Titel dieser Gruppe im **aktiven Bucket** (Watchlist, Archiv, „Watch + Archiv“ …) als Trefferliste (Aktion `showGroup` in `app.js` → `showPinnedInList`); ein Modal, aus dem das Sheet kam, wird dabei geschlossen (`returnClose`). Der Stift in der Toolbar
@@ -173,7 +173,8 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   sonst Yahoo); ohne Kerzen und ohne laufenden Abruf bleibt LS, bis 1J gewählt wird.
   Tab „Trend" erklärt die Bias-Grafik (drei Ebenen, Ring-Legende) und zeigt mit
   geladener TD-Historie Bias-Verlauf, Regime-Statistik, den **SMA200-Trend**
-  (Ø-Wachstum je Monat, Richtung 1M/3M, Fenster) und Fragilität.
+  (Ø-Wachstum je Monat, Richtung 1M/3M, Fenster) und Fragilität. Davor (seit 26.11.2026, auch ohne Bias) der Block
+  **SMA Trend Strength** (`renderSmaScoreBlock`: Score, SMA50-/SMA200-Steigung, Separation, Balken je Komponente, Historie).
   Tab „Prog." (Forecast) zeigt zusätzlich das Analysten-Konsensziel als
   gestrichelten Verlauf mit Fächer (Spalte „PTØ" in der Trade-Ansicht neben „Target")
   und projiziert 6 Monate: 3 Monate echte Kerzen + drei
@@ -320,7 +321,13 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   (Claude · ChatGPT · Perplexity, `subsectorLeadersPrompt` in `quick-take-prompt.js`): bis zu 6 branchenführende
   börsennotierte Titel ohne die vorhandenen, Rückweg über `#add=…&sub=<Sub-Sektor>` → Prüffenster (Titel „Branchenführer ·
   …“) → Inbox, Quelle `ai-subsector`. `parsePeerHash` liest `sub`, nimmt bis zu 8 Titel und überspringt nicht ersetzte
-  `TICKER`-Platzhalter. **Rankings** = ganz oben die
+  `TICKER`-Platzhalter. Zwischen Setup-Matrix und Sub-Sektor-Heatmap (seit 26.11.2026) die **Trend Map**
+  (`components/trend-map.js`, Zoom-Scatter mit farbigen Bereichen `zones`): x = SMA Trend Score, y = SMA50-Steigung %
+  über 20 Handelstage, ein Punkt je Titel, Grösse = Börsenwert (abschaltbar), Umriss = unvollständige Historie; Bereiche
+  stark positiv (Score ≥ 70, SMA50 steigend) · entwickelnd · schwach/negativ (< 40 oder SMA50 fallend). Filter Score ab
+  40/55/70, Markt USA/Europa/Sonstige, nur vollständig; Legende = Filter Trendstatus. Daneben/darunter der **Trend
+  Scanner** (Score · S50↗ · S200↗ · Sep · Stab, sortierbar per Spaltenkopf, 60 Zeilen + „Alle zeigen“, „In Tabelle
+  öffnen“). Gleicher Ausschnitt wie Cluster-Filter/Drill-down, ohne Setup-Filter. **Rankings** = ganz oben die
   **Ranking-Matrix** (seit 23.11.2026: RSI × Score 0–100, ein Punkt je Titel und bestandener Liste, Farbe = Liste,
   `rankingPoints` in `lib/rankings-filter.js`, ohne Sektor-/Anzahlgrenze), darunter Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
@@ -385,6 +392,15 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
 - Screener: `tv-fields.js`, `tv-screener.js`, `screener-presets.js`.
 - Viz/metrics: `price-viz.js` (range ladder), `spark.js`, `dashboard-metrics.js`,
   `alerts.js` (alert model + evaluation).
+- **SMA Trend Strength** (`sma-trend-score.js`, seit 26.11.2026): Score 0–100 = Alignment 30 (Anteil richtig
+  geordneter SMA-Paare 20>50>100>200) · Slope 30 (%-Steigung je SMA über 20 Handelstage, voll ab `SLOPE_CAP`) ·
+  Separation 25 (SMA20 über SMA200, voll ab 25 %) · Stability 15 (Tage mit bullischer Struktur in den letzten 20),
+  alles prozentual. Historie: `swing_analysis.sma` (wenn ≤ 10 Tage alt und ≥ 21 Punkte), sonst **`tv_data.sma_hist`**
+  `[[Tag, s20, s50, s100, s200], …]` (neueste zuerst, 21 Handelstage, ~1 KB je Titel), das `buildUpdates` in
+  `tv-enrichment.js` bei jeder TV-Anreicherung fortschreibt (`upsertSmaHist`; App, Bucket-Refresh, Auto-Rotation; beim
+  ersten Mal aus den 5 `snapshot`-Tagen vorbefüllt; Wochenende zählt zum Freitag, unveränderte Werte = kein neuer Tag).
+  Mit 5–19 Tagen wird die Steigung hochgerechnet, unter 5 Tagen fallen Slope und Stability weg; der Score wird dann auf
+  die verfügbaren Punkte normiert und als `partial` („~“) markiert. `smaTrendScore(c)` cacht je Objekt.
 - Typ/Trend-Helfer: `instrument-type.js` (ETF vs. Aktie — erst `tv_data.type`/
   `typespecs` aus dem Scanner, sonst Namensheuristik; `asset_type` am Kandidaten
   ist das persistierte Ergebnis), `sma-trend.js` (Ø-Wachstum und Richtung einer

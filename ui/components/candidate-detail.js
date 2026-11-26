@@ -10,14 +10,14 @@ import { tvChartUrl } from '../lib/link-builder.js?v=20260819m';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { detectBottomSignal, detectBreakoutSetup, detectBreakdownRisk, MIN_SNAPSHOTS, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
 import { classifyCluster, tradeTarget, breakoutEntry, exitLevels } from '../lib/trade-setup.js?v=20260807a';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261103b';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261126a';
 import { normalizeExchange } from '../lib/exchange-map.js';
 import { swingLadderSVG, isUsTicker, detectPivots, yahooChartSymbol, SMA_PERIODS } from '../lib/tv-swings.js?v=20260818a';
 import { computeBias, trendAge, biasLabel, biasRingSVG, BIAS_LEVELS } from '../lib/tv-sentiment.js?v=20260807a';
 import { regimeStats, detectDivergence, WARMUP as BIAS_WARMUP } from '../lib/tv-bias-history.js?v=20260807a';
 import { bollinger, supertrend, cci, smaSeries } from '../lib/chart-indicators.js?v=20260818a';
 import { transcriptLlmText } from '../lib/company-profile.js?v=20261101b';
-import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261103b';
+import { ANALYST_ACTIONS, mergeNews } from '../lib/tv-news.js?v=20261126a';
 import { rangeInputs, rangeView } from '../lib/range-levels.js?v=20261104a';
 import { armedLevels, rangeAlarmOn } from '../lib/range-alarm.js?v=20261104b';
 import { candidateQuoteEur } from '../lib/alerts.js?v=20261103h';
@@ -27,6 +27,7 @@ import { buildForecast, futureBusinessDays, probAtOrAbove, SIGMA_FROM_ATRP, DRIF
 import { analystTargets, yahooExtra, yahooSymbol } from '../lib/analyst-targets.js?v=20260819g';
 import { fmpErrorText } from '../lib/fmp-valuation.js?v=20260818a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
+import { smaTrendScore, TREND_STATUS, SMA_TS } from '../lib/sma-trend-score.js?v=20261126a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { chatUrl } from '../lib/quick-take-prompt.js?v=20261125b';
 import { CLAUDE_LOGO, PERPLEXITY_LOGO, CHATGPT_LOGO } from '../lib/ai-logos.js?v=20261125b';
@@ -1162,6 +1163,40 @@ function renderSma200Block(c) {
     absteigenden Regime.</p>`;
 }
 
+/* ── SMA Trend Strength (Trend-Tab, seit 26.11.2026) ───────────────────────────
+ * Score 0–100 aus vier Komponenten (lib/sma-trend-score.js), alles prozentual. Balken je Komponente,
+ * darunter die Rohwerte: Steigung jeder SMA über 20 Handelstage, Separation, Stabilität, Historie.
+ */
+function renderSmaScoreBlock(c) {
+  const t = smaTrendScore(c);
+  const headline = '<h4 class="pv-subhead">SMA Trend Strength</h4>';
+  if (!t) return `${headline}<p class="tb-hint">Braucht SMA20, SMA50 und SMA200 aus den TV-Daten.</p>`;
+  const W = SMA_TS.W, st = TREND_STATUS[t.status];
+  const pct = (v, d = 2) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmtN(Math.abs(v), d)}%`);
+  const bar = (label, pts, max, val) => `<div class="smts-bar"><span>${label}</span>
+      <span class="smts-bar__track"><span class="smts-bar__fill${pts == null ? ' is-na' : ''}" style="width:${pts == null ? 0 : Math.round((pts / max) * 100)}%"></span></span>
+      <span class="smts-bar__val">${pts == null ? '—' : `${Math.round(pts)}/${max}`}${val ? ` · ${val}` : ''}</span></div>`;
+  const hist = t.src ? `${t.histDays} Handelstage · ${t.src}` : 'keine Historie';
+  return `${headline}
+    <div class="tb-stats">
+      ${trendStat('Score', `<span style="color:var(${st?.tone ?? '--text'})">${t.partial ? '~' : ''}${t.score}</span>`, st?.label ?? '')}
+      ${trendStat('SMA50 · 20 T', pct(t.slopes[50]), 'Steigung (y-Achse der Trend Map)', t.slopes[50] >= 0 ? 'pos' : 'neg')}
+      ${trendStat('SMA200 · 20 T', pct(t.slopes[200]), 'Steigung', t.slopes[200] >= 0 ? 'pos' : 'neg')}
+      ${trendStat('Separation', pct(t.sep, 1), 'SMA20 gegenüber SMA200', t.sep >= 0 ? 'pos' : 'neg')}
+    </div>
+    <div class="smts-bars">
+      ${bar('Alignment', t.parts.align, W.align, '')}
+      ${bar('Slope', t.parts.slope, W.slope, `S20 ${pct(t.slopes[20], 1)} · S100 ${pct(t.slopes[100], 1)}`)}
+      ${bar('Separation', t.parts.sep, W.sep, '')}
+      ${bar('Stabilität', t.parts.stab, W.stab, t.stabN ? `${t.stabDays}/${t.stabN} T` : '')}
+    </div>
+    <p class="tb-hint">Alignment = bullische Reihenfolge SMA20 &gt; 50 &gt; 100 &gt; 200 (Anteil geordneter Paare) ·
+    Slope = Steigung je SMA über 20 Handelstage, volle Punkte ab +${[20, 50, 100, 200].map((n) => fmtN(SMA_TS.SLOPE_CAP[n], 1)).join(' / ')} % (SMA20/50/100/200) ·
+    Separation voll ab +${SMA_TS.SEP_CAP} % · Stabilität = Tage mit bullischer Struktur.
+    Historie: ${hist}${t.extrapolated ? ', Steigung auf 20 Tage hochgerechnet' : ''}${t.partial ? ` — Score auf ${t.max} verfügbare Punkte normiert, deshalb „~“` : ''}.
+    Die Reihe wächst mit jeder TV-Anreicherung um einen Handelstag; geladene Tageskerzen liefern sie sofort.</p>`;
+}
+
 function renderTrendTab(c) {
   const tv = c.tv_data;
   const b = tv ? computeBias(tv) : null;
@@ -1169,7 +1204,7 @@ function renderTrendTab(c) {
     // Die Retail-Stimmung hängt nicht an den TV-Daten — sie bleibt auch ohne
     // berechenbares Bias sichtbar, sonst wäre der Tab hier komplett leer.
     return `<p class="pv-empty">Kein Bias berechenbar – „TV Daten" in der Subbar laden.</p>`
-      + renderStocktwitsBlock(c);
+      + (smaTrendScore(c) ? renderSmaScoreBlock(c) : '') + renderStocktwitsBlock(c);
   }
 
   const age  = b.neutral ? null : trendAge(tv, b.sign);
@@ -1276,7 +1311,7 @@ function renderTrendTab(c) {
      Das Regime-Segment im Ring sagt nur „Kurs über/unter der SMA200"; hier
      steht, ob die Linie selbst steigt, fällt oder liegt und wie schnell.
      Quelle sind dieselben Tageskerzen wie oben (analysis.sma). */
-  const smaBlock = renderSma200Block(c);
+  const smaBlock = renderSmaScoreBlock(c) + renderSma200Block(c);
 
   /* 6 · Fragilität */
   const frag = fragilityItems(c, tv, bars);

@@ -21,6 +21,8 @@
  *               Ganz oben die fünf Mega-Cluster-Icons: Filter für alle Grafiken des Reiters
  *               (= Drill-down auf den Cluster, nochmal tippen = alle). Ganz unten die
  *               Sub-Sektor-Heatmap (components/subsector-heatmap.js) über denselben Ausschnitt,
+ *               davor (unter der Setup-Matrix) die Trend Map + Trend Scanner (components/trend-map.js):
+ *               SMA Trend Score × SMA50-Steigung, Filter Score/Markt/Trendstatus, Punktgröße = Börsenwert,
  *               mit KI-Lookup branchenführender Titel (Claude · ChatGPT · Perplexity → Inbox).
  *   Rankings  – ganz oben die Ranking-Matrix (RSI gegen Score 0–100 je Liste, Zoom + Tabelle,
  *               components/zoom-scatter.js), darunter Umschalter Live (fünf technische Listen) ·
@@ -42,13 +44,14 @@
 import { icons } from '../lib/icons.js?v=20261123a';
 import { pulse } from '../lib/dashboard-metrics.js?v=20261103h';
 import { liveListHtml, weeklyRankingsHtml, rotationTabHtml, RANK_SEGS } from './rankings-panel.js?v=20261116a';
-import { liveRankings, rankingPoints } from '../lib/rankings-filter.js?v=20261123a';
-import { zoomScatterHtml, zsClick, zsVisible, bindZoomScatter } from './zoom-scatter.js?v=20261123a';
+import { liveRankings, rankingPoints } from '../lib/rankings-filter.js?v=20261126a';
+import { zoomScatterHtml, zsClick, zsVisible, bindZoomScatter } from './zoom-scatter.js?v=20261126a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
 import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { subsectorHeatHtml, heatSelIds, defaultHeatState } from './subsector-heatmap.js?v=20261125b';
+import { trendMapHtml, trendMapClick, trendShowIds, defaultTrendState } from './trend-map.js?v=20261126a';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
 
@@ -94,7 +97,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   const filtered = !!universe && universe.length !== candidates.length;
   const all = universe ?? candidates;
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState() };
+    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState(), trend: defaultTrendState() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -320,6 +323,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
         ${signalMatrixHtml(sigView())}
         ${setupMatrixHtml(model, sel)}
+        ${trendMapHtml(scopeOf(base, 'cluster', dyn.path), state.trend)}
         ${subsectorHeatHtml(scopeOf(base, 'cluster', dyn.path), state.heat, all)}
         <div class="dash-pulse">${pulseBody()}</div>
       </div>
@@ -348,7 +352,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
      Farbe = Liste. Rechteck ziehen zoomt, die Tabelle darunter zeigt den Ausschnitt. */
   const RK_TONE = { momentum: '--series-1', solid: '--series-3', growth: '--series-7', pullback: '--series-4', breakout: '--series-2' };
   const RK_SHORT = Object.fromEntries(RANK_SEGS.map((sg) => [sg.key, sg.label]));
-  const zs = { rank: { zoom: [], off: new Set() } };
+  const zs = { rank: { zoom: [], off: new Set() }, trend: state.trend.zs };
   let rkPts = null;
   function rankPoints() {
     if (rkPts) return rkPts;
@@ -500,6 +504,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
     bodyEl.innerHTML = rankTabHtml();
     bodyEl.scrollTop = top;
   };
+  const renderTab = () => (rk.tab === 'dynamics' ? renderDynamics() : renderRankings());
   async function loadData() {
     if (rk.data || rk.loading || !loadRankings) return;
     rk.loading = true;
@@ -539,7 +544,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
     else showLive();
   }));
   bindZoomScatter(bodyEl, {
-    onZoom: (key, box) => { if (zs[key]) { zs[key].zoom.push(box); renderRankings(); } },
+    onZoom: (key, box) => { if (zs[key]) { zs[key].zoom.push(box); renderTab(); } },
     onTap: (key, id) => { const cand = candidates.find((c) => c.id === id); if (cand) onOpenDetail?.(cand, ctrl); },
   });
   bindSetupBrush(bodyEl, (brush) => {
@@ -551,8 +556,18 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   bodyEl.addEventListener('click', async (e) => {
     if (e.target.closest('.grp-sel')) return;
     /* Ranking-Matrix: Zoom zurück, Legende, „In Tabelle öffnen“ (Titel im Ausschnitt). */
-    if (zsClick(e, zs)) { renderRankings(); return; }
-    if (e.target.closest('[data-zs-show]')) {
+    if (zsClick(e, zs)) { renderTab(); return; }
+    /* Trend Map: Filter Score/Markt/Größe, Scanner-Sortierung, „In Tabelle öffnen“. */
+    if (trendMapClick(e, state.trend)) { renderDynamics(); return; }
+    const zsShow = e.target.closest('[data-zs-show]');
+    if (zsShow?.dataset.zsShow === 'trend') {
+      const ids = trendShowIds(scopeOf(base, 'cluster', dyn.path), state.trend).filter((id) => inBucket.has(id));
+      if (!ids.length) return;
+      ctrl.close();
+      onSelectInList?.(ids);
+      return;
+    }
+    if (zsShow) {
       const ids = [...new Set(zsVisible(rankPoints(), { x0: 0, x1: 100, y0: 0, y1: 100 }, zs.rank).map((p) => p.id))].filter((id) => inBucket.has(id));
       if (!ids.length) return;
       ctrl.close();
@@ -643,6 +658,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         : drill ? [...dyn.path, drill.dataset.sigDrill] : dyn.path.slice(0, Number(crumb.dataset.dynBc));
       state.sig = null;                          // Zeilen der Matrix ändern sich
       state.setup = { cell: null, q: null, brush: null };   // Quintile und Achsen hängen am Ausschnitt
+      state.trend.zs.zoom = [];                  // Trend Map: Achsen hängen am Ausschnitt
       renderDynamics();
       return;
     }

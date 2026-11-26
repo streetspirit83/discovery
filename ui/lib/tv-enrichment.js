@@ -18,6 +18,7 @@ import { computeOverallScore }       from './tv-overall-score.js';
 import { computeMomentumCheck }      from './tv-momentum-check.js';
 import { normalizeExchange }         from './exchange-map.js';
 import { assetTypeFromTv }           from './instrument-type.js?v=20260831a';
+import { upsertSmaHist }             from './sma-trend-score.js?v=20261126a';
 
 const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
 
@@ -767,6 +768,10 @@ recommend_ma_1m: d[COL.recommendMA1M] ?? null,
   // Append today's closing scores to the per-day series so the dashboard can
   // derive a gapless day-over-day time series (deltas) for every score.
   updates.tv_data.snapshot = upsertSnapshot(candidate.tv_data?.snapshot, snapshotRecord(updates.tv_data));
+  // SMA-Tageswerte (20 Handelstage zurück) für den SMA Trend Strength Score: Slope und Stabilität.
+  // Beim ersten Mal aus den 5 Snapshot-Tagen vorbefüllt (lib/sma-trend-score.js).
+  const smaHist = upsertSmaHist(candidate.tv_data?.sma_hist, updates.tv_data, candidate.tv_data?.snapshot);
+  if (smaHist?.length) updates.tv_data.sma_hist = smaHist;
 
   return updates;
 }

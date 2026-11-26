@@ -6,7 +6,7 @@ import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261103b';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261126a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
@@ -29,6 +29,7 @@ import { CLAUDE_LOGO, PERPLEXITY_LOGO } from '../lib/ai-logos.js?v=20261125b';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
+import { smaTrendScore, TREND_STATUS, SMA_TS } from '../lib/sma-trend-score.js?v=20261126a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -408,6 +409,7 @@ function sortValue(c, col) {
     // Sortiert nach dem Ø-Wachstum (der angezeigten Zahl), nicht nach der
     // Pfeilrichtung — sonst fielen alle „seitwärts"-Zeilen in einen Topf.
     case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
+    case 'sma_ts':      return smaTrendScore(c)?.score ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'analyst_net': return c.analyst_30d?.net ?? null;
     // Nähe zählt, nicht die Richtung: gebrochene Levels stehen ebenfalls oben.
@@ -682,6 +684,21 @@ const S200D_COL = {
   key: 'tv_sma200_dist', label: '%S200', num: true,
   title: 'Abstand des LS-Kurses zur SMA 200 in % (ohne LS-Kurs: TV-Schluss) · positiv = Kurs über der Linie · sortiert nach Abstand',
   fmt: (c) => { const d = smaDistPct(c, c.tv_data?.sma200); return `<span class="${posNegClass(d)}">${d == null ? '—' : (d >= 0 ? '+' : '−') + fmtNum(Math.abs(d), 1) + '%'}</span>`; },
+};
+
+/* SMA Trend Strength Score 0–100 (lib/sma-trend-score.js). Standard nach „%S200“.
+   Zweite Zeile: Steigung SMA200 über 20 Handelstage · Separation SMA20–SMA200. „~“ = kürzere Historie. */
+const SMTS_COL = {
+  key: 'sma_ts', label: 'SMA-T', num: true,
+  title: `SMA Trend Strength 0–100 aus SMA20/50/100/200, alles prozentual: Alignment ${SMA_TS.W.align} · Slope (20 T) ${SMA_TS.W.slope} · Separation SMA20–SMA200 ${SMA_TS.W.sep} · Stabilität (bullische Struktur in 20 T) ${SMA_TS.W.stab} · Farbe = Trendstatus (grün stark ≥ ${SMA_TS.STRONG} mit steigender SMA50, rot < ${SMA_TS.WEAK} oder fallende SMA50) · ~ = kürzere Historie, auf verfügbare Punkte normiert · zweite Zeile: SMA200-Steigung · Separation · sortiert nach Score`,
+  fmt: (c) => {
+    const t = smaTrendScore(c);
+    if (!t) return '<span class="muted-dash" title="Braucht SMA20/50/200 aus den TV-Daten">—</span>';
+    const sp = (v, d = 1) => (v == null ? '—' : `${v >= 0 ? '+' : '−'}${fmtNum(Math.abs(v), d)}`);
+    const st = TREND_STATUS[t.status];
+    const tip = `${st?.label ?? ''} · Alignment ${Math.round(t.parts.align)}/${SMA_TS.W.align} · Slope ${t.parts.slope == null ? '—' : Math.round(t.parts.slope)}/${SMA_TS.W.slope} · Separation ${Math.round(t.parts.sep)}/${SMA_TS.W.sep} · Stabilität ${t.parts.stab == null ? '—' : Math.round(t.parts.stab)}/${SMA_TS.W.stab}${t.partial ? ` · Historie ${t.histDays} T${t.extrapolated ? ', Steigung hochgerechnet' : ''}` : ''}${t.src ? ` · ${t.src}` : ''}`;
+    return `<span class="smts" style="--smts-c:var(${st?.tone ?? '--text'})" title="${tip}"><span class="smts__v">${t.partial ? '~' : ''}${t.score}</span><span class="smts__s">${sp(t.slopes[200], 2)}% · ${sp(t.sep)}%</span></span>`;
+  },
 };
 
 const SMA200_COL = {
@@ -1212,6 +1229,7 @@ export class CandidateList {
       cols += this.thNum('bias', 'Bias', 'Markt-Bias \u2212100\u2026+100 aus drei Ebenen: Regime (SMA200 \u00b7 Golden/Death-Cross \u00b7 Weekly-EMA-Stack, 40%) \u00b7 Trend (Daily-EMA-Stack \u00b7 ADX\u00d7DI \u00b7 Aroon \u00b7 Perf.1M, 35%) \u00b7 Momentum (PerfW \u00b7 \u03941T \u00b7 MACD \u00b7 RSI, 25%) \u00b7 Volumen verst\u00e4rkt oder d\u00e4mpft, dreht aber nie \u00b7 Ring = ein Segment je Ebene, zweite Zeile = Trendalter');
       cols += this.thNum('sma200_trend', SMA200_COL.label, SMA200_COL.title);
       cols += this.thNum(S200D_COL.key, S200D_COL.label, S200D_COL.title);
+      cols += this.thNum(SMTS_COL.key, SMTS_COL.label, SMTS_COL.title);
       cols += this.thNum('trend_age', 'Dauer', 'Trenddauer in Tagen · gemessen aus der zwischengespeicherten TD-Historie, wenn vorhanden (dann fett) · sonst Tages-Aroon (max. 14 Tage) bzw. „≥…" als Untergrenze aus dem Performance-Fenster · sortierbar nach Tagen');
       cols += this.thNum('analyst_net', 'Ana', 'Analysten, letzte 30 Tage: Hoch- plus Abstufungen und Kurszieländerungen nach oben / unten \u00b7 sortiert nach dem Saldo \u00b7 erfasst für Augen-Titel und Tages-Movers ab dem Monitor-Lauf \u00b7 sonst leer');
       cols += this.thNum('tv_roic', 'ROIC', 'Return on Invested Capital (FY) \u00b7 Zell-T\u00f6nung: gr\u00fcn ab 10% (voll ab 25%), rot unter 0%', 'col-group-start');
@@ -1466,6 +1484,7 @@ export class CandidateList {
           `<td class="num">${renderBias(c)}</td>` +
           `<td class="num">${renderSma200Trend(c)}</td>` +
           `<td class="num">${S200D_COL.fmt(c)}</td>` +
+          `<td class="num">${SMTS_COL.fmt(c)}</td>` +
           `<td class="num">${renderTrendAge(c)}</td>` +
           `<td class="num">${analystNetCell(c)}</td>` +
           `<td class="num col-group-start"${roicTint(tv)}>${roicCell(c)}</td>` +

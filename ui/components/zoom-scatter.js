@@ -12,8 +12,10 @@
  * Klicks: `data-zs-out` / `data-zs-reset` / `data-zs-leg` / `data-zs-show` tragen den Plot-Schlüssel,
  * Zoom und Tippen meldet `bindZoomScatter`.
  *
- * Punkt: { id, x, y, group, sym, tip, open? } · `open` = Kennung, die der Aufrufer beim Tippen
- * bekommt (Standard `id`). Ein Titel darf mehrfach vorkommen (z. B. in mehreren Dimensionen);
+ * Punkt: { id, x, y, group, sym, tip, open?, r?, hollow? } · `open` = Kennung, die der Aufrufer beim Tippen
+ * bekommt (Standard `id`); `r` = Faktor auf den Punktradius (z. B. Börsenwert), `hollow` = nur Umriss
+ * (unvollständige Daten). Optional `o.zones` = farbige Hintergrundflächen in Datenkoordinaten
+ * ({x0,x1,y0,y1,tone}, seit 26.11.2026 für die Trend Map). Ein Titel darf mehrfach vorkommen (z. B. in mehreren Dimensionen);
  * die Tabelle fasst je `id` zusammen.
  */
 
@@ -63,6 +65,11 @@ export function zoomScatterHtml(o) {
   const all = points.filter((p) => p.x != null && p.y != null);
   const vis = zsVisible(points, full, st);
   const parts = [];
+  for (const z of o.zones ?? []) {
+    const zx0 = Math.max(z.x0, d.x0), zx1 = Math.min(z.x1, d.x1), zy0 = Math.max(z.y0, d.y0), zy1 = Math.min(z.y1, d.y1);
+    if (zx1 <= zx0 || zy1 <= zy0) continue;
+    parts.push(`<rect x="${X(zx0).toFixed(1)}" y="${Y(zy1).toFixed(1)}" width="${(X(zx1) - X(zx0)).toFixed(1)}" height="${(Y(zy0) - Y(zy1)).toFixed(1)}" class="zs-zone" style="fill:var(${z.tone})"/>`);
+  }
   for (const t of ticks([d.x0, d.x1])) parts.push(`<line x1="${X(t)}" x2="${X(t)}" y1="${ZS.t}" y2="${ZS.b}" class="zs-grid"/><text x="${X(t)}" y="${ZS.b + 13}" text-anchor="middle" class="sm-tick">${t}</text>`);
   for (const t of ticks([d.y0, d.y1], 4)) parts.push(`<line x1="${ZS.l}" x2="${ZS.r}" y1="${Y(t)}" y2="${Y(t)}" class="zs-grid"/><text x="${ZS.l - 5}" y="${Y(t) + 3.5}" text-anchor="end" class="sm-tick">${t}</text>`);
   for (const r of o.refs ?? []) {
@@ -81,7 +88,9 @@ export function zoomScatterHtml(o) {
   const label = vis.length <= LABEL_MAX;
   parts.push(`<g clip-path="url(#zs-clip-${esc(key)})">${vis.map((p) => {
     const cx = X(p.x).toFixed(1), cy = Y(p.y).toFixed(1);
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" class="zs-dot" style="fill:var(${tone[p.group] ?? '--muted'})" data-zs-id="${esc(p.open ?? p.id)}"><title>${esc(p.tip)}</title></circle>${label ? `<text x="${(+cx + r + 2).toFixed(1)}" y="${(+cy + 3).toFixed(1)}" class="zs-lbl">${esc(p.sym)}</text>` : ''}`;
+    const pr = p.r ? +(r * p.r).toFixed(1) : r, col = `var(${tone[p.group] ?? '--muted'})`;
+    const paint = p.hollow ? `fill:${col};fill-opacity:.15;stroke:${col};stroke-width:1.2` : `fill:${col}`;
+    return `<circle cx="${cx}" cy="${cy}" r="${pr}" class="zs-dot" style="${paint}" data-zs-id="${esc(p.open ?? p.id)}"><title>${esc(p.tip)}</title></circle>${label ? `<text x="${(+cx + pr + 2).toFixed(1)}" y="${(+cy + 3).toFixed(1)}" class="zs-lbl">${esc(p.sym)}</text>` : ''}`;
   }).join('')}</g>`);
   parts.push('<rect x="0" y="0" width="0" height="0" class="sm-brush" data-zs-brushrect/>');
   const svg = `<svg class="sm-scatter zs-plot" viewBox="0 0 ${ZS.w} ${ZS.h}" data-zs-plot="${esc(key)}" role="img"

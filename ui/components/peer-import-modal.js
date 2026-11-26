@@ -5,7 +5,7 @@
  */
 
 import { icons } from '../lib/icons.js?v=20261103f';
-import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261125b';
+import { candidateKey, resolveTickers } from '../lib/peer-import.js?v=20261126a';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

@@ -60,7 +60,7 @@ export const PICK_WEIGHTS = {
 
 /* Börsenwert kommt in Notierungswährung. Grobe Kurse genügen: sie entscheiden
    nur über Mindestgrössen, nicht über den Score. */
-const USD_PER = {
+export const USD_PER = {
   USD: 1, EUR: 1.1, GBP: 1.3, GBX: 0.013, CHF: 1.2, SEK: 0.1, NOK: 0.1, DKK: 0.15,
   CAD: 0.72, AUD: 0.65, JPY: 0.0067, KRW: 0.00072, HKD: 0.13, TWD: 0.032, CNY: 0.14, SGD: 0.75, INR: 0.012,
 };

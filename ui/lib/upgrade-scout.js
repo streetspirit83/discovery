@@ -19,7 +19,7 @@
  * eigenen Score. Der Bericht zeigt dafür den Rotations-Score neben der Schwelle.
  */
 
-import { parseAnalystHeadline, ANALYST_ACTIONS, googleNewsUrl } from './tv-news.js?v=20261103b';
+import { parseAnalystHeadline, ANALYST_ACTIONS, googleNewsUrl } from './tv-news.js?v=20261126a';
 import { normalizeExchange } from './exchange-map.js';
 
 export { googleNewsUrl };
