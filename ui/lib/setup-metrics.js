@@ -16,6 +16,7 @@
 import { classifyCluster } from './trade-setup.js?v=20260807a';
 import { detectBreakoutSetup } from './ls-history-signals.js?v=20260807a';
 import { sma200DistPct } from './sma200-extremes.js?v=20261106b';
+import { smaReversal, smaTrendScore } from './sma-trend-score.js?v=20261127b';
 
 /* ── Setup-Spalte ─────────────────────────────────────────────────────────── */
 
@@ -88,6 +89,13 @@ export const SETUP_TYPES = [
 
 export const THRESH = { vol: 100, brk: 50, rat: 0.6 };
 
+/* Zusatzzeilen der Setup-Matrix (seit 27.11.2026): Titel mit SMA-Trendumkehr ab „früh“ (|r| ≥ 25), je Richtung.
+   Anders als die vier Setups schliessen sie sich nicht aus (ein Titel steht im Setup UND in einer Umkehr-Zeile). */
+export const REV_ROWS = [
+  { key: 'rev_up', label: 'Umkehr ↑', icon: 'trendingUp',   tone: '--pos', dir: 1,  test: (m) => m.rev?.dir > 0 },
+  { key: 'rev_dn', label: 'Umkehr ↓', icon: 'trendingDown', tone: '--neg', dir: -1, test: (m) => m.rev?.dir < 0 },
+];
+
 /** Spalten der Matrix. `test(m)` prüft die Kennzahlen eines Titels. */
 export const SETUP_COLS = [
   { key: 'n',    label: 'Titel',        title: 'Alle Titel des Typs',                          test: () => true },
@@ -111,6 +119,8 @@ export function setupMetrics(cands) {
       rat: num(tv?.recommend_all_1m),
       s200: sma200DistPct(tv),
       eps: epsGrowthPct(tv),
+      rev: smaReversal(c),                 // SMA-Trendumkehr (Zeilen „Umkehr ↑/↓“, Zeitleiste)
+      score: smaTrendScore(c)?.score ?? null,
     };
   });
 }

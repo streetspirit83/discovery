@@ -20,11 +20,14 @@
 import { icons } from '../lib/icons.js?v=20261117a';
 import {
   setupMetrics, quintileEdges, quintileOf, quantile,
-  SETUP_TYPES, SETUP_COLS, THRESH,
-} from '../lib/setup-metrics.js?v=20261117a';
+  SETUP_TYPES, SETUP_COLS, THRESH, REV_ROWS,
+} from '../lib/setup-metrics.js?v=20261127b';
+import { zoomScatterHtml, zsVisible } from './zoom-scatter.js?v=20261126a';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 const TYPE = Object.fromEntries(SETUP_TYPES.map((t) => [t.key, t]));
+const REV = Object.fromEntries(REV_ROWS.map((t) => [t.key, t]));
+const rowLabel = (k) => (k === 'all' ? 'Alle Titel' : TYPE[k]?.label ?? REV[k]?.label ?? k);
 const sg = (v, dec = 0) => {
   if (v == null) return '–';
   const a = Math.abs(v).toFixed(dec);
@@ -68,7 +71,8 @@ export function buildSetupModel(cands) {
 /* ── Filter ───────────────────────────────────────────────────────────────── */
 
 const COL = Object.fromEntries(SETUP_COLS.map((c) => [c.key, c]));
-const passCell = (m, cell) => !cell || ((cell.type === 'all' || m.setup === cell.type) && COL[cell.col].test(m));
+const passRow = (m, type) => type === 'all' || (REV[type] ? REV[type].test(m) : m.setup === type);
+const passCell = (m, cell) => !cell || (passRow(m, cell.type) && COL[cell.col].test(m));
 const passQ = (m, q) => q == null || m.q === q;
 const passBrush = (m, b) => !b || (m.x != null && m.y != null && m.x >= b.x0 && m.x <= b.x1 && m.y >= b.y0 && m.y <= b.y1);
 const passIds = (m, ids) => !ids || ids.has(m.c.id);
@@ -91,18 +95,21 @@ function matrixHtml(model, sel) {
   const base = model.metrics.filter((m) => passQ(m, sel.q) && passBrush(m, sel.brush) && passIds(m, sel.ids));
   const rows = [...SETUP_TYPES.map((t) => ({ key: t.key, label: t.label, icon: icons[t.icon], tone: t.tone,
     items: base.filter((m) => m.setup === t.key) })),
+  ...REV_ROWS.map((t, i) => ({ key: t.key, label: t.label, icon: icons[t.icon], tone: t.tone, sep: i === 0,
+    tip: 'SMA-Trendumkehr ab früh (|Umkehr| ≥ 25) · zählt zusätzlich zum Setup · Zelle wählen klappt die Zeitleiste aus',
+    items: base.filter(t.test) })),
   { key: 'all', label: 'Alle Titel', icon: '', tone: '--muted', items: base }];
   const counts = rows.map((r) => SETUP_COLS.map((c) => r.items.filter(c.test).length));
   const max = Math.max(1, ...counts.slice(0, -1).flatMap((r) => r.slice(1)));
   const head = SETUP_COLS.map((c) => `<span class="sx-head" title="${esc(c.title)}">${esc(c.label).replace('\n', '<br>')}</span>`).join('');
   const body = rows.map((r, ri) => {
-    const label = `<span class="sx-row${r.key === 'all' ? ' sx-row--total' : ''}" title="${esc(r.label)} · ${r.items.length} Titel">
+    const label = `<span class="sx-row${r.key === 'all' ? ' sx-row--total' : ''}${r.sep ? ' sm-row--sep' : ''}" title="${esc(r.tip ? `${r.label} · ${r.tip}` : r.label)} · ${r.items.length} Titel">
       <span class="sx-row__name sm-type">${r.icon ? `<span class="sm-ico" style="color:var(${r.tone})">${r.icon}</span>` : ''}${esc(r.label)}</span></span>`;
     return label + SETUP_COLS.map((c, ci) => {
       const n = counts[ri][ci];
       const on = sel.cell && sel.cell.type === r.key && sel.cell.col === c.key;
       const style = c.key === 'n' ? '' : cellStyle(n, r.key === 'all' ? Math.max(max, n) : max, r.key === 'all' ? '--accent' : r.tone);
-      return `<button type="button" class="sx-cell${on ? ' is-sel' : ''}${c.key === 'n' ? ' sm-cell--n' : ''}" data-sm-cell="${r.key}|${c.key}"
+      return `<button type="button" class="sx-cell${on ? ' is-sel' : ''}${c.key === 'n' ? ' sm-cell--n' : ''}${r.sep ? ' sm-row--sep' : ''}" data-sm-cell="${r.key}|${c.key}"
         style="${style}" title="${esc(`${r.label} · ${c.title}: ${n}`)}" aria-label="${esc(`${r.label}, ${c.title}: ${n} Titel`)}"${n ? '' : ' disabled'}>${n || '·'}</button>`;
     }).join('');
   }).join('');
@@ -205,7 +212,7 @@ function filterLabel(model, sel) {
   const out = [];
   if (sel.ids) out.push(`Signal: ${sel.idsLabel ?? 'Auswahl'}`);
   if (sel.cell) {
-    const t = sel.cell.type === 'all' ? 'Alle Titel' : TYPE[sel.cell.type]?.label;
+    const t = rowLabel(sel.cell.type);
     out.push(sel.cell.col === 'n' ? t : `${t} + ${COL[sel.cell.col].title.split(' (')[0]}`);
   }
   if (sel.q != null) out.push(`%S200 Q${sel.q + 1}`);
@@ -217,12 +224,14 @@ function filterLabel(model, sel) {
  * @param {object} model    aus buildSetupModel()
  * @param {{cell:{type,col}|null, q:number|null, brush:{x0,x1,y0,y1}|null, ids?:Set<string>|null, idsLabel?:string}} sel
  */
-export function setupMatrixHtml(model, sel) {
+export function setupMatrixHtml(model, sel, rev = null) {
   if (!model.metrics.length) return '';
+  const tl = rev && REV[sel.cell?.type] ? revTimelineHtml(model, sel, rev) : '';
   return `<section class="sm" aria-label="Setups">
     <div class="sm-head"><h3 class="sm-title">Setups</h3>
       <span class="md-note">Schwellen fest: V/Ø30d &gt; ${THRESH.vol} % · Brk↑ &gt; ${THRESH.brk} % · Rat1M &gt; ${de(THRESH.rat, 1)} · Brk↑ für ${model.cover.brk}, V/Ø30d für ${model.cover.vol} von ${model.metrics.length} (LS-Historie)</span></div>
     ${matrixHtml(model, sel)}
+    ${tl}
     <div class="sm-card"><div class="sm-card__head">EPS-Wachstum vs. %S200 <small>${model.cover.plot} Titel · ziehen = Auswahl${sel.ids ? ' · Signal-Auswahl hervorgehoben' : ''}</small></div>
       ${scatterHtml(model, sel)}${quintileHtml(model, sel)}</div>
   </section>`;
@@ -300,4 +309,64 @@ export function bindSetupBrush(root, onBrush) {
   };
   root.addEventListener('pointerup', end);
   root.addEventListener('pointercancel', end);
+}
+
+
+/* ── Umkehr-Zeitleiste (seit 27.11.2026) ─────────────────────────────────────
+ * Klappt unter der Matrix aus, sobald eine Zelle der Zeilen „Umkehr ↑/↓“ gewählt ist. x = vor wie vielen
+ * Handelstagen der Trend gedreht hat (jüngstes Ereignis aus `smaReversal`: Kreuzung 20/50, Golden/Death Cross,
+ * Richtungswechsel SMA20; 0 = heute, rechts), y = SMA Trend Score 0–100. Ein Punkt je Titel, der alle übrigen
+ * Filter erfüllt (Zelle mit Spalte, Quintil, Brush, Signal-Auswahl). Farbe = bestätigt (|r| ≥ 50) oder früh.
+ * Zeitraum 5/10/20 Tage. Zoom/Tippen/Legende/„In Tabelle öffnen“ aus zoom-scatter.js (Schlüssel `rev`), den
+ * Zustand `{zs, win}` hält dashboard-modal.js; Klick auf `data-rev-win` setzt den Zeitraum.
+ */
+export const REV_WINDOWS = [5, 10, 20];
+export function defaultRevState() { return { zs: { zoom: [], off: new Set() }, win: 20 }; }
+
+const jitter = (id) => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return ((h % 1000) / 1000) * 0.5 - 0.25; };
+function revPoints(model, sel, rev) {
+  const pts = [];
+  for (const m of setupHits(model, sel)) {
+    const v = m.rev;
+    if (!v || v.level === 'none' || v.age == null || v.age > rev.win || m.score == null) continue;
+    pts.push({ id: m.c.id, x: -v.age + (v.age ? jitter(m.c.id) : -jitter(m.c.id) * 0.4 - 0.1), y: m.score, m,
+      group: v.level, sym: m.c.symbol,
+      tip: `${m.c.symbol} · ${v.event ?? v.label} vor ${v.age} T · Umkehr ${v.r > 0 ? '+' : ''}${v.r} · Trend Score ${m.score}` });
+  }
+  return pts;
+}
+export function revVisibleIds(model, sel, rev) {
+  const pts = revPoints(model, sel, rev);
+  return [...new Set(zsVisible(pts, { x0: -rev.win - 0.5, x1: 0.5, y0: 0, y1: 100 }, rev.zs).map((p) => p.id))];
+}
+function revTimelineHtml(model, sel, rev) {
+  const row = REV[sel.cell.type];
+  const pts = revPoints(model, sel, rev);
+  const win = `<div class="dash-seg">${REV_WINDOWS.map((w) => `<button type="button" class="dash-seg__btn${w === rev.win ? ' is-active' : ''}" data-rev-win="${w}">${w} T</button>`).join('')}</div>`;
+  const head = `<div class="md-ctl tm-ctl"><span class="md-ctl__label">Zeitraum</span>${win}</div>`;
+  if (!pts.length) return `<div class="tm-wrap sm-rev">${head}<p class="dash-empty">Keine ${esc(row.label)} in den letzten ${rev.win} Tagen mit allen Filtern.</p></div>`;
+  const table = (prs) => {
+    const rows = prs.map((ps) => ps[0].m).sort((a, b) => a.rev.age - b.rev.age || Math.abs(b.rev.r) - Math.abs(a.rev.r));
+    return `<div class="tm-scan">
+      <div class="tm-head sr-head"><span class="tm-th" style="text-align:left">Titel</span><span class="tm-th">vor</span><span class="tm-th" style="text-align:left">Ereignis</span><span class="tm-th">Umk.</span><span class="tm-th">Score</span></div>
+      <div class="dash-group" data-group="setup.rev">${rows.map((m) => `<button class="dash-row tm-row sr-row" data-id="${esc(m.c.id)}">
+        <span class="dash-row__sym"><span class="dash-sym">${esc(m.c.symbol)}</span><span class="dash-ex">${esc(m.c.name ?? m.c.exchange ?? '')}</span></span>
+        <span class="tm-cell">${m.rev.age} T</span><span class="tm-cell sr-ev">${esc(m.rev.event ?? '')}</span>
+        <span class="tm-cell ${m.rev.r > 0 ? 'pos' : 'neg'}">${m.rev.r > 0 ? '+' : '−'}${Math.abs(m.rev.r)}</span>
+        <span class="tm-cell tm-score">${m.score}</span></button>`).join('')}</div></div>`;
+  };
+  const map = zoomScatterHtml({
+    key: 'rev', points: pts, full: { x0: -rev.win - 0.5, x1: 0.5, y0: 0, y1: 100 }, st: rev.zs,
+    groups: [
+      { key: 'confirmed', label: 'bestätigt (|Umkehr| ≥ 50)', tone: row.tone },
+      { key: 'early', label: 'früh (25–49)', tone: '--warn' },
+    ],
+    zones: [{ x0: -5.5, x1: 1, y0: -1, y1: 101, tone: row.tone }],
+    title: `${row.label} · Zeitleiste`, xLabel: 'vor X Handelstagen gedreht (0 = heute)', yLabel: 'SMA Trend Score 0–100',
+    xShort: 'Tage', yShort: 'Score',
+    refs: [{ axis: 'y', v: 50 }],
+    tableHtml: table,
+    note: `Ereignis = jüngstes aus Kreuzung SMA20/50, Golden/Death Cross oder Richtungswechsel der SMA20 · getönt = letzte 5 Tage · gilt mit allen Filtern der Matrix (Spalte, Quintil, Rechteck, Signal)`,
+  });
+  return `<div class="tm-wrap sm-rev">${head}${map}</div>`;
 }

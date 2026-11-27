@@ -3461,3 +3461,10 @@ button.tag--group:hover, button.tag--group:focus-visible { background:var(--acce
 /* Monitor › Dynamik: ATH-Map (components/ath-map.js) */
 .am-head, .am-row { grid-template-columns:minmax(0, 1fr) 62px 62px 46px; }
 @media (max-width:520px) { .am-head, .am-row { grid-template-columns:minmax(64px, 1fr) 56px 56px 38px; } }
+/* Setup-Matrix: Umkehr-Zeilen (abgesetzt) und Zeitleiste (components/setup-matrix.js) */
+.sm-row--sep { margin-top:var(--s-2); }
+.sx-row.sm-row--sep { border-top:1px dashed var(--border); padding-top:var(--s-2); }
+.sm-rev { margin:var(--s-2) 0; }
+.sr-head, .sr-row { grid-template-columns:minmax(0, 1fr) 40px minmax(0, 1.1fr) 44px 42px; }
+.sr-ev { text-align:left; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:520px) { .sr-head, .sr-row { grid-template-columns:minmax(56px, 1fr) 34px minmax(0, 1fr) 38px 34px; } .sr-row .dash-ex { display:none; } }

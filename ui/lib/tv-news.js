@@ -19,7 +19,7 @@
  */
 
 import { normalizeExchange } from './exchange-map.js';
-import { TV_PREFIX_MAP } from './tv-enrichment.js?v=20261127a';
+import { TV_PREFIX_MAP } from './tv-enrichment.js?v=20261127b';
 
 const ENDPOINT = 'https://news-headlines.tradingview.com/v2/headlines';
 const CACHE_PREFIX = 'discovery_tvnews1_';

@@ -308,7 +308,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   liegt seitdem in `setup-metrics.js` und wird von der Tabelle importiert), Spalten = feste Schwellen V/Ø30d > 100 % ·
   Brk↑% > 50 % · Rat1M > 0,6 · alle 3 (`THRESH`); Scatter EPS-Wachstum YoY (TTM, sonst FY) gegen %S200 (TV-Schluss gegen
   TV-SMA200 wie `sma200DistPct`) mit Rand-Histogrammen und Brush (`bindSetupBrush`), %S200-Quintile über den Ausschnitt
-  (der Spider ist seit 19.11.2026 entfallen). Alle Filter gelten zusammen, jede Ansicht zählt mit den Filtern der
+  (der Spider ist seit 19.11.2026 entfallen). Unter den vier Setups (seit 27.11.2026, abgesetzt) die Zeilen **Umkehr ↑ /
+  Umkehr ↓** (`REV_ROWS`: SMA-Trendumkehr ab früh, schliessen sich mit den Setups nicht aus). Eine gewählte Zelle dieser
+  Zeilen klappt die **Umkehr-Zeitleiste** aus (Zoom-Scatter, Schlüssel `rev`, Zustand `state.rev`): x = vor X
+  Handelstagen gedreht (jüngstes Ereignis aus `smaReversal`: `age`/`event`), y = SMA Trend Score, Farbe bestätigt/früh,
+  Zeitraum 5/10/20 T, Tabelle + „In Tabelle öffnen“; sie gilt mit allen Filtern der Matrix. Alle Filter gelten zusammen, jede Ansicht zählt mit den Filtern der
   anderen; Treffer → „In Tabelle öffnen“. **Signal-Matrix und Setup-Teil sind verknüpft** (`sigView`/`setupSel` in
   `dashboard-modal.js`): die gewählte Signal-Zelle (Bullisch · Bärisch · Extreme) filtert Setup-Matrix, Scatter,
   Quintile und Treffer (`sel.ids`), Setup-Zelle/Quintil/Brush filtern umgekehrt die Zählungen der Signal-Matrix.

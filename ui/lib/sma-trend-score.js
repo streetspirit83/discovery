@@ -275,6 +275,18 @@ function lastCross(rows, a, b, maxAge) {
   }
   return null;
 }
+/** Tage seit dem letzten Richtungswechsel der SMA20 (Vorzeichen der Tagesänderung), null ohne Wechsel. */
+function turnAge(rows) {
+  const n = rows.length;
+  const d = (i) => Math.sign((rows[i]?.s20 ?? 0) - (rows[i - 1]?.s20 ?? 0));
+  const cur = d(n - 1);
+  if (!cur) return null;
+  for (let i = n - 2; i >= 1; i--) {
+    const v = d(i);
+    if (v && v !== cur) return n - 1 - (i + 1);
+  }
+  return null;
+}
 const chg = (rows, key, from, to) => {
   const a = rows[from]?.[key], b = rows[to]?.[key];
   return a && b ? (b / a - 1) * 100 : null;
@@ -302,5 +314,15 @@ export function smaReversal(c) {
   const level = ar >= REV.CONFIRMED ? 'confirmed' : ar >= REV.EARLY ? 'early' : 'none';
   const dir = level === 'none' ? 0 : Math.sign(r);
   const label = level === 'none' ? 'kein Signal' : `${dir > 0 ? 'Aufwärts' : 'Abwärts'}umkehr${level === 'early' ? ' (früh)' : ''}`;
-  return { r, dir, level, label, parts, cross2050: x1, cross50200: x2, days: n - 1, src: hist.src };
+  // Wann hat es gedreht? Jüngstes Ereignis: Kreuzung 20/50, Golden/Death Cross, sonst der letzte Vorzeichenwechsel
+  // der Tagesänderung der SMA20 (Richtungswechsel). Für die Umkehr-Zeitleiste (Setup-Matrix, „vor X Tagen“).
+  const events = [];
+  if (x1) events.push({ age: x1.age, text: x1.dir > 0 ? 'SMA20 kreuzt SMA50 ↑' : 'SMA20 kreuzt SMA50 ↓' });
+  if (x2) events.push({ age: x2.age, text: x2.dir > 0 ? 'Golden Cross' : 'Death Cross' });
+  const turn = turnAge(rows);
+  if (turn != null) events.push({ age: turn, text: `SMA20 dreht ${rows[n - 1].s20 >= rows[n - 2].s20 ? '↑' : '↓'}` });
+  events.sort((a, b) => a.age - b.age);
+  const ev = events[0] ?? null;
+  return { r, dir, level, label, parts, cross2050: x1, cross50200: x2, days: n - 1, src: hist.src,
+    age: ev ? ev.age : null, event: ev ? ev.text : null };
 }

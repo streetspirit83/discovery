@@ -6,7 +6,7 @@ import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261127a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261127b';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
@@ -19,7 +19,7 @@ import { eurBasisFactor } from '../lib/eur-basis.js?v=20261103h';
 import { candidateTriggeredCount } from '../lib/alerts.js?v=20261103h';
 import { classifyCluster, tradeTarget, breakoutEntry, pivotSet, exitLevels } from '../lib/trade-setup.js?v=20260807a';
 import { detectBreakoutSetup, detectBreakdownRisk, detectBottomSignal, MIN_SNAPSHOTS, MIN_SNAPSHOTS_BOTTOM, MAX_SNAPSHOTS } from '../lib/ls-history-signals.js?v=20260807a';
-import { priceSituation, volRatioPct } from '../lib/setup-metrics.js?v=20261117a';
+import { priceSituation, volRatioPct } from '../lib/setup-metrics.js?v=20261127b';
 import { computePriceClusters } from '../lib/price-cluster.js?v=20260807a';
 import { lsTrend } from '../lib/ls-trend.js?v=20260807a';
 import { trendScore } from '../lib/trend-radar.js?v=20261103h';
@@ -29,7 +29,7 @@ import { CLAUDE_LOGO, PERPLEXITY_LOGO } from '../lib/ai-logos.js?v=20261125b';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
-import { smaTrendScore, TREND_STATUS, SMA_TS, smaReversal, REV } from '../lib/sma-trend-score.js?v=20261127a';
+import { smaTrendScore, TREND_STATUS, SMA_TS, smaReversal, REV } from '../lib/sma-trend-score.js?v=20261127b';
 import { athDistPct } from '../lib/ath-distance.js?v=20261127a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */

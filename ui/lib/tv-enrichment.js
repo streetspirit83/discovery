@@ -18,7 +18,7 @@ import { computeOverallScore }       from './tv-overall-score.js';
 import { computeMomentumCheck }      from './tv-momentum-check.js';
 import { normalizeExchange }         from './exchange-map.js';
 import { assetTypeFromTv }           from './instrument-type.js?v=20260831a';
-import { upsertSmaHist }             from './sma-trend-score.js?v=20261127a';
+import { upsertSmaHist }             from './sma-trend-score.js?v=20261127b';
 
 const SNAPSHOT_MAX = 5; // keep up to 5 days of score history per candidate
 

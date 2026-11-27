@@ -10,7 +10,7 @@
  */
 
 import { zoomScatterHtml, zsVisible } from './zoom-scatter.js?v=20261126a';
-import { smaTrendScore, TREND_STATUS } from '../lib/sma-trend-score.js?v=20261127a';
+import { smaTrendScore, TREND_STATUS } from '../lib/sma-trend-score.js?v=20261127b';
 import { athDistPct } from '../lib/ath-distance.js?v=20261127a';
 import { USD_PER } from '../lib/rankings-filter.js?v=20261126a';
 

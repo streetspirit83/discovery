@@ -49,11 +49,11 @@ import { liveRankings, rankingPoints } from '../lib/rankings-filter.js?v=2026112
 import { zoomScatterHtml, zsClick, zsVisible, bindZoomScatter } from './zoom-scatter.js?v=20261126a';
 import { dailyPicksHtml } from './daily-picks-panel.js?v=20261107a';
 import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
-import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
+import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush, defaultRevState, revVisibleIds } from './setup-matrix.js?v=20261127b';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { subsectorHeatHtml, heatSelIds, defaultHeatState } from './subsector-heatmap.js?v=20261125b';
-import { trendMapHtml, trendMapClick, trendShowIds, defaultTrendState } from './trend-map.js?v=20261127a';
-import { athMapHtml, athMapClick, athVisibleIds, defaultAthState } from './ath-map.js?v=20261127a';
+import { trendMapHtml, trendMapClick, trendShowIds, defaultTrendState } from './trend-map.js?v=20261127b';
+import { athMapHtml, athMapClick, athVisibleIds, defaultAthState } from './ath-map.js?v=20261127b';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
 
@@ -99,7 +99,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   const filtered = !!universe && universe.length !== candidates.length;
   const all = universe ?? candidates;
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState(), trend: defaultTrendState(), ath: defaultAthState() };
+    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState(), trend: defaultTrendState(), ath: defaultAthState(), rev: defaultRevState() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -324,7 +324,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         <div class="md-ctl dyn-filter"><div class="lv-filter" role="group" aria-label="Mega-Sektor-Filter">${segBtns}</div></div>
         <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
         ${signalMatrixHtml(sigView())}
-        ${setupMatrixHtml(model, sel)}
+        ${setupMatrixHtml(model, sel, state.rev)}
         ${trendMapHtml(scopeOf(base, 'cluster', dyn.path), state.trend)}
         ${athMapHtml(scopeOf(base, 'cluster', dyn.path), state.ath)}
         ${subsectorHeatHtml(scopeOf(base, 'cluster', dyn.path), state.heat, all)}
@@ -355,7 +355,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
      Farbe = Liste. Rechteck ziehen zoomt, die Tabelle darunter zeigt den Ausschnitt. */
   const RK_TONE = { momentum: '--series-1', solid: '--series-3', growth: '--series-7', pullback: '--series-4', breakout: '--series-2' };
   const RK_SHORT = Object.fromEntries(RANK_SEGS.map((sg) => [sg.key, sg.label]));
-  const zs = { rank: { zoom: [], off: new Set() }, trend: state.trend.zs, ath: state.ath.zs };
+  const zs = { rank: { zoom: [], off: new Set() }, trend: state.trend.zs, ath: state.ath.zs, rev: state.rev.zs };
   let rkPts = null;
   function rankPoints() {
     if (rkPts) return rkPts;
@@ -563,7 +563,16 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
     /* Trend Map: Filter Score/Markt/Größe, Scanner-Sortierung, „In Tabelle öffnen“. */
     if (trendMapClick(e, state.trend)) { renderDynamics(); return; }
     if (athMapClick(e, state.ath)) { renderDynamics(); return; }
+    const revWin = e.target.closest('[data-rev-win]');
+    if (revWin) { state.rev.win = Number(revWin.dataset.revWin); state.rev.zs.zoom = []; renderDynamics(); return; }
     const zsShow = e.target.closest('[data-zs-show]');
+    if (zsShow?.dataset.zsShow === 'rev') {
+      const ids = revVisibleIds(setupModel(), setupSel(), state.rev).filter((id) => inBucket.has(id));
+      if (!ids.length) return;
+      ctrl.close();
+      onSelectInList?.(ids);
+      return;
+    }
     if (zsShow?.dataset.zsShow === 'ath') {
       const ids = athVisibleIds(scopeOf(base, 'cluster', dyn.path), state.ath).filter((id) => inBucket.has(id));
       if (!ids.length) return;
@@ -611,6 +620,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
       const [type, col] = smCell.dataset.smCell.split('|');
       const c = state.setup.cell;
       state.setup.cell = c && c.type === type && c.col === col ? null : { type, col };
+      state.rev.zs.zoom = [];                    // Umkehr-Zeitleiste: neuer Ausschnitt
       renderDynamics();
       return;
     }
