@@ -245,3 +245,62 @@ export function marketOf(c) {
   if (EU_EX.has(ex)) return 'eu';
   return 'other';
 }
+
+/* ── SMA-Trendumkehr (seit 27.11.2026) ─────────────────────────────────────────
+ * smaReversal(c) → null | { r, dir, label, level, parts, cross2050, cross50200, days }
+ * Gerichteter Indikator −100…+100: Wie stark dreht der SMA-Trend gerade? Er misst Wechsel, nicht Zustände —
+ * ein seit Wochen intakter Aufwärtstrend ohne Kreuzung bleibt nahe 0 („kein Signal“). Bausteine aus derselben
+ * Historie wie der Trend Score (`smaHistoryOf`, älteste zuerst, ≥ REV.MIN Tage):
+ *   · Kreuzung SMA20/SMA50 in den letzten 10 Tagen (±35, ab Tag 6 ×0,7; die alte Lage muss ≥ 3 Tage gehalten haben)
+ *   · Kreuzung SMA50/SMA200 (Golden/Death Cross) in den letzten 20 Tagen (±30)
+ *   · Richtungswechsel der SMA20: Steigung der letzten 5 Tage gegen die 10 Tage davor, Vorzeichen gedreht (±20)
+ *   · Beschleunigung der SMA50: Steigung letzte 5 gegen vorherige 5 Tage, ±1 %-Punkt = volle ±15
+ *   · Kursbestätigung: TV-Schluss über (unter) SMA20 und SMA50 (±10)
+ * Summe gekappt auf ±100. Stufen: |r| ≥ 50 bestätigt, ≥ 25 früh, sonst kein Signal.
+ */
+export const REV = { MIN: 11, CROSS_FAST: 35, CROSS_SLOW: 30, FLIP: 20, ACC: 15, PRICE: 10, CONFIRMED: 50, EARLY: 25 };
+
+function lastCross(rows, a, b, maxAge) {
+  const n = rows.length;
+  const sg = (r) => (r[a] == null || r[b] == null ? 0 : Math.sign(r[a] - r[b]));
+  const cur = sg(rows[n - 1]);
+  if (!cur) return null;
+  for (let i = n - 1; i >= 1 && n - 1 - i <= maxAge; i--) {
+    const prev = sg(rows[i - 1]);
+    if (prev && prev !== cur && sg(rows[i]) === cur) {
+      // alte Lage muss davor mindestens 3 Tage bestanden haben (kein Hin und Her)
+      const held = rows.slice(Math.max(0, i - 3), i).every((r) => sg(r) === prev);
+      return held ? { dir: cur, age: n - 1 - i } : null;
+    }
+  }
+  return null;
+}
+const chg = (rows, key, from, to) => {
+  const a = rows[from]?.[key], b = rows[to]?.[key];
+  return a && b ? (b / a - 1) * 100 : null;
+};
+
+export function smaReversal(c) {
+  const hist = smaHistoryOf(c);
+  const rows = hist?.rows ?? [];
+  const n = rows.length;
+  if (n < REV.MIN) return null;
+  const parts = {};
+  const x1 = lastCross(rows, 's20', 's50', 10);
+  parts.cross2050 = x1 ? x1.dir * REV.CROSS_FAST * (x1.age <= 5 ? 1 : 0.7) : 0;
+  const x2 = lastCross(rows, 's50', 's200', 20);
+  parts.cross50200 = x2 ? x2.dir * REV.CROSS_SLOW : 0;
+  const rec20 = chg(rows, 's20', n - 6, n - 1), pri20 = chg(rows, 's20', Math.max(0, n - 16), n - 6);
+  parts.flip = rec20 != null && pri20 != null && Math.sign(rec20) !== Math.sign(pri20) && Math.abs(rec20) >= 0.2
+    ? Math.sign(rec20) * REV.FLIP : 0;
+  const rec50 = chg(rows, 's50', n - 6, n - 1), pri50 = chg(rows, 's50', n - 11, n - 6);
+  parts.acc = rec50 != null && pri50 != null ? Math.max(-1, Math.min(1, rec50 - pri50)) * REV.ACC : 0;
+  const close = num(c.tv_data?.close), last = rows[n - 1];
+  parts.price = close && last ? (close > last.s20 && close > last.s50 ? REV.PRICE : close < last.s20 && close < last.s50 ? -REV.PRICE : 0) : 0;
+  const r = Math.round(Math.max(-100, Math.min(100, Object.values(parts).reduce((s, v) => s + v, 0))));
+  const ar = Math.abs(r);
+  const level = ar >= REV.CONFIRMED ? 'confirmed' : ar >= REV.EARLY ? 'early' : 'none';
+  const dir = level === 'none' ? 0 : Math.sign(r);
+  const label = level === 'none' ? 'kein Signal' : `${dir > 0 ? 'Aufwärts' : 'Abwärts'}umkehr${level === 'early' ? ' (früh)' : ''}`;
+  return { r, dir, level, label, parts, cross2050: x1, cross50200: x2, days: n - 1, src: hist.src };
+}

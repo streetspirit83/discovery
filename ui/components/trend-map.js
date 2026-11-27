@@ -16,7 +16,7 @@
  */
 
 import { zoomScatterHtml, zsVisible } from './zoom-scatter.js?v=20261126a';
-import { smaTrendScore, TREND_STATUS, TREND_MARKETS, marketOf, SMA_TS } from '../lib/sma-trend-score.js?v=20261126a';
+import { smaTrendScore, TREND_STATUS, TREND_MARKETS, marketOf, SMA_TS } from '../lib/sma-trend-score.js?v=20261127a';
 import { USD_PER } from '../lib/rankings-filter.js?v=20261126a';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));

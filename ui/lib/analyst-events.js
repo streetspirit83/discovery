@@ -7,7 +7,7 @@
  * Bestätigungen fliegen hier raus: Sie sind die grosse Mehrheit und ändern nichts.
  */
 
-import { ANALYST_ACTIONS, collapseAnalyst } from './tv-news.js?v=20261126a';
+import { ANALYST_ACTIONS, collapseAnalyst } from './tv-news.js?v=20261127a';
 
 const KEEP_DAYS = 180;             // Historie je Titel
 const MAX_PER_TITLE = 40;

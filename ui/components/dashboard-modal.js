@@ -21,7 +21,8 @@
  *               Ganz oben die fünf Mega-Cluster-Icons: Filter für alle Grafiken des Reiters
  *               (= Drill-down auf den Cluster, nochmal tippen = alle). Ganz unten die
  *               Sub-Sektor-Heatmap (components/subsector-heatmap.js) über denselben Ausschnitt,
- *               davor (unter der Setup-Matrix) die Trend Map + Trend Scanner (components/trend-map.js):
+ *               davor (unter der Setup-Matrix) die Trend Map + Trend Scanner (components/trend-map.js) und die
+ *               ATH-Map (components/ath-map.js: ATH-Abstand × 3M-Perf./Trend Score/RSI):
  *               SMA Trend Score × SMA50-Steigung, Filter Score/Markt/Trendstatus, Punktgröße = Börsenwert,
  *               mit KI-Lookup branchenführender Titel (Claude · ChatGPT · Perplexity → Inbox).
  *   Rankings  – ganz oben die Ranking-Matrix (RSI gegen Score 0–100 je Liste, Zoom + Tabelle,
@@ -51,7 +52,8 @@ import { signalMatrixHtml, selectedIds } from './signal-matrix.js?v=20261119c';
 import { buildSetupModel, setupMatrixHtml, setupHitsHtml, setupHitCount, setupHits, hasSetupFilter, bindSetupBrush } from './setup-matrix.js?v=20261119d';
 import { signalColumns } from '../lib/market-signals.js?v=20261116c';
 import { subsectorHeatHtml, heatSelIds, defaultHeatState } from './subsector-heatmap.js?v=20261125b';
-import { trendMapHtml, trendMapClick, trendShowIds, defaultTrendState } from './trend-map.js?v=20261126a';
+import { trendMapHtml, trendMapClick, trendShowIds, defaultTrendState } from './trend-map.js?v=20261127a';
+import { athMapHtml, athMapClick, athVisibleIds, defaultAthState } from './ath-map.js?v=20261127a';
 import { groupsFor, scopeOf, withData, median, PERSPECTIVES } from '../lib/market-scope.js?v=20261116d';
 import { MEGA_CLUSTERS, megaClusterOf, megaClusterLabel } from '../lib/sector-clusters.js?v=20260807a';
 
@@ -97,7 +99,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   const filtered = !!universe && universe.length !== candidates.length;
   const all = universe ?? candidates;
   const state = { rkList: 'momentum', rkSub: 'live', sig: null,
-    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState(), trend: defaultTrendState() };
+    setup: { cell: null, q: null, brush: null }, side: storedSide(), heat: defaultHeatState(), trend: defaultTrendState(), ath: defaultAthState() };
   const rk = { tab: 'dynamics', data: null, err: null, loading: false };
   // Dynamik: Drill-down-Pfad über die Perspektive `cluster` (Mega-Cluster → Sektor → Sub-Sektor).
   const base = withData(candidates);
@@ -324,6 +326,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         ${signalMatrixHtml(sigView())}
         ${setupMatrixHtml(model, sel)}
         ${trendMapHtml(scopeOf(base, 'cluster', dyn.path), state.trend)}
+        ${athMapHtml(scopeOf(base, 'cluster', dyn.path), state.ath)}
         ${subsectorHeatHtml(scopeOf(base, 'cluster', dyn.path), state.heat, all)}
         <div class="dash-pulse">${pulseBody()}</div>
       </div>
@@ -352,7 +355,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
      Farbe = Liste. Rechteck ziehen zoomt, die Tabelle darunter zeigt den Ausschnitt. */
   const RK_TONE = { momentum: '--series-1', solid: '--series-3', growth: '--series-7', pullback: '--series-4', breakout: '--series-2' };
   const RK_SHORT = Object.fromEntries(RANK_SEGS.map((sg) => [sg.key, sg.label]));
-  const zs = { rank: { zoom: [], off: new Set() }, trend: state.trend.zs };
+  const zs = { rank: { zoom: [], off: new Set() }, trend: state.trend.zs, ath: state.ath.zs };
   let rkPts = null;
   function rankPoints() {
     if (rkPts) return rkPts;
@@ -559,7 +562,15 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
     if (zsClick(e, zs)) { renderTab(); return; }
     /* Trend Map: Filter Score/Markt/Größe, Scanner-Sortierung, „In Tabelle öffnen“. */
     if (trendMapClick(e, state.trend)) { renderDynamics(); return; }
+    if (athMapClick(e, state.ath)) { renderDynamics(); return; }
     const zsShow = e.target.closest('[data-zs-show]');
+    if (zsShow?.dataset.zsShow === 'ath') {
+      const ids = athVisibleIds(scopeOf(base, 'cluster', dyn.path), state.ath).filter((id) => inBucket.has(id));
+      if (!ids.length) return;
+      ctrl.close();
+      onSelectInList?.(ids);
+      return;
+    }
     if (zsShow?.dataset.zsShow === 'trend') {
       const ids = trendShowIds(scopeOf(base, 'cluster', dyn.path), state.trend).filter((id) => inBucket.has(id));
       if (!ids.length) return;
@@ -659,6 +670,7 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
       state.sig = null;                          // Zeilen der Matrix ändern sich
       state.setup = { cell: null, q: null, brush: null };   // Quintile und Achsen hängen am Ausschnitt
       state.trend.zs.zoom = [];                  // Trend Map: Achsen hängen am Ausschnitt
+      state.ath.zs.zoom = [];
       renderDynamics();
       return;
     }

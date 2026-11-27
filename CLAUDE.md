@@ -164,7 +164,7 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   `.row-etf`; „Aktie" steht dort bewusst nicht (Normalfall). Die Symbol-Spalte
   endet nach Symbol + TV-Icon, die zweite Zeile wird an der Kante abgeschnitten. Die Spalte **„S200Ø"**
   (Standard nach „Bias", Trade nach „TrdR") zeigt das Ø-Wachstum der SMA200 je
-  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). Daneben (Standard nach „%S200“) **„SMA-T“** (`SMTS_COL`): SMA Trend Strength Score 0–100 (siehe unten), Farbe = Trendstatus, „~“ = kürzere Historie, zweite Zeile SMA200-Steigung · Separation SMA20–SMA200. Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
+  Monat plus Richtungspfeil für den letzten Monat (`sma-trend.js`). Daneben (Standard nach „S200Ø", Preis nach „SMA200") steht **„%S200"** (`S200D_COL`): Abstand des LS-Kurses (sonst TV-Schluss) zur SMA200 in %, sortiert nach Abstand (`smaDistPct`). In der Standard-Ansicht nach „52W“ steht **„ΔATH“** (`ATH_COL`, `lib/ath-distance.js`, seit 27.11.2026): Abstand TV-Schluss zum Allzeithoch `high_all` in %, grün ab −5 %, rot ab −40 %. In der Score-Ansicht nach „Trend“ **„Umkehr“** (`smaReversal`, siehe SMA Trend Strength). Daneben (Standard nach „%S200“) **„SMA-T“** (`SMTS_COL`): SMA Trend Strength Score 0–100 (siehe unten), Farbe = Trendstatus, „~“ = kürzere Historie, zweite Zeile SMA200-Steigung · Separation SMA20–SMA200. Das Monitor-Modal (`dashboard-modal.js`) zeigt dazu die Matrix-Spalten „S200↑/S200↓“ und die Färbung „SMA200“ aus `lib/sma200-extremes.js` — dieselbe Rechnung (TV-Schluss gegen TV-SMA200) nutzt der Monitor-Bericht für `sma200_far_above/_below`.
 - `candidate-detail.js` – per-candidate detail sheet (TV data, links, notes,
   AI-enrichment, range viz). Swipe-to-dismiss; reopens the modal it came from.
   Sechs Tabs (Perf. · Trend · Prog. · Trade · Fund. · News). Preise stehen **immer zuerst in EUR** (seit 25.11.2026, `displayInfo`: USD- und EUR-Titel mit Wechselkurs → EUR, der €/$-Knopf schaltet auf USD; ohne Kurs bleibt die Heimatwährung). Die Badges **Sektor** und **Sub-Sektor** im Kopf (seit 25.11.2026) öffnen alle Titel dieser Gruppe im **aktiven Bucket** (Watchlist, Archiv, „Watch + Archiv“ …) als Trefferliste (Aktion `showGroup` in `app.js` → `showPinnedInList`); ein Modal, aus dem das Sheet kam, wird dabei geschlossen (`returnClose`). Der Stift in der Toolbar
@@ -327,7 +327,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   stark positiv (Score ≥ 70, SMA50 steigend) · entwickelnd · schwach/negativ (< 40 oder SMA50 fallend). Filter Score ab
   40/55/70, Markt USA/Europa/Sonstige, nur vollständig; Legende = Filter Trendstatus. Daneben/darunter der **Trend
   Scanner** (Score · S50↗ · S200↗ · Sep · Stab, sortierbar per Spaltenkopf, 60 Zeilen + „Alle zeigen“, „In Tabelle
-  öffnen“). Gleicher Ausschnitt wie Cluster-Filter/Drill-down, ohne Setup-Filter. **Rankings** = ganz oben die
+  öffnen“). Gleicher Ausschnitt wie Cluster-Filter/Drill-down, ohne Setup-Filter. Direkt darunter (seit 27.11.2026) die
+  **ATH-Map** (`components/ath-map.js`): x = Abstand zum Allzeithoch (ab −80 % am Rand), y umschaltbar 3M-Performance
+  (Standard) · SMA Trend Score · RSI, Farbe = Trendstatus, Grösse = Börsenwert; vier Bereiche um −10 % und die
+  y-Mitte: Leader am Hoch · Rücksetzer am Hoch · Erholung · Abwärts; Tabelle + „In Tabelle öffnen“. **Rankings** = ganz oben die
   **Ranking-Matrix** (seit 23.11.2026: RSI × Score 0–100, ein Punkt je Titel und bestandener Liste, Farbe = Liste,
   `rankingPoints` in `lib/rankings-filter.js`, ohne Sektor-/Anzahlgrenze), darunter Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
@@ -401,6 +404,10 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   ersten Mal aus den 5 `snapshot`-Tagen vorbefüllt; Wochenende zählt zum Freitag, unveränderte Werte = kein neuer Tag).
   Mit 5–19 Tagen wird die Steigung hochgerechnet, unter 5 Tagen fallen Slope und Stability weg; der Score wird dann auf
   die verfügbaren Punkte normiert und als `partial` („~“) markiert. `smaTrendScore(c)` cacht je Objekt.
+  **SMA-Trendumkehr** `smaReversal(c)` (seit 27.11.2026, gleiche Historie, ≥ 11 Tage): gerichtet −100…+100, misst
+  Wechsel statt Zustand — Kreuzung SMA20/50 in 10 T ±35 (ab Tag 6 ×0,7, alte Lage ≥ 3 Tage gehalten), Golden/Death
+  Cross SMA50/200 in 20 T ±30, Richtungswechsel SMA20 (5 T gegen 10 T davor) ±20, Beschleunigung SMA50 (5 gegen 5 T,
+  ±1 %-Punkt = ±15), Kurs über/unter SMA20+50 ±10; ab ±50 bestätigt, ab ±25 früh (`REV`).
 - Typ/Trend-Helfer: `instrument-type.js` (ETF vs. Aktie — erst `tv_data.type`/
   `typespecs` aus dem Scanner, sonst Namensheuristik; `asset_type` am Kandidaten
   ist das persistierte Ergebnis), `sma-trend.js` (Ø-Wachstum und Richtung einer

@@ -3454,3 +3454,10 @@ button.tag--group:hover, button.tag--group:focus-visible { background:var(--acce
   .tm-head > :last-child, .tm-row > .tm-stab { display:none; }
   .tm-row .dash-ex { display:none; }
 }
+.smrev--pos { color:var(--pos); }
+.smrev--neg { color:var(--neg); }
+.smrev--muted { color:var(--muted); font-weight:var(--fw-regular, 400); }
+.smrev--early { opacity:.75; }
+/* Monitor › Dynamik: ATH-Map (components/ath-map.js) */
+.am-head, .am-row { grid-template-columns:minmax(0, 1fr) 62px 62px 46px; }
+@media (max-width:520px) { .am-head, .am-row { grid-template-columns:minmax(64px, 1fr) 56px 56px 38px; } }

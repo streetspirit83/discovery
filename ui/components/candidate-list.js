@@ -6,7 +6,7 @@ import { computeEntryPrices } from '../lib/tv-entry-prices.js';
 import { computeOverallScore } from '../lib/tv-overall-score.js';
 import { computeUpsidePotential, monthlyGrowthRate } from '../lib/tv-upside.js';
 import { fairValue } from '../lib/tv-reverse-dcf.js?v=20260814o';
-import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261126a';
+import { EXCHANGE_CURRENCY } from '../lib/tv-enrichment.js?v=20261127a';
 import { computeMomentumCheck } from '../lib/tv-momentum-check.js';
 import { checkTradeRepublic } from '../lib/tr-check.js?v=20260807a';
 import { fetchLsQuote } from '../lib/ls-intraday.js?v=20261026a';
@@ -29,7 +29,8 @@ import { CLAUDE_LOGO, PERPLEXITY_LOGO } from '../lib/ai-logos.js?v=20261125b';
 import { regimeStats } from '../lib/tv-bias-history.js?v=20260807a';
 import { instrumentType, instrumentTypeSource, TYPE_LABEL } from '../lib/instrument-type.js?v=20260831a';
 import { sma200Trend, SMA_DIR_GLYPH, SMA_DIR_LABEL, SIDE_BAND_PCT, MONTH_BARS } from '../lib/sma-trend.js?v=20260831a';
-import { smaTrendScore, TREND_STATUS, SMA_TS } from '../lib/sma-trend-score.js?v=20261126a';
+import { smaTrendScore, TREND_STATUS, SMA_TS, smaReversal, REV } from '../lib/sma-trend-score.js?v=20261127a';
+import { athDistPct } from '../lib/ath-distance.js?v=20261127a';
 
 /** Schlüssel für die Dup-Marker: Symbol+Börse normalisiert (wie die Backend-Dedup). */
 export const dupKey = (c) => `${normalizeExchange(c.exchange)}:${String(c.symbol ?? '').toUpperCase()}`;
@@ -410,6 +411,8 @@ function sortValue(c, col) {
     // Pfeilrichtung — sonst fielen alle „seitwärts"-Zeilen in einen Topf.
     case 'sma200_trend':return sma200Trend(c.swing_analysis)?.avgMonthlyPct ?? null;
     case 'sma_ts':      return smaTrendScore(c)?.score ?? null;
+    case 'ath_dist':    return athDistPct(c);
+    case 'sma_rev':     return smaReversal(c)?.r ?? null;
     case 'trend_age':   return trendDuration(c)?.days ?? null;
     case 'analyst_net': return c.analyst_30d?.net ?? null;
     // Nähe zählt, nicht die Richtung: gebrochene Levels stehen ebenfalls oben.
@@ -701,6 +704,34 @@ const SMTS_COL = {
   },
 };
 
+/* Abstand zum Allzeithoch (lib/ath-distance.js), Standard nach „52W“. Tönung: ≥ −5 % grün (am Hoch), ≤ −40 % rot. */
+const ATH_COL = {
+  key: 'ath_dist', label: 'ΔATH',
+  title: 'Abstand des TV-Schlusskurses zum Allzeithoch in % (beides in Instrumentwährung) · 0 % = am Hoch · grün ab −5 %, rot ab −40 % · sortiert nach Abstand',
+  fmt: (c) => {
+    const d = athDistPct(c);
+    if (d == null) return '<span class="muted-dash" title="Braucht TV-Schluss und Allzeithoch (TV Daten)">—</span>';
+    const cls = d >= -5 ? 'pos' : d <= -40 ? 'neg' : '';
+    return `<span class="${cls}" title="Allzeithoch ${fmtNum(c.tv_data.high_all, 2)} · Schluss ${fmtNum(c.tv_data.close, 2)}">${d > -0.05 ? '0,0' : `−${fmtNum(Math.abs(d), 1)}`}%</span>`;
+  },
+};
+
+/* SMA-Trendumkehr (lib/sma-trend-score.js `smaReversal`), Score-Ansicht nach „Trend“. */
+function renderReversal(v) {
+  if (!v) return '<span class="muted-dash" title="Braucht ≥ 10 Handelstage SMA-Historie (wächst mit jeder TV-Anreicherung, Tageskerzen liefern sie sofort)">—</span>';
+  const p = v.parts;
+  const why = [
+    v.cross2050 ? `${v.cross2050.dir > 0 ? '20↑50' : '20↓50'} vor ${v.cross2050.age} T` : null,
+    v.cross50200 ? `${v.cross50200.dir > 0 ? 'Golden' : 'Death'} Cross vor ${v.cross50200.age} T` : null,
+    p.flip ? `SMA20 dreht ${p.flip > 0 ? '↑' : '↓'}` : null,
+  ].filter(Boolean);
+  const tip = `${v.label} · Kreuzung 20/50 ${Math.round(p.cross2050)} · 50/200 ${Math.round(p.cross50200)} · Wechsel SMA20 ${p.flip} · Beschl. SMA50 ${Math.round(p.acc)} · Kurs ${p.price} · ${v.days} T Historie${v.src ? ` (${v.src})` : ''}`;
+  const tone = v.level === 'none' ? 'muted' : v.dir > 0 ? 'pos' : 'neg';
+  const arrow = v.level === 'none' ? '' : v.dir > 0 ? '↗ ' : '↘ ';
+  const val = `${arrow}${v.r > 0 ? '+' : v.r < 0 ? '−' : ''}${Math.abs(v.r)}`;
+  return `<span class="smts" title="${tip}"><span class="smts__v smrev--${tone}${v.level === 'early' ? ' smrev--early' : ''}">${val}</span><span class="smts__s">${why[0] ?? (v.level === 'none' ? 'kein Signal' : v.label)}</span></span>`;
+}
+
 const SMA200_COL = {
   key: 'sma200_trend', label: 'S200Ø', num: true,
   title: 'SMA200-Trend aus den geladenen Tageskerzen (TwelveData US / Yahoo sonst): Ø Wachstum der 200-Tage-Linie je Monat (geometrisch über das ganze Fenster) · Pfeil = Richtung der letzten ~21 Handelstage (▲ steigend · ▼ fallend · → seitwärts, Totband ±0,5%) · sortiert nach dem Ø-Wachstum',
@@ -846,6 +877,9 @@ VIEWS.score = [
   { key:'momentum',                label:'Mom',    title:'Momentum-Punkte 0–100', num:true, fmt:c=>renderMomentumCheck(c.momentum_check) },
   { key:'tv_entry_score',          label:'Entry',  title:'Entry Timing Score 0–100', num:true, fmt:c=>renderEntryScore(liveEntryScore(c.tv_data)) },
   { key:'tv_rating1m',             label:'Trend',  title:'Empfehlung 1 Monat (Trend)', num:true, fmt:c=>{ const r=c.tv_data?.recommend_all_1m; return `<span class="tv-rating-txt--${tvRatingClass(r)}">${r!=null?`${tvRatingGlyph(r)} ${fmtNum(r,2)}`:'—'}</span>`; } },
+  { key:'sma_rev', label:'Umkehr', num:true,
+    title:`SMA-Trendumkehr −100…+100 (gerichtet): misst Wechsel, nicht Zustand · Kreuzung SMA20/50 in 10 T ±${REV.CROSS_FAST} · Golden/Death Cross SMA50/200 in 20 T ±${REV.CROSS_SLOW} · Richtungswechsel SMA20 ±${REV.FLIP} · Beschleunigung SMA50 ±${REV.ACC} · Kurs über/unter SMA20+50 ±${REV.PRICE} · ab ±${REV.CONFIRMED} bestätigt, ab ±${REV.EARLY} früh · zweite Zeile = Auslöser · sortiert nach Wert`,
+    fmt: (c) => renderReversal(smaReversal(c)) },
   ...VIEWS.performance,
   ...VIEWS.metrics,
 ];
@@ -1222,6 +1256,7 @@ export class CandidateList {
       cols += this.thNum('ls10', '10T', '10-Tage-Verlauf aus den LS-Nacht-Snapshots + heutigem Live-Kurs \u00b7 Referenzlinie = Kurs vor zehn Tagen \u00b7 sortiert nach dem Zuwachs \u00fcber das Fenster');
       cols += this.thNum('tv_growth6m', '\u00d8Gr/M', '\u00d8 monatliche Growth Rate der letzten 6 Monate (geometrisch aus Perf.6M) \u00b7 dieselbe Kennzahl wie in der \u201eScore\u201c-Ansicht');
       cols += this.thNum('range52', '52W', 'Position des aktuellen Kurses in der 52-Wochen-Spanne (Tief \u2026 Hoch)');
+      cols += this.thNum(ATH_COL.key, ATH_COL.label, ATH_COL.title);
       cols += this.thNum('range_sup', 'Sup', 'N\u00e4chster Support wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he', 'col-group-start');
       cols += this.thNum('range_pos', 'Range', 'Position des Kurses zwischen Support und Resistance \u00b7 Pfeil: 5-Tage-Trend ab \u00b11 % \u00b7 rot/gr\u00fcn: Bruch oder Ausbruch');
       cols += this.thNum('range_res', 'Res', 'N\u00e4chste Resistance wie in Watch Ranges \u00b7 darunter der Abstand zum Kurs \u00b7 sortiert nach N\u00e4he', 'rg-r');
@@ -1477,6 +1512,7 @@ export class CandidateList {
           `<td class="num">${ls10CellHTML(c, fmtNum, convFromEur())}</td>` +
           heatPctTd(monthlyGrowthRate(tv?.perf_6m, 6)) +
           `<td class="num">${render52wRange(tv)}</td>` +
+          `<td class="num">${ATH_COL.fmt(c)}</td>` +
           `<td class="num col-group-start rg-s">${rangeLevelCell(c, 'sup', archived)}</td>` +
           `<td class="rg-b">${rangeBarCell(c)}</td>` +
           `<td class="rg-r">${rangeLevelCell(c, 'res', archived)}</td>` +
