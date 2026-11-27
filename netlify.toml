@@ -1,3 +1,4 @@
+# DISCOVERY_SECRET am 2026-11-02 erneuert (Deploy übernimmt den neuen Wert)
 [build]
   base    = "netlify-backend"
   publish = "public"
@@ -16,11 +17,11 @@
   [headers.values]
     Access-Control-Allow-Origin  = "*"
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, x-discovery-secret, x-deploy-secret"
+    Access-Control-Allow-Headers = "Content-Type, x-discovery-secret, x-deploy-secret, x-research-token"
 
 [[headers]]
   for = "/.netlify/functions/*"
   [headers.values]
     Access-Control-Allow-Origin  = "*"
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, x-discovery-secret, x-deploy-secret"
+    Access-Control-Allow-Headers = "Content-Type, x-discovery-secret, x-deploy-secret, x-research-token"

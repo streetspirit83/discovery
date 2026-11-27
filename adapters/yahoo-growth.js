@@ -1,7 +1,8 @@
 /**
  * Yahoo Finance Growth Stocks adapter
  *
- * Fetches Yahoo's predefined "undervalued_growth_stocks" screener via the
+ * Fetches Yahoo's predefined screeners (undervalued_growth_stocks, growth_technology_stocks,
+ * aggressive_small_caps, small_cap_gainers, day_gainers) via the
  * Netlify scrape-proxy (AWS IP, browser headers). GitHub Actions (Azure) is
  * range-blocked by Yahoo; Netlify is not.
  *
@@ -27,8 +28,17 @@ const log = (level, msg, data = {}) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const SCREEN_ID = 'undervalued_growth_stocks';
-const COUNT     = 25;
+// Seit Nov. 2026 mehrere fertige Yahoo-Screener (gleicher Endpoint, gleiche Antwort, gemessen 23.11.2026).
+// Titel aus mehreren Screens werden zu einem Kandidaten mit mehreren Quellen. Mindestens MIN_CAP Börsenwert,
+// nur quoteType EQUITY (keine Warrants/ETFs).
+const SCREENS = [
+  { id: 'undervalued_growth_stocks', label: 'Yahoo Growth Stocks',      count: 25, signal: 'screener_growth' },
+  { id: 'growth_technology_stocks',  label: 'Yahoo Growth Tech',        count: 25, signal: 'screener_growth' },
+  { id: 'aggressive_small_caps',     label: 'Yahoo Aggressive Small Caps', count: 25, signal: 'screener_growth' },
+  { id: 'small_cap_gainers',         label: 'Yahoo Small-Cap Gainers',  count: 25, signal: 'day_gainer' },
+  { id: 'day_gainers',               label: 'Yahoo Day Gainers',        count: 25, signal: 'day_gainer' },
+];
+const MIN_CAP = 300e6;
 
 // Browser headers that pass Yahoo's bot filter (same set as yahoo-trending)
 const BROWSER_HEADERS = {
@@ -81,91 +91,71 @@ function normalizeExchange(fullExchangeName) {
 
 // ─── Fetch screener ───────────────────────────────────────────────────────────
 
-async function fetchScreener() {
-  const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${SCREEN_ID}&count=${COUNT}`;
-  log('info', 'yahoo-growth: fetching screener', { screen: SCREEN_ID, url });
-
+async function fetchScreener(screen) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${screen.id}&count=${screen.count}`;
   let proxy;
   try {
     proxy = await proxyFetch(url);
   } catch (err) {
-    log('warn', 'yahoo-growth: proxy call failed', { error: err.message });
-    return [];
+    log('warn', 'yahoo-growth: proxy call failed', { screen: screen.id, error: err.message });
+    return null;
   }
-
-  log('debug', 'yahoo-growth: upstream status', { status: proxy.status, size: proxy.body?.length });
-
   if (proxy.status !== 200) {
-    log('warn', 'yahoo-growth: non-200 upstream', { status: proxy.status, preview: proxy.body?.slice(0, 300) });
-    return [];
+    log('warn', 'yahoo-growth: non-200 upstream', { screen: screen.id, status: proxy.status, preview: proxy.body?.slice(0, 300) });
+    return null;
   }
-
-  let data;
   try {
-    data = JSON.parse(proxy.body);
+    const quotes = JSON.parse(proxy.body)?.finance?.result?.[0]?.quotes ?? [];
+    log('info', 'yahoo-growth: screener parsed', { screen: screen.id, count: quotes.length });
+    return quotes;
   } catch {
-    log('warn', 'yahoo-growth: JSON parse failed', { preview: proxy.body?.slice(0, 300) });
-    return [];
+    log('warn', 'yahoo-growth: JSON parse failed', { screen: screen.id, preview: proxy.body?.slice(0, 300) });
+    return null;
   }
-
-  const quotes = data?.finance?.result?.[0]?.quotes ?? [];
-  log('info', 'yahoo-growth: screener parsed', { count: quotes.length });
-  return quotes;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function fetchCandidates() {
-  log('info', 'yahoo-growth: starting', { screen: SCREEN_ID });
+  log('info', 'yahoo-growth: starting', { screens: SCREENS.map((s) => s.id) });
+  const now = new Date().toISOString();
+  const byKey = new Map();
+  let ok = 0;
 
-  const now    = new Date().toISOString();
-  const quotes = await fetchScreener();
-  const candidates = [];
-
-  for (let i = 0; i < quotes.length; i++) {
-    const q      = quotes[i];
-    const symbol = q?.symbol ?? '';
-    if (!symbol) continue;
-
-    if (!/^[A-Z0-9.]{1,10}$/.test(symbol)) {
-      log('debug', 'yahoo-growth: skipping non-standard symbol', { symbol });
-      continue;
-    }
-
-    const rank     = i + 1;
-    const exchange = normalizeExchange(q?.fullExchangeName)
-      ?? await resolveUSExchange(symbol).catch(() => 'NASDAQ');
-
-    candidates.push({
-      id: uuidv4(),
-      symbol,
-      exchange,
-      yahoo_symbol: symbol,
-      isin: null,
-      name: q?.longName ?? symbol,
-      sources: [{
+  for (const [si, screen] of SCREENS.entries()) {
+    if (si) await sleep(600);
+    const quotes = await fetchScreener(screen);
+    if (!quotes) continue;
+    ok++;
+    for (let i = 0; i < quotes.length; i++) {
+      const q = quotes[i];
+      const symbol = q?.symbol ?? '';
+      if (!symbol || !/^[A-Z0-9.]{1,10}$/.test(symbol)) continue;
+      if (q?.quoteType && q.quoteType !== 'EQUITY') continue;
+      if (q?.marketCap != null && q.marketCap < MIN_CAP) continue;
+      const rank = i + 1;
+      const source = {
         adapter: 'yahoo-growth',
-        source_url: 'https://finance.yahoo.com/research-hub/screener/undervalued_growth_stocks/',
+        source_url: `https://finance.yahoo.com/research-hub/screener/${screen.id}/`,
         discovered_at: now,
-        signal_type: 'screener_growth',
-        raw_signal: {
-          screen: SCREEN_ID,
-          rank,
-          full_exchange_name: q?.fullExchangeName ?? null,
-        },
-        info_snippet: `Yahoo Growth Stocks #${rank}`,
-      }],
-      links: buildLinks({ exchange, symbol, yahooSymbol: symbol }),
-      workspace_state: 'new',
-      notes: '',
-      enrichment: null,
-      first_discovered_at: now,
-      last_updated_at: now,
-    });
-
-    await sleep(50);
+        signal_type: screen.signal,
+        raw_signal: { screen: screen.id, rank, full_exchange_name: q?.fullExchangeName ?? null, market_cap: q?.marketCap ?? null, change_pct: q?.regularMarketChangePercent ?? null },
+        info_snippet: `${screen.label} #${rank}`,
+      };
+      const known = [...byKey.values()].find((c) => c.symbol === symbol);
+      if (known) { known.sources.push(source); continue; }
+      const exchange = normalizeExchange(q?.fullExchangeName) ?? await resolveUSExchange(symbol).catch(() => 'NASDAQ');
+      byKey.set(`${symbol}:${exchange}`, {
+        id: uuidv4(), symbol, exchange, yahoo_symbol: symbol, isin: null, name: q?.longName ?? q?.shortName ?? symbol,
+        sources: [source],
+        links: buildLinks({ exchange, symbol, yahooSymbol: symbol }),
+        workspace_state: 'new', notes: '', enrichment: null, first_discovered_at: now, last_updated_at: now,
+      });
+    }
   }
-
+  if (!ok) log('warn', 'yahoo-growth: no screener reachable');
+  const candidates = [...byKey.values()];
+  for (const c of candidates) if (c.sources.length > 1) c.sources[0].info_snippet = `Yahoo: ${c.sources.map((s) => s.info_snippet.replace(/^Yahoo /, '')).join(' · ')}`;
   log('info', 'yahoo-growth: candidates ready', { count: candidates.length });
   return candidates;
 }

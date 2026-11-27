@@ -8,6 +8,11 @@ const KEYS = {
   claudeKey: 'discovery_claude_key',
   githubPat: 'discovery_github_pat',
   twelveDataKey: 'discovery_twelvedata_key',
+  roicKey: 'discovery_roic_key',
+  fmpKey: 'discovery_fmp_key',
+  marketauxKey: 'discovery_marketaux_key',
+  rapidApiKey: 'discovery_rapidapi_key',
+  fxEurUsd: 'discovery_fx_eurusd',
 };
 
 export function loadSettings() {
@@ -17,6 +22,11 @@ export function loadSettings() {
     claudeKey: localStorage.getItem(KEYS.claudeKey) ?? '',
     githubPat: localStorage.getItem(KEYS.githubPat) ?? '',
     twelveDataKey: localStorage.getItem(KEYS.twelveDataKey) ?? '',
+    roicKey: localStorage.getItem(KEYS.roicKey) ?? '',
+    fmpKey: localStorage.getItem(KEYS.fmpKey) ?? '',
+    marketauxKey: localStorage.getItem(KEYS.marketauxKey) ?? '',
+    rapidApiKey: localStorage.getItem(KEYS.rapidApiKey) ?? '',
+    fxEurUsd: localStorage.getItem(KEYS.fxEurUsd) ?? '',
   };
 }
 
@@ -84,6 +94,44 @@ export function renderSettingsModal(onSave) {
         </div>
 
         <div class="form-group">
+          <label for="set-roic-key">ROIC.ai API Key <small>(optional)</small></label>
+          <input type="password" id="set-roic-key" placeholder="roic.ai → API"
+            value="${settings.roicKey}" autocomplete="off">
+          <small>Firmenprofil im Detail (Beschreibung, CEO, Mitarbeiter; Lookup auch per ISIN). Ohne Key springt Wikipedia ein.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="set-fmp-key">FMP API Key <small>(optional)</small></label>
+          <input type="password" id="set-fmp-key" placeholder="site.financialmodelingprep.com → Dashboard"
+            value="${settings.fmpKey}" autocomplete="off">
+          <small>DCF-Fair-Value und Rating im Fund.-Tab. Free-Plan: 250 Anfragen/Tag und
+            ein <b>begrenzter Symbol-Umfang</b> — gemessen liefern Mega-Caps (AAPL, NVDA,
+            MSFT, GOOGL …) Daten, Small/Mid-Caps und alles ausserhalb der USA antworten
+            mit 402. Der eigene Reverse-DCF daneben funktioniert für alle Titel.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="set-marketaux-key">Marketaux API Key <small>(optional)</small></label>
+          <input type="password" id="set-marketaux-key" placeholder="marketaux.com → API Token"
+            value="${settings.marketauxKey}" autocomplete="off">
+          <small>Markt-News im News-Tab (Märkte). Free-Tier ohne Kreditkarte (100 Requests/Tag).</small>
+        </div>
+
+        <div class="form-group">
+          <label for="set-rapidapi-key">RapidAPI Key <small>(optional, TradingView Data)</small></label>
+          <input type="password" id="set-rapidapi-key" placeholder="rapidapi.com → tradingview-data1"
+            value="${settings.rapidApiKey}" autocomplete="off">
+          <small>TradingView-News im News-Tab. Free-Tier des tradingview-data1-Endpoints auf RapidAPI.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="set-fx-eurusd">EUR/USD Kurs <small>(optional, manuell)</small></label>
+          <input type="text" inputmode="decimal" id="set-fx-eurusd" placeholder="z.B. 1.16"
+            value="${settings.fxEurUsd}" autocomplete="off">
+          <small>USD je 1 EUR – Fallback für die €/$-Umschaltung. Wird automatisch überschrieben, sobald der Live-Kurs von TradingView geladen werden kann.</small>
+        </div>
+
+        <div class="form-group">
           <label>
             <input type="checkbox" id="set-use-mock"> Mock-Daten verwenden (kein Backend nötig)
           </label>
@@ -106,6 +154,11 @@ export function renderSettingsModal(onSave) {
       claudeKey: overlay.querySelector('#set-claude-key').value.trim(),
       githubPat: overlay.querySelector('#set-github-pat').value.trim(),
       twelveDataKey: overlay.querySelector('#set-twelvedata-key').value.trim(),
+      roicKey: overlay.querySelector('#set-roic-key').value.trim(),
+      fmpKey: overlay.querySelector('#set-fmp-key').value.trim(),
+      marketauxKey: overlay.querySelector('#set-marketaux-key').value.trim(),
+      rapidApiKey: overlay.querySelector('#set-rapidapi-key').value.trim(),
+      fxEurUsd: overlay.querySelector('#set-fx-eurusd').value.trim(),
     };
     saveSettings(newSettings);
     overlay.remove();

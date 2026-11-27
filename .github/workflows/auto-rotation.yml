@@ -1,0 +1,50 @@
+name: Auto-Rotation – Watchlist täglich neu auswählen
+
+on:
+  # Werktags nach US-Schluss und vor dem Monitor-Bericht (22:13 UTC), damit dieser
+  # die neue Watchlist sieht.
+  schedule:
+    - cron: '37 21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Probelauf erzwingen (nichts verschieben, nur Bericht)'
+        type: boolean
+        default: true
+      set_mode:
+        description: 'Nur Modus umschalten (kein Lauf): live = scharf, dry = Probelauf'
+        type: choice
+        options: ['', 'live', 'dry']
+        default: ''
+      patch_report:
+        description: 'Wartung: Bericht wiederherstellen (JSON), kein Lauf'
+        type: string
+        default: ''
+      symbols:
+        description: 'Diagnose: Symbole mit allen Werten ins Log (kommagetrennt)'
+        type: string
+        default: ''
+
+# Gleiche Gruppe wie der Monitor-Bericht: beide schreiben den market-Blob und
+# dürfen sich nicht überschneiden.
+concurrency:
+  group: monitor-report
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/auto-rotation/run.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          FORCE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && 'dry' || '' }}
+          DIAG: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && '1' || '' }}
+          DIAG_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || '' }}
+          SET_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.set_mode || '' }}
+          PATCH_REPORT: ${{ github.event_name == 'workflow_dispatch' && inputs.patch_report || '' }}

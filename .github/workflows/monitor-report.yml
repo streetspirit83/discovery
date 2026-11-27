@@ -1,0 +1,39 @@
+name: Monitor-Bericht – Google Doc + JSON (Watchlist + Archiv, nur Aktien)
+
+on:
+  # Werktags nach US-Schluss und nach dem LS-Snapshot (21:30 UTC)
+  schedule:
+    - cron: '13 22 * * 1-5'
+  # Manuell: Actions-Tab → Run workflow
+  workflow_dispatch:
+
+concurrency:
+  group: monitor-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/monitor-report
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      - name: Bericht nach Google Drive schreiben
+        run: node run.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          # Standard: Drive-Ordner „Wertpapiere" (wie der Indices-Snapshot)
+          MONITOR_FOLDER_ID: ${{ vars.MONITOR_FOLDER_ID || vars.INDICES_FOLDER_ID || '0B_5gQxQZ0ZHQfkk4dk5mYUg0aDdXT3Y0dWZJZ0VPSFRmQVJfeWxyaERxRXNaYlNja1AxQTg' }}

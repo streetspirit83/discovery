@@ -1,0 +1,38 @@
+name: Adapter – ARK Holdings
+
+on:
+  schedule:
+    - cron: '23 12 * * 1-5'   # werktags 12:23 UTC: ARK veröffentlicht den Vortagsstand über Nacht
+  workflow_dispatch:
+
+concurrency:
+  group: adapter-ark-holdings
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # Vortagsstand der Positionen: neuester Cache-Eintrag mit diesem Präfix
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ark-state
+          key: ark-state-${{ github.run_id }}
+          restore-keys: ark-state-
+      - name: Run ARK Holdings adapter
+        run: node adapters/_run.js ark-holdings
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          ARK_STATE: .ark-state/holdings.json
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('.ark-state/holdings.json') != ''
+        with:
+          path: .ark-state
+          key: ark-state-${{ github.run_id }}

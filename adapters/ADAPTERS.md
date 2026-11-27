@@ -8,12 +8,41 @@ Each adapter is a Node.js module that exports `fetchCandidates()` and is run by 
 
 | Adapter            | Cron              | UTC Time              | Trigger              | Status     |
 |--------------------|-------------------|-----------------------|----------------------|------------|
-| `openinsider`              | `0 6 * * *`       | Daily 06:00           | Schedule + manual    | ✅ Active  |
-| `etf-holdings`             | `0 7 * * 1`       | Monday 07:00          | Schedule + manual    | ✅ Active  |
-| `stocktwits`               | `0 8,20 * * *`    | Daily 08:00 + 20:00   | Schedule + manual    | ✅ Active  |
-| `yahoo-trending`           | `0 14 * * 1-5`    | Weekdays 14:00        | Schedule + manual    | ✅ Active  |
-| `tradingview-screener`     | `30 15 * * 1-5`   | Weekdays 15:30        | Schedule + manual    | ✅ Active  |
+| `openinsider`              | `17 6 * * 1,3,5`  | Mo/Mi/Fr 06:17        | Schedule + manual    | ✅ Active  |
+| `etf-holdings`             | `37 7 * * 2`      | Tuesday 07:37         | Schedule + manual    | ✅ Active  |
+| `stocktwits`               | `23 8,13,20 * * *`| Daily 3×              | Schedule + manual    | ✅ Active  |
+| `yahoo-trending`           | `43 8,13,20 * * 1-5` | Weekdays 3×        | Schedule + manual    | ✅ Active  |
+| `yahoo-growth`             | `17 9,14 * * 1-5` | Weekdays 2× (5 Yahoo-Screener) | Schedule + manual | ✅ Active |
+| `tradingview-screener`     | `47 9,15 * * 1-5` | Weekdays 2× (alle Studio-Presets mit Auto) | Schedule + manual | ✅ Active |
+| `sector-rotation`          | `7 21 * * 1-5`    | Weekdays 21:07        | Schedule + manual    | ✅ Active  |
+| `ark-holdings`             | `23 12 * * 1-5`   | Weekdays 12:23        | Schedule + manual    | ✅ Active  |
 | `boerse-frankfurt`         | *(paused)*        | —                     | Manual only          | ⏸ Paused  |
+
+Seit Nov. 2026 kommen außerdem Titel aus dem Analysten-Scout (`upgrade-scout.yml`) und dem KI-Wochen-Scout
+(Samstag, `market-briefing.yml` mit `kind: scout` → `tools/ai-scout/lib.mjs`) automatisch in die Inbox.
+
+## Adapter: TradingView Screener (Auto-Presets, seit Nov. 2026)
+
+Keine fest eingebauten Screens mehr: der Adapter liest die Presets aus dem Config-Blob (`read_config`, dieselbe
+Quelle wie das Screener Studio), gleicht die eingebauten mit `ui/lib/screener-presets.js` ab und führt alle mit
+`isAutoPreset` aus (Vorgabe `auto`, Schalter im Studio = `auto_override`). Abfrage und Nachfilter teilt er mit dem
+Studio (`ui/lib/screen-runner.js`): Feld gegen Feld (`right: 'SMA50'`), Marktgruppe `europe` (Endpoint `global`,
+`is_primary`), Mega-Cluster (`mega` → `sector in_range`), nur Heimatbörsen (`exchange in_range`, sonst liefert
+`germany` vor allem Auslandswerte an deutschen Plätzen und `america` OTC). Titel aus mehreren Screens = ein
+Kandidat mit mehreren Quellen, höchstens 150 je Lauf (meiste Treffer zuerst). Env `PRESETS=id1,id2` für Tests.
+
+## Adapter: Sektor-Rotation (top-down)
+
+Ein Scan je Region (USA, Europa) über alle Aktien ab 300 Mio. in den Mega-Clustern. Branchen-Score je TV-Industry
+(≥ 6 Titel): 0,4 · Perzentil Median Perf.1M + 0,4 · Perzentil Median Perf.3M + 0,2 · Anteil über SMA50. In den
+8 besten Branchen je bis zu 4 Leader mit Kurs > SMA50 > SMA200, Perf.3M > 0, RSI < 80. Signal `sector_rotation`.
+
+## Adapter: ARK Holdings
+
+Tägliche CSV der sechs ARK-ETFs (`assets.ark-funds.com`, frei). Signal = Veränderung zum letzten Lauf: neue
+Position (`etf_addition`) oder ≥ 10 % mehr Stück bei ≥ 0,5 % Gewicht (`etf_weight_increase`). Der Vortagsstand
+liegt in `.ark-state/holdings.json` und wird per `actions/cache` weitergereicht; erster Lauf nur Stand. Börse über
+den TV-Scanner (nur US-Aktien).
 
 Manual trigger: GitHub Actions → workflow → **Run workflow**.
 
@@ -85,14 +114,16 @@ Endpoint: `GET https://api.stocktwits.com/api/2/trending/symbols.json`
 
 > ✅ Public endpoint, no API key, no cookie/crumb flow. Cloud IPs not blocked as of 2025.
 
-StockTwits refreshes their trending list every 15 minutes. The adapter runs twice daily to capture distinct pre-market (08:00 UTC) and after-hours (20:00 UTC) sentiment snapshots without excessive polling.
+StockTwits refreshes their trending list every 15 minutes. The adapter runs 3× daily (08:23 / 13:23 / 20:23 UTC) to capture distinct pre-market, US-open and after-hours sentiment snapshots without excessive polling.
 
 ### Method
 
-1. **Fetch** `trending/symbols.json` — returns top-30 symbols with `id`, `symbol`, `title`, `watchlist_count`.
+1. **Fetch** `trending/symbols.json` — returns top-30 symbols. The response carries far more than the name suggests: `rank`, `trending_score`, `exchange`, `symbol_mic`, `isin`, `cusip`, `sector`/`industry`, a `trends.summary` blurb, and a full `fundamentals` block.
 2. **Filter** for standard equity tickers only — regex `/^[A-Z]{1,5}$/` removes crypto (`.X` suffix), indices, and malformed entries.
-3. **Resolve exchange** via `resolveUSExchange()` (FMP → Twelve Data → static fallback → NASDAQ).
-4. **Return** all remaining symbols as candidates; rank and watchlist count stored in `raw_signal` for downstream weighting.
+3. **Read exchange + ISIN from the payload** (`exchange`, else the MIC in `symbol_mic`). `resolveUSExchange()` (FMP → Twelve Data → static fallback → NASDAQ) is only a fallback for entries that carry neither — so a normal run makes **one** HTTP request instead of up to 31.
+4. **Return** all remaining symbols as candidates. `trends.summary` — StockTwits' own explanation of *why* the symbol is trending — becomes the `info_snippet`; rank, watchlist count, trending score and CUSIP go to `raw_signal`.
+
+> ⚠️ The **message stream** (`streams/symbol/{SYM}.json`) is not a usable sentiment source: `entities.sentiment` is `null` on virtually every message, because users rarely tag their posts. For per-symbol bull/bear numbers use `symbols/{SYM}/sentiment.json` instead — that is what the UI's `lib/stocktwits-sentiment.js` reads.
 
 ### Key Thresholds & Filters
 
@@ -100,8 +131,8 @@ StockTwits refreshes their trending list every 15 minutes. The adapter runs twic
 |---------------------|-------------------|---------------------------------------------|
 | Symbols fetched     | Top 30 (API max)  | Full trending list; dedup prevents bloat    |
 | Equity filter       | `/^[A-Z]{1,5}$/`  | Excludes crypto `BTC.X`, indices `SPY500`   |
-| Schedule            | 2× daily          | Pre-market + after-hours sentiment capture  |
-| Rate limit margin   | 50 ms between     | API allows ~60 req/min; one req per run     |
+| Schedule            | 3× daily          | Pre-market, US-open + after-hours capture   |
+| Rate limit margin   | 50 ms between     | Only on the fallback exchange lookup        |
 
 ### Signal Quality
 
@@ -113,8 +144,8 @@ US equity-focused. Measures **retail sentiment momentum** — not a price breako
 |-------------------------|----------|------------------------------------|
 | `DISCOVERY_BACKEND_URL` | ✅        | Netlify backend URL                |
 | `DISCOVERY_SECRET`      | ✅        | Auth header for backend            |
-| `FMP_API_KEY`           | Optional | Exchange resolution (primary)      |
-| `TWELVEDATA_API_KEY`    | Optional | Exchange resolution (fallback)     |
+| `FMP_API_KEY`           | Optional | Exchange resolution — fallback only |
+| `TWELVEDATA_API_KEY`    | Optional | Exchange resolution — fallback only |
 
 ---
 

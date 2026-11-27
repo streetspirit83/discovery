@@ -1,0 +1,36 @@
+name: Titel endgültig löschen
+
+# Löscht einen Titel aus allen Buckets und sperrt ihn für die Adapter.
+# Ohne confirm = 1 zeigt der Lauf nur die Treffer.
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: 'Symbol, z. B. META'
+        required: true
+        type: string
+      isins:
+        description: 'ISINs weiterer Listings, kommagetrennt (optional)'
+        required: false
+        type: string
+      confirm:
+        description: '1 = wirklich löschen'
+        required: false
+        type: string
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/maintenance/delete-candidate.mjs
+        env:
+          DISCOVERY_BACKEND_URL: ${{ secrets.DISCOVERY_BACKEND_URL }}
+          DISCOVERY_SECRET: ${{ secrets.DISCOVERY_SECRET }}
+          SYMBOL: ${{ inputs.symbol }}
+          ISINS: ${{ inputs.isins }}
+          CONFIRM: ${{ inputs.confirm }}
