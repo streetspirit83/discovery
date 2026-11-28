@@ -281,19 +281,48 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
   /* Verknüpfung Signal-Matrix ↔ Setup-Teil: Die Signal-Matrix zählt nur Titel, die die
      Setup-Filter (Zelle, Quintil, Brush) erfüllen; die gewählte Signal-Zelle filtert
      umgekehrt Setup-Matrix, Scatter, Quintile und Trefferliste. */
-  const setupOnly = () => ({ ...state.setup, ids: null });
+  /* ATH-Map als Filter (seit 28.11.2026): Ein Zoom-Ausschnitt oder ausgeblendete Legenden-Gruppen der ATH-Map
+     filtern alle übrigen Grafiken (Signal-Matrix, Setup-Matrix inkl. Zeitleiste, Trend Map, Trefferliste) – über
+     den ganzen Ausschnitt gerechnet, damit sich die Filter nicht im Kreis bedingen. Die ATH-Map selbst zeigt die
+     Titel, die Signal- und Setup-Filter erfüllen. */
+  const dynScope = () => scopeOf(base, 'cluster', dyn.path);
+  function athIds() {
+    const am = state.ath;
+    if (!am.zs.zoom.length && !am.zs.off.size) return null;
+    return new Set(athVisibleIds(dynScope(), am));
+  }
+  const inter = (a, b) => (!a ? b : !b ? a : new Set([...a].filter((x) => b.has(x))));
+  const setupOnly = () => {
+    const a = athIds();
+    return { ...state.setup, ids: a, idsLabel: a ? 'ATH-Map-Ausschnitt' : undefined };
+  };
+  /* Titel nach allen Filtern ausser `skip` ('ath' = ohne ATH-Ausschnitt) – für Trend Map und ATH-Map. */
+  function filteredScope(skip) {
+    const sel = skip === 'ath' ? { ...state.setup, ...sigIds() } : setupSel();
+    return hasSetupFilter(sel) ? setupHits(setupModel(), sel).map((m) => m.c) : dynScope();
+  }
+  function sigIds() {
+    const d = sigData();
+    const col = d.sel && d.columns.find((c) => c.key === d.sel.col);
+    if (!col) return { ids: null };
+    const where = d.sel.row === 'all' ? '' : `${d.rows[Number(d.sel.row)]?.name ?? ''} · `;
+    return { ids: new Set(selectedIds(d)), idsLabel: `${where}${col.title}` };
+  }
+  function filterNote(list, skip) {
+    const n = list.length, tot = dynScope().length;
+    const ath = skip !== 'ath' && (state.ath.zs.zoom.length || state.ath.zs.off.size);
+    return n < tot ? `<p class="md-note tm-filter">Gefiltert über Signal-/Setup-Auswahl${ath ? ' und ATH-Map' : ''}: ${n} von ${tot} Titeln</p>` : '';
+  }
   function sigView() {
     const d = sigData();
-    if (!hasSetupFilter(state.setup)) return d;
+    if (!hasSetupFilter(setupOnly())) return d;
     const ok = new Set(setupHits(setupModel(), setupOnly()).map((m) => m.c.id));
     return { ...d, columns: d.columns.map((col) => ({ ...col, rows: col.rows.filter((x) => ok.has(x.c.id)) })) };
   }
   function setupSel() {
-    const d = sigData();
-    const col = d.sel && d.columns.find((c) => c.key === d.sel.col);
-    if (!col) return setupOnly();
-    const where = d.sel.row === 'all' ? '' : `${d.rows[Number(d.sel.row)]?.name ?? ''} · `;
-    return { ...state.setup, ids: new Set(selectedIds(d)), idsLabel: `${where}${col.title}` };
+    const sg = sigIds(), a = athIds();
+    if (!sg.ids) return setupOnly();
+    return { ...state.setup, ids: inter(sg.ids, a), idsLabel: a ? `${sg.idsLabel} · ATH-Map-Ausschnitt` : sg.idsLabel };
   }
   /* Setup-Matrix unter der Signal-Matrix: gleicher Ausschnitt, je Pfad gecacht. */
   const setupCache = new Map();
@@ -325,8 +354,8 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
         <nav class="md-bc" aria-label="Ausschnitt">${crumbs}</nav>
         ${signalMatrixHtml(sigView())}
         ${setupMatrixHtml(model, sel, state.rev)}
-        ${trendMapHtml(scopeOf(base, 'cluster', dyn.path), state.trend)}
-        ${athMapHtml(scopeOf(base, 'cluster', dyn.path), state.ath)}
+        ${(() => { const l = filteredScope(); return filterNote(l) + trendMapHtml(l, state.trend); })()}
+        ${(() => { const l = filteredScope('ath'); return filterNote(l, 'ath') + athMapHtml(l, state.ath); })()}
         ${subsectorHeatHtml(scopeOf(base, 'cluster', dyn.path), state.heat, all)}
         <div class="dash-pulse">${pulseBody()}</div>
       </div>
@@ -574,14 +603,14 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
       return;
     }
     if (zsShow?.dataset.zsShow === 'ath') {
-      const ids = athVisibleIds(scopeOf(base, 'cluster', dyn.path), state.ath).filter((id) => inBucket.has(id));
+      const ids = athVisibleIds(filteredScope('ath'), state.ath).filter((id) => inBucket.has(id));
       if (!ids.length) return;
       ctrl.close();
       onSelectInList?.(ids);
       return;
     }
     if (zsShow?.dataset.zsShow === 'trend') {
-      const ids = trendShowIds(scopeOf(base, 'cluster', dyn.path), state.trend).filter((id) => inBucket.has(id));
+      const ids = trendShowIds(filteredScope(), state.trend).filter((id) => inBucket.has(id));
       if (!ids.length) return;
       ctrl.close();
       onSelectInList?.(ids);
@@ -632,7 +661,11 @@ export function renderDashboardModal({ candidates = [], universe = null, filterN
       renderDynamics();
       return;
     }
-    if (e.target.closest('[data-sm-reset]')) { state.setup = { cell: null, q: null, brush: null }; state.sig = null; renderDynamics(); return; }
+    if (e.target.closest('[data-sm-reset]')) {
+      state.setup = { cell: null, q: null, brush: null }; state.sig = null;
+      state.ath.zs.zoom = []; state.ath.zs.off = new Set();
+      renderDynamics(); return;
+    }
     if (e.target.closest('[data-sm-show]')) {
       const ids = setupHits(setupModel(), setupSel()).map((m) => m.c.id).filter((id) => inBucket.has(id));
       if (!ids.length) return;

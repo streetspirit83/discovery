@@ -334,7 +334,11 @@ Entry point `ui/app.js` (shell, state, bot-nav, modals wiring). Then:
   öffnen“). Gleicher Ausschnitt wie Cluster-Filter/Drill-down, ohne Setup-Filter. Direkt darunter (seit 27.11.2026) die
   **ATH-Map** (`components/ath-map.js`): x = Abstand zum Allzeithoch (ab −80 % am Rand), y umschaltbar 3M-Performance
   (Standard) · SMA Trend Score · RSI, Farbe = Trendstatus, Grösse = Börsenwert; vier Bereiche um −10 % und die
-  y-Mitte: Leader am Hoch · Rücksetzer am Hoch · Erholung · Abwärts; Tabelle + „In Tabelle öffnen“. **Rankings** = ganz oben die
+  y-Mitte: Leader am Hoch · Rücksetzer am Hoch · Erholung · Abwärts; Tabelle + „In Tabelle öffnen“. **Verknüpft (seit 28.11.2026):**
+  Zoom-Ausschnitt oder ausgeblendete Legende der ATH-Map filtern Signal-Matrix, Setup-Matrix (inkl. Zeitleiste),
+  Trend Map und Trefferliste (`athIds` in `dashboard-modal.js`, über den ganzen Ausschnitt gerechnet); ATH-Map und
+  Trend Map zeigen umgekehrt nur die Titel nach Signal-/Setup-Filtern (`filteredScope`, Hinweis „Gefiltert … N von M“).
+  „Zurücksetzen“ in der Trefferliste nimmt auch den ATH-Filter. **Rankings** = ganz oben die
   **Ranking-Matrix** (seit 23.11.2026: RSI × Score 0–100, ein Punkt je Titel und bestandener Liste, Farbe = Liste,
   `rankingPoints` in `lib/rankings-filter.js`, ohne Sektor-/Anzahlgrenze), darunter Umschalter
   Live (fünf technische Listen, eine zur Zeit) · KI-Ranking (Sonntag) · Tagessieger. **Rotation** = Tagesbericht der
